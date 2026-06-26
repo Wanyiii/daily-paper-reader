@@ -1,0 +1,582 @@
+Title: GeoFlow-SLAM++: A Robust Multi-Camera Visual-Inertial SLAM System with Relocalization
+
+URL Source: https://arxiv.org/pdf/2606.22051v2
+
+Published Time: Thu, 25 Jun 2026 00:28:16 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# GeoFlow-SLAM++: A Robust Multi-Camera Visual-Inertial SLAM System with Relocalization 
+
+Wei Feng ∗, Tingyang Xiao ∗, Liu Liu †, Xiaolin Zhou, Zhizhong Su Horizon Robotics 
+
+> ∗
+
+Equal contribution †Project Lead 
+
+Abstract — Monocular and RGB-D visual-inertial SLAM sys-tems remain susceptible to limited field of view, sensor-specific failure modes, and unreliable cross-session relocalization. To address these issues, we present GeoFlow-SLAM++, a tightly coupled multi-camera visual-inertial SLAM system that extends GeoFlow-SLAM from a single RGB-D sensor to a calibrated multi-camera rig with a unified body-centric formulation. Within this multi-camera framework, GeoFlow-SLAM++ sup-ports two interchangeable visual front-ends: a conventional ORB front-end and a neural network feature (NN-Feature) front-end built on SuperPoint and LightGlue. The system unifies tracking, mapping, and relocalization on a shared body state, and combines multi-camera reprojection constraints, IMU pre-integration, cross-view place recognition, and dual-stream optical flow/NN-Feature tracking for robust localization. As an optional extension, the system can further incorporate cross-view-consistent pseudo-depth predictions from RGB images as auxiliary geometric constraints. We evaluate GeoFlow-SLAM++ on EuRoC, OpenLORIS, TUM, Hilti, and a self-collected handheld multi-camera dataset. Results show that the NN-Feature front-end improves robustness in appearance-challenging scenarios, the multi-camera formulation achieves competitive localization accuracy on Hilti, and the unified cross-view relocalization design reaches LiDAR-comparable performance on the handheld dataset. 
+
+I. I NTRODUCTION 
+
+Simultaneous localization and mapping (SLAM) under-pins autonomous navigation and accurate pose estimation in embodied robotics. Visual-inertial (VI) SLAM systems such as ORB-SLAM3 [1], S-VIO [2], VINS [3-5], and OKVIS [6] provide compact and mature solutions. Our previous GeoFlow-SLAM [7] improved RGB-D VI-SLAM accuracy and robustness by combining dual-stream optical flow feature tracking with generalized iterative closest point (GICP) [8] geometric constraints. However, a single RGB-D sensor still suffers from limited visual coverage and limited appearance evidence. In practice, active depth sensing can fail outdoors or on reflective surfaces, a single narrow field of view can easily lose trackable features under occlusion or degenerate motion, and relocalization remains fragile under large temporal or viewpoint changes. To improve robustness beyond a single RGB-D sensor, GeoFlow-SLAM can be extended in two aspects. First, a calibrated multi-camera rig provides broader visual coverage and stronger redundancy for tracking, loop closure, and re-localization. Second, a dual visual front-end design supports both an ORB front-end and an NN-Feature front-end. The ORB front-end provides an efficient and standard solution, while the NN-Feature front-end targets stronger appearance matching under illumination, texture, and viewpoint changes. In this paper, we present GeoFlow-SLAM++ , a tightly coupled multi-camera VI-SLAM framework centered on a dual visual front-end design. Our main contributions are as follows:  
+
+> •
+
+A unified multi-camera SLAM framework that ex-tends GeoFlow-SLAM from a single RGB-D sensor to a calibrated multi-camera rig, where tracking, mapping, loop closure, and relocalization are all formulated on a shared body state.  
+
+> •
+
+A dual visual front-end design that supports both a conventional ORB front-end and a learning-based NN-Feature front-end based on SuperPoint and LightGlue under the same downstream geometric interface.  
+
+> •
+
+A multi-camera tightly coupled optimization pipeline 
+
+that combines dual-stream visual tracking, multi-camera reprojection residuals, IMU pre-integration, and cross-view place recognition for robust localization and relo-calization.  
+
+> •
+
+An optional pseudo-depth extension that introduces cross-view-consistent pseudo-depth predictions from RGB images as supplementary geometric constraints in degraded scenarios. II. R ELATED WORK 
+
+A. Monocular VI-SLAM 
+
+Monocular VI-SLAM integrates a single camera and an IMU via tightly coupled sliding-window optimization. Rep-resentative methods such as OKVIS [6] leverage keyframe-based formulations to jointly optimize visual and iner-tial residuals. Following this optimization paradigm, VINS-Mono [3] provides a canonical monocular implementation, whereas VINS-Fusion [4] and ORB-SLAM3 [1] extend the same optimization backbone to support diverse sensor setups and multi-map operations. Despite delivering mature and robust tightly coupled baselines, existing methods are inherently limited to a single viewing perspective. This leads to fundamental single-view vulnerabilities: restricted field of view, degraded observability under viewpoint-degenerate motions, and catastrophic tracking failures when the camera view is occluded or geometrically degraded. 
+
+> arXiv:2606.22051v2 [cs.RO] 24 Jun 2026
+
+B. Multi-Camera VI-SLAM 
+
+Multi-camera configurations expand the aggregate field of view and significantly reduce the probability of simultaneous tracking failures. To this end, OpenMAVIS [9] investigates tightly coupled VI-SLAM tailored for partially overlapping multi-camera setups, whereas Multicam-SLAM [10] ad-dresses non-overlapping configurations for visual localization and navigation. Though these prior works fully leverage the benefits of multi-camera redundancy, they lack a unified modeling strategy to integrate diverse multi-camera measure-ments into a cohesive optimization pipeline, which limits the overall accuracy and robustness of multi-camera fusion. 
+
+C. LiDAR-Inertial and LiDAR-Visual-Inertial Fusion 
+
+Range-based SLAM systems leverage direct distance mea-surements to establish definitive geometric constraints. For example, FAST-LIO2 [11] provides a representative for-mulation for LiDAR-inertial odometry. Moving a step fur-ther, R3LIVE [12], FAST-LIVO2 [13], and OmniLIVO [14] combine LiDAR, visual, and inertial cues to achieve dense LiDAR-visual-inertial odometry (LIVO) and scene recon-struction. Despite the superior robustness of existing LIVO systems in large-scale environments, they rely on heavy, power-consuming, and expensive hardware payloads. Such inherent hardware dependence restricts their applicability in lightweight, low-power, and cost-sensitive scenarios. 
+
+D. Neural Network Feature and Place Recognition 
+
+The NN-Feature paradigm has remarkably improved local data association and global place retrieval under drastic illu-mination, texture, and viewpoint alterations. SuperPoint [15] extracts repeatable keypoints alongside local descriptors, while LightGlue [16] delivers highly efficient feature match-ing via deep neural networks. For global visual place recognition, representative frameworks like NetVLAD [17], MixVPR [18], and BoQ [19] generate compact image-level global descriptors, whereas DBoW2 [20] remains the stan-dard bag-of-words baseline for ORB-based SLAM. Recent NN-Feature SLAM adaptations, such as SuperVINS [21], have verified that deep local features effectively improve tracking robustness in challenging scenarios. Nevertheless, the practical applicability of these approaches is heavily constrained by sensor hardware configurations, stringent real-time requirements, and challenges in seamless integration with back-end optimization modules. 
+
+E. 3D Foundation Models for Geometry 
+
+Feed-forward 3D foundation models, including the Depth Anything series [22-24], DUSt3R [25], MASt3R [26], and VGGT [27], infer dense depth, pixel-wise correspondence, or explicit 3D structures directly from standard RGB images, with recent applications extending to downstream SLAM systems such as IRIS-SLAM [28]. These foundation models offer an unprecedented opportunity to inject passive geomet-ric constraints into VI estimation frameworks. Nevertheless, because these feed-forward networks predict geometry on individual frames or pairs, their outputs cannot guarantee the strict temporal and probabilistic consistency required by an online SLAM back-end. Therefore, we treat this learned geometry as a source of supplementary, consistency-checked constraints rather than a primary source of metric depth. III. S YSTEM OVERVIEW 
+
+GeoFlow-SLAM++ extends GeoFlow-SLAM from a sin-gle RGB-D sensor to a calibrated multi-camera rig. As illustrated in the architectural diagram Fig. 1, the centralized pipeline ingests synchronized image streams alongside high-frequency IMU measurements. Upon data arrival, the system routes the images through one of two selected visual feature front-ends:  
+
+> •
+
+The ORB front-end extracts ORB keypoints and gen-erates bag-of-words descriptors for standard operations.  
+
+> •
+
+The NN-Feature front-end extracts SuperPoint key-points, establishes correspondences via LightGlue, and computes MixVPR descriptors for robust global visual place retrieval. Both front-ends provide high-quality local features for frame-to-frame tracking and sparse mapping, while simulta-neously generating image-level global descriptors to trigger loop closure and cross-session relocalization. To fully leverage multi-camera redundancy, the front-end treats the calibrated multi-camera system as a unified source of tracking constraints. The centralized body-state dual-stream optical flow/NN-Feature tracking aggregates valid data associations from all camera viewpoints, minimizing the risk of tracking failure caused by single-view occlusion or degenerate observations. The tracking module then ap-plies strict cross-view epipolar and triangulation checks to eliminate geometrically inconsistent associations. When the optional depth module is enabled, a multi-camera 3D foun-dation model predicts depth directly from the synchronized RGB images based on fixed extrinsics. Only geometrically consistent depth predictions are passed to downstream com-ponents to prevent noisy artifacts from corrupting the state estimate. The back-end relies on a centralized factor-graph opti-mizer. It jointly optimizes the robot body state by fus-ing multi-camera reprojection residuals, IMU pre-integration terms, and GICP constraints whenever RGB-D data or val-idated pseudo-depth predictions are available. Loop closure and cross-session relocalization follow an identical body-centric design. The loop closure module aggregates individ-ual per-camera descriptors into a single, unified query vector, verifies candidates through explicit cross-view geometric checks, and incorporates the accepted loop constraints to update and optimize the global map. IV. M ETHOD 
+
+A. Dual Visual Feature Front-Ends 
+
+GeoFlow-SLAM++ provides dual feature front-ends that share the same downstream geometric modules. Both front-ends output keypoints, local descriptors, and global descrip-tors; the ORB front-end prioritizes efficiency, while the NN-1. Synchronized Multi -Camera 
+
+RGB -D/IMU          
+
+> Extrinsic Calibration
+> Optional Foundation Model Depth
+> cam c0cam c1cam cN-1
+> Dc0 Dc1 DcN -1
+
+2. Multi -Camera Dual -Stream Tracking        
+
+> Stage 1: 3D -to -2D PnP &Optical Flow /NN
+> Stage 2: 2D -to -2D Optical Flow /NN
+> c0
+> c1
+> cN-1
+> Frame i-1Frame i
+> MapPoint ,Stage1
+> No MapPoint, Stage 2
+> 3D -2D Projection
+> Optical Flow/NN
+
+3. Multi -Camera Tightly Coupled Factor -
+
+Graph Optimization  
+
+> State
+> GICP Factor
+> IMU -Pre Factor
+> Map Points
+
+4. Loop Closing & Global Optimization     
+
+> Unified Place Recognition
+> Descriptors
+> Retrieve Candidates
+> Place Recognition
+> Geometric Verification
+> Global BA
+> Reprojection Error
+> Loop Constraint
+> State Update
+
+5. Multi -Camera Relocalization      
+
+> Loading Map Multi -Descriptors for Unified
+> Place Recognition 3D -to -2D PnP & Verification Multi -Cams Optical Flow /NN Tracking
+
+Fig. 1: System architecture of GeoFlow-SLAM++. The pipeline ingests synchronized image streams from a calibrated multi-camera rig alongside high-frequency IMU measurements. The front-end coordinates an ORB pipeline, an NN-Feature pipeline, and dual-stream optical flow tracking to establish robust data association through cross-view geometric verification. The back-end then solves a centralized factor graph that jointly optimizes the robot body state by fusing multi-camera reprojection residuals, IMU pre-integration, and depth-conditioned GICP constraints. The loop closure module aggregates individual per-camera descriptors vck into unified global descriptors to trigger cross-view place recognition and 7-DoF relocalization against the global map. Feature front-end targets stronger appearance matching under illumination, texture, and viewpoint changes. 
+
+ORB Front-End. This efficiency-oriented front-end com-bines hand-crafted FAST keypoints, rotated BRIEF descrip-tors, and bag-of-words place retrieval. It yields a local feature set FORB  
+
+> ck
+
+= {(pjck , djck )}. Loop closure retrieval is handled via a pre-trained DBoW2 vocabulary, which emits per-camera bag-of-words vectors vck that are subsequently aggregated by the unified descriptor operator A(·) (detailed in Section IV-D). 
+
+NN-Feature Front-End. This NN-Feature front-end fuses three learning-based components: SuperPoint provides self-supervised, illumination-invariant keypoints and local de-scriptors; LightGlue executes attention-driven matching with adaptive computation depth and supports both local feature association and loop closure verification; MixVPR extracts a compact global descriptor vck that is normalized and aggregated by A(·) for visual place retrieval. 
+
+Shared Feature Interface. The dual front-ends hide their in-ternal feature implementations behind the same downstream interface. Each camera provides a keypoint coordinate set 
+
+{pjck }, local descriptors djck , and global descriptors vck .Tracking and mapping consume the local features, while loop closure and relocalization consume the global descriptors. Fig. 2 illustrates the difference between the two front-ends on a representative multi-camera frame with the same budget of 500 keypoints per camera. The ORB front-end tracks fewer keypoints in low-texture or over-exposed regions, 
+
+(a) ORB front-end 
+
+(b) NN-Feature front-end 
+
+Fig. 2: Multi-camera feature extraction under the dual vi-sual feature front-ends on a representative multi-camera frame (4-camera stitched view, identical viewpoint, top-
+
+500 keypoint budget per camera). Red dots denote tracked keypoints. (a) The ORB front-end tracks fewer features in textureless and over-exposed regions. (b) The NN-Feature front-end tracks more in most views and distributes them more evenly across low-textured areas. while the NN-Feature front-end uses the budget more fully and spreads features more evenly. 
+
+B. Dual-stream Optical Flow/NN-Feature Tracking 
+
+The tracker combines 3D-to-2D tracking with optical flow compensation tracking, and extends both streams with multi-camera geometric verification to maintain associations under rapid motion, initialization error, or local view degradation. Stage 1: 3D-to-2D Tracking. Let Tba denote the rigid transformation from frame a to b. Using the pre-calibrated extrinsics {Tbck } and the current body pose prediction Twbi ,we project historical map points Pjw ∈ R3 into each camera 
+
+ck’s image plane through a unified multi-camera projection operator 
+
+hck (Twb , Pjw) ≜ πck
+
+ Tck 
+
+> b
+
+(Twb )−1Pjw
+
+ (1) which is reused by tracking, factor-graph optimization, and global bundle adjustment (BA) and relocalization. The Stage 1 prediction is then 
+
+pj, pred  
+
+> ck
+
+= hck (Twbi , Pjw) (2) where πck : R3 → R2 is the camera projection function with distortion correction. Given the previous observation pj,i −1 
+
+> ck
+
+,we find the precise match by performing local optical flow matching within a neighborhood N jck around pj, pred  
+
+> ck
+
+:
+
+pj, ∗ 
+
+> ck
+
+= pj, pred  
+
+> ck
+
++ arg min  
+
+> ∆p∈∆Njck
+
+X
+
+> u∈W
+
+Iick (u + pj, pred  
+
+> ck
+
++ ∆ p) − Ii−1 
+
+> ck
+
+(u + pj,i −1 
+
+> ck
+
+) 2 (3) where W is the local image patch and ∆N jck denotes the local displacement search window. This pose-guided local search narrows the matching window and improves robust-ness under fast motion. Meanwhile, we support NN-Feature matching. To further improve multi-camera tracking reliability, we introduce cross-view geometric consistency verification. If the same map point Pjw is tracked in two distinct cameras 
+
+k1 and k2 as (pck1 , pck2 ), their homogeneous coordinates 
+
+(˜ pck1 , ˜pck2 ) must satisfy the epipolar constraint defined by the relative pose Tck1 
+
+> ck2
+
+= Tck1 
+
+> b
+
+(Tck2 
+
+> b
+
+)−1:
+
+(˜ pck1 )T Fk1,k 2 ˜pck2 = 0 (4) where Fk1,k 2 is the fundamental matrix. Matches with epipolar residuals exceeding a threshold ϵ are flagged as outliers. The cross-camera check removes associations that are inconsistent with the calibrated rig geometry, which is especially useful when a single view suffers from illumina-tion changes, occlusion, or repetitive texture. Stage 1 outputs 
+
+M3D = {(Pjw, pj, ∗ 
+
+> ck
+
+)}.
+
+Stage 2: 2D-to-2D Tracking. To accommodate newly ex-tracted features lacking historical map points, as well as features where 3D-to-2D reprojection fails due to depth degradation from low texture, long range, or motion blur, we execute a pure visual frame-to-frame tracking fallback. Each camera ck independently runs feature association. The tracker parallelly utilizes both the local optical flow matching defined in (3) and an independent NN-Feature matching modality. These distinct modalities generate can-didate matches (pi−1,j ck , pi,j ck ), which are then filtered by a lightweight geometric check within each camera. When one view provides too few reliable tracks, valid tracks from other cameras can still constrain the shared body motion, reducing the influence of a single degraded stream. The verification keeps geometrically consistent matches without coupling Stage 2 to a dense map. Stage 2 outputs M2D , which complements M3D in low-depth or low-feature regions. 
+
+C. Tightly Coupled Factor-Graph Optimization 
+
+In the multi-camera configuration, local BA parameterizes the sliding-window optimization variables into a shared body state X :
+
+Xi = Twbi vwbi bai bgi
+
+ (5) where Twbi = Rwbi pwbi
+
+ ∈ SE (3) is the body pose in the world frame, vwbi ∈ R3 is the body velocity, and bai , bgi ∈
+
+R3 are the IMU biases. Rather than optimize each camera pose independently, the framework constrains all visual and geometric observations to this shared body state with rigid extrinsics {Tbck ∈
+
+SE (3) }. This body state parameterization keeps cross-view geometry consistent by construction and avoids adding a separate pose variable for every camera. 
+
+IMU Pre-integration Residual Factor r1. Inertial kine-matic constraints between adjacent keyframes bi and bi+1 
+
+are formulated through IMU pre-integration residuals. By integrating high-frequency IMU in the local body state, we avoid the computational overhead of re-integration during iterative state updates. The residual vector on the inertial state error manifold is: 
+
+r1 = rimu (zbi,b i+1 , Xi, Xi+1 )=
+
+
+
+r∆R
+
+r∆v
+
+r∆p
+
+rba
+
+rbg
+
+
+
+(6) with the explicit nonlinear prediction errors: 
+
+r∆R = log 
+
+ ∆ ˜Rbibi+1 exp( JRbg δbgi )−1
+
+· (Rwbi )−1Rwbi+1 
+
+
+
+,
+
+r∆v = ( Rwbi )−1 
+
+vwbi+1 − vwbi − gw∆t
+
+
+
+−
+
+
+
+∆˜ vbibi+1 + Jvba δbai + Jvbg δbgi
+
+
+
+,
+
+r∆p = ( Rwbi )−1 
+
+pwbi+1 − pwbi − vwbi ∆t − 12 gw∆t2
+
+−
+
+
+
+∆˜ pbibi+1 + Jpba δbai + Jpbg δbgi
+
+
+
+(7) where {∆ ˜R, ∆˜ v, ∆˜ p} are the pre-integrated measurements, 
+
+J(·)(·) are the first-order Jacobian corrections with respect to the biases, and gw is the gravity vector in the world frame. The random-walk bias residuals are rba = bai+1 − bai and 
+
+rbg = bgi+1 − bgi . The Mahalanobis weight of the IMU factor is dictated by the covariance matrix Σimu , propagated by the error-state transition law. The resulting factor provides inertial scale information and short-term trajectory continuity constraints. 
+
+Multi-Camera Visual Reprojection Residual Factor r2.
+
+We fuse synchronized visual observations from all N cam-eras. This visual factor forms the base geometric term, while depth-related weighting is applied when valid depth observations are available from either RGB-D sensor or the optional pseudo-depth interface. At keyframe i, a map point 
+
+Pjw projects onto the k-th camera’s image plane via: 
+
+pj, proj  
+
+> ck
+
+= hck (Twbi , Pjw) (8) where hck is the unified projection operator from Eq. (1), with Tck 
+
+> b
+
+= ( Tbck )−1. The unified visual cost is: 
+
+r2(i) =  
+
+> N−1
+
+X
+
+> k=0
+
+X
+
+> j∈F i,k
+
+ρH
+
+
+
+pji,k − pj, proj 
+
+> ck
+> 2Σv,j
+
+
+
+(9) where Fi,k is the set of visual observations in camera ck at keyframe i, pji,k is the measured pixel coordinate, and ρH (·)
+
+is the Huber robust kernel. The measurement covariance Σv,j 
+
+is adaptively weighted according to the feature pyramid level and the validity of the associated depth observation when the depth module is enabled. The visual residual links multi-camera observations to the global body state and keeps all camera measurements in one optimization frame. 
+
+GICP Relative Pose Residual Factor r3. The GICP factor is depth-gated: it is instantiated only when valid depth observations are available. These observations may come from physical RGB-D sensors or from the optional pseudo-depth interface. In textureless corridors or environments with drastic illumination transitions where visual features degrade severely, the resulting local point clouds provide supplemen-tary GICP constraints. Following the GICP penalizes both point-to-point Euclidean distances and probabilistic local surface structures. Let di and dj denote the keyframes i and 
+
+j. The GICP factor is: 
+
+r3 = X ρC
+
+
+
+∥Ti,j ∥2ΣGICP ,i,j 
+
+
+
+(10) where Ti,j is the relative pose of GICP and ρC (·) denotes the robust Cauchy kernel. 
+
+D. Loop Closure and Global BA 
+
+To reduce accumulated drift and scale divergence in large-scale trajectories, GeoFlow-SLAM++ uses a multi-camera loop closure and global factor-graph optimization mecha-nism. 
+
+Unified Cross-View Place Recognition. Conventional multi-camera SLAM frameworks typically perform loop closure retrieval on a per-camera basis. This independent retrieval strategy tends to produce false negative results when the robot undergoes aggressive maneuvers, partial occlusion occurs in a single view, or drastic illumination fluctua-tions affect individual sensors. GeoFlow-SLAM++ extends appearance-based loop closure to a multi-camera fused place recognition module, which can run seamlessly with either of the two feature front-ends. Whenever a keyframe is created, global descriptors vck are extracted in parallel from all active cameras {ck}N −1 
+
+> k=0
+
+. Since all descriptors belong to the same calibrated body keyframe, they are combined into the unified descriptor vunified by A(·). The similarity query is then executed against the map database in the corresponding descriptor space. When some camera views 
+
+Fig. 3: Unified cross-view place recognition retrieval. Aquery keyframe at time ti provides left-side, front, and right-side views, and the retrieved candidate at time tj has comple-mentary overlap across the same camera system. GeoFlow-SLAM++ aggregates per-camera descriptors into vunified and queries the map database in the unified visual descriptor space. The retrieved candidate is then used for geometric verification, loop closure, and cross-session relocalization. suffer degradation, the remaining views can still contribute appearance evidence for retrieval in complex environments. Fig. 3 illustrates how complementary camera views are aggregated for retrieval under partial view degradation. 
+
+Global BA. Once a loop candidate passes geometric ver-ification in cross-view, global BA uses the loop constraint to update the trajectory and map jointly. Unlike the local sliding-window optimization, global BA revisits all historical body states, IMU biases, and map points, and jointly balances inertial, visual, and GICP constraints: 
+
+min  
+
+> X,Pw
+
+X ρI (rimu ) + X ρH (rvis )+ X ρC (rGICP )
+
+(11) where the visual term uses the multi-camera reprojection residual 
+
+ei,k,j = pji,k − hck (Twbi , Pjw) (12) and the other terms follow the same factor definitions as the local factor graph. Solving this sparse least-squares problem distributes the loop correction over the trajectory. 
+
+E. Relocalization 
+
+GeoFlow-SLAM++ uses the same multi-camera aggrega-tion strategy for cross-session relocalization. When relocal-ization is triggered, the system extracts global descriptors vck
+
+and aggregates them into vunified to query the map database, 
+
+vunified = A({vck }N −1 
+
+> k=0
+
+). (13) For the ORB front-end, A(·) corresponds to summing sparse BoW vectors; for the NN-Feature front-end, it denotes normalized pooling of per-camera descriptors. Querying 
+
+vunified against the inverted index of the prior map, together with cumulative scoring over covisible keyframes, yields candidate matches. When some cameras are occluded or visually degraded, the remaining views can still contribute appearance evidence for relocalization. For retrieved candidates, a joint multi-camera Perspective-n-Point (PnP) solver estimates absolute pose constraints directly on the body state’s SE (3) manifold, reducing the need for separate per-camera pose initializations. With rigid extrinsics {Tbck }, 2D observations from all cameras and their corresponding map points Pjw are jointly constrained by the multi-camera reprojection model: 
+
+pjck = hck (Twb , Pjw) (14) where Twb is the target body pose. Pooling matches across cameras allows random sample consensus (RANSAC) hy-potheses to draw support from the cross-view inlier set rather than from one camera alone. After initial pose estimation, coarse-to-fine geometric checks and motion-only BA filter out spurious matches across all cameras. The system accepts a relocalization hypothesis when the verified multi-view support is sufficient: 
+
+ninlier = 
+
+> N−1
+
+X
+
+> k=0
+
+X
+
+> j∈I k
+
+1 ≥ γthresh . (15) where Ik is the verified inlier set for camera ck. This criterion prevents low-support hypotheses from entering localization mode. After relocalization, the system enters pure localization mode: local mapping and loop closure stop, while tracking continues against a local submap cropped from the Map with IMU propagation and joint multi-camera reprojection. 
+
+F. Optional Multi-Camera Joint Feed-Forward Depth Inter-face 
+
+The depth module is an optional source of supplementary geometry. When enabled, it infers dense pseudo-depth from synchronized RGB images and fixed multi-camera extrinsics. At time step i, the system uses images from N cameras: 
+
+Ii = {Iick }N −1 
+
+> k=0
+
+, N ≥ 3 (16) alongside fixed rigid extrinsics relative to the body: 
+
+Tc = {Tbck }N −1 
+
+> k=0
+
+. (17) A joint pseudo-depth model predicts all camera depths in one pass: 
+
+{Dick }N −1 
+
+> k=0
+
+= Φ θ
+
+ {Iick }N −1 
+
+> k=0
+
+,
+
+{Tbck }N −1
+
+> k=0
+
+ (18) where Φθ is the joint pseudo-depth model and Dick is the pseudo-depth of the k-th camera at time step i.
+
+Unified Structural Alignment. Because the pseudo-depths are tied to the same calibrated multi-camera system, each depth can be transformed into a common reference frame for map recovery and geometric residuals: 
+
+Pc0 (pck ) = Tc0 
+
+> ck
+
+π−1
+
+> ck
+
+ pck , D ck (pck ) (19) where π−1 
+
+> ck
+
+(·) back-projects pixel pck with its pseudo-depth and Tc0 
+
+> ck
+
+maps camera ck to reference camera c0. To limit the effect of pseudo-depth errors, cross-view-consistent depth observations enter map updates and residual construction. V. E XPERIMENTAL EVALUATION 
+
+We comprehensively benchmark GeoFlow-SLAM++ across five distinct datasets from four evaluation dimensions. The Hilti SLAM Challenge dataset [29] facilitates quantitative comparisons between the presented multi-camera RGB-IMU system and mainstream LiDAR-based SLAM pipelines, with the pseudo-depth module disabled throughout evaluations. A self-collected Pocket2 dataset, recorded via the MANIFOLD TECH handheld Pocket2 device with three fisheye cameras and a Livox Mid360 LiDAR, is used to evaluate pure vision-based cross-session relocalization. Ablation studies on the TUM RGB-D [30] and Hilti datasets systematically quantify the individual contributions of loop closure, optical flow tracking, NN-Feature, and the optional depth branch. Additionally, EuRoC [31] and OpenLORIS [32] further validate the efficacy of NN-Feature for robust RGB-IMU and RGB-D tracking under challenging conditions, including texture deficiency, complex appearance variations, and drastic illumination fluctuations. 
+
+Evaluation Details. Depth Anything V3 [24] is exclusively adopted for ablation experiments involving the depth module, where all depth predictions are precomputed offline. The GICP constraint is activated adaptively whenever valid RGB-D measurements or reliable pseudo-depth observations are available. 
+
+A. Multi-Camera Mapping Evaluation on Hilti Benchmark 
+
+Table I summarizes the localization accuracy on the Hilti, where the root mean square error (RMSE) of Absolute Trajectory Error (ATE) is taken as the quantitative evalu-ation metric. GeoFlow-SLAM++(ORB) achieves an average ATE of 0.058 m, significantly outperforming OpenMAVIS. While Omni-LIVO yields the highest overall accuracy, our ORB-based variant remains competitive, demonstrating the effectiveness of our visual-only approach against LiDAR-assisted baselines. The superiority of our framework is most evident in challenging sequences Exp14, Exp16, and Exp18. In these scenarios, GeoFlow-SLAM++(NN-Feature) effectively over-comes poor visual conditions, outperforming Omni-LIVO by 3.23% and 24.17% on Exp14 and Exp16, respectively. Notably, several LiDAR-assisted baselines fail to complete these sequences, whereas our system maintains consistent tracking. In geometrically regular scenes Exp04 through Exp06, our variants show only minor deviations from the Omni-LIVO benchmark, confirming their high precision. The slightly higher average ATE of 0.064 m for the NN-Feature variant is attributed to the fact that ORB features are sufficient for stable matching in structured scenes within the feature budget. As illustrated in Fig. 4, trajectory compar-isons in Exp18 further verify that both variants effectively suppress cumulative drift compared to FAST-LIVO2 and OpenMAVIS. TABLE I: Quantitative Comparison of Localization Accuracy on the Hilti Benchmark without Pseudo-Depth. Methods are grouped into LiDAR-assisted systems and vision-only visual-inertial systems. ATE RMSE is measured in meters. “ −”indicates tracking failure; the average row is reported only for methods that successfully complete all six sequences to ensure a fair comparison. Best is in bold , second-best underlined.                                                                 
+
+> Sequence LiDAR-assisted systems Vision-only visual-inertial systems FAST-LIVO R3LIVE FAST-LIO2 FAST-LIVO2 Omni-LIVO OpenMAVIS GeoFlow-SLAM++ (ORB) GeoFlow-SLAM++ (NN-Feature)
+> Exp04 0.032 0.028 0.124 0.030 0.027 0.083 0.036 0.048 Exp05 0.089 0.041 0.100 0.041 0.009 0.040 0.041 0.047 Exp06 0.091 0.049 −0.045 0.011 0.075 0.047 0.081 Exp14 0.129 0.097 0.136 0.097 0.031 0.082 0.034 0.030
+> Exp16 1.165 −−0.123 0.120 0.255 0.101 0.091
+> Exp18 0.387 −−0.155 0.083 0.178 0.091 0.089
+> Avg. 0.316 −−0.082 0.047 0.119 0.058 0.064
+
+Fig. 4: Qualitative mapping trajectory comparison with representative baselines on Hilti Exp18. The plotted trajectories are aligned to the ground truth for visualization. The zoomed regions compare local drift with FAST-LIVO2 and OpenMAVIS, which represent LiDAR-visual-inertial and multi-camera visual-inertial baselines, respectively. TABLE II: Quantitative Evaluation of Relocalization and Localization Accuracy and Efficiency in Cross-Session Scenarios Using the ORB Front-End. RMSE in meters and relocalization time in milliseconds. Best 6-DoF RMSE is underlined, and best 7-DoF RMSE is in bold .                                                    
+
+> Scene Mapping Sequence Localization Sequence Total Frames LiDAR-Based GeoFlow-SLAM++ (ORB) 6-DoF 7-DoF Time 6-DoF 7-DoF Time
+> Sh3 20260320-1309 20260414-1242 1288 0.077 0.078 87.660 0.048 0.015 99.050 Sh2 20260414-1340 20260320-1315 2255 0.087 0.087 91.180 0.054 0.036 98.540 Sh1 20260422-1040 20260414-1345 1583 0.072 0.069 84.080 0.145 0.034 87.530 Garage 20260422-1422 20260422-1426 2405 0.082 0.078 90.260 0.122 0.086 99.360
+> Avg. −−−0.079 0.078 88.290 0.092 0.043 96.120
+
+B. Cross-Session Relocalization 
+
+We evaluate cross-session relocalization under practical vision-only deployment conditions, where localization relies solely on fisheye cameras without LiDAR inputs during runtime. We conduct experiments on four self-collected sequences, including three indoor scenes with appearance variations and one low-texture parking scenario. For each scene, one sequence is used for map construction and an-other cross-session sequence serves as the localization query, with LiDAR-based localization adopted as the benchmark. We adopt six-degree-of-freedom (6-DoF) and seven-degree-of-freedom (7-DoF) RMSE for comprehensive evaluation, which quantify global registration accuracy and trajectory intrinsic consistency, respectively. TABLE III: Ablation Study Results of the NN-Feature Front-End on the TUM RGB-D Dataset. “Op” denotes dual-stream optical flow tracking. ATE RMSE in meters. “ −” indicates tracking failure. Best is in bold , second-best underlined.                                                                                     
+
+> Loop Op NN-Feature 360 desk desk2 floor plant room rpy teddy xyz Avg.
+> ×××0.153 0.022 0.305 -0.050 0.338 0.023 0.195 0.011 0.137
+> ×✓×0.155 0.026 0.157 0.222 0.117 0.250 0.021 0.254 0.011 0.135
+> ××✓0.094 0.019 0.044 0.034 0.034 0.193 0.022 0.144 0.010 0.066
+> ✓××0.176 0.018 0.209 -0.028 0.201 0.020 0.170 0.011 0.104
+> ✓✓×0.120 0.017 0.026 0.287 0.018 0.078 0.021 0.163 0.010 0.082
+> ✓×✓0.081 0.016 0.051 0.017 0.033 0.090 0.024 0.128 0.010 0.050
+
+TABLE IV: Ablation Study Results with Optional Pseudo-Depth on the Hilti Multi-Camera Dataset. “Op” denotes dual-stream optical flow tracking. ATE RMSE in meters. Best is in bold , second-best underlined.                                                                                 
+
+> Loop Op NN-Feature Depth Exp04 Exp05 Exp06 Exp14 Exp16 Exp18 Avg.
+> ××××0.055 0.042 0.068 0.038 0.113 0.107 0.070
+> ✓×××0.040 0.040 0.064 0.039 0.105 0.104 0.065
+> ×✓××0.038 0.027 0.049 0.040 0.122 0.094 0.062
+> ✓✓××0.036 0.042 0.048 0.034 0.102 0.091 0.059
+> ××✓×0.041 0.059 0.086 0.029 0.087 0.092 0.066
+> ✓×✓×0.048 0.047 0.081 0.030 0.091 0.089 0.064
+> ✓×✓✓0.039 0.034 0.048 0.037 0.107 0.092 0.060
+
+As shown in Table II, our GeoFlow-SLAM++ achieves superior trajectory stability. It achieves an average 7-DoF RMSE of 0.043 m, reducing the LiDAR baseline error by 44.87% and outperforming the LiDAR method on all three indoor sequences. The LiDAR baseline achieves better global alignment in terms of 6-DoF accuracy, since visual matching is susceptible to illumination changes, object rearrangement and low texture across different sessions. In terms of effi-ciency, our vision-only method achieves comparable runtime with the LiDAR baseline, demonstrating good practicality for real-world deployment. 
+
+C. Ablation Study 
+
+We conduct ablation experiments to quantify the individual contribution of loop closure ( Loop ), dual-stream optical flow tracking ( Op ), NN-Feature and pseudo-depth, as well as the complementarity among these modules. 
+
+1) TUM RGB-D: As shown in Table III, all the modules designed in this paper can improve localization accuracy to varying degrees. When used alone, the NN-Feature module achieves an average ATE of 0.066 m, which is clearly better than the standalone Loop and Op modules. This module pro-vides the most substantial performance improvement: it not only restores effective tracking on the floor sequence where the baseline loses track, but also significantly suppresses se-vere cumulative pose drift in the challenging desk2 sequence. 
+
+Loop mainly constrains long-term global localization drift and achieves the most obvious accuracy improvement on the long-trajectory room sequence. The performance gain brought by standalone Op is quite limited, which indicates that for such short sequences constrained by metric depth, optical flow is mainly adopted to stabilize short-term frame-to-frame tracking rather than eliminate global drift. The combination of Loop and NN-Feature achieves the best average ATE of 0.050 m, indicating clear complementarity between the two modules, and it outperforms all single-module schemes as well as the Loop +Op combination. 
+
+2) Multi-Camera Hilti: As shown in Table IV, all meth-ods achieve centimeter-level localization accuracy with negli-gible performance gaps under the multi-camera setting. Com-pared with the TUM datasets, each module exhibits different performance preferences. Benefiting from sufficient visual redundancy of multi-camera systems, the baseline can main-tain stable tracking, and each module only brings marginal accuracy gains. The Loop +Op combination achieves the lowest average ATE of 0.059 m. The NN-Feature module can effectively restrict cumulative pose drift on several test sequences, while it performs worse than Op on other sequences. Integrating pseudo-depth into the Loop +NN-Feature pipeline strengthens geometric constraints, yet depth estimation noise slightly reduces localization accuracy in several dynamic scenarios. The full pipeline with pseudo-depth achieves an average ATE of 0.060 m, which is compa-rable to the optimal scheme. This suggests that pseudo-depth provides geometric compensation only in limited scenarios and does not further improve global localization accuracy in stable multi-camera SLAM systems with abundant visual redundancy. 
+
+D. Experiments on EuRoC and OpenLORIS 
+
+To isolate the contribution of the dual front-end design, we further evaluate the NN-Feature branch under monocular RGB-IMU EuRoC and monocular RGB-D OpenLORIS set-tings, decoupled from the full multi-camera system. These experiments are intended to verify the standalone benefit of the learning-based front-end within the overall GeoFlow-SLAM++ design. 
+
+1) EuRoC: As shown in Table V, GeoFlow-SLAM++ (NN-Feature) achieves the lowest ATE on sequences MH02, MH03, MH04, and V101, demonstrating that it can de-liver more stable feature associations under scenarios with viewpoint changes, motion blur, and weak textures. Its per-formance degrades on sequences V201 to V203, which is mainly attributed to unstable long-baseline feature tracking TABLE V: Quantitative Comparison of Monocular RGB-IMU Localization Accuracy of GeoFlow-SLAM++ (NN-Feature) on the EuRoC Dataset. ATE RMSE in meters. “ −” indicates tracking failure. Best is in bold , second-best underlined. 
+
+Dataset ORB-SLAM3 OKVIS VINS-Mono-loop VINS-Fusion-loop SuperVINS GeoFlow-SLAM GeoFlow-SLAM++ (NN-Feature) 
+
+MH01 0.062 0.330 0.087 0.091 0.087 0.019 0.025 MH02 0.037 0.370 0.108 0.046 0.097 0.035 0.027 
+
+MH03 0.046 0.250 0.066 0.092 0.181 0.052 0.038 
+
+MH04 0.075 0.270 0.205 0.131 0.171 0.071 0.069 
+
+MH05 0.057 0.390 0.142 0.262 0.158 0.070 0.100 V101 0.049 0.094 0.048 0.154 0.201 0.034 0.031 
+
+V102 0.015 0.140 0.063 0.219 0.116 0.027 0.028 V103 0.037 0.210 0.201 0.170 0.221 0.096 0.069 V201 0.042 0.090 0.067 0.123 0.061 0.031 0.046 V202 0.021 0.170 0.159 − 0.100 0.018 0.025 V203 0.027 0.230 0.248 0.193 0.169 0.029 0.093 
+
+Avg. 0.043 0.231 0.127 0.148 0.142 0.044 0.050 
+
+TABLE VI: Quantitative Comparison of Monocular RGB-D-IMU Localization Accuracy of GeoFlow-SLAM++ (NN-Feature) on the OpenLORIS-Scene Dataset. ATE RMSE in meters. “ −” indicates tracking failure. Best is in bold , second-best underlined. 
+
+Dataset ORB-SLAM3 VINS-Mono VINS-RGBD S-VIO GeoFlow-SLAM GeoFlow-SLAM++ (NN-Feature) 
+
+Home1-1 0.929 1.076 0.452 0.402 0.458 0.339 
+
+Home1-2 − 0.542 0.379 0.316 0.378 0.381 Office1-1 0.068 0.231 0.101 0.101 0.058 0.056 
+
+Office1-2 0.123 0.289 0.124 0.099 0.070 0.069 
+
+Office1-3 − 0.155 0.154 0.151 0.029 0.100 Office1-4 0.253 0.392 0.186 0.164 0.155 0.148 
+
+Office1-5 − 0.238 0.239 0.212 0.200 0.197 Avg. − 0.418 0.234 0.206 0.193 0.184 
+
+under high-speed motion. The overall average ATE reaches 
+
+0.050 m, yielding comparable localization accuracy against conventional approaches. 
+
+2) OpenLORIS: As summarized in Table VI, GeoFlow-SLAM++ (NN-Feature) achieves the best results on Home1-1, Office1-1, Office1-2, Office1-4, and Office1-5, with the minimum average ATE of 0.184 m. Although depth infor-mation is incorporated into the system to provide scale and geometric constraints, NN-Feature further reduces localiza-tion errors by enhancing the stability of feature matching. This reveals that high-quality visual correspondences are still essential for boosting SLAM localization precision. VI. C ONCLUSION 
+
+In this study, we present GeoFlow-SLAM++, a robust and tightly coupled multi-camera VI-SLAM framework that extends our prior single-sensor GeoFlow-SLAM into a uni-fied body-centric multi-camera system. A central design of GeoFlow-SLAM++ is its dual visual front-end design, which supports both conventional ORB-based tracking and learning-based NN-Feature tracking under a shared down-stream geometric pipeline. Built on this formulation, the system integrates multi-camera dual-stream optical flow/NN-Feature tracking, cross-view place recognition, and tightly coupled factor-graph optimization for mapping and relocal-ization. An optional pseudo-depth extension further provides supplementary geometric constraints in selected degraded scenarios. GeoFlow-SLAM++ achieves competitive perfor-mance across multiple benchmark datasets. Beyond straightforward pseudo-depth integration in geo-metric SLAM, our future work will focus on improving the geometric consistency of depth estimated by 3D foundation models, aligning the scale of pseudo-depth with sensor mea-surements, and investigating whether such pseudo-depth can replace physical depth sensors for high-precision mapping and localization on robotic platforms. REFERENCES [1] C. Campos, R. Elvira, J. J. G´ omez Rodr´ ıguez, J. M. M. Montiel, and J. D. Tard´ os, “ORB-SLAM3: An accurate open-source library for visual, visual-inertial and multi-map SLAM,” IEEE Transactions on Robotics , vol. 37, no. 6, pp. 1874–1890, 2021. [2] P. Gu and Z. Meng, “S-vio: Exploiting structural constraints for rgb-d visual inertial odometry,” IEEE Robotics and Automation Letters ,vol. 8, no. 6, pp. 3542–3549, 2023. [3] T. Qin, P. Li, and S. Shen, “VINS-Mono: A robust and versa-tile monocular visual-inertial state estimator,” IEEE Transactions on Robotics , vol. 34, no. 4, pp. 1004–1020, 2018. [4] T. Qin, S. Cao, J. Pan, and S. Shen, “VINS-Fusion: A general optimization-based framework for global pose estimation with multiple sensors,” arXiv preprint arXiv:1901.03642 , 2019. [5] Z. Shan, R. Li, and S. Schwertfeger, “Rgbd-inertial trajectory estima-tion and mapping for ground robots,” Sensors , vol. 19, no. 10, p. 2251, 2019. [6] S. Leutenegger, S. Lynen, M. Bosse, R. Siegwart, and P. Furgale, “Keyframe-based visual-inertial odometry using nonlinear optimiza-tion,” The International Journal of Robotics Research , vol. 34, no. 3, pp. 314–334, 2015. [7] T. Xiao, X. Zhou, L. Liu, W. Sui, W. Feng, J. Qiu, X. Wang, and Z. Su, “Geoflow-slam: A robust tightly-coupled rgbd-inertial and legged odometry fusion slam for dynamic legged robotics,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) .IEEE, 2025, pp. 15 181–15 188. [8] A. Segal, D. Haehnel, and S. Thrun, “Generalized-ICP,” in Robotics: Science and Systems , vol. 2, no. 4, 2009, p. 435. [9] Y. Wang, Y. Ng, I. Sa, A. Parra, C. Rodriguez, T. J. Lin, and H. Li, “MAVIS: Multi-camera augmented visual-inertial SLAM using SE 2(3) based exact IMU pre-integration,” in IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2024, pp. 1694–1700. [10] S. Li, L. Pang, and X. Hu, “Multicam-SLAM: Non-overlapping multi-camera SLAM for indirect visual localization and navigation,” arXiv preprint arXiv:2406.06374 , 2024. [11] W. Xu, Y. Cai, D. He, J. Lin, and F. Zhang, “FAST-LIO2: Fast direct LiDAR-inertial odometry,” IEEE Transactions on Robotics , vol. 38, no. 4, pp. 2053–2073, 2022. [12] J. Lin and F. Zhang, “R 3LIVE: A robust, real-time, RGB-colored, LiDAR-inertial-visual tightly-coupled state estimation and mapping package,” in IEEE International Conference on Robotics and Automa-tion (ICRA) . IEEE, 2022, pp. 10 672–10 678. [13] C. Zheng, W. Xu, Z. Zou, T. Hua, C. Yuan, D. He, B. Zhou, Z. Liu, J. Lin, F. Zhu, Y. Ren, R. Wang, F. Meng, and F. Zhang, “FAST-LIVO2: Fast, direct LiDAR-inertial-visual odometry,” IEEE Transactions on Robotics , vol. 41, pp. 326–346, 2024. [14] Y. Cao, C. Zhang, X. He, Y. Chen, C. Pu, B. Wang, K. Wu, S. Zhu, F. Han, S. Liu, C. Li, and J. Wang, “Omni-LIVO: Robust RGB-colored multi-camera visual-inertial-LiDAR odometry via photometric migration and ESIKF fusion,” IEEE Robotics and Automation Letters ,2026, early Access, arXiv:2509.15673. [15] D. DeTone, T. Malisiewicz, and A. Rabinovich, “SuperPoint: Self-supervised interest point detection and description,” in IEEE Con-ference on Computer Vision and Pattern Recognition Workshops (CVPRW) , 2018, pp. 224–236. [16] P. Lindenberger, P.-E. Sarlin, and M. Pollefeys, “LightGlue: Local fea-ture matching at light speed,” in IEEE/CVF International Conference on Computer Vision (ICCV) , 2023, pp. 17 627–17 638. [17] R. Arandjelovi´ c, P. Gronat, A. Torii, T. Pajdla, and J. Sivic, “NetVLAD: CNN architecture for weakly supervised place recogni-tion,” in IEEE Conference on Computer Vision and Pattern Recogni-tion (CVPR) , 2016, pp. 5297–5307. [18] A. Ali-bey, B. Chaib-draa, and P. Gigu` ere, “MixVPR: Feature mixing for visual place recognition,” in IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) , 2023, pp. 2998–3007. [19] A. Ali-Bey, B. Chaib-Draa, and P. Giguere, “BoQ: A place is worth a bag of learnable queries,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2024, pp. 17 794–17 803. [20] D. G´ alvez-L´ opez and J. D. Tard´ os, “Bags of binary words for fast place recognition in image sequences,” IEEE Transactions on Robotics ,vol. 28, no. 5, pp. 1188–1197, 2012. [21] H. Luo, Y. Liu, C. Guo, Z. Li, and W. Song, “Supervins: A real-time visual-inertial slam framework for challenging imaging conditions,” 
+
+IEEE Sensors Journal , 2025. [22] L. Yang, B. Kang, Z. Huang, X. Xu, J. Feng, and H. Zhao, “Depth anything: Unleashing the power of large-scale unlabeled data,” in 
+
+IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2024, pp. 10 371–10 381. [23] L. Yang, B. Kang, Z. Huang, Z. Zhao, X. Xu, J. Feng, and H. Zhao, “Depth anything V2,” in Advances in Neural Information Processing Systems (NeurIPS) , vol. 37, 2024, pp. 21 875–21 911. [24] H. Lin, S. Chen, J. Liew, D. Y. Chen, Z. Li, G. Shi, J. Feng, and B. Kang, “Depth anything 3: Recovering the visual space from any views,” arXiv preprint arXiv:2511.10647 , 2025. [25] S. Wang, V. Leroy, Y. Cabon, B. Chidlovskii, and J. Revaud, “DUSt3R: Geometric 3D vision made easy,” in IEEE/CVF Conference on Com-puter Vision and Pattern Recognition (CVPR) , 2024, pp. 20 697– 20 709. [26] V. Leroy, Y. Cabon, and J. Revaud, “Grounding image matching in 3D with MASt3R,” in European Conference on Computer Vision (ECCV) .Springer, 2024, pp. 71–91. [27] J. Wang, M. Chen, N. Karaev, A. Vedaldi, C. Rupprecht, and D. Novotny, “VGGT: Visual geometry grounded transformer,” in 
+
+IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2025, pp. 5294–5306. [28] T. Xiao, L. Liu, W. Feng, Z. Zou, X. Zhou, W. Sui, H. Li, D. Zhang, and Z. Su, “Iris-slam: Unified geo-instance representations for robust semantic localization and mapping,” 2026. [Online]. Available: https://arxiv.org/abs/2602.18709 [29] M. Helmberger, K. Morin, B. Berner, N. Kumar, G. Cioffi, and D. Scaramuzza, “The Hilti SLAM challenge dataset,” IEEE Robotics and Automation Letters , vol. 7, no. 3, pp. 7518–7525, 2022. [30] J. Sturm, N. Engelhard, F. Endres, W. Burgard, and D. Cremers, “A benchmark for the evaluation of RGB-D SLAM systems,” in IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) ,2012, pp. 573–580. [31] M. Burri, J. Nikolic, P. Gohl, T. Schneider, J. Rehder, S. Omari, M. W. Achtelik, and R. Siegwart, “The EuRoC micro aerial vehicle datasets,” 
+
+The International Journal of Robotics Research , vol. 35, no. 10, pp. 1157–1163, 2016. [32] X. Shi, D. Li, P. Zhao, Q. Tian, Y. Tian, Q. Long, C. Zhu, J. Song, F. Qiao, L. Song et al. , “Are we ready for service robots? the OpenLORIS-Scene datasets for lifelong SLAM,” in IEEE Interna-tional Conference on Robotics and Automation (ICRA) , 2020, pp. 3139–3145.

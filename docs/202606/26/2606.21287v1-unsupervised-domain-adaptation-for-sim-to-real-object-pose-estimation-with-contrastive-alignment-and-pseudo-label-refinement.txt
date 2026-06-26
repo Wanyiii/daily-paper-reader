@@ -1,0 +1,1097 @@
+Title: Unsupervised Domain Adaptation for Sim-to-Real Object Pose Estimation with Contrastive Alignment and Pseudo-Label Refinement
+
+URL Source: https://arxiv.org/pdf/2606.21287v1
+
+Published Time: Tue, 23 Jun 2026 00:52:03 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Unsupervised Domain Adaptation for Sim-to-Real Object Pose Estimation with Contrastive Alignment and Pseudo-Label Refinement 
+
+Nidhal Eddine Chenni, Arunkumar Rathinam and Djamila Aouada 
+
+> Groundtruth w/o UDA CAPLR Object pose
+
+Fig. 1: Qualitative results on target-domain samples. Row-1: GT keypoints (red). Row-2: heatmaps from synthetic pretrained model. Row-3: refined heatmaps after CAPLR adaptation. Row-4: recovered Object pose with GT and prediction overlaid. 
+
+Abstract — Unsupervised domain adaptation (UDA) enables robust transfer of knowledge from simulated to real environ-ments while exploiting a subset of unlabeled target data to improve real-world performance. Existing UDA methods for Object pose estimation often rely on global feature matching, multi-stage larger frameworks, or image translation pipelines, which tend to overlook the pose-specific information embed-ded in feature representations. To bridge this limitation, we introduce CAPLR that targets the adaptation of pose-sensitive features in localized regions, ensuring that domain alignment preserves the geometric cues essential for accurate pose estima-tion. CAPLR achieves UDA with three key components: (1) Ef-ficient Cross-Domain Pairing strategy leveraging intermediate features to identify pose similar image pairs across domains without supervision; (2) Contrastive Alignment to perform feature alignment at localised regions in both intermediate and task-specific representations; and (3) Consistency-Based Pseudo-Label Refinement to improve reliability by encouraging stable target predictions. Extensive experiments demonstrate that CAPLR achieves state-of-the-art performance across mul-tiple well-known object pose estimation benchmarks featuring diverse and challenging scenarios. 
+
+I. INTRODUCTION Deep learning (DL) models trained solely on synthetic data often underperform on real data due to distributional discrepancies between synthetic and real domains, commonly referred to as the domain gap [1] or sim-to-real transfer [2]. Yet collecting ground-truth annotations in real-world settings  
+
+> The authors are associated with SnT, University of Luxembourg. Contact emails: {nidhal.chenni, arunkumar.rathinam, djamila.aouada }@uni.lu The work was funded by Luxembourg National Research Fund under the project reference BRIDGES/2025/IS/19855391/U-ADAPT, and LMO space.
+
+is often impractical given the cost, labor, and scalability constraints. To mitigate these gaps, Unsupervised Domain Adaptation (UDA) [3] leverages unlabeled real data (tar-get) alongside labeled synthetic data (source) to train DL models. While UDA has been effective for classification and segmentation [4], regression tasks such as object pose estimation remain challenging due to continuous outputs, ob-ject symmetries, and multimodal uncertainty [5]. Moreover, the domain gap can span not only appearance changes but also geometric and structural differences [6], affecting both feature extraction and output prediction. Recent efforts have increasingly focused on self-supervised adaptation, often via heavy pipelines with an-chor/cluster partitioning and multi-stage optimization that are sensitive to hyperparameter and can struggle with continu-ous, multimodal pose distributions [7]. In contrast, image-to-image translation methods [8], [9] focus on narrowing the appearance gap by rendering synthetic data more real-istic; however, they cannot fully preserve the geometric or structural information essential for pose accuracy, especially under large domain gaps, often resulting in noisy target pseudo labels. Multi-view consistency approaches [10], [11] can help, but rely on assumptions that rarely hold in standard single-view scenarios. An alternative, still relatively under-explored in pose estimation, is direct feature-level alignment, which has shown strong generalization in other tasks [12], [13]. Extending this concept to pose estimation introduces additional challenges, as indiscriminate feature alignment can disrupt task-specific spatial and geometric relationships 
+
+> arXiv:2606.21287v1 [cs.CV] 19 Jun 2026
+
+essential for accurate prediction, rather than enhancing them. To overcome these limitations, a practical adaptation strategy must ensure that (1) features are aligned at a fine-grained spatial scale that preserves geometric consistency, and (2) pseudo labels in the target domain remain reliable despite the domain-induced appearance and structural distortions. This paper introduces CAPLR , a unified keypoint-based UDA framework for object pose estimation to address the synthetic-to-real domain gap via Contrastive Alignment and 
+
+Pseudo-Label Refinement. wiith the following key contri-butions: First , a cross-domain pairing strategy that iden-tifies source–target pairs with consistent poses, enabling supervision without target annotations. Second , a patch-level contrastive alignment mechanism that jointly aligns feature embeddings and task-specific representations. Third ,a consistency-based pseudo-label refinement scheme that uses augmented views to improve and stabilize target predic-tions. Finally , the framework’s effectiveness is validated on multiple object pose estimation benchmarks spanning diverse domain gaps, complexities, and model sizes, supported by an ablation study isolating each component’s impact. The remainder of this paper is organized as follows: Section II reviews related work on UDA and object pose estimation. Section III presents the proposed CAPLR frame-work and its implementation. Section IV describes the ex-perimental setup and reports results on benchmark datasets. Section V concludes with key findings and future work. II. RELATED WORKS For DL-based object pose estimation of known objects from an image, two common paradigms are Direct regression 
+
+and Hybrid approaches . Direct methods learn an end-to-end mapping by regressing continuous pose parameters from the image (e.g., [14]), but they often struggle with the nonlinear-ity of rotation space, leading to complex loss design, lower accuracy, and limited interpretability. In contrast, hybrid methods (e.g., [15]) first predict 2D locations of predefined keypoints and then recover the pose using Perspective-n-Point (PnP), given the corresponding 3D keypoints and cam-era intrinsics. Owing to their geometric interpretability and flexibility in incorporating spatial priors, hybrid approaches have become the prevailing paradigm for pose estimation. 
+
+A. UDA for Keypoint Detection 
+
+UDA aims to transfer knowledge from a labeled source domain to an unlabeled target domain by addressing the dis-tributional shifts in both features and labels. Existing meth-ods are broadly grouped into Reconstruction-, Adversarial-
+
+and Discrepancy-based approaches; for a detailed review see [3]. UDA for keypoint detection has unique challenges, as keypoints encode precise geometric relationships and are therefore highly sensitive to domain shift [16]. Shape-consistent frameworks [17] integrate adversarial learning and self-supervision to preserve geometric structure, but they struggle as the domain gap increases and their reliance on implicit shape priors may not generalize to complex 3D objects. In [16] a dual-regressor strategy inspired by Disparity Discrepancy Theory [18] was introduced to sta-bilize adversarial training by reducing source–target domain conflicts; nevertheless, adversarial methods remain sensitive to hyperparameters and can be unstable. Moreover, their indirect discriminator-driven alignment may match irrelevant superficial characteristics rather than discriminatory task features [19], which can limit robust transfer. Among discrepancy-based methods, contrastive learning emerged as an effective paradigm for classification tasks, where discrete labels naturally define positive/negative pairs [20], but constructing such pairs is non-trivial for regres-sion due to continuous outputs [21]. CAPLR overcomes this through a cross-domain pairing strategy that establishes meaningful correspondences, enabling effective contrastive alignment for keypoint regression under domain shift. 
+
+B. UDA for Object Pose Estimation 
+
+Recent UDA methods for object pose estimation primar-ily reduce the domain gap through self-supervised adapta-tion. Typically, models are trained on synthetic data and then adapted using unlabeled real images. For example, Self6D++ [22] performs self-supervised mask alignment with differentiable rendering, but it still faces a rendered-vs-real discrepancy and depends on a costly rendering pipeline that limits scalability to complex scenes. SMOC-Net [10] introduces a relative-pose geometry constraint using esti-mated camera poses. MAST [7] uses manifold-aware self-training that models dependencies among regression targets to encourage domain-invariant representations, though its smooth-transition assumption may miss local structural mis-alignments across domains. Other works attempt to narrow the gap via synthetic-to-real image translation [8], which can reduce appearance differences but often generalizes poorly to challenging cases such as occlusion. More recently, [11] improves translation robustness by leveraging multi-view images with overlapping regions, an assumption that many real-world datasets do not satisfy. In contrast, direct feature alignment has demonstrated strong performance in other UDA tasks [12], [13], but remains relatively unexplored for object pose estimation, A key difficulty is that alignment must target task-relevant features, otherwise, it risks ampli-fying superficial cues (e.g., texture/style) while overlooking pose-critical information. Motivated by these limitations, our work introduces a patch-based dual-level alignment strategy that jointly aligns backbone embeddings and regression head outputs, ensuring that adaptation captures both marginal and conditional distri-butions relevant to pose, building on prior findings that joint alignment of features and outputs improves adaptation [23], as well as theoretical results emphasizing the importance of combining marginal and conditional alignment for regression problems [24]. Furthermore, to mitigate the unreliability of predictions in the unlabeled target domain, we incorporate a consistency-based pseudo-label refinement that filters low-confidence or spatially inconsistent labels, thereby stabiliz-ing supervision. Together, these components form a unified framework named CAPLR that advances UDA for Object pose estimation beyond the need for image translation or computationally expensive rendering pipelines. III. METHODOLOGY 
+
+A. Problem Statement 
+
+Let (xi, y i) ∼ D be a pair sampled from a data distribution 
+
+D over the input space X and the output space Y, where 
+
+xi ∈ RH×W ×3 is the input image and yi = {(uk, v k)}Kk=1 is a set of annotated 2D keypoints K. The objective is to train a regressor fθ : X → Y that, given an input image, predicts 2D keypoints by minimizing the prediction error, where L
+
+denotes a regression loss function measuring the discrepancy between the predicted and ground truth keypoints. 
+
+Ltask (θ) = E(x,y )∼D L(fθ (x), y ). (1) Given the predicted 2D keypoints {(˜ uk, ˜vk)}Kk=1 , the known 3D object keypoints {Xk}Kk=1 , and camera intrinsics ϕ, the optimal 6D object pose (R∗, t ∗) is estimated by solving a PnP problem: 
+
+(R∗, t ∗) = arg min 
+
+> R,t K
+
+X
+
+> k=1
+
+∥ϕ(RX k + t) − (˜ uk, ˜vk)∥2 . (2) In the UDA setting, a labeled source domain ˆP =
+
+{(xsi , y si )}ni=1 is given, sampled from distribution P(xs, y s)
+
+along with an unlabeled target domain ˆQ = {xti}mi=1 sampled from the marginal Q(xt) of the joint target distribution 
+
+Q(xt, y t) where the labels yt are not available during train-ing. The objective is to learn a model fθ that minimizes the expected prediction error in the target domain: err Q = E(x,y )∼Q [L(fθ (x), y )] . (3) However, this task is challenging due to the domain gap, which arises from discrepancies in both input and output distributions between the source and target domains [24]: 
+
+P(xs)̸ = Q(xt)
+
+P(ys | xs)̸ = Q(yt | xt). (4) This mismatch hinders generalization capability of models trained on source domain when deployed in target domain. 
+
+B. CAPLR Framework 
+
+To address the gap described in eq. (4), a domain adap-tation strategy would aim to align both the input and condi-tional output distributions [24] as follows: 
+
+P(xs) ≡ Q (xt)
+
+P(ys | xs) ≡ Q (yt | xt). (5) However, aligning the input distributions P(xs) and Q(xt)
+
+is nontrivial due to domain shifts in illumination, texture, and rendering fidelity between source and target images. Similarly, aligning the conditional distributions P(ys | xs)
+
+and Q(yt | xt) is particularly difficult in regression due to the continuous nature of the output space. To overcome this, we reformulate the objective in eq. (5) within the feature space, where task-relevant representations are more amenable to alignment. Specifically, eq. (6) defines alignment over backbone features g(x) and regression head outputs h(g(x)) ,which serve as proxies for the input and conditional output distributions, respectively. 
+
+Pg
+
+ g(xs) ≡ Q g
+
+ g(xt)
+
+Ph
+
+ h(g(xs))  ≡ Q h
+
+ h(g(xt)) , (6) where Pg and Ph refer to source distributions, and Qg
+
+and Qh to target distributions; subscripts g and h indicate backbone and head features, respectively. Building on this reformulation, the proposed CAPLR framework instantiates the alignment process through three complementary stages: cross-domain pairing, local patch contrastive alignment, and consistency-based pseudo-label refinement. Together, these stages constitute a practical instantiation of the objective in eq. (6). The details of each stage are presented in section III-B.1–III-B.3. 
+
+1) Cross-Domain Pairing: Effective feature alignment re-quires establishing source–target pairings with similar poses. In the UDA setting, this is particularly challenging due to the absence of target labels and the limited reliability of initial pose estimates. To address this, a two-step Cross-Domain Pairing (CDP) strategy is introduced, comprising (i) feature-based candidate selection and (ii) pose-based refinement. 
+
+1.A. Feature-Based Initial Candidate Selection: Pose predictions obtained from a model trained exclusively on the source domain often lead to suboptimal pairings when used directly, due to errors caused by domain shift. To mitigate this limitation, the first step of CDP relies on feature embeddings rather than raw pose estimates. Although accurate keypoint localization in the target domain is un-reliable, heatmap activations still provide informative cues about the approximate object region (see fig. 1-row2). These activations are therefore used to extract local features by treating predicted keypoints as anchors for cropping patches from the backbone feature map F ∈ RC×H×W .Formally, for each image I, the model outputs K keypoints 
+
+{kj = ( xj , y j )}Kj=1 , each with a confidence score cj ∈ [0 , 1] 
+
+derived from the predicted heatmap. Around each keypoint 
+
+kj , a local patch pj ∈ RC×h′×w′
+
+is extracted from F
+
+as shown in fig. 2-B. These patches are aggregated into a confidence-weighted image-level embedding: 
+
+E =
+
+PKj=1 cj vec( pj )
+
+PKj=1 cj + ϵ , (7) where vec( ·) denotes vectorization of the patch. Dividing by the sum of confidences normalizes the embedding ensuring that images with varying numbers of confident keypoints are represented on a similar scale. Cosine similarity is then used to cluster the resulting embeddings, forming an initial pool of structurally similar source–target image pairs. 
+
+1.B. Refinement via Pose Prediction: The second stage refines the candidate set obtained from the previous step by applying pose-based filtering. While direct pairwise com-parison of predicted poses across all source–target images is computationally expensive and error-prone due to noisy target predictions, restricting the operation to the reduced set from feature-based selection makes it feasible and more (A)    
+
+> ++
+> Contrastive loss
+> Backbone Regression
+> Head
+> Target images
+> Source images
+> Projection on features Target keypoints
+> Source keypoints
+> Projection on features
+> Only relevant patches are selected
+> Paired images
+> (Fig. 1-B)
+
+(B) 
+
+> Features
+> Prediction
+
+(C)     
+
+> Confidence
+> Spatial distance
+> Confidence
+> Spatial distance
+> Confidence
+> Spatial distance
+> Confidence
+> Spatial distance
+
+Fig. 2: Overview of the proposed framework. (A) Contrastive alignment between relevant feature patches (in colors) of paired samples. (B) Keypoint projection for local patch extraction from the feature map. (C) Consistency-based filtering of pseudo-keypoints (red), incorporating confidence thresholding and spatial consistency checks (green circle). reliable.This refinement mitigates the risk of retaining struc-turally similar pairs that differ in pose, which would oth-erwise degrade feature alignment. For each candidate pair 
+
+(Is, I t) where Is and It denote a source and target image respectively, the similarity between predicted poses (ts, q s)
+
+and (tt, q t) is evaluated using a combined pose error ( Epose )defined as: 
+
+ET = ∥tt − ts∥
+
+Enorm  
+
+> T
+
+= ET /∥ts∥
+
+ER = 2 arccos( |⟨ qt, q s⟩| )
+
+Epose = Enorm  
+
+> T
+
++ λrot · ER
+
+
+
+(8) where ET denotes the translation error, Enorm  
+
+> T
+
+is the normalized translation error, which accounts for scale differ-ences, and ER is the angular distance between quaternions. 
+
+λrot is a weighting factor balancing the two. The source image with the lowest Epose is selected as the optimal match for each target image, ensuring that only pairs with closely aligned pose are retained for the subsequent stage. 
+
+2) Local Patch Contrastive Alignment: Keypoint predic-tions in the target domain are often imprecise due to domain shift, producing dispersed heatmaps, as shown in the second row of fig. 1. Nevertheless, as established in section III-B.1, these heatmaps frequently localize near correct object regions, providing a meaningful signal for patch-level align-ment. Local Patch Contrastive Alignment (LPCA) leverages this property by aligning local feature representations across source–target pairs, in contrast to global feature alignment that may capture irrelevant background context (fig. 2-A). Specifically, feature patches are extracted around predicted keypoints (fig. 2-B) from both intermediate backbone fea-tures and pre-output regression head features. Backbone-level patches preserve spatial structure, while head-level patches encode task-specific semantics related to keypoint prediction. For a source–target pair (Is, I t), keypoints are predicted as {ksj }Kj=1 = f (Is) and {ktj }Kj=1 = f (It) using a network trained on synthetic data. Around each kj , patches 
+
+psj and ptj are cropped from the feature maps. These localized descriptors are then aligned via the InfoNCE loss LiNCE [25]: 
+
+LiNCE = − 1
+
+BK 
+
+X
+
+> b,k
+
+log exp( sim (psrc 
+
+> b,k
+
+, p tgt 
+
+> b,k
+
+)/τ )
+
+PBb′=1 exp( sim (psrc 
+
+> b,k
+
+, p tgt 
+
+> b′,k
+
+)/τ ) (9) where sim (·) denotes cosine similarity, τ is a temperature hyperparameter, and B is the batch size. The final alignment loss ( Lalign ) combines the task objective with contrastive losses at both levels: 
+
+Lalign = Ltask + λbackbone Lbackbone iNCE + λhead Lhead iNCE , (10) where λbackbone and λhead balance the alignment and the keypoint regression objective Ltask (eq. (1)). These weights are chosen to ensure that the contrastive terms have similar magnitude to the task loss at initialization, with greater emphasis placed on backbone-level alignment due to its broader effect on domain invariance. 
+
+3) Consistency-Based Pseudo Label Refinement: To im-prove robustness on the unlabeled target domain, aConsistency-Based Pseudo Label Refinement (CBPR) strat-egy is applied after the LPCA stage, leveraging model con-fidence to identify reliable keypoint predictions and enforce consistency across multiple augmented variants of the same image. Given a target image It a set of M augmented variants 
+
+{I(m) 
+
+> t
+
+}Mm=1 is generated using the same augmentations ap-plied to source-domain images during training. Each variant is passed through the current model f producing keypoint predictions K(m) ∈ RK×2 with associated confidence scores 
+
+c(m) ∈ RK :
+
+K(m), c (m) = f
+
+
+
+I(m)
+
+> t
+
+
+
+, m ∈ { 1, . . . , M }. (11) To construct pseudo-labels, predictions across these variants are aggregated via confidence-weighted averaging. For each keypoint kk, the pseudo-label is computed as follows: 
+
+kpseudo =
+
+PMm=1 c(m) 
+
+> k
+
+k(m)
+
+> k
+
+PMm=1 c(m) 
+
+> k
+
++ ϵ , (12) where ϵ ensures numerical stability. This aggregation pri-oritizes high-confidence predictions while down-weighting uncertain ones. Two filtering criteria are applied to improve reliability (fig. 2-C): 3.A. Confidence Thresholding: A pseudo-keypoint is re-tained only if at least one variant yields a confidence score above a threshold cthresh :
+
+∃m ∈ { 1, . . . , M } : c(m) 
+
+> k
+
+> c thresh . (13) 3.B. Spatial Consistency Filtering: Retained keypoints must also exhibit low spatial variance across variants. Specifically, the maximum distance between any pre-diction and the pseudo-label must be below dthresh :
+
+max   
+
+> m∈{ 1,...,M }
+
+∥k(m) 
+
+> k
+
+− kpseudo ∥2 < d thresh . (14) Only keypoints that satisfy both criteria are used as pseudo-labels and further used in a consistency loss to regularize the model. For each training image b in batch B, with Kb
+
+valid keypoints, the loss encourages predictions across all augmented variants to remain close to the pseudo-label: 
+
+Lpseudo = 1
+
+B
+
+> B
+
+X
+
+> b=1
+
+1
+
+Kb
+
+X
+
+> k∈Kb
+> M
+
+X
+
+> m=1
+
+∥k(m) 
+
+> b,k
+
+− kpseudo  
+
+> b,k
+
+∥22. (15) This loss reinforces prediction stability under diverse aug-mentations, effectively regularizing the model and enhancing robustness to noisy keypoints in the unlabeled target domain. IV. EXPERIMENTS AND RESULTS 
+
+A. Experimental Setup 1) Datasets: CAPLR is evaluated on different benchmarks for object pose estimation. LineMOD dataset [37] contains individual sequences of 13 household objects in cluttered scenes with challenging lighting with ∼1.2k real images per sequence. Notably, two of the objects (Eggbox and Glue) exhibit symmetry. Following prior works, we use 15% of im-ages for domain adaptation (without annotations) and the rest for testing. Occluded-LineMOD [38], a subset of LineMOD with 8 objects under severe occlusions, we use the BOP split [39] to sample data for testing and use the rest for adaptation. 
+
+HomebrewedDB [40] provides new set of images of three LineMOD objects (bvise, driller, phone). This dataset differs from LineMOD in scene layouts, background appearance, camera intrinsics, and slightly varying CAD model sizes, making it a suitable benchmark to evaluate the generalization ability of CAPLR to unseen variations. We use the second sequence for testing. These three real-world datasets serve as target domains, all sharing the same synthetic source domain from BOP challenge [41], which contains 50k PBR-generated images. For a more complex scenario, we use 
+
+SPEED+ [42] designed for spacecraft pose estimation, with 59,960 synthetic images (80/20 train/validation split) and two real subsets captured under varied lighting: Lightbox (6,740 image) and Sunlamp (2,791 image). For fair comparison with SOTA, all test images are used for adaptation discarding their labels. To mitigate this overlap, we also evaluate on the recent SHIRT dataset [36], which provides two real sequences (roe1 and roe2) captured under lighting conditions similar to Lightbox. SHIRT serves as an external real-world validation set, enabling us to assess whether the adaptation learned on SPEED+ transfers beyond its own test imagery, and to further evaluate generalization to unseen real images. 
+
+2) Metrics: For BOP datasets, we use the Average Dis-tance of Model Points (ADD) [43] for asymmetric objects, which measures the average distance between 3D object TABLE I: Comparison on LineMOD. The best and the second best results are in bold and underlined. S: synthetic data; 
+
+R: annotated real data; R−: unannotated real data. Symmetric objects are in italic . Metrics: ADD-(S) [%] ↑.                                                                                                                                                                                           
+
+> Methods Data Ape Bvise. Cam Can Cat Drill Duck Eggbox Glue Holep. Iron Lamp Phone Mean ↑
+> GDR-Net [22]
+> S
+> 50.9 99.4 89.2 97.2 79.9 98.7 24.6 81.1 81.2 41.9 98.8 98.9 64.3 77.4 DPODv2 [26] 62.1 88.3 92.5 96.6 86.1 90.1 54.8 98.6 95.4 27.0 98.2 91.0 74.3 81.2 MAR [7] 68.6 97.4 79.4 98.3 87.1 94.2 61.3 82.0 87.1 56.7 94.3 92.3 68.8 82.1 GDR-Net [22] R85.0 99.8 96.5 99.3 93.0 100.0 65.3 99.9 98.1 73.4 86.9 99.6 86.3 91.0 DPODv2 [26] 80.0 99.7 99.2 99.6 95.1 98.9 79.5 99.6 99.8 72.3 99.4 96.3 96.8 93.5 Self6D++ [27]
+> S+R−
+> 76.0 91.6 97.1 99.8 85.6 98.8 56.5 91.0 92.2 35.4 99.5 97.4 91.8 85.6 MAST [7] 73.5 97.2 80.8 98.6 89.1 93.9 66.9 95.3 95.4 69.8 95.5 98.9 93.4 93.2 SMOC-Net [10] 85.6 96.7 97.2 99.9 95.0 100.0 76.0 98.3 99.2 45.6 99.9 98.9 94.0 91.3 Tex-Pose [8] 80.9 99.0 94.8 99.7 92.6 97.4 83.4 94.9 93.4 79.3 99.8 98.3 78.9 91.7 ONDA-Pose [11] 83.0 99.9 98.0 99.5 96.4 99.4 76.5 96.3 87.1 83.4 99.6 98.9 93.4 93.2
+> CAPLR s(Ours) 82.1 95.2 93.2 97.4 98.8 97.0 89.5 100.0 96.9 95.1 98.8 78.0 93.7 93.5
+> CAPLR m(Ours) 90.7 99.5 93.2 97.9 99.3 97.7 98.8 100.0 99.5 97.0 99.9 94.1 96.6 97.2
+
+TABLE II: Comparison on the Occluded-LineMOD. Top two results are in bold and underlined. Metrics: ADD-(S) [%] ↑.
+
+Method Data Ape Can Cat Drill Duck Eggbox Glue Holep. Mean ↑
+
+CosyPose [28] 
+
+S
+
+44.0 69.9 42.1 67.5 47.8 24.4 60.0 17.5 46.7 GDR-Net [22] 44.0 83.9 49.1 88.5 15.0 33.9 75.0 34.9 52.9 MAR [7] 44.9 78.4 40.3 73.5 47.9 26.9 72.1 58.0 55.3 Self6D++ [27] 
+
+S+R−
+
+57.7 95.0 52.6 90.5 26.7 45.0 87.1 23.5 59.8 MAST [7] 47.6 82.9 45.4 75.0 53.7 48.2 75.3 63.0 61.4 SMOC-Net [10] 60.0 94.5 59.1 93.0 37.2 48.3 89.3 25.0 63.3 Tex-Pose [8] 60.5 93.4 56.1 92.5 55.5 46.0 82.8 46.5 66.7 ONDA-Pose [11] 57.7 92.0 56.7 94.0 56.1 50.6 77.9 69.5 69.3 
+
+CAPLR s (Ours) 62.0 91.3 61.2 86.1 69.4 95.6 75.6 93.6 79.3 
+
+CAPLR m (Ours) 67.0 93.9 71.3 95.0 83.3 98.0 85.8 92.4 85.8 
+
+TABLE III: Comparison of pose estimation performance across target domains in the SPEED+. Metrics: Enorm  
+
+> T
+
+in [.], ER in [ ◦], and Epose in [.]. Results marked with * are SPEC21 winners. 
+
+Size Data Lightbox Sunlamp 
+
+Method (M) Type Enorm  
+
+> T
+
+↓ ER ↓ Epose ↓ Enorm  
+
+> T
+
+↓ ER ↓ Epose ↓
+
+Small models 
+
+YOLOv8s [29] 11.5 S 0.118 18.0 0.432 0.086 19.8 0.432 UAKD [30] 3.8 S 0.049 11.42 0.248 0.063 17.03 0.360 Lava1302 [9] ∗ 8.2 S + R− 0.048 6.66 0.165 0.011 2.73 0.059 
+
+CAPLR s (Ours) 3.9 S + R− 0.029 7.80 0.165 0.035 11.17 0.230 
+
+Large/Medium models 
+
+PVSPE [15] 70 S 0.017 4.81 0.101 0.022 8.94 0.178 FA-VAE [31] 42 S 0.027 4.94 0.114 0.028 5.19 0.118 TangoU [32] ∗ 50 S + R− 0.018 3.19 0.073 0.015 4.30 0.090 VPU [33] ∗ 190 S + R− 0.022 4.58 0.101 0.012 2.83 0.061 
+
+SPNv2 [34] 53 S + R− 0.024 5.58 0.122 0.030 9.79 0.197 
+
+CAPLR m (Ours) 35 S + R− 0.018 3.54 0.080 0.022 5.77 0.122 
+
+TABLE IV: Generalization on HomebrewedDB (LineMOD Adaptation). Metrics: ADD-(S) [%] ↑.                     
+
+> Method Bvise Drill Phone Mean
+> MAST [7] 93.8 91.5 81.8 89.0 Tex-Pose [8] 93.1 94.8 79.3 89.1 ONDA-Pose [11] 98.2 97.1 92.1 95.8
+> CAPLR m(Ours) 93.0 91.5 94.1 92.9
+
+TABLE V: Generalization results on the SHIRT dataset (SPEED+ Adaptation).                                                          
+
+> Data roe1 roe2 Method Type ET[m]↓ER[◦]↓ET[m]↓ER[◦]↓
+> U-AUKF [35] S+A0.250 ±0.06 14.00 ±11.0 0.380 ±0.06 9.00 ±7.5
+> A-UKF [36] S+B0.303 ±0.35 17.17 ±42.2 0.203 ±0.23 4.67 ±14.9
+> S0.348 ±2.30 10.74 ±27.7 0.110 ±0.30 6.04 ±22.2
+> CAPLR mS+R−0.266 ±0.78 10.65 ±28.0 0.087 ±0.17 4.49 ±17.7
+> S+R0.269 ±1.41 10.31 ±28.0 0.097 ±0.42 3.74 ±14.2
+
+points transformed by the estimated pose and those trans-formed by the ground truth. For symmetric objects, we use ADD-S [14], which computes the average distance to the closest model points. Combining both, we report ADD(-S) the Average Recall (%) of poses with error below 10% of the object’s diameter on all three datasets. Following [34], evaluation on SPEED+ uses rotation error ( ER), translation and normalized translation errors ( ET , Enorm T ), and overall pose error ( Epose ). 
+
+3) Network Architecture: Our network follows the design of [34], consisting of an EfficientNet backbone, a Bidirec-tional Feature Pyramid Network (BiFPN), and a regression head with deconvolution layers that produce K heatmaps, each representing one of the K designated keypoints. The final 6D pose is recovered from the predicted 2D keypoints using PnP-RANSAC, which requires at least four keypoints. For the BOP datasets, all eight keypoints are used, while for the more challenging SPEED+ dataset, only the top five keypoints (ranked by prediction confidence) are employed, yielding better performance. The robustness of CAPLR is evaluated across model scales using two variants: CAPLR s,based on EfficientNet-B0 with ∼3.9M params, and CAPLR m,based on EfficientNet-B5 with ∼35M params. 
+
+B. Comparative Evalaution 1) LineMOD: The results are compared against a range of methods employing different levels of supervision, in-cluding models trained solely on synthetic data (GDR-Net [22], DPODv2 [26] and MAR [7]), models trained on annotated real data (GDR-Net and DPODv2), and models trained on synthetic data combined with unlabeled real images (Self6D++ [27], MAST [7], SMOC-Net [10], Tex-pose [8] and ONDA-pose [11]). Detailed results are reported in Table I. In particular, CAPLR s alone outperforms all methods and even reaches a performance comparable to that of DPODv2, which leverages real annotated images during training. CAPLR m achieves even stronger results, demonstrating both the effectiveness of CAPLR for domain adaptation in 6D object pose estimation and its robustness to model size. 
+
+2) Occluded-LineMOD: Results are compared against methods trained solely on synthetic images (CosyPose [28], GDR-Net and MAR) as well as those leveraging unlabeled real data (Self6D++, MAST, SMOC-Net, Tex-pose and ONDA-pose). Table II shows that combining synthetic and unlabeled real images reduces the domain gap, outperforming purely synthetic models. Nevertheless, CAPLR surpasses all UDA baselines by a margin of at least 10% in the ADD(-S) score, demonstrating the effectiveness of the framework even under challenging conditions of severe occlusions. 
+
+3) SPEED+: The results are presented in Table III, with the performance further analyzed by model size, an aspect of particular importance in space applications. Comparisons are made against the top three winners of the SPEC21 challenge [32] as well as recent state-of-the-art approaches (Yolov8s [29], UAKD [30], SPNv2 [34], PVSPE [15] and TABLE VI: CDP performance evaluated with the proposed compatibility metric. Results compare Upper Bound (GT), Single-Stage variants, and our Two-Stage framework.                                          
+
+> Lightbox (Accuracy % ↑)Sunlamp (Accuracy % ↑)
+> Method [.5m, 10 ◦][1 m, 10 ◦][1 m, 15 ◦][.5m, 10 ◦][1 m, 10 ◦][1 m, 15 ◦]
+> Ground-Truth pairs 47.06 59.23 88.50 48.15 55.18 89.29 Single-Stage (Features) 7.39 16.71 35.16 5.98 12.76 28.84 Single-Stage (Predictions) 36.90 44.79 75.95 32.32 38.45 66.46
+> Two-Stage (Ours) 37.83 56.88 83.26 32.78 46.76 72.62
+
+TABLE VII: Impact of Feature-alignment levels (Backbone vs Head vs Dual) and Sensitivity to target data availability.                       
+
+> Config. Data Lightbox Ep↓Sunlamp Ep↓
+> SL1: Backbone 100% 0.166 0.384 SL2: Head 100% 0.177 0.260 DL: Dual 10% 0.179 0.291 DL: Dual 20% 0.179 0.259 DL: Dual 100% 0.165 0.230
+
+FA-VAE [31]). Notably, PVSPE and FA-VAE are trained exclusively on synthetic images, whereas SPNv2 and the top SPEC21 winners leverage both synthetic and unlabeled real images, similar to our setup. For smaller models, CAPLR s
+
+proves highly competitive, achieving the best performance in the Lightbox domain and the second-best in the Sun-lamp domain, despite having roughly half the size of the leading model (Lava1302). For medium and larger models, 
+
+CAPLR m continues to perform strongly, securing the second-best result in Lightbox, outperforming models 5x larger, such as VPU, and the fourth-best in Sunlamp. When averaging performance across both domains, CAPLR m (Ep = 0 .101 )ranks third overall after VPU ( Ep = 0 .081 ) and TangoU (Ep = 0 .082 ) models, highlighting that CAPLR achieves con-sistently strong results in varied real-world space conditions. 
+
+4) Generalization to unseen domains: Direct feature alignment may raise concerns regarding generalization to unseen domains. To evaluate this, we assess two setups: (i) 
+
+CAPLR m models adapted using only 15% of real LineMOD images, tested on HomebrewedDB; and (ii) models adapted on the Lightbox domain of SPEED+, tested on the SHIRT dataset. The results are summarized in Tables IV and V. In the HomebrewedDB dataset, CAPLR m achieves the second-best overall performance compared to MAST, Tex-Pose and ONDA-Pose, demonstrating strong robustness to changes in scene layout, background, and camera intrinsics. In SHIRT, we compare with [35], [36], where CAPLR m achieves better performance. We also report baselines trained only on syn-thetic data and on synthetic+real SPEED+ images as lower and upper bounds; the performance gap notably narrows, indicating that CAPLR m effectively transfers beyond its adaptation domain. 
+
+C. Ablation Studies 
+
+To assess the design choices in our framework and quantify the contribution of its components, we conduct a comprehensive ablation study, as detailed below. 
+
+1) Effectiveness of Two-Stage Pairing Strategy: The cross-domain pairing approach consists of two stages: ini-tial selection of candidate based on features followed by refinement based on poses. To assess the effectiveness of this two-step strategy, comparisons are made against single-stage alternatives and ground-truth-based pairings as an upper bound. To measure pair quality, we define a compatibility metric based on pose error thresholds, as shown below: Compatible (Is, I t) = 
+
+
+
+1, if drot (qs, q t) ≤ Rth &
+
+dtran (ts, t t) ≤ Tth 
+
+0, otherwise (16) Based on the above eq. (16), we calculate the number of compatible pairs from the total pairs as the accuracy reported in Table VI that shows that the two-stage strategy signifi-cantly outperforms the single-stage methods and approaches the performance of ground truth-based pairings, confirming the effectiveness of the two-stage pairing strategy. 
+
+2) Effectiveness of Dual-Level Alignment: The proposed dual alignment strategy simultaneously aligns the backbone and head features across the source and target domains, bridging the gap at multiple levels. To evaluate its effec-tiveness, we compare configurations that perform alignment exclusively on the backbone (SL1) features and head (SL2) features against the dual-level (DL) alignment strategy. As shown in Table VII , dual-level alignment consistently out-performs partial variants, underscoring the complementary benefits of aligning both types of features. 
+
+3) Generalizability with Limited Target Data: To assess the effectiveness of CAPLR under limited availability of target data, we add experiments using subsets of 10%/20% of SPEED+ target images for adaptation and evaluate on the full test set. The results, presented in Table VII , demonstrate that CAPLR significantly mitigates the domain gap even with substantially reduced target supervision. 
+
+4) Effectiveness of the CBPR Stage: We evaluate the im-pact of the CBPR stage by comparing the full CAPLR frame-work with a version that omits CBPR (Alignment only). Although alignment alone achieves strong performance, the addition of the CBPR stage consistently improves results across multiple datasets, as shown in Table VIII, confirming the effectiveness of this refinement step in enhancing the robustness of keypoint prediction. TABLE VIII: Effectiveness of CAPLR pseudo label refine-ment. Compared to contrastive alignment only. 
+
+ADD(-S) [%] ↑ Epose [-] ↓
+
+Configuration LM O-LM Lightbox Sunlamp 
+
+Syn. only 84.4 70.3 0.193 0.395 Alignment Only 93.3 78.7 0.177 0.256 
+
+CAPLR s (Full) 93.5 79.3 0.165 0.230 
+
+V. CONCLUSION This paper introduces CAPLR , a unified keypoint-based UDA framework for object pose estimation that combines cross-domain pairing, contrastive alignment, and pseudo-label refinement. Unlike prior self-supervised pipelines, 
+
+CAPLR tackles domain gaps via explicit feature alignment. Experiments across diverse domains, varying scene complex-ity, and multiple model sizes show state-of-the-art results on several benchmarks. CAPLR nonetheless has limitations: it depends on finding source–target pairings, which can be difficult when synthetic CAD models differ substantially from real objects, and its patch extraction relies on uncertain predictions rather than being fully learnable. Future work will focus on reducing or removing the need for explicit pairing and exploring learning-based patch extraction. REFERENCES [1] M. Denninger, M. Sundermeyer, et al. , “Blenderproc: Reducing the reality gap with photorealistic rendering,” in 16th Robotics: Science and Systems, RSS 2020, Workshops , 2020. [2] A. Pitkevich and I. Makarov, “A survey on sim-to-real transfer methods for robotic manipulation,” in 2024 IEEE 22nd Jubilee International Symposium on Intelligent Systems and Informatics (SISY) , 2024. [3] A. Farahani, S. Voghoei, et al. , “A brief review of domain adap-tation,” in Advances in Data Science and Information Engineering ,R. Stahlbock, G. M. Weiss, et al. , Eds. Cham: Springer International Publishing, 2021, pp. 877–894. [4] M. Schwonberg, J. Niemeijer, et al. , “Survey on unsupervised domain adaptation for semantic segmentation for visual perception in auto-mated driving,” IEEE Access , vol. 11, pp. 54 296–54 336, 2023. [5] T. Ikeda, S. Zakharov, et al. , “Diffusionnocs: Managing symmetry and uncertainty in sim2real multi-modal category-level pose estimation,” in 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2024, pp. 7406–7413. [6] D. Bauer, P. H¨ onig, et al. , “Challenges for monocular 6d object pose estimation in robotics,” IEEE Transactions on Robotics , 2024. [7] Y. Zhang, J. Lin, et al. , “Manifold-aware self-training for unsupervised domain adaptation on regressing 6d object pose,” in Proceedings of the International Joint Conference on Artificial Intelligence , 2023. [8] H. Chen, F. Manhardt, et al. , “Texpose: Neural texture learning for self-supervised 6d object pose estimation,” in Proceedings of the IEEE/CVF Conference on CVPR , 2023. [9] Z. Wang, M. Chen, et al. , “Bridging the domain gap in satellite pose estimation: A self-training approach based on geometrical constraints,” 
+
+IEEE transactions on aerospace and electronic systems , 2023. [10] T. Tan and Q. Dong, “Smoc-net: leveraging camera pose for self-supervised monocular object pose estimation,” in Proceedings of the IEEE/CVF Conference on CVPR , 2023. [11] T.Tan and Q.Dong, “Onda-pose: Occlusion-aware neural domain adap-tation for self-supervised 6d object pose estimation,” in Proceedings of the Computer Vision and Pattern Recognition Conference , 2025. [12] Q. Zhang, J. Zhang, et al. , “Category anchor-guided unsupervised domain adaptation for semantic segmentation,” Advances in neural information processing systems , vol. 32, 2019. [13] C. Chen, Z. Fu, et al. , “Towards self-similarity consistency and feature discrimination for unsupervised domain adaptation,” Signal Processing: Image Communication , vol. 94, p. 116232, 2021. [14] Y. Xiang, T. Schmidt, et al. , “Posecnn: A convolutional neural network for 6d object pose estimation in cluttered scenes,” in Proceedings of Robotics: Science and Systems , Pittsburgh, Pennsylvania, June 2018. [15] H. Yang, X. Xiao, et al. , “Pvspe: A pyramid vision multitask trans-former network for spacecraft pose estimation,” Advances in Space Research , 2024. [16] J. Jiang, Y. Ji, et al. , “Regressive domain adaptation for unsupervised keypoint detection,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2021, pp. 6780–6789. [17] L. O. Vasconcelos, M. Mancini, et al. , “Shape consistent 2d keypoint estimation under domain shift,” in 2020 25th International Conference on Pattern Recognition (ICPR) . IEEE, 2021, pp. 8037–8044. [18] Y. Zhang, T. Liu, et al. , “Bridging theory and algorithm for domain adaptation,” in ICML . PMLR, 2019, pp. 7404–7413. [19] H. Zhao, R. T. Des Combes, et al. , “On learning invariant represen-tations for domain adaptation,” in ICML . PMLR, 2019. [20] R. Xu, A. Samat, et al. , “Unsupervised domain adaptation with contrastive learning-based discriminative feature augmentation for rs image classification,” Remote Sensing , vol. 16, no. 11, p. 1974, 2024. [21] M. Keramati, L. Meng, and R. D. Evans, “Conr: Contrastive regu-larizer for deep imbalanced regression,” in The Twelfth International Conference on Learning Representations , 2024. [22] G. Wang, F. Manhardt, et al. , “Gdr-net: Geometry-guided direct regression network for monocular 6d object pose estimation,” in 
+
+Proceedings of the IEEE/CVF Conference on CVPR , 2021. [23] C. Zhao, B. Qin, et al. , “An unsupervised domain adaptation method towards multi-level features and decision boundaries for cross-scene hyperspectral image classification,” IEEE Transactions on Geoscience and Remote Sensing , vol. 60, pp. 1–16, 2022. [24] H.-R. Yang, C.-X. Ren, and Y.-W. Luo, “Cod: Learning conditional in-variant representation for domain adaptation regression,” in European Conference on Computer Vision . Springer, 2024, pp. 108–125. [25] A. v. d. Oord, Y. Li, and O. Vinyals, “Representation learning with contrastive predictive coding,” arXiv preprint arXiv:1807.03748 , 2018. [26] I. Shugurov, S. Zakharov, and S. Ilic, “Dpodv2: Dense correspondence-based 6 dof pose estimation,” IEEE transactions on pattern analysis and machine intelligence , vol. 44, no. 11, 2021. [27] G. Wang, F. Manhardt, et al. , “Occlusion-aware self-supervised monocular 6d object pose estimation,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 46, pp. 1788–1803, 2021. [28] Y. Labb´ e, J. Carpentier, et al. , “Cosypose: Consistent multi-view multi-object 6d pose estimation,” in European Conference on Computer Vision . Springer, 2020, pp. 574–591. [29] M. Bechini and M. Lavagna, “Robust and efficient single-cnn-based spacecraft relative pose estimation from monocular images,” Acta Astronautica , 2025. [30] N. Ali Ousalah, A. Kacem, et al. , “Uncertainty-aware knowledge dis-tillation for compact and efficient 6dof pose estimation,” International Conference on Intelligent Robots and Systems (IROS) , 2025. [31] L. Yanfang, Z. Rui, et al. , “Feature-aided pose estimation approach based on variational auto-encoder structure for spacecrafts,” Chinese Journal of Aeronautics , vol. 37, no. 8, pp. 329–341, 2024. [32] T. H. Park, M. M¨ artens, et al. , “Satellite pose estimation competition 2021: Results and analyses,” Acta Astronautica , 2023. [33] J. I. B. P´ erez-Villar, ´A. Garc´ ıa-Mart´ ın, and J. Besc´ os, “Spacecraft pose estimation based on unsupervised domain adaptation and on a 3d-guided loss combination,” in ECCV , 2022. [34] T. H. Park and S. D’Amico, “Robust multi-task learning and online re-finement for spacecraft pose estimation across domain gap,” Advances in Space Research , 2024. [35] L. P. Cassinis, T. H. Park, et al. , “Leveraging neural network un-certainty in adaptive unscented kalman filter for spacecraft pose estimation,” Advances in Space Research , pp. 5061–5082, 2023. [36] T. H. Park and S. D’Amico, “Adaptive neural-network-based unscented kalman filter for robust pose tracking of noncooperative spacecraft,” 
+
+Journal of Guidance, Control, and Dynamics , pp. 1671–1688, 2023. [37] S. Hinterstoisser, V. Lepetit, et al. , “Model based training, detection and pose estimation of texture-less 3d objects in heavily cluttered scenes,” in Asian conference on computer vision . Springer, 2012. [38] E. Brachmann, A. Krull, et al. , “Learning 6d object pose estimation using 3d object coordinates,” in European conference on computer vision . Springer, 2014, pp. 536–551. [39] T. Hodaˇ n, V. Vineet, et al. , “Photorealistic image synthesis for object instance detection,” in 2019 IEEE international conference on image processing (ICIP) . IEEE, 2019, pp. 66–70. [40] R. Kaskman, S. Zakharov, et al. , “Homebreweddb: Rgb-d dataset for 6d pose estimation of 3d objects. in 2019 ieee,” in CVF International Conference on Computer Vision Workshop (ICCVW) , 2019. [41] T. Hodaˇ n, M. Sundermeyer, et al. , “Bop challenge 2020 on 6d object localization,” in European Conference on Computer Vision , 2020. [42] T. H. Park, M. M¨ artens, et al. , “Speed+: Next-generation dataset for spacecraft pose estimation across domain gap,” in 2022 IEEE Aerospace Conference (AERO) , 2022, pp. 1–15. [43] S. Hinterstoisser, C. Cagniart, et al. , “Gradient response maps for real-time detection of textureless objects,” IEEE transactions on pattern analysis and machine intelligence , vol. 34, no. 5, pp. 876–888, 2011. [44] I. Loshchilov and F. Hutter, “Decoupled weight decay regularization,” in International Conference on Learning Representations , 2019. [45] Z. Luo, Z. Wang, et al. , “Rethinking the heatmap regression for bottom-up human pose estimation,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2021. [46] T. Chen, S. Kornblith, et al. , “A simple framework for contrastive learning of visual representations,” in International conference on machine learning . PmLR, 2020, pp. 1597–1607. [47] B. Xiao, H. Wu, and Y. Wei, “Simple baselines for human pose estimation and tracking,” in Proceedings of the European Conference on Computer Vision (ECCV) , September 2018. Supplementary Material 
+
+I. A DDITIONAL ANALYSIS 
+
+A. Impact of Synthetic Domain Pretraining 
+
+We evaluate the effect of synthetic pretraining on the SPEED+ dataset by comparing two settings prior to adap-tation with CAPLR s : (i) initializing the backbone (Efficient-Net, as described in Section IV-A) with ImageNet-pretrained weights and adapting only the regression head, and (ii) pretraining the entire network on the full synthetic dataset before adaptation. table IX shows that synthetic pretraining of the full network results in a significant improvement in post-adaptation performance compared to ImageNet-only pretraining, confirming that pretraining on the synthetic domain is essential. TABLE IX: Performance comparison with partial (i) and full (ii) network synthetic pretraining on SPEED+ domains. 
+
+Config. Lightbox-Epose [−] ↓ Sunlamp-Epose [−] ↓
+
+(i) 1.65 2.38 (ii) 0.165 0.230 
+
+B. Effectiveness of CBPR stage 
+
+The consistency-based pseudo-label Refinement (CBPR) stage constitutes the final stage of CAPLR and is specifically designed to enhance the model’s prediction confidence on the target domain. This process is executed over N training epochs ( N = 40 in our experiments), and for each run, we select the epoch yielding the highest number of accepted pseudo-keypoints according to the criteria described in III-B.3. In fig. 1a and 1b, the blue curve shows the maximum av-erage number of accepted keypoints per 100 images achieved at this stage, revealing a clear upward trend. The red curve depicts the best linear fit computed across all epochs (not restricted to the selected best ones), and likewise indicates a consistent improvement across both domains. Together, these results demonstrate a steady increase in model confidence. 
+
+C. Validation Performance Across CBPR stage 
+
+During the CBPR stage, training relies solely on the loss between predicted keypoints on the augmented images and the pseudo labels, omitting direct task supervision. This could raise concerns about training stability and potential performance degradation. To investigate this, we report the percentage of correct keypoints (within 5% of image width) on the SPEED+ domains during this stage, shown in Figure 3. The results exhibit only minor fluctuations, indicating that performance remains largely stable throughout CBPR. This stability is primarily ensured by two factors. First, the augmentations used are simple and similar to those seen during training, preventing the model from encoun-tering overly unfamiliar inputs. Second, update acceptance conditions based on prediction confidence and spatial con-sistency, filter out unreliable pseudo-label updates, avoiding detrimental updates from poorly aligned keypoints. Together, these mechanisms maintain stable performance across CBPR epochs. 
+
+(a) Lightbox 
+
+(b) Sunlamp 
+
+Fig. 2: Accepted pseudo-labeled keypoints across epochs (blue) following the two criterias defined in III-B.3. The red line indicates the linear trend fitted to the data. 0 5 10 15 20 25 30 35 40 
+
+> Epoch
+> 0.8825
+> 0.8850
+> 0.8875
+> 0.8900
+> 0.8925
+> 0.8950
+> 0.8975
+> 0.9000
+> PCK
+> PCK (val)
+> ±0.003 std
+> Mean = 0.896
+
+(a) Lightbox 0 5 10 15 20 25 30 35 40 
+
+> Epoch
+> 0.886
+> 0.887
+> 0.888
+> 0.889
+> 0.890
+> 0.891
+> 0.892
+> 0.893
+> PCK
+> PCK (val)
+> ±0.001 std
+> Mean = 0.890
+
+(b) Sunlamp 
+
+Fig. 3: Validation performance (PCK, 5%) on real images during CBPR stage. Performance remains stable across epochs. TABLE X: Results on LineMOD – Baseline (S), CAPLR (S+R −), and Real-Finetuned Model (S+R)                                                                                                     
+
+> Method Data Ape bvise cam Can Cat Drill Duck Eggbox Glue Holep iron lamp phone Mean ↑
+> CAPLR s
+> S49.7 94.5 74.1 93.3 95.1 94.3 78.3 96.9 84.2 91.1 98.7 63.8 82.8 84.4 S+R −82.1 95.2 93.2 97.4 98.8 97.0 89.5 100.0 96.9 95.1 98.8 78.0 93.7 93.5 S+R 95.1 98.9 95.1 95.8 93.1 99.7 96.3 100 96.1 98.7 99.8 86.6 96.8 96.3
+> CAPLR m
+> S75.2 99.5 85.1 95.6 96.6 95.1 96.0 99.8 84.6 92.9 99.7 75.2 90.9 90.8 S+R −90.7 99.5 93.2 97.9 99.3 97.7 98.8 100.0 99.5 97.0 99.9 94.1 96.6 97.2 S+R 98.1 99.9 97.7 98.4 100 99.9 99.9 100 98.6 99.7 100 96.8 99.9 99.2
+
+TABLE XI: Results on Occluded-LineMOD – Baseline (S), CAPLR (S+R −), and Real-Finetuned Model (S+R)                                                                  
+
+> Method Data Ape Can Cat Drill Duck Eggbox Glue Holep Mean ↑
+> CAPLR s
+> S54.6 80.3 56.1 79.6 55.8 91.1 62.9 80.3 70.3 S+R −62.0 91.3 61.2 86.1 69.4 95.6 75.6 93.6 79.3 S+R 85.0 95.8 87.7 90.3 82.9 95.3 80.6 98.4 89.5
+> CAPLR m
+> S54.6 84.0 54.5 92.5 79.5 97.4 68.6 86.7 77.2 S+R −67.0 93.9 71.3 95.0 83.3 98.0 85.8 92.4 85.8 S+R 90.0 97.4 95.1 96.8 88.4 98.4 87.9 99.0 94.1
+
+TABLE XII: Results on SPEED+ – Baseline (S), CAPLR (S+R −), and Real-Finetuned Model (S+R) 
+
+DATA Lightbox Sunlamp Mean 
+
+Method (M) ET [m] / Enorm T [.] ↓ ER [°] ↓ Epose [.] ↓ ET [m] / Enorm T [.] ↓ ER [°] ↓ Epose [.] ↓ Epose [.] ↓
+
+CAPLR s
+
+S 0.221 / 0.036 8.98 0.193 0.426/0.065 18.93 0.395 0.294 S+R − 0.173 / 0.029 7.80 0.165 0.215 / 0.035 11.17 0.230 0.198 S+R 0.127 / 0.020 4.74 0.103 0.131 / 0.021 5.38 0.115 0.109 
+
+CAPLR m
+
+S 0.162 / 0.026 5.31 0.119 0.288 / 0.044 11.09 0.237 0.178 S+R − 0.103 / 0.018 3.54 0.080 0.126 / 0.022 5.77 0.122 0.101 S+R 0.097 / 0.016 2.99 0.068 0.106 / 0.017 3.69 0.082 0.075 
+
+D. Extended Results and Ablation on CAPLR Performance 
+
+To better illustrate the gains attributable to CAPLR , we report in this section the lower and upper bounds of model performance. The lower bound corresponds to the model trained only on synthetic images, while the upper bound corresponds to a model trained on synthetic images and fine-tuned on real images for the same number of alignment epochs as in CAPLR . Results are reported on LineMOD (Table X), Occluded-LineMOD (Table XI), and SPEED+ (Table XII). For the first two datasets, the real images used for fine-tuning are the same as those used for adaptation; for SPEED+, we use the first 20% of real images. As evident from tables, CAPLR achieves consistent and substantial gains over the synthetic-only baseline. Moreover, in most cases, the improvement from synthetic-only to 
+
+CAPLR is larger than the difference between the upper-bound (syn+real) model and CAPLR , highlighting the effectiveness of CAPLR in closing the gap towards real-data performance. II. T ECHNICAL DETAILS 
+
+A. Network Architecture and Training 
+
+The adopted architecture consists of an EfficientNet back-bone, followed by a Bidirectional Feature Pyramid Network (BiFPN) and a regression head with three deconvolution layers that generate K heatmaps, each corresponding to one of the K annotated keypoints (fig. 4). The BiFPN produces features at multiple levels, each capturing different amounts of information. For the CDP stage, we use the P4 features due to their large receptive fields and robustness to stylistic variations [34]. For the alignment, we rely on the P1 features, as they directly drive the final predictions. For the BOP datasets, training is performed exclusively on synthetic images without any data augmentation. Input images are padded by 16 pixels on the top and bottom (result-ing in a resolution of 640 × 512 ). The corresponding output heatmaps are generated at a resolution of 320 ×256 . Training is conducted for 5 epochs using the AdamW optimizer [44], with a learning rate of 10 −4 and a batch size of 16. For the SPEED+ dataset, synthetic data is also used, but augmented with the transformations proposed in [34]. Input images are padded by 40 pixels on the top and bottom to match the original image ratio ( 1920 × 1280 ), and resized to 768 × 512 . The heatmap resolution is set to 384 × 256 .Training follows the same optimizer and batch size settings, but is extended to 80 epochs. All experiments are conducted on a single NVIDIA A6000 GPU. During the Cross-Domain Pairing (CDP) stage, the number of initial candidates is fixed at 1000, with patch sizes of 
+
+12 × 12 (10 × 10 ) for backbone features and 10 × 10 
+
+(10 × 10 ) for head features on SPEED+ (BOP datasets), as this configuration yields the best empirical performance. We do not follow a strict rule for choosing the patch size; rather, Fig. 4: Architecture used in experiments, comprising an EfficientNet backbone, a BiFPN layer, and a heatmap head with three deconvolution layers. we observe that it seems to depend on how well the synthetic-trained model performs on the real domain, where better performance allows the use of smaller patches, and also on the object size, with smaller objects tending to favor smaller patches, The weighting parameter λrot in eq. (8) is set to 2 to give more emphasis to orientation differences, as the patch-level alignment is inherently more sensitive to angular variations than to translational ones. In the Local Patch Contrastive Alignment (LPCA) stage, the contrastive loss usually converges within five epochs. The model is evaluated on the target domain at each epoch, and the checkpoint with the highest percentage of correct keypoints score is retained. Finally, the Consistency-Based Pseudo-Refinement (CBPR) stage is performed exclusively on the target domain. We use the augmentation set consisting of Blur, Emboss, and FancyPCA from the Albumentations library. Training runs for 40 epochs, and the checkpoint selected for final evaluation corresponds to the one that yields the highest number of accepted keypoints under the consistency criterion defined in section III-B.3. 
+
+B. Loss Function Choice 
+
+A. Heatmap Supervision with KL Divergence Loss: 
+
+The heatmap regression model outputs K heatmaps, each corresponding to one of the K keypoints. To supervise the heatmap regression, the Kullback-Leibler divergence (KLD) loss is used. The KLD loss makes the predicted heatmaps more uniformly distributed around the correct keypoint lo-cations by reducing spatial divergence [45]. An alternative approach is to extract keypoints from the predicted heatmaps (e.g., using argmax or soft-argmax) and compute the mean squared error (MSE) between the predicted and ground-truth keypoint coordinates. Two training strategies were initially explored: (a) using only the KLD loss and (b) combining KLD with the MSE loss. In the combined setting, a weight-ing factor λ was introduced to balance the two losses to ensure that they operate on a similar scale. However, MSE supervision at the coordinate level may weaken the training signal by smoothing gradients or encouraging less sharply defined heatmaps, as it does not directly enforce spatial distribution alignment. In contrast, KLD loss alone promotes accurate localization and well-formed heatmaps. The results of training with synthetic data (Table XIII) indicate that using KLD loss alone produces the best performance, supporting its selection as the final loss function. TABLE XIII: Pose Error ( Epose ) Comparison of performance using KLD loss alone versus a combination of KLD on heatmaps and MSE on keypoints.            
+
+> Configuration Lightbox -Epose [−]↓Sunlamp -Epose [−]↓
+> KLD 0.193 0.395 KLD + λMSE 0.257 0.512
+
+B. Contrastive Alignment with InfoNCE Loss: 
+
+To align the features between the synthetic and real domains, InfoNCE loss is used due to its strong theoretical foundation and practical effectiveness in learning contrastive representation. InfoNCE maximizes a lower bound on mutual information between positive pairs, promoting semantic con-sistency across domains while distinguishing them from un-related negative samples [25]. Its softmax-based formulation over large negative sets generally ensures stable gradients and efficient use of negatives, which is particularly beneficial in unsupervised domain adaptation, where explicit supervision is not available. Compared to alternative contrastive losses, such as triplet loss, InfoNCE benefits from using many negatives per anchor without the need for hard negative mining or manually tuned margins, leading to more robust and scalable training. While losses like NT-Xent (used in SimCLR) are also effective, they are essentially temperature-scaled and normalized variants of InfoNCE [46]. However, InfoNCE is preferred here because of its interpretability in terms of mutual information maximization and its ease of integration into the alignment stage of our framework. 
+
+C. Heatmaps generation for training 
+
+For keypoint regression, the ground-truth 2D coordinates are converted into target heatmaps using a Gaussian render-ing function. For each keypoint, a 2D Gaussian distribution centered at its annotated location is generated with the 
+
+render gaussian 2d function from the DSNT library: t a r g e t = d s n t . r e n d e r g a u s s i a n 2 d ( mean= k e y p o i n t s , s t d = [ 1 , 1 ] , s i z e = ( 3 8 4 , 2 5 6 ) ) 
+
+This procedure yields one heatmap per keypoint, where the peak intensity encodes the confidence of the keypoint localization. The peak value ranges between 0 and 1, serv-ing as a confidence score. During inference, the predicted keypoint location is obtained by identifying the pixel with maximum value in the corresponding heatmap. 
+
+D. Keypoint Extraction 
+
+Predicted keypoints are extracted from the output heatmaps through the following procedure: A. Initial Localization: Identification of coordinates cor-responding to the maximum value in each heatmap, referred to as coarse keypoints. B. Subpixel Refinement: Enhancement of coarse keypoints via second-order Taylor expansion applied on a local 3×3 patch around each coarse prediction. This refine-ment technique improves localization accuracy beyond the heatmap resolution, as demonstrated in Table XIV. The refinement approach adapted from [47] calculates a subpixel offset utilizing image gradients and a local quadratic approximation as detailed in algorithm 1below. 
+
+Algorithm 1 Subpixel Keypoint Refinement 
+
+Require: A set of predicted keypoints and their heatmaps 
+
+Ensure: Refined keypoints 
+
+1: for all predicted keypoint k do 
+
+2: Extract a 3 × 3 patch from the heatmap around k
+
+3: Compute gradients dx, d y and Hessian matrix H
+
+from the patch 
+
+4: if H is invertible then 
+
+5: Compute subpixel offset : 
+
+6: ∆ = H−1 −dx − dy
+
+
+
+7: Refine keypoint: k ← k + ∆ 
+
+8: end if 
+
+9: end for 
+
+10: return refined keypoints 
+
+E. 6-DoF Pose Recovery 
+
+To estimate the 6-DoF pose from the predicted keypoints, the Perspective-n-Point (PnP) algorithm with RANSAC is initially employed, followed by pose refinement. The proce-dure is as follows: A. Initial Estimation: The initial pose estimation is ob-tained using the solvePnPRansac function from OpenCV, which estimates the rotation and translation vectors by minimizing reprojection errors under poten-tial outliers. B. Refinement: To enhance accuracy, the initial pose es-timates from solvePnPRansac are further refined using the Levenberg-Marquardt optimization algorithm via the solvePnPRefineLM function, improving the precision of pose estimation, as validated in Table XIV. III. F AILURE CASES ANALYSIS 
+
+A. Cross-Domain Pairing 
+
+In this section, we analyze the performance of the CDP stage compared to ground-truth pairing. We then examine pairing failure cases, discuss their likely causes, and outline their impact on the overall adaptation performance. 0 25 50 75 100 125 150 175 
+
+> Rotation difference (degrees)
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> 7
+> Translation difference (m)
+> Rotation vs Translation Differences in Paired Images
+> Two Stage
+> Ground truth
+
+(a) Lightbox 0 25 50 75 100 125 150 175  
+
+> Rotation difference (degrees)
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> 7
+> Translation difference (m)
+> Rotation vs Translation Differences in Paired Images
+> Two Stage
+> Ground truth
+
+(b) Sunlamp 
+
+Fig. 5: Comparison of pairing performance in SPEED+. Pairs discovered by the CDP stage are shown in blue, and ground-truth pairs are shown in red. In Lightbox, 90.8% of CDP pairs fall within the low-error range [0 , 1] m, [0 , 25] ◦, while in Sunlamp, 81.9% of CDP pairs fall in this range. 
+
+1) Comparison with Ground-Truth Pairing: : In Figure 5, we show the distributions of rotational and translational differences between paired samples from the Lightbox and Sunlamp domains of SPEED+. For each domain, we visu-alize the pairs identified by the CDP stage (blue) alongside the pairs obtained directly from ground-truth labels (red). On Lightbox, ground-truth pairs lie almost entirely within the region [0,1] m,[0,25] ◦ . The CDP stage exhibits ahighly similar structure: 90.8% of CDP-generated pairs fall within this error range, indicating that CDP reliably discovers valid correspondences in this domain. A comparable trend is observed on Sunlamp, where 81.9% of CDP pairs lie within [0,1] m,[0,25] ◦ . These results demonstrate that the CDP stage produces pairings that are strongly aligned with the ground-truth distribution, supporting its effectiveness and robustness across domains, even in real and more challenging illumination settings. A small fraction of CDP pairs, however, exhibit larger differences in either rotation or translation. Understanding the conditions under which these higher-error pairs occur is important, as they can affect the overall framework perfor-mance. We analyze these cases in detail in the following TABLE XIV: Advantage of keypoint and pose refinement on pose error, comparing the performance of CAPLR s with and without refinement on the SPEED+ real domains. 
+
+Lightbox Sunlamp Configuration Epose [−] ↓ Epose [−] ↓
+
+w/o refine 0.179 0.248 w/ keypoints refine 0.176 0.247 w/ pose refine 0.166 0.232 w/ keypoints & pose refine 0.165 0.230 Real Image Synthetic Pair w/o UDA CAPLR                                              
+
+> img000594 img032220
+> ∆R= 166 .7◦,∆t= 6 .37 m
+> Er: 158.0 ◦
+> Et: 6.28 mEr: 0.583 ◦
+> Et: 0.14 m
+> img001900 img002435
+> ∆R= 161 .9◦,∆t= 6 .59 m
+> Er: 64.7 ◦
+> Et: 4.36 mEr: 32.5 ◦
+> Et: 3.35 m
+> img001967 img011079
+> ∆R= 171 .3◦,∆t= 6 .12 m
+> Er: 164.4 ◦
+> Et: 6.07 mEr: 147.6 ◦
+> Et: 1.58 m
+> img000173 img002453
+> ∆R= 136 .4◦,∆t= 6 .99 m
+> Er: 96.3 ◦
+> Et: 3.81 mEr: 4.5 ◦
+> Et: 0.09 m
+> img000373 img012493
+> ∆R= 179 .6◦,∆t= 6 .00 m
+> Er: 174.1 ◦
+> Et: 2.38 mEr: 0.43 ◦
+> Et: 0.23 m
+
+Fig. 6: Cross-Domain Pairing failure cases on SPEED+. The first two columns show the discovered real-synthetic pairs along with their rotational and translational differences. The last two columns show the estimated pose on the real image before and after CAPLR . Ground-truth poses and predictions are indicated in red and blue, respectively. section. 
+
+2) Pairing Failure Analysis: : In Figure 6, we illustrate several of the worst-discovered pairs from the CDP stage in SPEED+, selected based on large rotational and translational differences. The first three rows correspond to the Sunlamp domain, while the last two rows correspond to the Lightbox domain. For each case, we show the real-synthetic pair, the prediction from the synthetic-only model, and the prediction after CAPLR adaptation. 
+
+Sunlamp: In the first row, part of the object is occluded by shadows, and a bright lighting source appears at the bottom of the image, creating confusion for the model. As seen in the synthetic-only prediction, this leads to an inaccurate pose estimate. After CAPLR , the prediction improves, which is likely because the framework can generalize from better-aligned pairs elsewhere in the dataset, allowing it to partially correct errors even for poorly paired examples. The second row presents a similarly challenging case with harsh lighting and partially hidden object features, resulting in only a modest improvement after CAPLR . In the third row, the real image contains a lighting source that could be confused with the object itself, explaining the pairing failure; nevertheless, 
+
+CAPLR still provides some correction, plausibly due to the same generalization mechanism. 
+
+Lightbox: In the fourth row, the real image is very dark, obscuring the object and making it difficult to find a good matching pair. Despite this, CAPLR improves the pose estimate significantly, almost matching the ground-truth, likely by leveraging knowledge learned from other correctly aligned pairs. The fifth row also contains occluded and shadowed objects with limited features, leading to poor initial predictions, but CAPLR still yields noticeable improvement. Overall, failures occur mostly under occlusion, harsh shadows, or confusing light conditions, which reduce the visibility of key object features. Importantly, CAPLR con-sistently mitigates the impact of these failures, likely by generalizing from correctly aligned pairs, demonstrating its ability to improve predictions even when individual pairings are imperfect. 
+
+B. UDA Failure Cases 
+
+Although CAPLR achieves consistent improvements on most samples, there remain cases where the gains are marginal or even where performance degrades. To better understand these limitations, we selected a few representative w/o UDA CAPLR Synthetic pair w/o U DA heatmap                             
+
+> img001069 Er: 142.3 ◦
+> Et: 1.85 mEr: 121.3 ◦
+> Et: 0.615 mimg021087
+> img001491 Er: 4.55 ◦
+> Et: 0.215 mEr: 133.2 ◦
+> Et: 0.917 mimg042986
+> img000806 Er: 160.6 ◦
+> Et: 55.98 mEr: 96.2 ◦
+> Et: 1.22 mimg038093
+> img004181 Er: 3.96 ◦
+> Et: 0.22 mEr: 170.8 ◦
+> Et: 0.406 mimg038051
+
+Fig. 7: Alignment failure cases on SPEED+. First two columns show pose estimates without UDA (left) and with CAPLR 
+
+(right). Ground-truth poses are shown in red and predictions in blue. The third column presents the discovered synthetic pair used for alignment, while the last column shows the synethic-only model predictions that serve as the basis for patch extraction. examples from SPEED+ and conducted a detailed analysis. This examination (Fig.7) provides insights into the underly-ing causes of reduced performance and highlights directions for future research. 
+
+Sunlamp: In both samples, the discovered image pairs are very similar (in pose) to the target and are generally acceptable. However, the UDA improvements remain limited. For the image in first row, this can be hypothesized due to two main factors. First, the predicted heatmaps fail to highlight all relevant regions in the target image, leading to inaccurate patch extraction that misses important cues. This issue is likely associated to the harsh lighting, which obscure object details leading to confusion in the predictions. Second, the object’s orientation in the image exposes only a single plane with relatively few discriminative features, further reducing the effectiveness of alignment. For the image in second row, the degradation is more pronounced. In addition to the aforementioned heatmap limitation, the presence of the Earth background in the syn-thetic image appears to mislead the patch-based alignment, since the corresponding real image only contains a dark background as well as affected by the scattered light around the keypoint regions. This discrepancy pushes the alignment towards unreliable feature correspondences. 
+
+Lightbox: For the third row, the predicted heatmaps successfully highlight relevant regions, enabling accurate patch localization. Nevertheless, the improvement in rotation accuracy remains modest. This is likely due to background differences between the synthetic and real images, combined with the fact that the real image appears significantly darker, limiting the availability of prominent object features. For the fourth row, the results again show degradation, despite the heatmaps highlighting appropriate regions. Simi-lar to the second row, this behavior can be explained by the influence of backgrounds in the patch between the synthetic and real images, which undermines the alignment quality. IV. Q UALITATIVE RESULTS 
+
+This last section presents qualitative visualizations that illustrate two aspects of the proposed method: (i) image pairs discovered during the cross-domain pairing stage, and (ii) CAPLR improved predictions over the baseline (only synthetic trained network) on real-world samples. A. (Occluded)-LineMOD Pairs 
+
+Target Source Target Source 
+
+Ape000037 
+
+∆R = 11 .56 ◦, ∆t = 1 .38 m
+
+benchv000410 
+
+∆R = 9 .7◦, ∆t = 5 .11 m
+
+cam000518 
+
+∆R = 17 .6◦, ∆t = 2 .69 m
+
+can000951 
+
+∆R = 16 .8◦, ∆t = 1 .37 m
+
+cat001126 
+
+∆R = 17 .65 ◦, ∆t = 1 .31 m
+
+driller000340 
+
+∆R = 11 .3◦, ∆t = 1 .72 m
+
+phone0000504 
+
+∆R = 12 .56 ◦, ∆t = 1 .54 m
+
+lamp000629 
+
+∆R = 11 .22 ◦, ∆t = 2 .02 m
+
+OLM-duck000003 
+
+∆R = 10 .03 ◦, ∆t = 0 .449 m
+
+OLM-Holep000003 
+
+∆R = 1 .39 ◦, ∆t = 1 .29 m
+
+OLM-EB000446 
+
+∆R = 2 .28 ◦, ∆t = 2 .35 m
+
+OLM-glue000178 
+
+∆R = 18 .56 ◦, ∆t = 3 .57 m
+
+Fig. 8: Examples of target-source image pairs in LineMOD (4 first rows) and Occluded-LineMOD (last 2 rows). Rotation and translation differences ( ∆R, ∆t) between each pair are indicated. B. Lightbox Pairs 
+
+Target Source Target Source 
+
+img000003 img039394 
+
+∆R = 3 .91 ◦, ∆t = 0 .284 m
+
+img000005 img007013 
+
+∆R = 6 .20 ◦, ∆t = 0 .228 m
+
+img000010 img055832 
+
+∆R = 8 .71 ◦, ∆t = 0 .361 m
+
+img000020 img004702 
+
+∆R = 12 .28 ◦, ∆t = 0 .476 m
+
+img000030 img036817 
+
+∆R = 12 .92 ◦, ∆t = 0 .332 m
+
+img000050 img017246 
+
+∆R = 5 .60 ◦, ∆t = 0 .567 m
+
+img000100 img011962 
+
+∆R = 12 .16 ◦, ∆t = 0 .044 m
+
+img000203 img010615 
+
+∆R = 7 .80 ◦, ∆t = 0 .138 m
+
+Fig. 9: Cross-domain pairs for lightbox domain. Rotation and translation differences ( ∆R, ∆t) between each pair are indicated. 
+
+# C. Sunlamp Pairs 
+
+Target Source Target Source 
+
+img000020 img015846 
+
+∆R = 6 .65 ◦, ∆t = 0 .267 m
+
+img000030 img014255 
+
+∆R = 14 .84 ◦, ∆t = 0 .497 m
+
+img000050 img024343 
+
+∆R = 4 .34 ◦, ∆t = 0 .387 m
+
+img001400 img029105 
+
+∆R = 18 .37 ◦, ∆t = 0 .678 m
+
+img001518 img020529 
+
+∆R = 8 .67 ◦, ∆t = 0 .439 m
+
+img000001 img007660 
+
+∆R = 3 .98 ◦, ∆t = 0 .573 m
+
+img000090 img039064 
+
+∆R = 9 .11 ◦, ∆t = 0 .402 m
+
+img000101 img040702 
+
+∆R = 11 .09 ◦, ∆t = 0 .599 m
+
+Fig. 10: Cross-domain pairs from Sunlamp. Rotation and translation differences ( ∆R, ∆t) between each pair are indicated. D. Improvements on LineMOD 
+
+w/o UDA CAPLR w/o UDA CAPLR       
+
+> Ape000033 benchv000012
+> cam000001 cam000006
+> can001028 cat001059
+> driller000096 duck001027
+> eggbox000101 glue000066
+> lamp000095 phone000279
+
+Fig. 11: Qualitative comparison of pose predictions on LineMOD images. Each pair shows results without UDA (left) and with CAPLR (right). Ground-truth poses are shown in red, and predictions in blue. E. Improvements on Lightbox 
+
+w/o UDA CAPLR w/o UDA CAPLR 
+
+img000019 Er : 116.1 ◦
+
+Et: 0.295 m Er : 0.75 ◦
+
+Et: 0.092 m img000067 Er : 23.4 ◦
+
+Et: 0.569 m Er : 3.32 ◦
+
+Et: 0.038 m
+
+img000501 Er : 155.9 ◦
+
+Et: 7.55 m Er : 35.49 ◦
+
+Et: 0.890 m img006481 Er : 45.64 ◦
+
+Et: 0.362 m Er : 4.28 ◦
+
+Et: 0.081 m
+
+img000977 Er : 157.0 ◦
+
+Et: 20.67 m Er : 2.59 ◦
+
+Et: 0.064 m img001781 Er : 114.9 ◦
+
+Et: 30.82 m Er : 1.74 ◦
+
+Et: 0.111 m
+
+img002460 Er : 110.56 ◦
+
+Et: 19.76 m Er : 0.75 ◦
+
+Et: 0.031 m img003100 Er : 138.8 ◦
+
+Et: 11.65 m Er : 2.15 ◦
+
+Et: 0.173 m
+
+img003221 Er : 167.8 ◦
+
+Et: 5.85 m Er : 2.98 ◦
+
+Et: 0.381 m img004521 Er : 172.3 ◦
+
+Et: 1.57 m Er : 6.10 ◦
+
+Et: 0.044 m
+
+img0004650 Er : 95.89 ◦
+
+Et: 3.75 m Er : 6.47 ◦
+
+Et: 0.302 m img004974 Er : 179.0 ◦
+
+Et: 0.205 m Er : 0.25 ◦
+
+Et: 0.021 m
+
+img005218 Er : 165.7 ◦
+
+Et: 2.69 m Er : 4.30 ◦
+
+Et: 0.043 m img005601 Er : 92.32 ◦
+
+Et: 1.14 m Er : 7.62 ◦
+
+Et: 0.039 m
+
+img005785 Er : 176.4 ◦
+
+Et: 3.06 m Er : 0.74 ◦
+
+Et: 0.297 m img006307 Er : 158.9 ◦
+
+Et: 4.97 m Er : 1.73 ◦
+
+Et: 0.571 m
+
+Fig. 12: Qualitative comparison of pose predictions on Lightbox. Each pair shows results without UDA (left) and with 
+
+CAPLR (right). Rotation and translation errors ( Er , Et) are reported. Ground-truth poses are shown in red, and predictions in blue. F. Improvements on Sunlamp 
+
+w/o UDA CAPLR w/o UDA CAPLR 
+
+img000026 
+
+Er : 162.1 ◦
+
+Et: 0.718 m
+
+Er : 4.16 ◦
+
+Et: 0.222 m img000048 
+
+Er : 24.97 ◦
+
+Et: 4.48 m
+
+Er : 5.13 ◦
+
+Et: 0.215 m
+
+img000328 
+
+Er : 17.6 ◦
+
+Et: 0.385 m
+
+Er : 5.02 ◦
+
+Et: 0.176 m img000358 
+
+Er : 154.8 ◦
+
+Et: 2.61 m
+
+Er : 7.96 ◦
+
+Et: 0.305 m
+
+img000955 
+
+Er : 46.33 ◦
+
+Et: 3.41 m
+
+Er : 0.98 ◦
+
+Et: 0.152 m img000961 
+
+Er : 54.03 ◦
+
+Et: 1.32 m
+
+Er : 1.22 ◦
+
+Et: 0.044 m
+
+img000972 
+
+Er : 76.31 ◦
+
+Et: 0.541 m
+
+Er : 1.11 ◦
+
+Et: 0.217 m img001033 
+
+Er : 40.16 ◦
+
+Et: 3.55 m
+
+Er : 1.83 ◦
+
+Et: 0.073 m
+
+img001038 
+
+Er : 33.65 ◦
+
+Et: 0.359 m
+
+Er : 3.13 ◦
+
+Et: 0.049 m img001040 
+
+Er : 150.7 ◦
+
+Et: 3.34 m
+
+Er : 2.04 ◦
+
+Et: 0.036 m
+
+img002781 
+
+Er : 27.9 ◦
+
+Et: 0.268 m
+
+Er : 6.81 ◦
+
+Et: 0.041 m img001104 
+
+Er : 114.5 ◦
+
+Et: 1.85 m
+
+Er : 3.21 ◦
+
+Et: 0.027 m
+
+img001124 
+
+Er : 35.2 ◦
+
+Et: 1.59 m
+
+Er : 1.96 ◦
+
+Et: 0.039 m img002422 
+
+Er : 147.3 ◦
+
+Et: 22.76 m
+
+Er : 6.50 ◦
+
+Et: 0.030 m
+
+img002603 
+
+Er : 174.2 ◦
+
+Et: 4.74 m img000019 
+
+Er : 2.97 ◦
+
+Et: 0.049 m img002617 
+
+Er : 57.2 ◦
+
+Et: 0.743 m
+
+Er : 5.19 ◦
+
+Et: 0.021 m
+
+Fig. 13: Qualitative comparison of pose predictions on Sunlamp. Each pair shows results without UDA (left) and with 
+
+CAPLR (right). Rotation and translation errors ( Er , Et) are reported. Ground-truth poses are shown in red, and predictions in blue.
