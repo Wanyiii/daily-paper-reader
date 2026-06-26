@@ -1,0 +1,397 @@
+Title: Ocean4D: Generative Underwater 4D Reconstruction via Medium-Aware Video Diffusion
+
+URL Source: https://arxiv.org/pdf/2606.23298v1
+
+Published Time: Tue, 23 Jun 2026 03:41:37 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Ocean4D: Generative Underwater 4D Reconstruction via Medium-Aware Video Diffusion 
+
+Yuqiang Huang 1, Yuxi Wang 1†,‡, Junyu Dong 1, and Zhaoxiang Zhang 2 
+
+> 1
+
+Faculty of Information Science and Engineering, Ocean University of China  
+
+> 2
+
+Institute of Automation, Chinese Academy of Sciences 
+
+Abstract. Underwater 4D reconstruction remains challenging due to the coupling between degraded light transport in participating media and dynamic water variations. Most existing Methods are developed under in-air assumptions and do not explicitly account for underwater absorption and backscatter. Additionally, near-static assumptions make these approaches sensitive to drifting particles and dynamic distractors , leading to unstable geometry and inconsistent cross-view results. To address these issues, we propose a generative framework for underwa-ter 4D reconstruction, named Ocean4D , which is built on two comple-mentary components. Specifically, 4D-GCC constructs 4D geometrically consistent conditioning with improved cross-frame coverage, while the Medium-Aware Block performs implicit medium-aware denoising in the latent diffusion process to stabilize underwater appearance under absorp-tion and scattering. Given a monocular video and target cameras, our method generates videos along the target trajectories while preserving global structure and cross-view consistency. Extensive experiments on both dynamic and static underwater benchmarks demonstrate state-of-the-art performance on underwater reconstruction. 
+
+Keywords: Underwater Reconstruction · Video Generative Model · Medium-Aware Diffusion Model 
+
+## 1 Introduction 
+
+Underwater reconstruction is an important yet highly challenging problem. In practice, reliable underwater reconstruction supports a wide range of appli-cations, including marine ecological monitoring and environmental protection [22, 39], and provides critical perceptual foundations for localization and navi-gation of autonomous underwater systems [3, 21]. Moreover, a particularly com-pelling scenario involves reconstructing stable and geometrically consistent 4D 
+
+> †
+
+Corresponding author. ‡Project lead. Web: https://anonymous.4open.science/w/Ocean4D/ Emails: yqhuang@stu.ouc.edu.cn , yuxiwang93@gmail.com , dongjunyu@ouc.edu.cn ,
+
+zhaoxiang.zhang@ia.ac.cn .
+
+> arXiv:2606.23298v1 [cs.CV] 22 Jun 2026
+
+2 Y. Huang et al. Monocula-Video    
+
+> 4D-GCC
+> 33-frames
+> Time-variant
+> Get Dynamic Points Map
+> Time-invariant
+> Time-varying geometric conditions (lack of information ✘)
+> Time-invariant completion(  )
+> Step(1) :Construction of 4D Geometric Conditions Step(2) :Diffusion Model Generate Video
+> a) TrajectoryCrafter
+> b) Ours Direct attenuation
+> No attenuation
+> Moving small fish
+> Floating particles
+> backscatter
+> Object
+> Object Camera
+> Camera
+> Dynamic distractors
+
+✘
+
+> No backscatter
+> TrajectoryCrafter assumes clean in-air imaging; so ignoring underwater attenuation/backscatter and dynamic distractors can cause appearance drift and hallucinations.
+> Our model assumes dynamic underwater media and accounts for distractors; such medium-aware diffusion with stronger 4D conditioning improves cross-view consistency and visual stability.
+
+Fig. 1: Ocean4D addresses the problem of underwater 4D reconstruction from a monocular video. Ocean4D constructs 4D geometrically consistent conditions and per-forms medium-aware generation with a video diffusion model, improving cross-view consistency and visual stability under dynamic underwater media. 
+
+representations from casually captured monocular videos, which would enable reliable visualization, analysis, and immersive interaction with dynamic under-water environments. With the advances of NeRF-based representations [5–7, 10, 37] and 3DGS-based splatting [13,16,28,32], a large number of underwater reconstruction meth-ods like WaterSplatting [30] has emerged in recent years [14,36,45,61]. However, these methods typically handle only static scenes and cannot address dynamic underwater scenarios. In parallel, the rise of diffusion models [8,9] has accelerated Generative 4D Reconstruction [4, 43, 50, 64]. Nevertheless, most diffusion-based approaches are developed for in-air settings and implicitly assume clean imag-ing with zero medium density [63], making them difficult to directly adapt to underwater image formation. Specifically, observations in underwater environments are jointly governed by distance-dependent attenuation of the direct component and volumetric scatter-ing in the medium. For example, pixel intensities arise from the superposition of surface-reflected radiance and accumulated backscatter along the line of sight, and this process varies significantly with depth, wavelength, and the medium state [1,2,23]. As a result, underwater 3D/4D reconstruction becomes more chal-lenging due to the medium effect. Moreover, existing monocular methods for 4D reconstruction typically rely on time-varying re-rendering to construct condition-ing signals for novel views. When occlusion or large viewpoint shifts introduce large unseen regions, the conditioning becomes sparse and incomplete. This even-tually causes the reconstruction to deviate from the source-video geometry and even induce semantically inconsistent hallucinations in missing regions. To address the above issues, we propose Ocean4D (Fig. 1), a generative framework for underwater 4D reconstruction from monocular videos. Ocean4D is built upon two complementary components. First, 4D-GCC (4D Geomet-rically Consistent Conditioning) provides a geometry-centric conditioning ab-straction that aggregates cross-frame geometric evidence into a consistent 4D representation, improving conditioning completeness under occlusions and large viewpoint shifts. Second, we introduce a Medium-Aware Block that performs 
+
+implicit medium modeling inside the diffusion denoising process. Instead of ex-Ocean4D: Generative Underwater 4D Reconstruction 3
+
+plicit medium-parameter regression, the Medium-Aware Block introduces depth-aware modulation into the denoising process, making the generator more robust to absorption-induced and scattering-induced appearance variations. Together, 4D-GCC and the Medium-Aware Block enable Ocean4D to produce geometry-consistent and medium-stable 4D reconstructions in challenging underwater sce-narios. We conduct extensive evaluations on both dynamic and static underwater benchmarks, and the results demonstrate that Ocean4D achieves state-of-the-art performance in terms of geometric consistency and underwater visual quality. Our main contributions are summarized as follows: 
+
+– We introduce 4D-GCC for 4D geometrically consistent conditioning, im-proving conditioning completeness under occlusions and large viewpoint shifts. 
+
+– We propose a Medium-Aware Block for implicit medium-aware denoising, stabilizing underwater appearance under absorption, scattering, and medium variation. 
+
+– We perform comprehensive experiments on dynamic and static underwater benchmarks, demonstrating state-of-the-art results on both quantitative and qualitative metrics. 
+
+## 2 Related Work 
+
+3D/4D Scene Reconstruction. 3D reconstruction and novel view synthesis have progressed rapidly with both implicit and explicit scene representations. NeRF-based methods recover continuous radiance fields via volume rendering and have been advanced with anti-aliasing and multi-scale designs (e.g., the Mip-NeRF series) [5–7], as well as multi-view and generalized extensions [10,17,52,65]. In parallel, 3D Gaussian Splatting (3DGS) [28] represents scenes with explicit Gaussian primitives and differentiable splatting, enabling efficient rendering and editable representations; follow-up works further improve reconstruction qual-ity through better initialization, geometric constraints, and rendering formu-lations [13, 16, 32, 34, 69]. Dynamic and 4D settings typically require modeling time-varying geometry and appearance, and are commonly tackled via deforma-tion or spatiotemporal representations [15, 40, 41, 47, 57]. Meanwhile, feed-forward large reconstruction models (LRMs) and COLMAP-free paradigms have substantially improved geometry recovery from monocular or sparse inputs by leveraging transformer representations and cross-view match-ing [53, 55, 56, 67]. Building on these priors, AnySplat [27] combines VGGT [54] with splatting-based representations to enable fast reconstruction without per-scene optimization, providing stronger geometric cues that can be used as con-ditioning under complex degradations. 
+
+Underwater Scene Reconstruction. Early studies often focus on image enhancement and color correction, aiming to recover more natural visual ap-pearances without using explicit models, e.g., methods based on contrast/color distribution adjustment or Retinex-style strategies [18,20,26,68]. More recently, an increasing number of works incorporate underwater image formation into neu-ral rendering. Represented by SeaThru-NeRF [29] and NURS [49] approaches, 4 Y. Huang et al. 
+
+NeRF-based methods explicitly model light transport in participating media by introducing medium-related fields or components, improving the physical con-sistency of underwater novel view synthesis [12, 45]. In parallel, 3DGS-based methods [14,30,36,61] have also been extended to underwater settings by incor-porating medium modeling or learnable medium features into Gaussian primitive rendering, achieving a better trade-off between efficiency and quality. Despite substantial progress, most existing underwater reconstruction methods still fo-cus on static scenes and are sensitive to real-world underwater perturbations, which can lead to unstable reconstructions. 
+
+Generative Novel View Synthesis. With the rapid progress of diffusion models for image and video generation [8, 11, 33, 46, 62], diffusion-based gener-ative novel view synthesis has become an important direction. Representative works typically control camera motion via geometry-related signals, such as conditioning on depth warping or point cloud renderings [50, 66], and further develop various conditioning designs [19, 38, 44, 59]. In contrast to explicit geo-metric conditioning, Zero-1-to-3 [35] adopts pose embeddings for implicit pose control, enabling controllable viewpoint generation without explicitly geometry. Extending these generative methods to dynamic scenes requires maintaining 4D consistency under both camera motion and scene motion. CAT4D [58] con-structs 4D scenes by fine-tuning CAT3D [19] on monocular videos. Similar to GCD [50], Gen3C [43] and TrajectoryCrafter [64] use depth warping as condi-tioning to guide novel trajectory synthesis. In contrast, ReCamMaster [4] directly generates videos given the input video and the target trajectory. While it benefits from strong pretrained diffusion priors, it often lacks geometric constraints under large viewpoint changes, making it difficult to guarantee cross-view consistency. 
+
+## 3 Method 
+
+3.1 Preliminaries Underwater Image Formation. In underwater environments, image forma-tion is jointly affected by distance-dependent energy attenuation and volumetric scattering processes. The direct light reflected from objects undergoes exponen-tial decay during propagation due to absorption and scattering, while volumetric scattering in the medium introduces an additional backscatter component along the line-of-sight. Following the classical underwater image formation model [1], the observed linear image intensity at each pixel can be expressed as: 
+
+I = J · e−ϕaD + ϕ∞ ·  1 − e−ϕbD  , (1) where J denotes the clear scene radiance in the absence of the medium, D repre-sents the scene depth corresponding to each pixel, ϕa and ϕb denote the attenua-tion coefficients for the direct signal and the backscatter component, respectively, and ϕ∞ represents the scattering color of the water at infinity. The first term in Eq. (1) characterizes the exponential attenuation of the object-reflected light Ocean4D: Generative Underwater 4D Reconstruction 5
+
+with propagation distance. The second term describes the accumulated backscat-ter contribution along the line of sight, whose intensity increases monotonically with depth and asymptotically approaches ϕ∞ at large distances. 
+
+Video Diffusion Models. Video diffusion models [8, 9, 11, 62] aim to model the spatiotemporal distribution of multi-frame video data. Given a video sample 
+
+x0 ∈ RF ×3×H×W , the forward diffusion process constructs a Markov chain by gradually injecting Gaussian noise into the data, smoothly transforming the real data distribution into a Gaussian distribution. This process can be written as: 
+
+q(xt | xt−1) = N (xt; √αtxt−1, (1 − αt)I) , (2) where {αt}Tt=1 is a predefined noise schedule. This leads to the closed-form ex-pression at an arbitrary timestep 
+
+xt = √¯αtx0 + √1 − ¯αtϵ, ϵ ∼ N (0 , I). (3) The reverse process progressively removes noise by learning a parameter-ized distribution pθ (xt−1 | xt). In practice, the noise prediction formulation is commonly adopted, where a neural network ϵθ (xt, t ) is trained to minimize: 
+
+min  
+
+> θ
+
+Ex0,t ∼U (1 ,T ),ϵ ∼N (0 ,I)
+
+h
+
+∥ϵθ (xt, t ) − ϵ∥22
+
+i
+
+. (4) A pretrained 3D VAE [62] is typically used to compress videos into the latent space z = E(x), and the diffusion process is performed in the latent space to reduce computational complexity. The latent variables are first partitioned into patch tokens and then fed into a DiT [64]. During inference, iterative denoising produces latent variables ˆz, which are finally decoded into video frames ˆx = D(ˆ z).
+
+3.2 4D-GCC: 4D Geometrically Consistent Conditioning 
+
+Given a monocular source video Is = {Isi }N −1 
+
+> i=0
+
+and the corresponding camera pose sequence {πsi }N −1 
+
+> i=0
+
+, our goal is to generate multi-view results with con-sistent geometry and temporal dynamics under a specified target camera pose sequence {πti }N −1 
+
+> i=0
+
+. To achieve this, the key lies in constructing a complete and geometrically consistent conditioning signal. Previous approaches [50, 64] typi-cally rely on depth priors [24] to render geometry from source frame i, causing the condition for target frame i to depend primarily on source frame i. Under occlusions, viewpoint changes, and rapid motion, this results in large invisible regions, leading to sparse and unstable conditioning information. To address this issue, we introduce 4D-GCC (4D Geometrically Consistent Conditioning), which extracts a 4D geometric representation from the input video and explic-itly enhances cross-frame geometric complementarity, thereby providing more complete conditioning signals for target views (Fig. 2). Let π0 denote a fixed reference viewpoint (typically the viewpoint of the first source frame). 4D-GCC takes N input frames and predicts two sets of point maps: a time-varying point map P, representing 3D points at each frame’s own 6 Y. Huang et al. Source video 
+
+> ……
+> VGGT Backbone
+> Time-invariant head
+> Time-variant head
+> Camera head
+> V-DPM
+> Time-invariant DPMs
+> Time-variant DPMs
+> Camera
+> ……
+> Time-variant
+> Projection
+> Time-invariant
+> render
+> C
+> DiT Block
+> Medium-Aware Block
+> DiT Block
+> Medium-Aware Block
+> DiT Block
+> Medium-Aware Block
+> ……
+> Text
+> Text
+> Encoder
+> Ref-Token
+> Target video
+> ……
+
+4D-GCC 
+
+Fig. 2: Overview of Ocean4D. Given a monocular source video with camera poses, our method generates multi-view videos under target poses using a video diffusion model. We first apply 4D-GCC to extract a 4D geometric representation and con-struct a geometry-consistent conditioning video by combining time-varying and time-invariant renderings to enrich cross-frame information. The resulting conditioning to-kens, together with reference tokens and text tokens from a frozen text encoder, are fed into a diffusion backbone where DiT Blocks and Medium-Aware Blocks are interleaved (DiT Block includes Ref-DiT Block [64]). Finally, the denoised latents are decoded to produce a high-quality target video aligned with the target camera poses and temporally consistent with the source video. 
+
+timestamp; and a time-invariant point map Q, aligning all frames to a common reference timestamp tj . This process can be expressed as: 
+
+(P, Q) = Ψ (Is 
+
+> 0
+
+, . . . , I sN −1).
+
+Here, Ψ denotes the point-map predictor used in 4D-GCC. In our implemen-tation, we instantiate Ψ with V-DPM [48]. P = {P i(ti, π 0)}N −1 
+
+> i=0
+
+denotes the time-varying point clouds, and Qj = {P i(tj , π 0)}N −1 
+
+> i=0
+
+denotes the time-invariant point clouds, where Pi(t, π ) ∈ R3×H×W . Specifically, Pi(ti, π 0) represents the 3D point cloud of frame i at timestamp ti under the reference viewpoint π0. Given camera intrinsics K ∈ R3×3, we can transform the 3D points from the reference viewpoint π0 to the target viewpoint πti , which can be written as: 
+
+˜Ivi = Φ  πti · P i(ti, π 0); K , ˜Iqj,i = Φ  πti · P j (ti, π 0); K , (5) where Φ denotes the projection operation. Through Eq. (5), we obtain the pri-mary renderings based on time-varying point maps, ˜Iv = { ˜Ivi }N −1 
+
+> i=0
+
+, as well as auxiliary renderings generated from cross-frame aligned point maps, ˜Iq =
+
+{ ˜Iqj,i }N −1
+
+> i,j =0
+
+. For target view i, the time-varying rendering ˜Ivi provides direct geo-metric information from source frame i, but under large viewpoint shifts or rapid Ocean4D: Generative Underwater 4D Reconstruction 7Ref-Token  condition-Token Cross Attention QKV  
+
+> Medium-Token Adapter Adapter Adapter
+> 3D Attention
+> Depth Adapter Depth Adapter Cross Attention DiT Block
+> KVQ
+> Cross Attention
+> KVQ
+> 3D Attention Medium Concatenation
+
+Fig. 3: Medium-Aware Block architecture. The Medium-Aware Block takes the conditioning tokens and reference tokens as inputs and first produces a medium to-ken via cross-attention. Three lightweight adaptors map this token to medium-related parameters {ϕa, ϕ b, ϕ ∞}. Depth-dependent components Ddir and Dback are injected through depth adaptors to modulate the direct and backscatter pathways. Two cross-attention branches predict ϵdir  
+
+> θ
+
+and ϵback  
+
+> θ
+
+, which are then concatenated to form the final medium representation for denoising. 
+
+motion, its coverage is often limited. In contrast, the time-invariant rendering 
+
+˜Iqj,i , explicitly aligned to timestamp ti, introduces geometry from other source frames j̸ = i that may be invisible in the current view but observable across frames. Let ˜M vi and ˜M qj,i denote the corresponding visibility masks. The target view is then obtained as: 
+
+ˆIi = ˜Ivi ˜M vi
+
++ X 
+
+> j̸=i
+
+˜Iqj,i ˜M qj,i ∩ ˜M vi
+
+. (6) After obtaining the fused target view sequence ˆI = { ˆIi}N −1 
+
+> i=0
+
+, we map it into the conditional latent space of the diffusion model. Let EVAE (·) denote a pretrained VAE encoder. The corresponding conditional latent variables are: 
+
+zcond  
+
+> i
+
+= EVAE ( ˆIi), (7) which are subsequently used as geometric conditioning inputs to the Video dif-fusion generation module. 
+
+3.3 Implicit Medium Modeling in Latent Diffusion 
+
+In Sec. 3.2, we have obtained the fused view sequence ˆI = { ˆIi}N −1 
+
+> i=0
+
+aligned with the target camera trajectory {πti }N −1 
+
+> i=0
+
+, along with its corresponding geometric conditioning latent variables zcond  
+
+> i
+
+= EVAE ( ˆIi). By projecting the temporally aligned point clouds P, we can acquire depth values D = {Di}N −1 
+
+> i=0
+
+. We now proceed to learn the conditional distribution of the target video It in the latent space. Specifically, we leverage CogVideoX’s VAE [62] for video compression and decoding, use BLIP [31] and T5 [42] for extracting text-based semantic embeddings, and utilize the DiT backbone from TrajectoryCrafter [64] for spa-tiotemporal diffusion. 8 Y. Huang et al. 
+
+Based on the underwater imaging formula in Eq. (1), the image is composed of direct and backscatter components. The parameters ϕa, ϕb, and ϕ∞ represent the backscatter coefficient, forward scattering coefficient, and background light, respectively, with each parameter corresponding to a value for each of the three color channels, totaling nine parameters. One straightforward approach is to pre-dict {ϕa, ϕ b, ϕ ∞} using a small head from the source video and explicitly model the direct and scatter components in the output image. However, in dynamic water bodies and across-view generation scenes, the medium parameters change over time and space, and explicit regression fails to stabilize. Therefore, we propose a Medium-Aware Block to perform implicit medium modeling in the latent space.We treat the target video latent z0 = EVAE (It)
+
+as being jointly shaped by a direct component and a backscatter component, and embed this decomposition into the diffusion denoising process. Hence, we formulate the noise prediction as: 
+
+ϵθ (zt, t ; C) = M ϵdir  
+
+> θ
+
+(zt, t ; C), ϵ back  
+
+> θ
+
+(zt, t ; C) , (8) where C represents the conditioning set of the diffusion model, including geo-metric conditioning latent variables zcond  
+
+> i
+
+, the depth sequence Di, camera pose information, and other relevant conditions. ϵdir  
+
+> θ
+
+corresponds to the direct de-noising component, and ϵback  
+
+> θ
+
+corresponds to the backscatter component. This formulation does not explicitly correspond to Eq. (1), but instead implements structural equivalence at the latent space level, enabling the diffusion network to learn the modulation dynamics of the medium end-to-end. To realize this implicit modeling, we insert a Medium-Aware Block after each DiT block, as shown in Fig. 3. Given the output feature h(l) 
+
+> t
+
+of the DiT, the Medium-Aware Block takes it as input, generating a medium token via the conditioning token and reference token. This token is processed by an adapter to build the parameters {ϕa, ϕ b, ϕ ∞}. Since relying solely on image information does not adequately capture the underwater imaging process, we retain the structural form from Eq. (1) by introducing depth-related exponential components in the latent space, where Ddir  
+
+> i
+
+= e−Di represents the depth attenuation for the direct component, and Dback  
+
+> i
+
+= 1 − e−Di captures the depth-enhanced trend for the backscatter component. These components are not treated as explicit physical constraints but are incorporated within the Medium-Aware Block, where they are fused with h(l) 
+
+> t
+
+to yield the overall ϵθ (zt, t ; C). The implicit medium dynamic modeling runs throughout the entire denoising process, not concentrated at the final output stage, and does so without additional physical parameter supervi-sion. The direct and backscatter decompositions are learned adaptively in the latent space by the diffusion network. The 4D-GCC conditioning introduced in Sec. 3.2 provides geometrically con-sistent structural constraints across views, while the Medium-Aware Block mod-els underwater medium effects implicitly within the diffusion denoising process. Both components work collaboratively in a unified latent space framework, en-abling stable 4D reconstruction for underwater scenes. Ocean4D: Generative Underwater 4D Reconstruction 9
+
+## 4 Experiments 
+
+4.1 Experimental Settings Datasets. We use multiple datasets for training and evaluation to cover both static and dynamic underwater scenes, and to mitigate the limited availabil-ity of synchronized underwater multi-view data. Our training data come from UVEB [60] and ReCamMaster [4]. UVEB [60] provides real underwater video samples with diverse degradation distributions, while ReCamMaster [4] offers paired supervision across camera types and trajectories. We emphasize that Re-CamMaster [4] is not an underwater dataset. We incorporate it because high-quality synchronized underwater multi-view data are scarce, and the stable geometry–trajectory correspondences in ReCamMaster [4] help constrain 4D spatiotemporal consistency, thereby ensuring correct 4D modeling. During train-ing , we use the static-scene subset of UVEB [60]. This subset contains no promi-nent dynamic subjects, but allows small-scale motion disturbances such as small fish and bubbles. UVEB [60] is split by extracting a continuous segment from each static video and evenly dividing it into source and target clips to form train-ing pairs. We also train with ReCamMaster [4], where two camera settings are selected from a predefined set of ten camera types, with one used as the source and the other as the target. 
+
+For evaluation on dynamic scenes , we select the remaining dynamic sub-set of UVEB [60] and keep samples with moderate motion to enable stable comparisons. The static UVEB data used for training are not included in the evaluation. For evaluation on static scenes , we use two benchmarks: NUSR [49] and DRUVA [51]. NUSR contains four real underwater scenes and involves more complex distractors, such as fast motions of small fish. DRUVA [51] is captured under natural illumination and includes disturbances introduced by human in-terference and water flow. 
+
+Implementation Details. We train our model on 8 Nvidia 4090 GPUs. The learning rate is set to 1 × 10 −5 for the DiT Block and 4 × 10 −5 for the Medium-Aware Block. To ensure fair comparison with competing methods, we standardize the input clip length to 33 frames and resize each frame to a resolution of 480 ×
+
+832 . For all videos, we estimate camera poses using the camera head provided by V-DPM [48]. During inference, we set both input and output lengths at 33 frames. 
+
+Baselines. We compare our method with recent representative approaches, in-cluding 3D Gaussians [28], Water-Splatting [30], AnySplat [27], TrajectoryCrafter [64], and ReCamMaster [4]. 3DGS [28] is a canonical explicit scene represen-tation with differentiable rendering based on optimizing a set of 3D Gaussian primitives. Water-Splatting [30] is an important underwater variant of 3DGS that incorporates underwater image formation modeling to jointly optimize scene appearance and medium effects, achieving SOTA performance on static underwa-ter reconstruction. AnySplat [27] represents recent feed-forward reconstruction methods. It combines fast geometric priors such as VGGT [54] and predicts a directly renderable Gaussian scene representation in a single forward pass, en-10 Y. Huang et al. Source video Ours  Trajectory  ReCamMaster Time 
+
+Fig. 4: Qualitative results on dynamic underwater scenes comparing our method with TrajectoryCrafter [64] and ReCamMaster [4]. Red arrows highlight typical failure modes under novel views, including semantic misrecognition and hallucinations caused by insufficient geometry. 
+
+Table 1: Quantitative comparison with state-of-the-art methods on VBench met-rics. [25] Best results are in bold , and the second best are underlined.                              
+
+> Method Subject Background Temporal Motion Aesthetic Imaging Consistency Consistency Flickering Smoothness Quality Quality TrajectoryCrafter [64] 0.844 0.904 0.932 0.954 0.454 0.487 ReCamMaster [4] 0.848 0.914 0.937 0.989 0.436 0.528
+> Ours 0.906 0.920 0.982 0.967 0.486 0.591
+
+abling robust novel view synthesis without per-scene optimization. In addition, we compare against two diffusion-based generative novel view synthesis methods, 
+
+TrajectoryCrafter [64] and ReCamMaster [4]. Both leverage video diffusion models for novel-trajectory generation, but differ in how pose conditioning is injected. Among them, TrajectoryCrafter currently achieves SOTA performance on novel-trajectory generation and 4D-consistent modeling for dynamic scenes. 
+
+4.2 Evaluation on Dynamic Underwater Scenes Qualitative Comparison. As shown in Fig. 4, we compare our method with TrajectoryCrafter [64] and ReCamMaster [4] on dynamic underwater scenes from UVEB [60]. TrajectoryCrafter-type methods that rely on depth-based [24] con-ditioning are prone to semantic drift and identity inconsistency. In the second column, due to insufficient conditioning coverage, TrajectoryCrafter [64] mistak-enly interprets the reef region as part of the turtle. In contrast, ReCamMaster [4] injects camera poses directly as conditioning, without providing geometric con-Ocean4D: Generative Underwater 4D Reconstruction 11 Sardine Turtle Composite    
+
+> Groundtruth Water-Splatting AnySplat Ours
+
+Fig. 5: Qualitative comparison on NUSR. Red boxes highlight distractor regions with zoomed-in views. Our method achieves better reconstruction quality in both static regions and distractor regions. 
+
+Table 2: Quantitative comparison on NUSR. PSNR, SSIM, and LPIPS comparisons on the four NUSR scenes. Best results are in bold , second best are underlined.                                                                            
+
+> Sardine Turtle Composite Coral Method PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓
+> 3DGS [28] 17.28 0.304 0.533 21.76 0.732 0.316 16.18 0.290 0.514 15.90 0.199 0.528 AnySplat [27] 15.83 0.252 0.532 23.75 0.778 0.248 17.44 0.404 0.463 16.22 0.280 0.515 W.Splat. [30] 18.14 0.351 0.476 22.74 0.774 0.331 19.55 0.468 0.237 17.48 0.230 0.316 Traj.C. [64] 17.08 0.463 0.313 24.46 0.823 0.133 16.30 0.563 0.401 16.33 0.467 0.503
+> Ours 19.58 0.517 0.248 28.36 0.853 0.104 17.80 0.609 0.340 18.76 0.554 0.254
+
+straints via target-view rerendering. As a result, it is more likely to produce hal-lucinations in regions with insufficient geometry. These observations suggest that in dynamic underwater novel view synthesis, relying solely on pose conditioning or incomplete geometric conditioning can only maintain cross-view and temporal consistency under small viewpoint changes. Our method mitigates these issues by improving geometric coverage and implicitly modeling the medium with the Medium-Aware Block. 
+
+VBench Results. We further conduct quantitative evaluation on 18 dynamic-view cases. As evaluation metrics, we adopt the VBench protocol [25], includ-ing Subject Consistency, Background Consistency, Temporal Flickering, Motion Smoothness, Aesthetic Quality, and Imaging Quality. The results are shown in Tab. 1. Overall, our method achieves better performance on consistency-related metrics, reaching 0.906 in Subject Consis. and 0.920 in Background Consis., outperforming both TrajectoryCrafter and ReCamMaster, indicating more sta-ble spatiotemporal content and more reliable imaging quality under viewpoint changes. We note that ReCamMaster achieves a higher Motion Smooth. score of 0.989 . This is because ReCamMaster uses direct pose injection and applies pose smoothing every four frames, which favors the motion smoothness met-12 Y. Huang et al. A10 A11 A12 Groundtruth Water-Splatting AnySplat Ours 
+
+Fig. 6: Qualitative comparison on DRUVA. Red boxes highlight detail regions that are strongly affected by water disturbances, including the flag in A11 and the rope in A12. 
+
+Table 3: Quantitative comparison on DRUVA. PSNR, SSIM, and LPIPS comparisons on four DRUVA scenes. Best results are in bold , second best are underlined.                                                                                        
+
+> A10 A11 A12 A13 Method PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓
+> 3DGS [28] 29.60 0.914 0.297 26.82 0.835 0.322 26.59 0.861 0.303 23.91 0.853 0.368 AnySplat [27] 31.56 0.920 0.268 26.19 0.846 0.320 25.97 0.861 0.302 27.52 0.894 0.346 W.Splat. [30] 30.03 0.933 0.086 25.10 0.856 0.196 25.38 0.882 0.209 25.13 0.947 0.119
+> Traj.C. [64] 22.55 0.940 0.129 21.48 0.900 0.174 19.79 0.894 0.193 19.40 0.919 0.202 ReCam. [4] 24.23 0.906 0.269 22.98 0.847 0.296 23.87 0.880 0.259 23.31 0.895 0.273
+> Ours 30.23 0.955 0.132 27.86 0.913 0.123 26.69 0.921 0.140 27.00 0.941 0.133
+
+ric. Considering that our setting requires strict view alignment and geometric consistency for static-scene, we do not adopt this strategy. 
+
+4.3 Evaluation on Static Scenes 
+
+We also evaluate our method for static scenes on NUSR [49] and DRUVA [51]. The corresponding qualitative and quantitative results are as follows. 
+
+Evaluation on NUSR. Fig. 5 shows qualitative comparisons with Water-Splatting [30] and AnySplat [27]. Although existing methods can generally re-cover background structures well, they typically struggle with small, dynamic distractors that frequently appear in underwater videos, e.g., small fish. In the 
+
+Turtle scene, the subtle motion of a small fish in the lower-left corner poses a challenge: AnySplat tends to introduce artifacts, while WaterSplatting often collapses the region into an averaged color patch, causing the loss of fine de-tails. Similar behavior is observed for the tropical fish in the Composite and 
+
+Sardine scenes. In the zoomed-in views, both WaterSplatting and AnySplat are more likely to fail under severe distractors. In contrast, our method not only reconstructs the seabed background and main structures clearly, but also adapts better to such distractors, yielding more stable reconstructions. Ocean4D: Generative Underwater 4D Reconstruction 13 Source video Ours Trajectory  
+
+> Fig. 7: Hallucination analysis on dynamic scenes. Red boxes and arrows highlight failure cases under large viewpoint shifts and unseen regions.
+
+Tab. 2 reports quantitative results on the four NUSR scenes [49]. Overall, our method achieves the best performance on all scenes except Composite . In the Turtle scene, our method improves PSNR to 28 .36 and SSIM to 0.853 , while reducing LPIPS to 0.104 , indicating that it maintains more stable reconstruction quality even in the presence of small dynamic distractors. 
+
+Evaluation on DRUVA. Fig. 6 shows qualitative comparisons on DRUVA [51]. In the A11 scene, the red box highlights the calibration flag region, where Water-Splatting [30] and AnySplat [27] exhibit varying degrees of trailing artifacts and blur, weakening edge details and texture structures. In the A12 scene, the red box corresponds to a thin rope structure. WaterSplatting fails to reconstruct this detail, while AnySplat produces visible breaks and discontinuities. In contrast, our method preserves fine structures and generates more consistent geometry and appearance, under water disturbances and cross-view medium variation. Tab. 3 reports quantitative results on four DRUVA scenes. Overall, our method achieves the best performance on most metrics. In the A11 scene, our method improves PSNR to 27 .861 and SSIM to 0.913 , while reducing LPIPS to 
+
+0.123 , indicating more stable reconstruction quality. 
+
+4.4 Ablation Studies Dynamic Scene Analysis. Fig. 7 provides a closer look at how Ocean4D bene-fits from 4D-GCC and the Medium-Aware Block. In the first and fourth columns, TrajectoryCrafter [64] synthesizes a turtle that is overall dim and fails to pre-serve the local highlights caused by non-uniform underwater illumination. Our results better match the lighting pattern in the source video and retain sharper texture details. This is consistent with the role of the Medium-Aware Block, which injects depth-aware modulation into the denoising pathway to better han-14 Y. Huang et al. Groundtruth w/o Medium-Aware Block w/o 4D-GCC w/o Med.-Aware Block & 4D-GCC 
+
+Fig. 8: Ablation visualization. Visual comparisons on static scenes, including Groundtruth, w/o Medium-Aware Block, w/o 4D-GCC, and w/o Medium-Aware Block & 4D-GCC. Red boxes highlight differences in reef textures and fine details. 
+
+Table 4: Ablation results. Average metrics on the NUSR static scenes.                
+
+> Method PSNR ↑SSIM ↑LPIPS ↓
+> Ours w/o 4D-GCC 19.782 0.573 0.295 Ours w/o Medium-Aware Block 18.710 0.557 0.306 Ours w/o 4D-GCC & Medium-Aware Block 18.543 0.579 0.337 Ours 21.125 0.633 0.237
+
+dle absorption- and scattering-induced appearance changes and suppress color drifting. The second and third columns emphasize the need for complete geo-metric conditioning under large viewpoint shifts. In the second column, Trajec-toryCrafter shows missing content in the red-arrow region, whereas our method completes it with a consistent seabed structure. In the third column, Trajecto-ryCrafter produces fish-like hallucinations on the seabed. By contrast, Ocean4D leverages 4D-GCC to aggregate complementary cross-frame geometric evidence, which improves conditioning coverage and reduces hallucinations. 
+
+Static Scene Analysis. We also conduct ablation studies on static scenes to evaluate the contributions of 4D-GCC and the Medium-Aware Block. Fig. 8 presents representative visual comparisons. With 4D-GCC, reef and seabed struc-tures are reconstructed more completely, indicating improved cross-view geo-metric consistency from more reliable conditioning coverage. With the Medium-Aware Block, underwater appearance becomes more stable. Although geometric consistency degrades without the assistance of 4D-GCC and the reef structure becomes incomplete, the modeled details are sharper, with stronger color consis-tency , suggesting that the Medium-Aware Block helps absorb medium variation during diffusion denoising and suppress appearance drift induced by scattering and attenuation. Tab. 4 reports quantitative results. The full model achieves the best performance on PSNR, SSIM, and LPIPS, reaching 21 .125 , 0.633 , and 
+
+0.237 , respectively, further validating the effectiveness of our design. 
+
+## 5 Conclusion 
+
+We propose Ocean4D , a unified framework for Generative 4D Reconstruc-tion from monocular underwater videos. Ocean4D leverages 4D-GCC to con-struct 4D geometrically consistent conditioning with improved cross-frame cov-erage under occlusions and large viewpoint changes. We further introduce a 
+
+Medium-Aware Block to inject depth-aware modulation into the denoising process, stabilizing underwater appearance variations caused by absorption and Ocean4D: Generative Underwater 4D Reconstruction 15 
+
+scattering. Experiments on both dynamic and static underwater scenes demon-strate that Ocean4D achieves state-of-the-art performance in terms of geometric consistency and underwater visual quality, offering a practical and effective so-lution for real-world underwater 4D modeling. 
+
+## References 
+
+1. Akkaynak, D., Treibitz, T.: A revised underwater image formation model. In: Proc. CVPR. pp. 6723–6732 (2018) 2, 4 2. Akkaynak, D., Treibitz, T.: Sea-thru: A method for removing water from under-water images. In: Proc. CVPR. pp. 1682–1691 (2019) 2 3. Arain, B., Dayoub, F., Rigby, P., Dunbabin, M.: Close-proximity underwater terrain mapping using learning-based coarse range estimation. arXiv preprint arXiv:2001.00330 (2020) 1 4. Bai, J., Xia, M., Fu, X., Wang, X., Mu, L., Cao, J., Liu, Z., Hu, H., Bai, X., Wan, P., et al.: Recammaster: Camera-controlled generative rendering from a single video. In: Proc. ICCV. pp. 14834–14844 (2025) 2, 4, 9, 10, 12 5. Barron, J.T., Mildenhall, B., Tancik, M., Hedman, P., Martin-Brualla, R., Srini-vasan, P.P.: Mip-nerf: A multiscale representation for anti-aliasing neural radiance fields. In: Proc. ICCV. pp. 5855–5864 (2021) 2, 3 6. Barron, J.T., Mildenhall, B., Verbin, D., Srinivasan, P.P., Hedman, P.: Mip-nerf 360: Unbounded anti-aliased neural radiance fields. In: Proc. CVPR. pp. 5470–5479 (2022) 2, 3 7. Barron, J.T., Mildenhall, B., Verbin, D., Srinivasan, P.P., Hedman, P.: Zip-nerf: Anti-aliased grid-based neural radiance fields. In: Proc. ICCV. pp. 19697–19705 (2023) 2, 3 8. Blattmann, A., Dockhorn, T., Kulal, S., Mendelevitch, D., Kilian, M., Lorenz, D., Levi, Y., English, Z., Voleti, V., Letts, A., et al.: Stable video diffusion: Scaling latent video diffusion models to large datasets. arXiv preprint arXiv:2311.15127 (2023) 2, 4, 5 9. Blattmann, A., Rombach, R., Ling, H., Dockhorn, T., Kim, S.W., Fidler, S., Kreis, K.: Align your latents: High-resolution video synthesis with latent diffusion models. In: Proc. CVPR. pp. 22563–22575 (2023) 2, 5 10. Chen, A., Xu, Z., Zhao, F., Zhang, X., Xiang, F., Yu, J., Su, H.: Mvsnerf: Fast generalizable radiance field reconstruction from multi-view stereo. In: Proc. ICCV. pp. 14124–14133 (2021) 2, 3 11. Chen, H., Xia, M., He, Y., Zhang, Y., Cun, X., Yang, S., Xing, J., Liu, Y., Chen, Q., Wang, X., et al.: Videocrafter1: Open diffusion models for high-quality video generation. arXiv preprint arXiv:2310.19512 (2023) 4, 5 12. Chen, L., Xiong, Y., Zhang, Y., Yu, R., Fang, L., Liu, D.: Sp-seanerf: Underwater neural radiance fields with strong scattering perception. Computers & Graphics 
+
+123 , 104025 (2024) 4 13. Chen, Y., Xu, H., Zheng, C., Zhuang, B., Pollefeys, M., Geiger, A., Cham, T.J., Cai, J.: Mvsplat: Efficient 3d gaussian splatting from sparse multi-view images. In: Proc. ECCV. pp. 370–386. Springer (2024) 2, 3 14. Du, Y., Zhang, Z., Zhang, P., Sun, F., Lv, X.: Udr-gs: Enhancing underwater dynamic scene reconstruction with depth regularization. Symmetry 16 (8), 1010 (2024) 2, 4 16 Y. Huang et al. 15. Duan, Y., Wei, F., Dai, Q., He, Y., Chen, W., Chen, B.: 4d-rotor gaussian splat-ting: towards efficient novel view synthesis for dynamic scenes. In: proc. ACM SIGGRAPH. pp. 1–11 (2024) 3 16. Fan, Z., Cong, W., Wen, K., Wang, K., Zhang, J., Ding, X., Xu, D., Ivanovic, B., Pavone, M., Pavlakos, G., et al.: Instantsplat: Sparse-view gaussian splatting in seconds. arXiv preprint arXiv:2403.20309 (2024) 2, 3 17. Feng, C., Yu, W., Cheng, X., Tang, Z., Zhang, J., Yuan, L., Tian, Y.: Ae-nerf: Augmenting event-based neural radiance fields for non-ideal conditions and larger scenes. In: Proc. AAAI. vol. 39, pp. 2924–2932 (2025) 3 18. Fu, X., Zhuang, P., Huang, Y., Liao, Y., Zhang, X.P., Ding, X.: A retinex-based enhancing approach for single underwater image. In: Proc. ICIP. pp. 4572–4576. IEEE (2014) 3 19. Gao*, R., Holynski*, A., Henzler, P., Brussee, A., Martin-Brualla, R., Srinivasan, P.P., Barron, J.T., Poole*, B.: Cat3d: Create anything in 3d with multi-view dif-fusion models. Advances in Neural Information Processing Systems (2024) 4 20. Ghani, A.S.A., Isa, N.A.M.: Underwater image quality enhancement through rayleigh-stretching and averaging image planes. International Journal of Naval Ar-chitecture and Ocean Engineering 6(4), 840–866 (2014) 3 21. Hernández, J.D., Istenič, K., Gracias, N., Palomeras, N., Campos, R., Vidal, E., Garcia, R., Carreras, M.: Autonomous underwater navigation and optical mapping in unknown natural environments. Sensors 16 (8), 1174 (2016) 1 22. Hopkinson, B.M., King, A.C., Owen, D.P., Johnson-Roberson, M., Long, M.H., Bhandarkar, S.M.: Automated classification of three-dimensional reconstructions of coral reefs using convolutional neural networks. PloS one 15 (3), e0230671 (2020) 123. Hu, K., Wang, T., Shen, C., Weng, C., Zhou, F., Xia, M., Weng, L.: Overview of underwater 3d reconstruction technology based on optical images. Journal of Marine Science and Engineering 11 (5), 949 (2023) 2 24. Hu, W., Gao, X., Li, X., Zhao, S., Cun, X., Zhang, Y., Quan, L., Shan, Y.: Depthcrafter: Generating consistent long depth sequences for open-world videos. In: Proc. CVPR. pp. 2005–2015 (2025) 5, 10 25. Huang, Z., He, Y., Yu, J., Zhang, F., Si, C., Jiang, Y., Zhang, Y., Wu, T., Jin, Q., Chanpaisit, N., et al.: Vbench: Comprehensive benchmark suite for video genera-tive models. In: Proc. CVPR. pp. 21807–21818 (2024) 10, 11 26. Iqbal, K., Odetayo, M., James, A., Salam, R.A., Talib, A.Z.H.: Enhancing the low quality images using unsupervised colour correction method. In: 2010 IEEE international conference on systems, man and cybernetics. pp. 1703–1709. IEEE (2010) 3 27. Jiang, L., Mao, Y., Xu, L., Lu, T., Ren, K., Jin, Y., Xu, X., Yu, M., Pang, J., Zhao, F., et al.: Anysplat: Feed-forward 3d gaussian splatting from unconstrained views. ACM Transactions on Graphics 44 (6), 1–16 (2025) 3, 9, 11, 12, 13 28. Kerbl, B., Kopanas, G., Leimkühler, T., Drettakis, G., et al.: 3d gaussian splatting for real-time radiance field rendering. ACM Trans. Graph. 42 (4), 139–1 (2023) 2, 3, 9, 11, 12 29. Levy, D., Peleg, A., Pearl, N., Rosenbaum, D., Akkaynak, D., Korman, S., Treibitz, T.: Seathru-nerf: Neural radiance fields in scattering media. In: Proc. CVPR. pp. 56–65 (2023) 3 30. Li, H., Song, W., Xu, T., Elsig, A., Kulhanek, J.: Watersplatting: Fast underwater 3d scene reconstruction using gaussian splatting. In: Proc. 3DV. pp. 969–978. IEEE (2025) 2, 4, 9, 11, 12, 13 Ocean4D: Generative Underwater 4D Reconstruction 17 31. Li, J., Li, D., Xiong, C., Hoi, S.: Blip: Bootstrapping language-image pre-training for unified vision-language understanding and generation. In: Proc. ICML. pp. 12888–12900. PMLR (2022) 7 32. Liang, Z., Zhang, Q., Hu, W., Zhu, L., Feng, Y., Jia, K.: Analytic-splatting: Anti-aliased 3d gaussian splatting via analytic integration. In: Proc. ECCV. pp. 281–297. Springer (2024) 2, 3 33. Lin, B., Ge, Y., Cheng, X., Li, Z., Zhu, B., Wang, S., He, X., Ye, Y., Yuan, S., Chen, L., et al.: Open-sora plan: Open-source large video generation model. arXiv preprint arXiv:2412.00131 (2024) 4 34. Lin, C.H., Ma, W.C., Torralba, A., Lucey, S.: Barf: Bundle-adjusting neural radi-ance fields. In: Proc. ICCV. pp. 5741–5751 (2021) 3 35. Liu, R., Wu, R., Van Hoorick, B., Tokmakov, P., Zakharov, S., Vondrick, C.: Zero-1-to-3: Zero-shot one image to 3d object. In: Proc. ICCV. pp. 9298–9309 (2023) 436. Liu, S., Lu, J., Gu, Z., Li, J., Deng, Y.: Aquatic-gs: A hybrid 3d representation for underwater scenes. arXiv preprint arXiv:2411.00239 (2024) 2, 4 37. Mildenhall, B., Srinivasan, P.P., Tancik, M., Barron, J.T., Ramamoorthi, R., Ng, R.: Nerf: Representing scenes as neural radiance fields for view synthesis. Commu-nications of the ACM 65 (1), 99–106 (2021) 2 38. Müller, N., Schwarz, K., Rössle, B., Porzi, L., Bulo, S.R., Nießner, M., Kontschieder, P.: Multidiff: Consistent novel view synthesis from a single image. In: Proc. CVPR. pp. 10258–10268 (2024) 4 39. de Oliveira, L.M.C., Lim, A., Conti, L.A., Wheeler, A.J.: High-resolution 3d map-ping of cold-water coral reefs using machine learning. Frontiers in Environmental Science 10 , 1044706 (2022) 1 40. Park, K., Sinha, U., Barron, J.T., Bouaziz, S., Goldman, D.B., Seitz, S.M., Martin-Brualla, R.: Nerfies: Deformable neural radiance fields. In: Proc. ICCV. pp. 5865– 5874 (2021) 3 41. Pumarola, A., Corona, E., Pons-Moll, G., Moreno-Noguer, F.: D-nerf: Neural ra-diance fields for dynamic scenes. In: Proc. CVPR. pp. 10318–10327 (2021) 3 42. Raffel, C., Shazeer, N., Roberts, A., Lee, K., Narang, S., Matena, M., Zhou, Y., Li, W., Liu, P.J.: Exploring the limits of transfer learning with a unified text-to-text transformer. Journal of Machine Learning Research 21 (140), 1–67 (2020) 7 43. Ren, X., Shen, T., Huang, J., Ling, H., Lu, Y., Nimier-David, M., Müller, T., Keller, A., Fidler, S., Gao, J.: Gen3c: 3d-informed world-consistent video generation with precise camera control. In: Proc. CVPR. pp. 6121–6132 (2025) 2, 4 44. Sargent, K., Li, Z., Shah, T., Herrmann, C., Yu, H.X., Zhang, Y., Chan, E.R., Lagun, D., Fei-Fei, L., Sun, D., et al.: Zeronvs: Zero-shot 360-degree view synthesis from a single image. In: Proc. CVPR. pp. 9420–9429 (2024) 4 45. Sethuraman, A.V., Ramanagopal, M.S., Skinner, K.A.: Waternerf: Neural radiance fields for underwater scenes. In: OCEANS 2023-MTS/IEEE US Gulf Coast. pp. 1– 7. IEEE (2023) 2, 4 46. Song, J., Meng, C., Ermon, S.: Denoising diffusion implicit models. In: Proc. ICLR (2020) 4 47. Song, L., Chen, A., Li, Z., Chen, Z., Chen, L., Yuan, J., Xu, Y., Geiger, A.: Nerf-player: A streamable dynamic scene representation with decomposed neural radi-ance fields. IEEE Transactions on Visualization and Computer Graphics 29 (5), 2732–2742 (2023) 3 48. Sucar, E., Insafutdinov, E., Lai, Z., Vedaldi, A.: V-dpm: 4d video reconstruction with dynamic point maps. arXiv preprint arXiv:2601.09499 (2026) 6, 9 18 Y. Huang et al. 49. Tang, Y., Zhu, C., Wan, R., Xu, C., Shi, B.: Neural underwater scene representa-tion. In: Proc. CVPR. pp. 11780–11789 (2024) 3, 9, 12, 13 50. Van Hoorick, B., Wu, R., Ozguroglu, E., Sargent, K., Liu, R., Tokmakov, P., Dave, A., Zheng, C., Vondrick, C.: Generative camera dolly: Extreme monocular dynamic novel view synthesis. In: Proc. ECCV. pp. 313–331. Springer (2024) 2, 4, 5 51. Varghese, N., Kumar, A., Rajagopalan, A.: Self-supervised monocular underwater depth recovery, image restoration, and a real-sea video dataset. In: Proc. ICCV. pp. 12248–12258 (2023) 9, 12, 13 52. Verbin, D., Hedman, P., Mildenhall, B., Zickler, T., Barron, J.T., Srinivasan, P.P.: Ref-nerf: Structured view-dependent appearance for neural radiance fields. IEEE Transactions on Pattern Analysis and Machine Intelligence 47 (11), 9426–9437 (2024) 3 53. Wang, H., Agapito, L.: 3d reconstruction with spatial memory. In: Proc. 3DV. pp. 78–89. IEEE (2025) 3 54. Wang, J., Chen, M., Karaev, N., Vedaldi, A., Rupprecht, C., Novotny, D.: Vggt: Visual geometry grounded transformer. In: Proc. CVPR. pp. 5294–5306 (2025) 3, 955. Wang, Q., Zhang, Y., Holynski, A., Efros, A.A., Kanazawa, A.: Continuous 3d perception model with persistent state. In: Proc. CVPR. pp. 10510–10522 (2025) 356. Wang, S., Leroy, V., Cabon, Y., Chidlovskii, B., Revaud, J.: Dust3r: Geometric 3d vision made easy. In: Proc. CVPR. pp. 20697–20709 (2024) 3 57. Wu, G., Yi, T., Fang, J., Xie, L., Zhang, X., Wei, W., Liu, W., Tian, Q., Wang, X.: 4d gaussian splatting for real-time dynamic scene rendering. In: Proc. CVPR. pp. 20310–20320 (2024) 3 58. Wu, R., Gao, R., Poole, B., Trevithick, A., Zheng, C., Barron, J.T., Holynski, A.: Cat4d: Create anything in 4d with multi-view video diffusion models. In: Proc. CVPR. pp. 26057–26068 (2025) 4 59. Wu, R., Mildenhall, B., Henzler, P., Park, K., Gao, R., Watson, D., Srinivasan, P.P., Verbin, D., Barron, J.T., Poole, B., et al.: Reconfusion: 3d reconstruction with diffusion priors. In: Proc. CVPR. pp. 21551–21561 (2024) 4 60. Xie, Y., Kong, L., Chen, K., Zheng, Z., Yu, X., Yu, Z., Zheng, B.: Uveb: A large-scale benchmark and baseline towards real-world underwater video enhancement. In: Proc. CVPR. pp. 22358–22367 (2024) 9, 10 61. Yang, D., Leonard, J.J., Girdhar, Y.: Seasplat: Representing underwater scenes with 3d gaussian splatting and a physically grounded image formation model. In: Proc. ICRA. pp. 7632–7638. IEEE (2025) 2, 4 62. Yang, Z., Teng, J., Zheng, W., Ding, M., Huang, S., Xu, J., Yang, Y., Hong, W., Zhang, X., Feng, G., et al.: Cogvideox: Text-to-video diffusion models with an expert transformer. In: Proc. ICLR (2024) 4, 5, 7 63. Yariv, L., Gu, J., Kasten, Y., Lipman, Y.: Volume rendering of neural implicit surfaces. Advances in Neural Information Processing Systems 34 , 4805–4815 (2021) 264. Yu, M., Hu, W., Xing, J., Shan, Y.: Trajectorycrafter: Redirecting camera trajec-tory for monocular videos via diffusion models. In: Proc. ICCV. pp. 100–111 (2025) 2, 4, 5, 6, 7, 9, 10, 11, 12, 13 65. Yu, W., Fan, Y., Zhang, Y., Wang, X., Yin, F., Bai, Y., Cao, Y.P., Shan, Y., Wu, Y., Sun, Z., et al.: Nofa: Nerf-based one-shot facial avatar reconstruction. In: Proc. ACM SIGGRAPH. pp. 1–12 (2023) 3 Ocean4D: Generative Underwater 4D Reconstruction 19 66. Yu, W., Xing, J., Yuan, L., Hu, W., Li, X., Huang, Z., Gao, X., Wong, T.T., Shan, Y., Tian, Y.: Viewcrafter: Taming video diffusion models for high-fidelity novel view synthesis. IEEE Transactions on Pattern Analysis and Machine Intelligence (2025) 4 67. Zhang, J., Herrmann, C., Hur, J., Jampani, V., Darrell, T., Cole, F., Sun, D., Yang, M.H.: Monst3r: A simple approach for estimating geometry in the presence of motion. In: Proc. ICLR (2024) 3 68. Zhang, S., Wang, T., Dong, J., Yu, H.: Underwater image enhancement via ex-tended multi-scale retinex. Neurocomputing 245 , 1–9 (2017) 3 69. Zhu, Z., Fan, Z., Jiang, Y., Wang, Z.: Fsgs: Real-time few-shot view synthesis using gaussian splatting. In: Proc. ECCV. pp. 145–163. Springer (2024) 3

@@ -1,0 +1,1611 @@
+Title: Flow Map Denoisers: Traversing the Distortion-Perception Plane for Inverse Problems
+
+URL Source: https://arxiv.org/pdf/2606.19802v1
+
+Published Time: Fri, 19 Jun 2026 00:32:26 GMT
+
+Number of Pages: 46
+
+Markdown Content:
+# Flow Map Denoisers: Traversing the Distortion-Perception Plane for Inverse Problems 
+
+Nicolas Zilberstein 
+
+Rice University 
+
+nzilberstein@rice.edu 
+
+Morteza Mardani 
+
+NVIDIA Inc. 
+
+mmardani@nvidia.com 
+
+Santiago Segarra 
+
+Rice University 
+
+segarra@rice.edu 
+
+Abstract 
+
+Image restoration faces a fundamental tradeoff: methods that minimize error produce blurry reconstructions, while those that maximize perceptual quality yield sharp but less faithful images. Existing approaches either commit to a single operating point on this distortion perception (DP) frontier or require paired-data supervision, auxiliary models, or hyperparameter tuning of the sampler to access different points. We show that flow map models, a recent extension of flow matching for few-step sampling that learns an average field, implicitly define a one-parameter family of denoisers that continuously spans the DP frontier. The lookahead parameter t acts as a control knob between the MMSE and perceptual regimes. For Gaussian targets, we prove that varying t exactly recovers the optimal DP frontier; for natural images, we observe similar behavior empirically. Within a Plug-and-Play solver, the same mechanism extends to general inverse problems, where it controls a tradeoff between perceptual alignment and data consistency. Despite the lack of exact optimality guarantees in this setting, a single trained flow map spans the DP tradeoff, matching or exceeding specialized baselines at both extremes. Extensive experiments on CelebA ( 128 × 128 ) and AFHQ ( 256 × 256 )across several linear and nonlinear inverse tasks validate our findings. Code is available in https://github.com/nzilberstein/Flow-map-denoisers 
+
+1 Introduction 
+
+Image restoration is a highly ill-posed inverse problem: a single degraded observation can correspond to a vast set of plausible clean images. Standard regression approaches that minimize mean squared error (MSE) approximate the conditional expectation (Ongie et al., 2020), achieving minimum distortion at the cost of over-smoothed reconstructions that lack fine detail. In contrast, posterior sampling techniques (Kawar et al., 2021) produce realistic-looking solutions at the cost of higher distortion. This inherent compromise is formalized by the distortion-perception (DP) tradeoff (Blau and Michaeli, 2018; Freirich et al., 2021). Because the ideal balance between low distortion and high perceptual quality is strictly user-dependent, designing a single model capable of traversing the DP plane at inference time remains a central challenge in computational imaging. Most existing methods commit to a single operating point in the DP plane , either targeting mini-mum distortion through supervised regression (Dong et al., 2015; Terris et al., 2026), or minimum perception by leveraging recent generative models as priors (Pokle et al., 2024; Chung et al., 2023; Kadkhodaie and Simoncelli, 2021) to draw samples from the posterior. A few recent works based on data-dependent flow models aim to traverse the DP plane (Ohayon et al., 2025; Delbracio and 
+
+> Preprint.
+> arXiv:2606.19802v1 [cs.LG] 18 Jun 2026
+
+Milanfar, 2023; Albergo et al., 2024), by explicitly interpolating between measurement-dependent estimators (e.g., the conditional mean) and the clean image. Unlike these approaches, which require external mechanisms, such as interpolation, discretization choices, or retraining, to move along the DP frontier, we show that this tradeoff is already implicitly encoded in the dynamics of flow maps. This raises the question of whether this behavior can be achieved without relying on solver choices, such as increasing the number of discretization steps. In this work, we propose a unified approach based on flow maps (Boffi et al., 2025b,a; Geng et al., 2025; Sabour et al., 2025b), which unifies all operating points along the DP plane within a single model. While prior work primarily uses flow maps to accelerate sampling (Gülle et al., 2026; Sabour et al., 2025a; Spagnoletti et al., 2025), we instead leverage them to traverse the DP frontier . Our key observation is that the lookahead t selects a point along a continuum of estimators—termed average denoisers —implicitly encoded within a single trained flow map, thus acting as a knob to control the characteristics of the restored image. This perspective reveals DP control as an intrinsic property of the learned flow map, eliminating the need for multiple models, auxiliary networks, or heuristic solver choices. This family spans the entire DP frontier, recovering the MMSE estimator at one extreme and approaching posterior sampling at the other. For Gaussian targets, we prove that this family spans the entire DP frontier, recovering the MMSE estimator at one extreme and approaching posterior sampling at the other, tracing the optimal DP curve (Freirich et al., 2021). While this exact theoretical correspondence strictly holds for Gaussian noise problems, we empirically observe similar behavior for natural images. When extending this approach to general, non-Gaussian inverse problems, traversing the lookahead serves as an approximation to the true DP frontier; here, the lookahead controls a tradeoff that combines perceptual alignment with data-consistency effects, rather than exactly reproducing the denoising DP frontier. By embedding these denoisers within a Plug-and-Play (PnP) framework (Venkatakrishnan et al., 2013), we leverage this property to obtain a versatile solver that effectively traverses the DP frontier across a wide range of inverse problems. Fig. 1 illustrates this behavior on a 2D Gaussian mixture model. Overall, our contributions are: • Flow maps as a continuum of DP estimators. We reinterpret flow maps as a family of denoisers indexed by a lookahead parameter t, enabling continuous traversal of the DP plane with a single model. • Exact optimality in the Gaussian case. We show that this family recovers the optimal DP curve for Gaussian targets, establishing a direct link between flow maps and DP theory. • PnP reconstruction with continuous control. We embed these denoisers into a plug-and-play framework, yielding a unified solver that spans the entire DP plane without retraining, and enables high-perceptual reconstructions at a fraction of the cost of posterior sampling methods. • Empirical validation. On CelebA and AFHQ inverse problems (inpainting, motion deblurring, super-resolution, Gaussian deblurring), our method matches or exceeds specialized baselines at both DP endpoints from a single trained model, and uniquely traces a smooth DP curve in between. 
+
+Notation. Bold symbols (e.g., x) denote vectors, and bold uppercase symbols (e.g., H) denote matrices. Mappings such as the flow map Xs,t and denoisers Ds,t are written in standard (non-bold) font. 
+
+2 Background 
+
+2.1 Flow matching and flow maps Stochastic interpolants. Stochastic interpolants (Albergo et al., 2025; Lipman et al., 2023) define a family of stochastic processes that interpolate between a source distribution p0 (typically N (0 , I))and a target distribution p1 (the data distribution): 
+
+xt = αtx0 + βtx1, (1) where α, β : [0 , 1] → R are continuously differentiable functions satisfying the boundary conditions 
+
+α0 = 1 , α 1 = 0 and β0 = 0 , β 1 = 1 . A common choice is the linear interpolant αt = 1 − t and 
+
+βt = t, yielding xt = (1 − t)x0 + tx1. The marginal velocity field v(x, t ) = E[ ˙ xt | xt = x]
+
+yields an ODE ˙xt = vt(xt), defining a continuous-time transport map from the source to the target distribution and which can be used to draw samples from p1. In practice, a neural network vθ (x, t ) is 2PnP-Flow( Ds, t = s) PnP-Flow( Ds, t = s + 0.27 ) PnP-Flow( Ds, t = 1 )   
+
+> Measurements Ground truth P1PnP output
+
+Figure 1: PnP with average denoisers on a 2D mixture-of-Gaussians inverse problem ( y = Hx + σϵ, with H arotation+scaling operator and σ = 0 .3). Ds,t denotes the average denoiser (defined formally in Section 3.1). The lookahead t controls the DP trade-off: at t = s the denoiser is MMSE and PnP reconstructions concentrate at the posterior mean, which for this symmetric bimodal posterior lies between the two modes, yielding low distortion but poor perceptual quality; as t → 1, the lookahead progressively restores the bimodal structure, recovering samples from both modes at the cost of higher distortion; details of this experiment are in Appendix B.4. 
+
+trained to approximate vt via the mean square error loss: 
+
+Et, x0,x1
+
+
+
+vθ (xt, t ) − ( ˙ αtx0 + ˙βtx1) 22
+
+
+
+, (2) which plays a role analogous to denoising score matching Vincent (2011) in diffusion models Song et al. (2021). For the linear interpolant, the velocity field relates directly to the Minimum Mean Squared Error (MMSE) denoiser – instantaneous denoiser – via Tweedie’s formula (Robbins, 1956; Miyasawa et al., 1961): 
+
+Dt(x) := E[x1 | xt = x] = x + (1 − t)v(x, t ). (3) A detailed characterization of denoisers can be found in (Milanfar and Delbracio, 2025). 
+
+Flow maps. Sampling from p1 using the learned velocity field requires numerical integration of the ODE, typically with many function evaluations. Flow maps (Boffi et al., 2025b,a; Geng et al., 2025) bypass this integration by training a model to directly predict the average over a finite interval [s, t ]:
+
+Xs,t (x) = x + ( t − s) v(x, s, t ), (4) where v(x, s, t ) is the average velocity over the interval [s, t ]. A network vθ (x, s, t ) is trained to predict this average velocity, conditioned on both the current time s and the target time t. While there are different alternatives for the loss for training flow maps Boffi et al. (2025b), in this work we consider the Lagrangian self-distillation (LSD) given by 
+
+LLSD (ˆ v) = 
+
+Z 10
+
+Z t
+
+> 0
+
+Ex0,x1
+
+
+
+∂t ˆXs,t (xs) − vθ
+
+ ˆXs,t (xs) , t 
+
+ 2
+
+dsdt. (5) We consider the LSD as it achieved the most stable training in practice and a good visual result; we include further background in Appendix A.1. 
+
+2.2 Inverse problems and Plug-and-Play methods 
+
+We consider inverse problems of the form 
+
+y = f (x) + v, (6) where f (·) is a known (possibly non-linear) degradation operator and v is an additive noise, typically Gaussian v ∼ N (0 , σ I). Two main families of methods combine flow or diffusion priors with data-consistency updates (Daras et al., 2024; Chung et al., 2025; Zheng et al., 2025): guidance-based methods (Zhang et al., 2024; Pokle et al., 2024; Chung et al., 2023; Song et al., 2022) and plug-and-play (optimization-based) methods (Ben-Hamu et al., 2024; Martin et al., 2025). We focus on the latter and defer a discussion of guidance-based approaches to Appendix A.2. 3Plug-and-Play methods. Plug-and-Play (PnP) algorithms (Venkatakrishnan et al., 2013; Romano et al., 2017) originate from proximal optimization methods for solving inverse problems of the form 
+
+min x g(x) + h(x). In particular, forward–backward splitting (FBS) alternates between a gradient step on the data-fidelity term and a proximal step on the regularizer: 
+
+zk = xk − λt∇g(xk), (7) 
+
+xk+1 = prox λh (zk), (8) where the proximal operator is defined as prox λh (z) := arg min x 12 ∥x − z∥2 + λh (x). Computing 
+
+prox λh corresponds to solving a denoising problem. 
+
+Flow and diffusion models as PnP priors. Recent works instantiate this proximal step with a learned denoiser Dt, yielding the iteration xk+1 = Dt(zk) (Zhu et al., 2023; Martin et al., 2025; Mardani et al., 2024; Zilberstein et al., 2025; Renaud et al., 2024; Laumont et al., 2022, 2023; Hu et al., 2024). This approach leverages implicit priors learned by generative models while retaining the flexibility of PnP for arbitrary forward operators. However, these methods typically optimize distortion, often at the expense of perceptual quality, resulting in over-smoothed reconstructions. In Section 3, we show that replacing the instantaneous denoiser with an average denoiser associated to the flow-map enables continuous control over this tradeoff and improves perceptual quality. 
+
+2.3 Distortion-Perception Tradeoff 
+
+The standard evaluation of image restoration methods relies on average distortion D = E[∆( x, ˆx)] 
+
+(e.g., MSE or LPIPS), which measures the discrepancy between the ground truth x and its estimate 
+
+ˆx. However, since reconstructions should also appear natural to humans, methods are additionally assessed by perceptual quality. In practice, this is approximated by a perceptual index P = d(px, p ˆx),measuring the divergence (e.g., Wasserstein distance) between the true and reconstructed distributions, and estimated via surrogates such as FID (Heusel et al., 2017) or KID (Bi´ nkowski et al., 2018). Blau and Michaeli (2018) showed that distortion and perception are fundamentally at odds, defining the distortion–perception (DP) tradeoff . Formally, the DP function is 
+
+D(P ) = min 
+
+> pˆx|y
+
+E[∥x − ˆx∥] s.t. W2(px, p ˆx) ≤ P, 
+
+where we considered the MSE distortion and Wasserstein distance for perception. For this choice, Freirich et al. (2021) showed that the optimal curve is D(P ) = D∗ + max {(P ∗ − P )2, 0}, P ∈
+
+[0 , P ∗], where D∗ = E[∥x − x∗∥2] is the MMSE distortion and P ∗ = W2(px, p x∗ ) is the perceptual gap of the posterior mean x∗ = E[x|y]. The optimal estimator at each perception level is given by the interpolation 
+
+ˆxP =
+
+
+
+1 − PP ∗
+
+
+
+ˆx0 + PP ∗ x∗, (9) where ˆx0 is a perfectly perceptual estimator. This result implies that the entire DP frontier can be recovered by interpolating between two endpoints: the MMSE estimator x∗ and a perceptually optimal estimator ˆx0. However, existing approaches require explicit interpolation between multiple models or task-specific retraining to access different operating points (Delbracio and Milanfar, 2023; Ohayon et al., 2025). In contrast, we seek a single model that directly parameterizes this continuum, enabling continuous traversal of the DP plane. 
+
+3 Average denoisers: traversing the DP plane 
+
+In this section we define and analyze the average denoiser associated to flow maps and its connection to the DP tradeoff (Section 3.1). 
+
+3.1 Flow maps as denoisers 
+
+Recall we seek a family of estimators parametrized by a single model that interpolates between P ∗
+
+(lowest distortion) and P = 0 (lowest perception). A natural candidate is the denoiser implicitly defined by the flow map (Section 2.1). The same object was independently introduced by Lee et al. (2026) for one-step language modeling on discrete data; here we study it in the continuous setting and show it parametrizes the DP frontier. 4Definition 1 (Average denoiser) Given a flow map with average velocity v(., s, t ), the average denoiser (or two-time denoiser) is: 
+
+Ds,t (x) := x + (1 − s)v(x, s, t ). (10) This definition has the same form as the instantaneous denoiser (3) , but replaces the instantaneous velocity v(., s ) with the average velocity v(., s, t ) over the interval [s, t ]. This modification has an important consequence: the parameter t now controls where Ds,t (x) sits on the DP plane, i.e., varying 
+
+t traces a continuous path between the low-distortion and low-perception extremes. Importantly, both 
+
+s and t are inputs of vθ (x, s, t ), so a single trained model produces a whole family of denoisers with different characteristics, as we show in the following section. 
+
+3.2 Traversing the DP plane with flow maps 3.2.1 Warm-up: Gaussian case (1D analysis) 
+
+We start with the Gaussian case, which renders a closed-form expression of the average denoiser in (10) . For clarity, we derive the results in the scalar case ( x ∈ R); all results extend directly to the multivariate setting by applying the analysis component-wise. Let p1 = N (0 , σ 2 
+
+> p
+
+), with σ2 
+
+> p
+
+≤ 1;following the stochastic interpolant formulation in Section 2.1, the marginal variance at noise level t
+
+is σ2 
+
+> t
+
+= t2σ2 
+
+> p
+
++ (1 − t)2, and the instantaneous denoiser is linear , given by E[x1 | xt = x] = Atx,with At = tσ 2 
+
+> p
+
+/σ 2 
+
+> t
+
+. Using Tweedie’s relationship in (3) , we also have a linear instantaneous velocity field v(x, t ) = Btx with Bt = [ t(σ2 
+
+> p
+
++ 1) − 1] /σ 2 
+
+> t
+
+.
+
+Flow map and average denoiser. The linearity of the instantaneous velocity yields a scalar flow map xt = Φ( t, s ) xs with Φ( t, s ) = σt/σ s, obtained by integrating R ts Bτ dτ = log( σt/σ s) (see Appendix D.2). Following Definition 1, the average denoiser reduces to Ds,t (xs) = Λ( s, t ) xs where: 
+
+Λ( s, t ) = (1 − s)σt − (1 − t)σs
+
+σs(t − s) . (11) This gain satisfies Λ( s, s ) = As (lowest distortion) and Λ( s, 1) = σp/σ s (lowest perception), and is strictly increasing in t (see Appendix D.2). 
+
+Optimal DP estimators in the Gaussian case. For a Gaussian target, the optimal DP estimator in (9) is also linear, given by ˆxP = Γ( α) xs, with the gain given by 
+
+Γ( α) = α A s + (1 − α) σp/σ s. (12) The parameter α = P/P ∗ ∈ [0 , 1] parametrizes the perception level, interpolating linearly between the MMSE gain As and the best perception gain σp/σ s. Given this particular instance of the DP estimator, we can establish a direct relationship between the flow map and the DP estimator in the Gaussian case: 
+
+Theorem 1 (Exact optimality) Let p1 = N (0 , σ 2 
+
+> p
+
+) with σ2 
+
+> p
+
+≤ 1, and let Λ( s, t ) be the average denoiser gain (11) associated with the true flow map. Then for every s ∈ (0 , 1) and t ∈ [s, 1] , there exists a perception level 
+
+α(s, t ) = σp/σ s − Λ( s, t )
+
+σp/σ s − As
+
+∈ [0 , 1] (13) 
+
+such that Λ( s, t ) = Γ( α(s, t )) . Moreover, α(s, t ) decreases monotonically from 1 at t = s (MMSE, 
+
+P = P ∗) to 0 at t = 1 (perfect perception, P = 0 ). Consequently, the average denoiser Ds,t traces the optimal DP curve exactly as t varies in [s, 1] .
+
+The proof is deferred to Appendix D.2. In summary, both Λ( s, t ) and the optimal DP gain Γ( α) are continuous monotonic functions that share the same endpoints: As (MMSE, lowest distortion) and 
+
+σp/σ s (lowest perception). Hence, inverting the affine relation Γ( α) = Λ( s, t ) yields a bijection 
+
+α(s, t ) between the lookahead and the perception level, so the average denoiser exactly realizes the optimal DP estimator at every intermediate operating point. We now extend this insight to more general distributions. 515 20 25                 
+
+> FID better
+> 4.15
+> 4.20
+> 4.25
+> 4.30
+> 4.35
+> RMSE  better  t=s
+> t= 1
+> = 0.1
+> 30 40 50 60
+> FID better
+> 8.75
+> 9.00
+> 9.25
+> 9.50
+> t=s
+> t= 1
+> = 0.3
+> 40 50 60
+> FID better
+> 13.0
+> 13.5
+> 14.0
+> 14.5
+> t=s
+> t= 1
+> = 0.5
+> 50 60 70
+> FID better
+> 19
+> 20
+> 21
+> t=s
+> t= 1
+> = 0.7
+
+(a) DP tradeoff curves 20 40 60   
+
+> FID better
+> 0.900
+> 0.925
+> 0.950
+> 0.975
+> 1.000
+> Var( Ds, t) / Var( x1)
+> = 0.1
+> = 0.3
+> = 0.5
+> = 0.7
+
+(b) Var. vs FID 
+
+Figure 2: Analysis of the perception-distortion DP tradeoff and variance restoration on CelebA 128 × 128 ,quantified as RMSE/Var ratio vs FID. (a) DF tradeoff at different noise levels. Each curve is swept by varying the lookahead parameter t using a single trained model. (b) The near-collapse of curves across noise levels indicates a universal relationship between variance restoration and perceptual quality (FID) improvement. 
+
+3.3 Beyond the Gaussian case: image denoising experiments 
+
+For general image distributions, the average denoiser no longer admits a closed-form characterization. While exact DP optimality is not expected beyond the Gaussian case, the structural insight underlying Theorem 1 should still hold: as t varies from s to 1, the output of Ds,t is expected to interpolate smoothly between the MMSE estimator (low distortion, low perception quality) and a perceptually-aligned estimator (higher distortion, improved perception). Consequently, we expect (i) smooth, monotonic DP curves parameterized by t, and (ii ) convex trajectories consistent with the optimal DP function (Section 2.3), which we verify empirically below. While this section focuses on image data, we further support this intuition for a 2D mixture of Gaussians (MoG) in Appendix D.3, where the DP curve can be computed explicitly. 
+
+Setup. We train a flow map network vθ (x, s, t ) on CelebA 128 × 128 (Appendix B) and evaluate 
+
+Ds,t (xs) at multiple lookahead values t ∈ [s, 1] , where t = s recovers the MMSE denoiser Ds and 
+
+t = 1 reaches the endpoint of the flow. Since the stochastic interpolant (1) at time s takes the form 
+
+xs = s x1 + (1 − s) ϵ with ϵ ∼ N (0 , I), applying the average denoiser Ds,t to xs corresponds to Gaussian denoising: recovering the clean signal x1 from an observation where the signal is scaled by s and corrupted by noise of standard deviation 1 − s. We parameterize the noise level by 
+
+ξ := 1 − s ∈ (0 , 1) , where larger ξ means heavier noise. 
+
+DP traversal. Fig. 2a shows the empirical DP curves obtained by sweeping the lookahead t from 
+
+s (MMSE) to 1 (full perception) across four noise levels ξ ∈ { 0.1, 0.3, 0.5, 0.7}. As expected, the average denoiser traces smooth, monotone curves in the DP plane: increasing t improves perception (lower FID) at the cost of distortion (higher RMSE). The resulting curves exhibit the convex shape predicted by the optimal DP function. Unlike prior methods that provide only discrete or heuristic control, our approach yields a smooth and continuous parameterization of the DP frontier from a single trained model. We also observe that the traversal range increases with the noise level. For ξ = 0 .1, the range is narrow since the MMSE estimator is already close to the data distribution, whereas for ξ = 0 .7, the lookahead spans a wide range of operating points. This is consistent with Freirich et al. (2021), as the perception gap P ∗ grows with noise, allowing a larger tradeoff between distortion and perception. Fig. 30 illustrates this effect: as t increases from s to 1, reconstructions transition from smooth averages to sharp, detailed images. 
+
+Variance restoration. A natural question is why increasing the lookahead improves perceptual quality. A simple explanation follows from the law of total variance: for any noisy observation xs, we have Var( x1) = Var  E[x1 | xs] + EVar( x1 | xs). Since the second term is strictly positive, the MMSE estimator Ds(xs) = E[x1 | xs] has lower variance than the true data, i.e., Var( Ds(xs)) <
+
+Var( x1). This variance gap leads to reduced contrast and over-smoothed reconstructions, and is precisely what the optimal DP estimator (9) corrects via interpolation. As the lookahead t increases, the average denoiser progressively restores this variance, effectively traversing the same tradeoff within a single model. Fig. 2b supports this empirically: the relationship between variance ratio and FID is nearly identical across noise levels, suggesting that variance restoration underlies the observed perceptual improvements. 6Algorithm 1 PnP with Flow Map Denoisers                                                                   
+
+> Require: Trained flow map vθ(·, s, t ), observations y, forward model H, noise levels {sk}K−1
+> k=0 , lookahead
+> tk∈[sk,1] , step sizes {λk}K−1
+> k=0 , iterations K
+> 1: Initialize x0
+> 2: for k= 0 , . . . , K −1do
+> 3: zk=xk−λk∇g(xk)▷Gradient step (data fidelity)
+> 4: Sample ϵ∼ N (0 ,I)
+> 5: ˜zk= (1 −sk)ϵ+skzk▷Renoising (reproject to noise level s)
+> 6: xk+1 = ˜ zk+ (1 −sk)vθ(˜ zk, s k, t k)▷Flow map denoiser
+> 7: end for
+> 8: return xK
+
+4 Plug-and-play with average denoisers 
+
+We now embed the average denoiser (10) into the PnP framework from Section 2.2 to solve general inverse problems with continuous DP control. Importantly, the DP interpretation applies at the level of the denoiser Ds,t , while the overall PnP solution reflects its interaction with the forward model. As a result, in general inverse problems, the lookahead controls a tradeoff that combines perceptual alignment with data-consistency effects, rather than exactly reproducing the denoising DP frontier. 
+
+Algorithm. Given a trained flow map vθ (·, s, t ), observations y, and a chosen lookahead t ∈ [s, 1] ,our method alternates between a gradient descent step on the data-fidelity term g(x) = 12 ∥y − f (x)∥2
+
+and a proximal step utilizing the average denoiser. Following (Martin et al., 2025), we include a renoising step prior to applying the denoiser. This reprojects the gradient-updated iterate onto the support of the distribution at noise level s, ensuring that the average denoiser Ds,t processes inputs at its intended operational noise level. The complete procedure is summarized in Algorithm 1. 
+
+Role of the renoising step. The stochastic renoising step is what makes the lookahead a DP knob in the inverse-problem setting. With renoising, Ds,t operates at its intended noise level s, placing it in the regime where Theorem 1 characterizes its behavior, and the injected noise restores the sample diversity required at the perceptual end of the frontier. Without renoising, the iteration reduces to a fixed-point Tikhonov estimator and the lookahead degenerates into a bias-variance knob; we treat this case in Appendix D.4. 
+
+Computational cost and connection to PnP-Flow. Algorithm 1 requires one forward pass through 
+
+vθ per iteration. The lookahead t is merely a conditioning input, adding zero overhead and preserving efficiency over methods requiring ODE backpropagation or trace computations. 
+
+5 Related work 
+
+Consistency models and flow maps for inverse problems. Consistency models (Song et al., 2023b) learn to map any point on a probability flow ODE to its origin, enabling single-step generation. Consistency trajectory models (Kim et al., 2025) and flow maps (Boffi et al., 2025a) generalize this to arbitrary pairs (s, t ) by learning the ODE solution operator. More recent works repurposed these models for controlled generation, either as guided samplers (Sabour et al., 2025a; Spagnoletti et al., 2025; Garber and Tirer, 2025; Holderrieth et al., 2026), as priors (Gülle et al., 2026), or for optimizing the noise initialization (Mammadov et al., 2026). Most recently, and concurrently to this work, Huang et al. (2026) also leverage flow maps for guidance, formulating reward-based generation as an optimal control problem and using the flow map for fast guided sampling. However, all these approaches primarily target accelerated sampling at a fixed operating point and do not provide explicit control over the restoration tradeoff. In contrast, we treat the lookahead t as a continuous parameter, turning a single flow map into a family of estimators that spans the entire distortion–perception (DP) frontier. 
+
+Methods that traverse the DP plane. Recent approaches explore distortion–perception control by learning data-dependent flows between degraded and clean distributions. Inversion by Direct Iteration (InDI) (Delbracio and Milanfar, 2023) and stochastic interpolants (Albergo et al., 2024) learn flows from measurements to clean images, while Posterior-Mean Rectified Flow (PMRF) (Ohayon et al., 7Table 1: Quantitative results for inpainting with random mask ( 90% ) w/ σ = 0 .01 and motion deblurring w/ σ = 0 .05 across the CelebA and AFHQ datasets. Best results are in bold ; second best underline.                                                                                                                             
+
+> Sampler CelebA 128 ×128 AFHQ 256 ×256
+> Inpainting Motion Deblurring Inpainting Motion Deblurring
+> PSNR ↑LPIPS ↓FID ↓DISTS ↓PSNR ↑LPIPS ↓FID ↓DISTS ↓PSNR ↑LPIPS ↓FID ↓DISTS ↓PSNR ↑LPIPS ↓FID ↓DISTS ↓
+> Flow-priors 26.50 0.089 59.43 0.132 25.07 0.151 114.41 0.188 23.94 0.193 27.22 0.164 23.14 0.207 18.97 0.154 D-Flow 26.55 0.066 50.27 0.110 29.77 0.071 73.15 0.112 22.80 0.192 18.31 0.137 25.52 0.230 19.92 0.156 OT-ODE 22.16 0.158 84.92 0.179 21.07 0.198 106.78 0.202 21.14 0.263 16.03 0.181 16.73 0.348 77.53 0.234 DPS-ODE 25.60 0.070 45.74 0.106 27.36 0.101 57.02 0.133 23.08 0.127 8.69 0.098 20.49 0.292 36.71 0.179 PnP-Flow ( t=s)27.29 0.073 48.88 0.113 29.79 0.114 53.65 0.130 24.99 0.162 13.49 0.135 25.40 0.347 20.37 0.201 PnP-Flow ( t= 1 )26.03 0.065 46.79 0.109 29.42 0.082 52.61 0.119 23.23 0.122 9.11 0.095 23.31 0.207 14.04 0.137
+
+2025) replaces the source distribution with an approximation of the posterior mean. These methods provide inference-time mechanisms for traversing the DP plane, either through integration schedules or through a scalar parameter that controls the interpolation between posterior-mean and perceptual reconstructions. However, they rely on supervised training with paired dat (y, x) and, in the case of PMRF, require an auxiliary model to estimate the posterior mean. Moreover, extending such approaches to handle different degradations generally requires collecting paired training data across those operators and scaling model capacity accordingly. In contrast, our approach learns a single unconditional flow map from clean images alone, whose lookahead parameter naturally induces a continuous family of denoisers. As a result, DP control is obtained from a single model without paired supervision, auxiliary networks, or retraining, and extends naturally to arbitrary forward operators through Plug-and-Play inference. 
+
+6 Numerical experiments 
+
+We now focus on the numerical results. Throughout the experiments, we aim to (i) demonstrate competitive performance with state-of-the-art methods, and (ii ) show that our method uniquely enables continuous traversal of the DP plane with a single model. 
+
+Setup. We evaluate all methods in two datasets: Celeba 128 × 128 and AFHQ 256 × 256 ; we also consider AFHQ-cats 192 × 192 . For each dataset, we train a flow map model vθ (x, s, t ), parametrized by the Song UNet architecture (Song et al., 2020; Ronneberger et al., 2015), from scratch using the off-diagonal loss of LSD described in (5) . More training details can be found in Appendix B.1. We assess the reconstruction quality of the different samplers with mean squared error (in terms of 
+
+PSNR = −10 log 10 MSE ) and two perceptual metrics, LPIPS (Zhang et al., 2018) and DISTS (Ding et al., 2020). In addition, we compute the FID Heusel et al. (2017) and KID Bi´ nkowski et al. (2018) between ensembles of test set images and posterior samples. We compute the average of 100 samples, and for all the methods we consider Gaussian noise with σ = 0 .05 , unless random inpainting with 
+
+σ = 0 .01 ; also, in Appendix C.2.2 we include an experiment with Poisson noise. We compared with recent methods that leverage pre-trained flow models, namely OT-ODE (Pokle et al., 2024), Flow Priors (Zhang et al., 2024), D-Flow (Ben-Hamu et al., 2024), DPS-ODE (Chung et al., 2023) and PnP-Flow (Martin et al., 2025), which corresponds to our proposed method for t = s.For all the models, we performed a search grid of hyperparameters to obtain the best performance possible, and we use the same trained network for the prior/regularizer; we defer to Appendix B.2 for further details. We also include a comparison with baselines using a flow matching model as prior (a model trained without the second loss in (5)), which can be found in App. C.4. 
+
+6.1 Inverse problems 
+
+We evaluate on the following tasks: (i) motion deblurring with random kernel genearted with the code 1 and size 31 × 31 (CelebA) and 61 × 61 (AFHQ) and σb = 1 ; (ii ) random inpainting with 
+
+90% missing pixels; (iii ) super-resolution ( ×4); and (iv ) Gaussian deblurring, which are deferred to Appendix C.2. Quantitative results are reported in Table 1 (with error bars in Appendix C.1), and visual results in Appendix C.5 and Fig. 5. PnP-Flow with t = s achieves the best or near-best PSNR across all four (dataset, task) settings, confirming that the average denoiser at small lookaheads behaves 
+
+> 1
+
+https://github.com/LeviBorodenko/motionblur 
+
+8Figure 3: Across five linear inverse problems on AFHQ (Gaussian/motion deblurring, box/random inpainting, SR ×4), we sweep the lookahead t within a PnP solver and report RMSE (distortion) versus FID and KID (perception). Each marker corresponds to a value of t, with small lookaheads favoring low distortion and large ones favoring low FID. A single trained model spans the full frontier across all tasks, without retraining or guidance tuning; reconstructions on the right illustrate the perceptual change as t increases (larger version in Fig. 19). 
+
+as a low-distortion estimator. At the other extreme, PnP-Flow with t = 1 achieves the best or near-best LPIPS DISTS and FID on every task; on inpainting, it matches DPS-ODE on FID while substantially improving LPIPS and DISTS. Competing methods either commit to a single operating point (DPS-ODE favors perception, D-Flow favors distortion) or fall short on both, whereas our approach attains both regimes from a single trained network. Beyond accuracy, PnP-Flow is also the fastest of the methods compared, as shown in Appendix B.3. Lastly, we note that PnP-Flow with t = 1 
+
+is not uniformly the best perceptual method in all tasks. In particular, on Gaussian deblurring and super-resolution (in Appendix C.2), some baselines achieve better perceptual metrics. Nevertheless, increasing the lookahead from t = s to t = 1 consistently shifts PnP-Flow toward the perceptual end of the DP spectrum, substantially improving FID, LPIPS, and DISTS relative to the distortion-oriented regime. We therefore view the main contribution not as identifying a universally optimal perceptual operating point, but as providing a principled mechanism for continuously traversing the DP tradeoff with a single trained model (see Appendix C.8 for further discussion). 
+
+6.2 Analysis of the DP tradeoff 
+
+We now analyze how the lookahead parameter t controls the characteristics of our reconstructions by moving in DP plane. We evaluate the average denoiser {Ds,t }t at multiple lookahead values within a PnP solver and report RMSE (distortion) against FID (perception); for box inpainting, we use a mask of size 80 × 80 .
+
+Figure 4: DP behavior on JPEG compression. Results are in in Fig. 3, and three observations stand out. First, varying t produces a smooth, (almost) monotonic trajectory in the DP plane: small looka-heads yields minimum RMSE, large lookaheads min-imum FID, and intermediate values smoothly inter-polate between the two. This empirically confirms our analysis from Section 3.2.1 and shows that the behavior extends to natural images and general degra-dations. Second, the same qualitative trend appears across all five inverse problems — Gaussian deblur-ring, motion deblurring, random/box inpainting, and super-resolution — despite the very different forward operators, suggesting that the DP control given by t is degradation-agnostic. Third, no single t is universally best: the optimal lookahead depends on the user’s preference between distortion and perception, which is precisely the use case our framework is designed to support. 9Degraded D-Flow Flow Priors OT-ODE DPS PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth (a) Motion deblurring Degraded D-Flow Flow Priors OT-ODE DPS PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth (b) Random inpainting 
+
+Figure 5: Results on CelebA and AFHQ. PnP-flow with t = 1 generates sharper results than with t = s, and closer to posterior sampling methods. 
+
+Non-linear inverse problems. Finally, we evaluate the DP tradeoff on JPEG compression, a non-linear degradation, with quantization factor 10. We study the effect of the number of PnP iterations; the results are shown in Fig. 4 for AFHQ; see Appendix C.2.1 for comparison with baselines. PnP with flow maps consistently achieves better perceptual quality. However, increasing the number of iterations eventually degrades FID, consistent with observations in other inverse problems. 
+
+7 Discussion and limitations 
+
+We introduced flow map denoisers, a generalization of the standard instantaneous denoiser that enables continuous, zero-shot traversal of the DP tradeoff. By reinterpreting flow maps as a continuum of average denoisers indexed by a lookahead parameter t, we link flow maps to the theory of optimal DP estimators. This traversal is provably optimal for Gaussian targets and empirically validated for natural images. Embedded within a Plug-and-Play (PnP) solver, our approach enables inference-time control over restoration quality across diverse degradations, without retraining, paired data, or auxiliary models. Our approach has several limitations. First, the formal optimality result is restricted to the Gaussian case. While the image experiments in Section 3.3 suggest similar behavior more broadly, a general theoretical characterization remains open. In particular, understanding failure modes is an important direction for future work, as certain degradations can lead to non-monotonic DP behavior, like box inpainting in Fig 3. Second, flow map models are more expensive to train than standard flow matching models and may underperform on pure distortion metrics such as PSNR. Third, while increasing the lookahead parameter consistently moves reconstructions toward the perceptual end of the DP spectrum, the resulting endpoint ( t = 1 ) is not always the best perceptual method. This suggests that the lookahead parameter should primarily be viewed as a mechanism for traversing the DP tradeoff rather than as a way of reaching the optimal perceptual operating point for every restoration task. The perspective in this work opens several directions for future work, borrowing ideas from the denoiser literature (Milanfar and Delbracio, 2025). Average denoisers could be trained directly via denoising objectives, such as SURE-based/consistency losses (Raphan and Simoncelli, 2011; Daras et al., 2025; Tachella et al., 2025). Extending the construction to more general noising processes, such as general restoration priors (Hu et al., 2024; Elata et al., 2025), is an additional natural next step. Lastly, our experiments are limited to pixel-space models (CelebA 128, AFHQ 256); extending the framework to latent-space and text-to-image settings is an important direction. 
+
+Acknowledgement 
+
+This work was supported in part by the NVIDIA Academic Grants Program. The research was sponsored by the National Science Foundation (CCF 2340481). 
+
+References 
+
+Albergo, M. S., Boffi, N. M., and Vanden-Eijnden, E. (2025). Stochastic interpolants: A unifying framework for flows and diffusions. J. Mach. Learn. Res. 
+
+10 Albergo, M. S., Goldstein, M., Boffi, N. M., Ranganath, R., and Vanden-Eijnden, E. (2024). Stochastic interpolants with data-dependent couplings. In Intl. Conf. on Mach. Learn. (ICML) , pages 921–937. PMLR. Ben-Hamu, H., Puny, O., Gat, I., Karrer, B., Singer, U., and Lipman, Y. (2024). D-flow: Dif-ferentiating through flows for controlled generation. In Intl. Conf. on Mach. Learn. (ICML) .PMLR. Bi´ nkowski, M., Sutherland, D. J., Arbel, M., and Gretton, A. (2018). Demystifying MMD GANs. In 
+
+Intl. Conf. Learn. Repr. (ICLR) .Blau, Y. and Michaeli, T. (2018). The perception-distortion tradeoff. In Proceedings of the IEEE/CVF Int. Conf. Comput. Vis. Pattern Recogn. (CVPR) .Boffi, N. M., Albergo, M. S., and Vanden-Eijnden, E. (2025a). Flow map matching with stochastic interpolants: A mathematical framework for consistency models. Trans. Mach. Learn. Res (TMLR). 
+
+Boffi, N. M., Albergo, M. S., and Vanden-Eijnden, E. (2025b). How to build a consistency model: Learning flow maps via self-distillation. In Advances in Neural Inf. Process. Syst. (NIPS) .Choi, Y., Uh, Y., Yoo, J., and Ha, J.-W. (2020). StarGAN v2: Diverse image synthesis for multiple domains. In Proceedings of the IEEE/CVF Int. Conf. Comput. Vis. Pattern Recogn. (CVPR) .Chung, H., Kim, J., Mccann, M. T., Klasky, M. L., and Ye, J. C. (2023). Diffusion posterior sampling for general noisy inverse problems. In Intl. Conf. Learn. Repr. (ICLR) .Chung, H., Kim, J., and Ye, J. C. (2025). Diffusion models for inverse problems. arXiv preprint arXiv:2508.01975 .Daras, G., Chung, H., Lai, C.-H., Mitsufuji, Y., Ye, J. C., Milanfar, P., Dimakis, A. G., and Delbracio, M. (2024). A survey on diffusion models for inverse problems. arXiv preprint arXiv:2410.00083 .Daras, G., Rodriguez-Munoz, A., Klivans, A., Torralba, A., and Daskalakis, C. C. (2025). Ambient diffusion omni: Training good models with bad data. In Advances in Neural Inf. Process. Syst. (NIPS) .Delbracio, M. and Milanfar, P. (2023). Inversion by direct iteration: An alternative to denoising diffusion for image restoration. Trans. Mach. Learn. Res (TMLR). 
+
+Ding, K., Ma, K., Wang, S., and Simoncelli, E. P. (2020). Image quality assessment: Unifying structure and texture similarity. IEEE Trans. Pattern Anal. Mach. Intell. , 44(5):2567–2581. Dong, C., Loy, C. C., He, K., and Tang, X. (2015). Image super-resolution using deep convolutional networks. IEEE Trans. Pattern Anal. Mach. Intell. , 38(2):295–307. Elata, N., Chung, H., Ye, J. C., Michaeli, T., and Elad, M. (2025). InvFussion: Bridging supervised and zero-shot diffusion for inverse problems. Advances in Neural Inf. Process. Syst. (NIPS) .Flamary, R., Courty, N., et al. (2021). Pot: Python optimal transport. J. Mach. Learn. Res. , 22(78):1–8. Freirich, D., Michaeli, T., and Meir, R. (2021). A theory of the distortion-perception tradeoff in wasserstein space. Advances in Neural Inf. Process. Syst. (NIPS) , 34:25661–25672. Garber, T. and Tirer, T. (2025). Zero-shot image restoration using few-step guidance of consistency models (and beyond). In Proceedings of the IEEE/CVF Int. Conf. Comput. Vis. Pattern Recogn. (CVPR) , pages 2398–2407. Geng, Z., Deng, M., Bai, X., Kolter, J. Z., and He, K. (2025). Mean flows for one-step generative modeling. In Advances in Neural Inf. Process. Syst. (NIPS) .Gülle, M., Yun, J., Alçalar, Y. U., and Akçakaya, M. (2026). PnP-CM: Consistency models as plug-and-play priors for inverse problems. Proceedings of the IEEE/CVF Int. Conf. Comput. Vis. Pattern Recogn. (CVPR) .11 Heusel, M., Ramsauer, H., Unterthiner, T., Nessler, B., and Hochreiter, S. (2017). GANs trained by a two time-scale update rule converge to a local Nash equilibrium. Advances in Neural Inf. Process. Syst. (NIPS) , 30. Holderrieth, P., Chen, D., Eyring, L., Shah, I., Anantharaman, G., He, Y., Akata, Z., Jaakkola, T., Boffi, N. M., and Simchowitz, M. (2026). Diamond maps: Efficient reward alignment via stochastic flow maps. arXiv preprint arXiv:2602.05993 .Hu, Y., Delbracio, M., Milanfar, P., and Kamilov, U. S. (2024). A restoration network as an implicit prior. In Intl. Conf. Learn. Repr. (ICLR) .Huang, J. Y., Lin, J., Shah, S., Nair, K., and Boffi, N. M. (2026). How to guide your flow: Few-step alignment via flow map reward guidance. arXiv preprint arXiv:2604.27147 .Kadkhodaie, Z. and Simoncelli, E. (2021). Stochastic solutions for linear inverse problems using the prior implicit in a denoiser. Advances in Neural Inf. Process. Syst. (NIPS) , 34:13242–13254. Karras, T., Aittala, M., Lehtinen, J., Hellsten, J., Aila, T., and Laine, S. (2024). Analyzing and improving the training dynamics of diffusion models. In Proceedings of the IEEE/CVF Int. Conf. Comput. Vis. Pattern Recogn. (CVPR) , pages 24174–24184. Kawar, B., Vaksman, G., and Elad, M. (2021). SNIPS: Solving noisy inverse problems stochastically. 
+
+Advances in Neural Inf. Process. Syst. (NIPS) , 34:21757–21769. Kim, B., Kim, J., Kim, J., and Ye, J. C. (2025). Generalized consistency trajectory models for image manipulation. In Intl. Conf. Learn. Repr. (ICLR) .Kingma, D. P. (2015). Adam: A method for stochastic optimization. Intl. Conf. Learn. Repr. (ICLR) .Laumont, R., Bortoli, V. D., Almansa, A., Delon, J., Durmus, A., and Pereyra, M. (2022). Bayesian imaging using plug & play priors: when Langevin meets Tweedie. SIAM J. Imag. Sciences ,15(2):701–737. Laumont, R., De Bortoli, V., Almansa, A., Delon, J., Durmus, A., and Pereyra, M. (2023). On maximum a posteriori estimation with plug & play priors and stochastic gradient descent. J. Math. Imaging Vis. , 65(1):140–163. Lee, C., Yoo, J., Agarwal, M., Shah, S., Huang, J., Raghunathan, A., Hong, S., Boffi, N. M., and Kim, J. (2026). One-step language modeling via continuous denoising. arXiv preprint arXiv:2602.16813 .Lipman, Y., Chen, R. T., Ben-Hamu, H., Nickel, M., and Le, M. (2023). Flow matching for generative modeling. In Intl. Conf. Learn. Repr. (ICLR) .Liu, Z., Luo, P., Wang, X., and Tang, X. (2015). Deep learning face attributes in the wild. In 
+
+Proceedings of the IEEE/CVF Int. Conf. Comput. Vis. (ICCV) .Mammadov, A., Takao, S., Chen, B., Baptista, R., Mardani, M., Teh, Y. W., and Berner, J. (2026). Variational flow maps: Make some noise for one-step conditional generation. arXiv preprint arXiv:2603.07276 .Mardani, M., Song, J., Kautz, J., and Vahdat, A. (2024). A variational perspective on solving inverse problems with diffusion models. Intl. Conf. Learn. Repr. (ICLR) .Martin, S., Gagneux, A., Hagemann, P., and Steidl, G. (2025). PnP-flow: Plug-and-play image restoration with flow matching. In Intl. Conf. Learn. Repr. (ICLR) .Milanfar, P. and Delbracio, M. (2025). Denoising: a powerful building block for imaging, inverse problems and machine learning. Philos. Trans. R. Soc. A , 383(2299). Miyasawa, K. et al. (1961). An empirical Bayes estimator of the mean of a normal population. Bull. Inst. Internat. Statist , 38(181-188):1–2. Ohayon, G., Michaeli, T., and Elad, M. (2025). Posterior-mean rectified flow: Towards minimum mse photo-realistic image restoration. In Intl. Conf. Learn. Repr. (ICLR) .12 Ongie, G., Jalal, A., Metzler, C. A., Baraniuk, R. G., Dimakis, A. G., and Willett, R. (2020). Deep learning techniques for inverse problems in imaging. IEEE J.Sel. Areas Inf. Theory. , 1(1):39–56. Pokle, A., Muckley, M. J., Chen, R. T. Q., and Karrer, B. (2024). Training-free linear image inverses via flows. Trans. Mach. Learn. Res (TMLR). 
+
+Raphan, M. and Simoncelli, E. P. (2011). Least squares estimation without priors or supervision. 
+
+Neural Comp. , 23(2):374–420. Renaud, M., Prost, J., Leclaire, A., and Papadakis, N. (2024). Plug-and-play image restoration with stochastic denoising regularization. In Intl. Conf. on Mach. Learn. (ICML) .Robbins, H. E. (1956). An empirical Bayes approach to statistics. In Proc. Third Berkeley Symp. Math. Statist. Prob. , pages 388–394. Springer. Romano, Y., Elad, M., and Milanfar, P. (2017). The little engine that could: Regularization by denoising (RED). SIAM J. Imag. Sciences , 10(4):1804–1844. Ronneberger, O., Fischer, P., and Brox, T. (2015). U-net: Convolutional networks for biomedical image segmentation. In Int. Conf. Med. Image Comput. Comput.-Assist. Interv. , pages 234–241. Springer. Ryu, E., Liu, J., Wang, S., Chen, X., Wang, Z., and Yin, W. (2019). Plug-and-play methods provably converge with properly trained denoisers. In Intl. Conf. on Mach. Learn. (ICML) , pages 5546–5557. PMLR. Sabour, A., Albergo, M. S., Domingo-Enrich, C., Boffi, N. M., Fidler, S., Kreis, K., and Vanden-Eijnden, E. (2025a). Test-time scaling of diffusions with flow maps. arXiv preprint arXiv:2511.22688 .Sabour, A., Fidler, S., and Kreis, K. (2025b). Align your flow: Scaling continuous-time flow map distillation. In Advances in Neural Inf. Process. Syst. (NIPS) .Song, J., Meng, C., and Ermon, S. (2020). Denoising diffusion implicit models. In Intl. Conf. Learn. Repr. (ICLR) .Song, J., Vahdat, A., Mardani, M., and Kautz, J. (2022). Pseudoinverse-guided diffusion models for inverse problems. In Intl. Conf. Learn. Repr. (ICLR) .Song, J., Zhang, Q., Yin, H., Mardani, M., Liu, M.-Y., Kautz, J., Chen, Y., and Vahdat, A. (2023a). Loss-guided diffusion models for plug-and-play controllable generation. In Intl. Conf. on Mach. Learn. (ICML) , pages 32483–32498. PMLR. Song, Y., Dhariwal, P., Chen, M., and Sutskever, I. (2023b). Consistency models. In Intl. Conf. on Mach. Learn. (ICML) , pages 32211–32252. PMLR. Song, Y., Sohl-Dickstein, J., Kingma, D. P., Kumar, A., Ermon, S., and Poole, B. (2021). Score-based generative modeling through stochastic differential equations. In Intl. Conf. Learn. Repr. (ICLR) .Spagnoletti, A., Prost, J., Almansa, A., Papadakis, N., and Pereyra, M. (2025). Latino-pro: Latent consistency inverse solver with prompt optimization. In Proceedings of the IEEE/CVF Int. Conf. Comput. Vis. Pattern Recogn. (CVPR) , pages 19597–19607. Tachella, J., Davies, M. E., and Jacques, L. (2025). Unsure: self-supervised learning with unknown noise level and stein’s unbiased risk estimate. In Intl. Conf. Learn. Repr. (ICLR) .Terris, M., Hurault, S., Song, M., and Tachella, J. (2026). Reconstruct anything model: a lightweight foundation model for computational imaging. Intl. Conf. Learn. Repr. (ICLR) .Venkatakrishnan, S. V., Bouman, C. A., and Wohlberg, B. (2013). Plug-and-play priors for model based reconstruction. In IEEE Global Conf. Signal and Info. Process. (GlobalSIP) , pages 945–948. IEEE. Vincent, P. (2011). A connection between score matching and denoising autoencoders. Neural computation , 23(7):1661–1674. 13 Wu, L., Trippe, B., Naesseth, C., Blei, D., and Cunningham, J. P. (2023). Practical and asymptotically exact conditional sampling in diffusion models. Advances in Neural Inf. Process. Syst. (NIPS) .Zhang, R., Isola, P., Efros, A. A., Shechtman, E., and Wang, O. (2018). The unreasonable effectiveness of deep features as a perceptual metric. In Proceedings of the IEEE/CVF Int. Conf. Comput. Vis. (ICCV) , pages 586–595. Zhang, Y., Yu, P., Zhu, Y., Chang, Y., Gao, F., Wu, Y. N., and Leong, O. (2024). Flow priors for linear inverse problems via iterative corrupted trajectory matching. Advances in Neural Inf. Process. Syst. (NIPS) , 37:57389–57417. Zheng, H., Chu, W., Zhang, B., Wu, Z., Wang, A., Feng, B., Zou, C., Sun, Y., Kovachki, N. B., Ross, Z. E., et al. (2025). Inversebench: Benchmarking plug-and-play diffusion priors for inverse problems in physical sciences. In Intl. Conf. Learn. Repr. (ICLR) .Zhu, Y., Zhang, K., Liang, J., Cao, J., Wen, B., Timofte, R., and Van Gool, L. (2023). Denoising diffusion models for plug-and-play image restoration. In Proceedings of the IEEE/CVF Int. Conf. Comput. Vis. Pattern Recogn. (CVPR) , pages 1219–1229. Zilberstein, N., Mardani, M., and Segarra, S. (2025). Repulsive latent score distillation for solving inverse problems. In Intl. Conf. Learn. Repr. (ICLR) .14 Appendix A Background 
+
+A.1 Flow Maps 
+
+Consider a probability flow defined by the ordinary differential equation 
+
+˙xt = vt(xt), x0 ∼ p0,
+
+which transports samples from a simple distribution p0 to a target distribution p1. The associated flow map Xs,t : Rd → Rd is defined as the solution operator of this ODE: 
+
+Xs,t (xs) = xt,
+
+i.e., it maps a point at time s to its position at time t along the flow trajectory. In particular, X0,1
+
+directly maps samples from p0 to p1, enabling one-step generation without numerical integration. A convenient parameterization of the flow map is given by 
+
+Xs,t (x) = x + ( t − s) v(x, s, t ),
+
+where vs,t can be interpreted as the average velocity between times s and t. In the limit t → s, this recovers the instantaneous velocity field: 
+
+lim  
+
+> s→t
+
+∂tXs,t (x) = v(x, t ),
+
+which implies that v(x, t, t ) = v(x, t ).
+
+Characterization of the flow map. The flow map can be equivalently characterized in three ways: • Lagrangian form: 
+
+∂tXs,t (x) = vt(Xs,t (x)) ,
+
+which describes evolution along trajectories; • Eulerian form: 
+
+∂sXs,t (x) + ∇Xs,t (x) vs(x) = 0 ,
+
+which expresses conservation along the flow; • Semigroup property: 
+
+Xs,t (x) = Xu,t (Xs,u (x)) ,
+
+which encodes consistency across time intervals. These equivalent formulations provide the basis for learning flow maps in practice (Boffi et al., 2025b). 
+
+Self-distillation framework. Instead of learning the instantaneous velocity field v(., t ) and inte-grating the ODE, flow map models directly learn v(., s, t ) by combining: • the diagonal loss in (2) enforcing v(x, t, t ) ≈ v(x, t ),• an off-diagonal loss enforcing consistency with one of the above three characterizations. Notice that throughout this work we used the LSD loss in (5) , which is the one associated to the Lagrangian condition. This approach, known as self-distillation , allows training a single model that approximates the full flow map Xs,t without requiring a pre-trained teacher model. 
+
+A.2 Inverse problems with flow/diffusion priors 
+
+While in this work we focus on flow-based models, there is a large body of works using diffusion priors, which are very related to our proposed method. We now summarize some of this early works. These methods generate a sample from the posterior by running the reverse process using conditional score at t obtained via Bayes’ rule as 
+
+∇xt log p(xt|y) = ∇xt log p(y|xt) + ∇xt log p(xt). (14) 15 While the second term uses a pre-trained diffusion model, the first is intractable, as seen from 
+
+p(y|xt) = R p(y|x0)p(x0|xt)dx0. Prior works (Chung et al., 2023; Song et al., 2022; Kadkhodaie and Simoncelli, 2021; Song et al., 2023a) address this with a Gaussian approximation of p(x0|xt)
+
+using Tweedie’s formula E[x0|xt] = 1 
+
+> αt
+
+(xt − σtϵθ (xt, t )) . Still, this requires the computation of the score Jacobian , which is computationally expensive, especially for pixel-based models at high-resolution. In fact, this approximation is the one used for DPS-ODE in Section 6. Beyond guidance and PnP/optimization-based techniques, there is a body of works using sequential monte carlo (SMC) (Wu et al., 2023). In a nutshell, these methods leverage particle-based techniques, which allows to target the exact posterior in the particle limit. 
+
+B Implementation 
+
+B.1 Training details 
+
+All models are trained unconditionally using the Flow Map objective (Boffi et al., 2025b) with the LSD loss (5). 
+
+Architecture. We use the SongUNet Song et al. (2021) – a UNet with self-attention – with a base channel width of 128 and channel multipliers [1 , 2, 3, 4] , giving four resolution scales. Self-attention is applied at spatial resolutions 16 × 16 and 8 × 8. Each resolution level contains 3 residual blocks, dropout rate 0.1, and a cosine resampling filter [1 , 3, 3, 1] .
+
+Time conditioning. The network is conditioned on two scalars (αr , α t) ∈ [0 , 1] 2 representing the interpolation times of the source and target. Both are encoded with a positional (sinusoidal) embedding . Following Boffi et al. (2025b), the two conditioning scalars are embedded as PE( αt −αr )
+
+and PE( αr ), summed, and passed through a two-layer MLP with SiLU activations to produce a global conditioning vector injected into every residual block via adaptive group normalisation. 
+
+Loss weighting. For the off-diagonal term, we sample s, t uniformly from {(s, t ) : 0 < s < t ≤ 1}
+
+as detailed in Boffi et al. (2025b). We follow Karras et al. (2024) and learn a per-sample uncertainty weight for the LSD loss, we attach a small network that outputs a scalar log-variance log σ2(αr , α t) ∈
+
+R per training example. The network takes the concatenated pair [αr , α t] ∈ RB×2×H×W and generate a scalar used to weight the loss as L ∝ e− log σ2
+
+ℓ + log σ2.
+
+Datasets and resolution. 
+
+• CelebA-HQ 128 ×128 Liu et al. (2015): 202,599 images; 90% train split. • AFHQ 256 ×256 Choi et al. (2020): 16,130 images; 90% train split. During training, 75% of the batch is used for the on-diagonal loss, while the remaining 25% for the off-diagonal one. Augmentation (horizontal flip, rotation, scaling, anisotropic scaling, translation) is applied with probability p = 0 .12 .
+
+Optimization. All models are optimized with Adam (Kingma, 2015) ( β1 = 0 .9, β2 = 0 .95 ,
+
+ε = 10 −8) at a learning rate of 2 × 10 −4 with no learning-rate schedule. 
+
+Compute. For training, we use 8 NVIDIA GPUs A100, while for inference we use a single GPU for all methods. Table 2: Per-run training configuration.               
+
+> Dataset Resolution Batch size GPUs Days CelebA 128 ×128 128 810 ( ≈700 k iterations) AFHQ 256 ×256 32 89 ( ≈580 k iterations)
+
+16 B.2 Hyperparameters and baselines 
+
+For all baselines, unless otherwise specified, we use σ = 0 .05 for Gaussian/motion deblurring and super-resolution, and σ = 0 .01 for inpainting. Blur kernel size is set to 61 for AFHQ and 31 for CelebA. 
+
+Flow-Priors (Zhang et al., 2024). We follow the original parameterization with guidance weight λ
+
+and step size η. We use λ = 10 5, η = 10 −2, and K = 1 inner iteration in all settings. The number of outer iterations is fixed to N = 100 .
+
+D-Flow (Ben-Hamu et al., 2024). We tune the regularization parameter λ ∈ { 0.1, 0.01 , 0.001 }
+
+and the initialization blending parameter α ∈ { 0.1, 0.3, 0.5}, retaining λ = 0 .01 and α = 0 .1. As recommended by the authors, the inner LBFGS optimization runs for 20 iterations and the ODE is solved with 6 Euler steps. The number of outer iterations is fixed to 20 .
+
+OT-ODE (Pokle et al., 2024). We tune the initial time t0 ∈ { 0.1, 0.2, 0.3, 0.4} and the step-size schedule γ ∈ { constant , √t}. We use γ = constant throughout. The retained values are t0 = 0 .1 for inpainting, t0 = 0 .3 for Gaussian deblurring and super-resolution, and t0 = 0 .4 for motion deblurring on AFHQ. The number of iterations is fixed to N = 100 .
+
+DPS-ODE (Chung et al., 2023). This methods corresponds to the ODE (deterministic) version of the original DPS designed for diffusion models. We tune the guidance weight η ∈ { 10 2, 10 3, 10 4},retaining η = 10 3 as default, η = 10 2 on CelebA box inpainting, and η = 10 2 on AFHQ Gaussian deblurring. The number of iterations is fixed to N = 100 .
+
+PnP-Flow w/ t = s (Martin et al., 2025) and w/ t = 1 (ours). We adjust the learning-rate exponent α ∈ { 0.05 , 0.1} and the number of time steps N ∈ { 30 , 50 , 100 , 300 }. We use α = 0 .05 
+
+in most settings and α = 0 .1 for motion deblurring; N = 100 by default, N = 300 for hard random inpainting on AFHQ, and N ∈ { 30 , 50 } for motion deblurring. 
+
+B.3 Computational cost Running time. Table 3 reports per-image reconstruction times on a single A100 GPU. PnP-Flow is the fastest method we compare against, while reaching perceptual quality typically associated with posterior sampling. This illustrates a concrete advantage of using a flow map as a PnP denoiser: it inherits the speed of MAP-style approaches without sacrificing perceptual fidelity. Table 3: Running time for each method. PnP with a flow map as a denoiser is the fastest method, while generating images that are closer to those from posterior sampling methods. Sampler Time [sec] Flow-priors 34.8 D-Flow 322 OT-ODE 8.4 DPS-ODE 7.7 PnP-flow 4.5 
+
+Memory footprint. Overall, almost all the methods fit in a single A100 with a batch of 5 images for AFHQ 256x256; the only one that could not fit is D-flow, which needed to use a single image per batch. 
+
+B.4 Experiment of the teaser plot 
+
+We detail here the experiment underlying Fig. 1. The data distribution p1 is a 2D isotropic mixture of Gaussians, 
+
+p1 = 12 N (μa, σ 2 
+
+> c
+
+I) + 12 N (μb, σ 2 
+
+> c
+
+I), μa = (4 .5, 3.5) , μb = (3 .5, 5.5) , σ c = 0 .35 .
+
+17 Observations are generated according to the linear forward model in (6) , with f (·) = H a fixed rotation of angle π/ 6 followed by isotropic rescaling. Similarly to the case in Appendix D.3, the MMSE denoiser Ds(x) = E[X1 | Xs = x] admits a closed-form expression via the component posteriors. We use this analytic denoiser to construct the flow-map denoiser 
+
+Ds,t (x) = x + (1 − s) v(x, s, t ), v(x, s, t ), = 1
+
+t − s
+
+Z ts
+
+Dτ (xτ ) − xτ
+
+1 − τ dτ, 
+
+where the average velocity is approximated by Euler integration of the flow ˙xτ = ( Dτ (xτ )−xτ )/(1 −
+
+τ ) using 100 steps. Using this approximation of the average denoiser, we run PnP-Flow in Alg. 1 with s = 0 .45 (which is fixed to isolate the behavior of the lookahead), step size γk = λp1 − k/K 
+
+with λ = 0 .4, and K = 50 iterations. We initialize with x(0) = H−1y and run the algorithm independently for each sample. We consider three lookaheads t ∈ { s, s + 0 .27 , 1}, corresponding to the MMSE, an intermediate, and the full lookahead regime. The behavior follows the distortion–perception tradeoff: at t = s, reconstructions collapse toward the inter-mode mean (low variance, high distortion), while at t = 1 the bimodal structure is recovered (higher perceptual quality). Intermediate lookaheads interpolate smoothly between these regimes, all using a single denoiser. 
+
+C Additional experiments 
+
+C.1 Results with error bars 
+
+Here, we provide the results from Section 6 with the corresponding error bars. Table 4: Quantitative results for random inpainting ( 90% ) with σ = 0 .01 on CelebA and AFHQ. Best results are in bold .
+
+Sampler CelebA 128 × 128 AFHQ 256 × 256 
+
+PSNR ↑ LPIPS ↓ FID ↓ DISTS ↓ PSNR ↑ LPIPS ↓ FID ↓ DISTS ↓
+
+Flow-priors 26 .50 ± 1.00 0.089 ± 0.011 59.43 0.132 ± 0.012 23 .94 ± 0.79 0.193 ± 0.021 18.96 0.164 ± 0.011 
+
+D-Flow 26 .55 ± 2.79 0.066 ± 0.031 50.27 0.110 ± 0.031 22 .80 ± 3.80 0.192 ± 0.146 18.31 0.137 ± 0.083 
+
+OT-ODE 22 .16 ± 0.74 0.158 ± 0.019 84.92 0.179 ± 0.016 21 .14 ± 0.26 0.263 ± 0.019 16.03 0.181 ± 0.012 
+
+DPS-ODE 25 .60 ± 1.32 0.070 ± 0.054 45.74 0.106 ± 0.024 23 .08 ± 0.73 0.127 ± 0.021 8.69 0.098 ± 0.014 
+
+PnP-Flow ( t = s) 27.29 ± 1.15 0.073 ± 0.073 48.88 0.113 ± 0.013 24 .99 ± 0.78 0.162 ± 0.013 13.49 0.135 ± 0.008 
+
+PnP-Flow ( t = 1 ) 26 .03 ± 1.03 0.065 ± 0.009 46.79 0.109 ± 0.012 23 .23 ± 0.739 0.122 ± 0.012 9.11 0.095 ± 0.006 
+
+Table 5: Quantitative results for motion deblurring with σ = 0 .05 on CelebA and AFHQ. Best results are in 
+
+bold .
+
+Sampler CelebA 128 × 128 AFHQ 256 × 256 
+
+PSNR ↑ LPIPS ↓ FID ↓ DISTS ↓ PSNR ↑ LPIPS ↓ FID ↓ DISTS ↓
+
+Flow-priors 25 .07 ± 1.34 0.151 ± .035 114.41 0.188 ± 0.021 23 .14 ± 2.26 0.207 ± 0.063 27.73 0.154 ± 0.028 
+
+D-Flow 29.77 ± 1.67 0.071 ± 0.022 73.15 0.112 ± 0.019 25.52 ± 2.60 0.230 ± 0.085 19.92 0.156 ± 0.042 
+
+OT-ODE 21 .07 ± 7.43 0.198 ± 0.157 106.78 0.202 ± 0.113 16 .73 ± 5.51 0.348 ± 0.165 77.53 0.234 ± 0.122 
+
+DPS-ODE 27 .36 ± 5.16 0.101 ± 0.063 57.02 0.133 ± 0.054 20 .49 ± 3.66 0.292 ± 0.123 36.71 0.179 ± 0.60 
+
+PnP-Flow ( t = s) 29 .79 ± 2.70 0.114 ± 0.056 53.65 0.130 ± 0.034 25 .40 ± 2.15 0.347 ± 0.076 20.37 0.201 ± 0.033 
+
+PnP-Flow ( t = 1 ) 29 .42 ± 2.80 0.082 ± 0.042 52.61 0.119 ± 0.029 23 .31 ± 2.50 0.207 ± 0.059 14.04 0.137 ± 0.028 
+
+C.2 Additional inverse problems Gaussian deblurring. We consider a kernel of size 31 × 31 for CelebA and 61 × 61 for AFHQ, with σb = 3 . The quantitative results are in Table 6. 
+
+Super-resolution. We consider super-resolution with a cubic method, and a factor of 4. The quantitative results are in Table 7. 18 Box-inpainting. We consider a box of size 80 × 80 for AFHQ and 60 × 60 for CelebA. The quantitative results are in Table 8. Table 6: Quantitative results for Gaussian deblurring w/ σ = 0 .05 across CelebA and AFHQ datasets. Best results are in bold .
+
+Sampler CelebA 128 × 128 AFHQ 256 × 256 
+
+PSNR ↑ LPIPS ↓ FID ↓ DISTS ↓ PSNR ↑ LPIPS ↓ FID ↓ DISTS ↓
+
+Flow-priors 30.41 0.044 80.53 0.125 22.73 0.182 12.87 0.124 D-Flow 26.59 0.081 66.93 0.120 22.80 0.175 12.31 0.121 OT-ODE 25.77 0.100 63.10 0.129 24.04 0.168 11.51 0.114 
+
+DPS-ODE 24.80 0.129 72.13 0.148 20.62 0.253 15.47 0.158 PnP-Flow ( t = s) 27.25 0.233 70.80 0.183 25.14 0.453 25.67 0.235 PnP-Flow ( t = 1 ) 26.60 0.157 61.57 0.152 23.41 0.191 11.09 0.122 
+
+Table 7: Quantitative results for super-resolution ×4 w/ σ = 0 .05 across CelebA and AFHQ datasets. Best results are in bold .
+
+Sampler CelebA 128 × 128 AFHQ 256 × 256 
+
+PSNR ↑ LPIPS ↓ FID ↓ DISTS ↓ PSNR ↑ LPIPS ↓ FID ↓ DISTS ↓
+
+Flow-priors 26.14 0.227 96.46 0.211 22.93 0.338 20.41 0.209 D-Flow 24.84 0.137 119.93 0.181 23.77 0.389 20.69 0.204 OT-ODE 24.79 0.142 81.18 0.173 20.36 0.400 44.28 0.247 DPS-ODE 26.38 0.083 55.10 0.123 24.18 0.165 10.88 0.114 
+
+PnP-Flow ( t = s) 26.94 0.235 71.30 0.187 25.10 0.429 26.45 0.232 PnP-Flow ( t = 1 ) 26.68 0.166 63.97 0.158 24.71 0.269 13.88 0.159 
+
+Table 8: Quantitative results for box inpainting w/ σ = 0 .01 across CelebA and AFHQ datasets. Best results are in bold .
+
+Sampler CelebA 128 × 128 AFHQ 256 × 256 
+
+PSNR ↑ LPIPS ↓ FID ↓ DISTS ↓ PSNR ↑ LPIPS ↓ FID ↓ DISTS ↓
+
+Flow-priors 25.09 0.062 36.28 0.068 26.51 0.048 16.62 0.052 D-Flow 26.36 0.056 34.70 0.073 26.87 0.069 11.08 0.079 OT-ODE 24.65 0.065 31.99 0.073 20.80 0.085 25.97 0.095 DPS-ODE 24.13 0.115 58.64 0.132 21.07 0.069 19.48 0.071 PnP-Flow ( t = s) 26.77 0.059 32.29 0.062 28.33 0.057 13.79 0.052 PnP-Flow ( t = 1 ) 24.77 0.062 26.07 0.062 26.40 0.031 7.61 0.033 
+
+C.2.1 Non-linear JPEG. We consider JPEG, following the setting from Section 6.2. Given that OT-ODE and Flow priors cannot handle non-linear degradations, we only compare with DPS-ODE; the result is shown in Table 9 for AFHQ. Table 9: Quantitative results for JPEG w/ σ = 0 .01 on AFHQ datasets. Best results are in bold .
+
+Sampler AFHQ 256 × 256 
+
+PSNR ↑ LPIPS ↓ FID ↓ DISTS ↓
+
+DPS-ODE 18.76 0.287 19.05 0.184 PnP-Flow ( t = s) 26.79 0.245 20.33 0.166 PnP-Flow ( t = 1 ) 25.52 0.143 12.84 0.124 
+
+Colorization. We consider also Colorization; the result is shown in Table 10 for AFHQ. Table 10: Quantitative results for Colorization w/ σ = 0 .001 on AFHQ datasets. Best results are in bold .
+
+Sampler AFHQ 256 × 256 
+
+PSNR ↑ LPIPS ↓ FID ↓ DISTS ↓
+
+DPS-ODE 18.60 0.413 33.79 0.236 PnP-Flow ( t = s) 26.30 0.111 9.95 0.110 PnP-Flow ( t = 1 ) 25.37 0.105 9.47 0.094 
+
+19 C.2.2 Gaussian deblurring with Poisson noise 
+
+Lastly, we consider Poisson noise, showing that our analysis goes beyond Gaussian noise. In particular, we normalized each image to [0 , 1] , and consider an independent Poisson process normalised by a peak rate λ > 0:
+
+yi x ∼ Poisson  λ (Hx )i
+
+, i = 1 , . . . , N, (15) so that E[yi | x] = ( Hx )i and Var[ yi | x] = ( Hx )i/λ . The signal-to-noise ratio scales as √λ,where lower λ corresponds to fewer photons and a noisier observation; we consider λ = 20 . Given this noise model, the corresponding negative log-likelihood, used as the data-fidelity term in Alg. 1, is (up to a constant in x)
+
+g(x) = 
+
+> N
+
+X
+
+> i=1
+
+ (Hx )i − yi log( Hx )i
+
+. (16) The results as a function of the number of steps is shown in Fig. 6, while qualitative comparisons are in Fig. 17. 0 100 200 300          
+
+> Number of steps
+> 20
+> 30
+> 40
+> 50
+> 60
+> FID  t=s
+> t= 1.0
+> 0100 200 300
+> Number of steps
+> 20.0
+> 22.5
+> 25.0
+> 27.5
+> 30.0
+> RMSE
+> t=s
+> t= 1.0
+
+Figure 6: Ablation of PnP-flow as a function of the number of steps with Poisson noise and Gaussian deblurring 
+
+C.3 Distortion-perception of CelebA 
+
+We include here the same plot as in Section 2.3; it is shown in Fig. 7. Again, varying t produces a smooth, monotonic trajectory in the DP plane: small lookaheads minimize RMSE, large lookaheads minimize FID, and intermediate values smoothly interpolate between the two. 
+
+Figure 7: Distortion-perception tradeoff traced by a single flow map on CelebA. Same setup as Fig. 3, but on CelebA 128 × 128 . For each of four linear inverse problems (Gaussian deblurring, motion deblurring, box inpainting, and super-resolution), we sweep the lookahead t of our average denoiser within a PnP solver and report RMSE (distortion, ↓) against FID (perception, ↓). Each marker corresponds to a different value of t; small lookaheads cluster near the low-distortion regime (top of each curve) while large lookaheads cluster near the low-FID regime (right). The same trained model spans the entire frontier across all four tasks. Reconstructions on the right illustrate the perceptual change as t increases. 
+
+20 0.000 0.005 0.010 0.015 0.020 0.025 
+
+KID better 
+
+10 
+
+11 
+
+12 
+
+13 
+
+14 
+
+15 
+
+16 
+
+17                                  
+
+> RMSE  better
+> t= min( s+ 0.0, 1.0)
+> t= min( s+ 0.01, 1.0)
+> t= min( s+ 0.05, 1.0)
+> t= min( s+ 0.1, 1.0)
+> t= min( s+ 0.2, 1.0)
+> t= min( s+ 0.3, 1.0)
+> t= min( s+ 0.5, 1.0)
+> t= min( s+ 1.0, 1.0)
+> t= min( s+ 0.0, 1.0)
+> t= min( s+ 0.01, 1.0)
+> t= min( s+ 0.05, 1.0)
+> t= min( s+ 0.1, 1.0)
+> t= min( s+ 0.2, 1.0)
+> t= min( s+ 0.3, 1.0)
+> t= min( s+ 0.5, 1.0)
+> t= min( s+ 1.0, 1.0)
+> Gaussian deblurring
+> Motion deblurring
+> Inpainting (box) Super-resolution x 4
+
+Figure 8: Distortion-perception tradeoff traced by a single flow map on CelebA. Same setup as Fig. 7, but on CelebA 128 × 128 , but evaluating KID. 
+
+C.4 Comparison with baselines using a flow matching model 
+
+Table 11 compares all methods under both a flow matching backbone and a flow map backbone, allowing us to isolate the contribution of the flow map training objective from the choice of sampler. 
+
+Flow matching backbone. PnP-Flow ( t = s) achieves the highest PSNR ( 25 .36 dB), but at the cost of perceptual quality relative to Flow-priors (LPIPS 0.359 vs. 0.205 ). PnP-Flow ( t = 1 ) is inapplicable here, as it requires the consistency property enforced only by flow map training. 
+
+Impact of the backbone. The results are largely consistent across backbones, with DPS-ODE achieving a lower FID with the flow matching model. However, the flow map backbone with PnP-flow (t = 1 ) still yields notably lower FID scores throughout and is required to unlock PnP-flow ( t = 1 ). Table 11: Quantitative results for motion deblurring w/ σ = 0 .05 across AFHQ dataset. Best results are in bold .                                                        
+
+> Sampler Flow Matching backbone Flow Map backbone PSNR ↑LPIPS ↓FID ↓DISTS ↓PSNR ↑LPIPS ↓FID ↓DISTS ↓
+> Flow-priors 23.20 0.205 18.48 0.153 23.14 0.207 18.96 0.154 D-Flow 25.52 0.230 19.92 0.156 OT-ODE 17.2 0.335 68.71 0.224 17.73 0.348 77.53 0.234 DPS-ODE 20.62 0.262 25.71 0.162 20.49 0.292 36.71 0.179 PnP-Flow ( t=s)25.36 0.359 20.90 0.206 25.40 0.347 20.37 0.201 PnP-Flow ( t= 1 )----23.31 0.207 14.04 0.137
+
+21 C.5 Visual results Degraded D-Flow Flow Priors OT-ODE DPS PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth 
+
+Figure 9: Gaussian deblurring with kernel size 61 × 61 and σb = 3 , and σ = 0 .05 
+
+22 Degraded D-Flow Flow Priors OT-ODE DPS PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth Figure 10: Motion deblurring with kernel size 61 × 61 and σb = 1 , and σ = 0 .1
+
+23 Degraded D-Flow Flow Priors OT-ODE DPS PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth Figure 11: Super resolution ×4, and σ = 0 .05 
+
+24 Degraded D-Flow Flow Priors OT-ODE DPS PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth Figure 12: Random inpainting with 90% drop rate, and σ = 0 .01 
+
+25 Degraded D-Flow Flow Priors OT-ODE DPS PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth Figure 13: Box inpainting with mask 80 × 80 , and σ = 0 .01 
+
+26 Degraded DPS PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth Figure 14: JPEG compresion 27 Degraded D-Flow Flow Priors OT-ODE DPS PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth Figure 15: CelebA - Super resolution ×4, and σ = 0 .05 
+
+28 Degraded D-Flow Flow Priors OT-ODE DPS PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth Figure 16: CelebA - Motion deblurring 29 Degraded PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth Figure 17: Gaussian deblurring with Poisson noise 30 Degraded DPS PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth Figure 18: Colorization 31 Measurement t = min( s + 0.0, 1.0) t = min( s + 0.1, 1.0) t = min( s + 0.2, 1.0) t = min( s + 0.3, 1.0) t = min( s + 1.0, 1.0) 
+
+Gaussian deblurring Measurement t = min( s + 0.0, 1.0) t = min( s + 0.1, 1.0) t = min( s + 0.2, 1.0) t = min( s + 0.3, 1.0) t = min( s + 1.0, 1.0) 
+
+Inpainting (box) Measurement t = min( s + 0.0, 1.0) t = min( s + 0.1, 1.0) t = min( s + 0.2, 1.0) t = min( s + 0.3, 1.0) t = min( s + 1.0, 1.0) 
+
+Super-resolution x 4 Measurement t = min( s + 0.0, 1.0) t = min( s + 0.1, 1.0) t = min( s + 0.2, 1.0) t = min( s + 0.3, 1.0) t = min( s + 1.0, 1.0) 
+
+Motion deblurring Measurement t = min( s + 0.0, 1.0) t = min( s + 0.1, 1.0) t = min( s + 0.2, 1.0) t = min( s + 0.3, 1.0) t = min( s + 1.0, 1.0) 
+
+Inpainting (random) Figure 19: Larger version of the images in Fig. 3. 32 C.6 Visualization of the iterations for different lookaheads meas t=40 t=80 t=120 t=160 t=200 t=240 t=280 t=300 GT 
+
+Figure 20: Progression of random inpainting with lookahead t = smeas t=40 t=80 t=120 t=160 t=200 t=240 t=280 t=300 GT 
+
+Figure 21: Progression of random inpainting with lookahead t = 1 
+
+33 meas t=20 t=40 t=60 t=80 t=100 GT Figure 22: Progression of SR ×4 with lookahead t = smeas t=20 t=40 t=60 t=80 t=100 GT 
+
+Figure 23: Progression of SR ×4 with lookahead t = 1 
+
+C.7 Performance as a function of the number of PnP iterations 
+
+We study how the two endpoint lookaheads, t = s and t = 1 , depend on the number of PnP iterations 
+
+N . Results for AFHQ are reported on super-resolution ×4 (Fig. 24), Gaussian deblurring (Fig. 25) and box inpainting (Fig. 26); we also include for CelebA in Fig. 27. 34 The two regimes behave qualitatively differently. At t = s, both RMSE and FID decrease monoton-ically with N and plateau, consistent with the local-contraction analysis of Theorem 2. At t = 1 ,the perceptual trajectory is non-monotonic: FID drops sharply within the first few tens of iterations, reaches its minimum, and then drifts back up as N continues to grow. The effect is most pronounced for Gaussian deblurring, where the best FID at t = 1 (≈ 11 at N ≈ 20 ) is reached an order of magnitude earlier than the best FID at t = s (≈ 23 .5 at N ≈ 300 ). This behavior is consistent with the lookahead-dependent contraction factor in Theorem 2. The local Lipschitz constant Lloc 
+
+D (t)
+
+grows with t, reflecting the transition from a contractive MMSE estimator at t = s to a less regular, perceptually-oriented estimator at t = 1 . RMSE remains well-behaved in both cases, indicating that the drift is along the perceptual axis. The practical takeaway is that the two endpoints call for different iteration schemes: the perceptual endpoint ( t = 1 ) is best run for fewer steps than the distortion endpoint ( t = s). The values of N
+
+used in our main experiments (Appendix B.2) reflect this asymmetry. This behavior also explains why flow maps and consistency models are useful denoisers for solving restoration problem with few-steps as in (Spagnoletti et al., 2025; Gülle et al., 2026). 0 100 200 300 400 500 600 700                
+
+> Number of steps
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> 90
+> FID
+> Super-resolution x4 FID
+> t=s
+> t= 1.0
+> 0100 200 300 400 500 600 700
+> Number of steps
+> 15.0
+> 17.5
+> 20.0
+> 22.5
+> 25.0
+> 27.5
+> 30.0
+> 32.5
+> RMSE
+> Super-resolution x4 RMSE
+> t=s
+> t= 1.0
+
+Figure 24: AFHQ - Super-resolution ×4. Ablation of PnP-flow as a function of the number of steps. 0 100 200 300 400 500 600 700                
+
+> Number of steps
+> 12.5
+> 15.0
+> 17.5
+> 20.0
+> 22.5
+> 25.0
+> 27.5
+> 30.0
+> FID
+> Gaussian deblurring FID
+> t=s
+> t= 1.0
+> 0100 200 300 400 500 600 700
+> Number of steps
+> 16
+> 18
+> 20
+> 22
+> 24
+> RMSE
+> Gaussian deblurring RMSE
+> t=s
+> t= 1.0
+
+Figure 25: AFHQ - Gaussian deblurring. Ablation of PnP-flow as a function of the number of steps. 0 100 200 300 400 500 600 700                
+
+> Number of steps
+> 8
+> 10
+> 12
+> 14
+> 16
+> 18
+> 20
+> 22
+> FID
+> inpainting_box FID
+> t=s
+> t= 1.0
+> 0100 200 300 400 500 600 700
+> Number of steps
+> 10.0
+> 12.5
+> 15.0
+> 17.5
+> 20.0
+> 22.5
+> 25.0
+> 27.5
+> 30.0
+> RMSE
+> inpainting_box RMSE
+> t=s
+> t= 1.0
+
+Figure 26: AFHQ - Box inpainting. Ablation of PnP-flow as a function of the number of steps. 35 0 100 200 300          
+
+> Number of steps
+> 50
+> 60
+> 70
+> FID
+> t=s
+> t= 1.0
+> 0100 200 300
+> Number of steps
+> 10
+> 12
+> 14
+> 16
+> RMSE
+> t=s
+> t= 1.0
+
+Figure 27: CelebA - Motion deblurring. Ablation of PnP-flow as a function of the number of steps. 
+
+C.8 Failure modes and limitations 
+
+While our contributions is using flow maps as denoisers in a PnP scheme, enhancing the perceptual quality of the estimated image, we observed that for some degradations, the DP traversing might not hold exactly. For instance, in phase retrieval with oversample of 4, we observe that PnP with flow maps outperform the instantaneous denoiser case ( t = s) only after certain number of steps, as shown in Fig. 28. Furthermore, the overall performance is not strong, as shown quantiative in Table 12 and qualitative in Fig. 29. 0 500 1000 1500          
+
+> Number of steps
+> 100
+> 150
+> 200
+> 250
+> FID
+> t=s
+> t= 1.0
+> 0500 1000 1500
+> Number of steps
+> 60
+> 65
+> 70
+> RMSE
+> t=s
+> t= 1.0
+
+Figure 28: Performance as a function of the number of steps Table 12: Quantitative results for Phase retrieval w/ σ = 0 .01 on AFHQ datasets. Best results are in bold .                  
+
+> Sampler AFHQ 256 ×256
+> PSNR ↑LPIPS ↓FID ↓DISTS ↓
+> PnP-Flow ( t=s)17.36 0.454 143.55 0.316 PnP-Flow ( t= 1 )20.88 0.317 99.95 0.240
+
+D Proofs and theoretical results 
+
+D.1 Average denoiser. 
+
+Recall the definition of the average denoiser 
+
+Ds,t (x) = x + (1 − s) v(x, s, t ), (17) where v(x, s, t ) denotes the average velocity of the flow map over [s, t ], and the flow map is parameterized as 
+
+Xs,t (x) = x + ( t − s) v(x, s, t ). (18) 
+
+Proposition 1 (Basic properties) For all 0 ≤ s ≤ u ≤ t ≤ 1, the average denoiser satisfies: 1. Flow-map relation. 
+
+Xs,t (x) = 1 − t
+
+1 − s x + t − s
+
+1 − s Ds,t (x). (19) 
+
+2. Diagonal consistency (MMSE). 
+
+Ds,s (x) = Ds(x) = E[x1 | xs = x]. (20) 36 Degraded PnP-Flow (t=s) PnP-Flow (t=1.0) Ground Truth Figure 29: Reconstruction for phase retrieval 
+
+3. Semigroup structure. 
+
+Ds,t (x) = γ D s,u (x) + (1 − γ) Du,t (Xs,u (x)) , (21) 
+
+with 
+
+γ = (1 − t)( u − s)(1 − u)( t − s) ∈ [0 , 1] . (22) 
+
+Proof. (1) Flow-map relation. Using the parameterization, 
+
+Ds,t (x) − x = (1 − s) v(x, s, t ), Xs,t (x) − x = ( t − s) v(x, s, t ).
+
+Eliminating v gives 
+
+Xs,t (x) = x + t − s
+
+1 − s
+
+ Ds,t (x) − x = 1 − t
+
+1 − s x + t − s
+
+1 − s Ds,t (x).
+
+(2) Diagonal consistency. By definition of the flow map, 
+
+lim  
+
+> t→s
+
+v(x, s, t ) = v(x, s ),
+
+the instantaneous velocity. Using Tweedie’s relation, 
+
+Ds(x) = x + (1 − s) v(x, s ),
+
+which matches Ds,t at t = s.
+
+(3) Semigroup structure. From the flow map semigroup property, 
+
+Xs,t (x) = Xu,t (Xs,u (x)) .
+
+Substitute the affine forms from (i) for each map and match coefficients of x and Ds,t . After rearrangement, this yields the convex combination: 
+
+Ds,t (x) = γ D s,u (x) + (1 − γ) Du,t (Xs,u (x)) ,
+
+with γ as stated. 37 D.2 Full derivation for the Gaussian case (Theorem 1) 
+
+We provide the complete derivation of the average denoiser gain and its connection to the optimal DP estimator for the scalar Gaussian target. 
+
+D.2.1 Setup 
+
+Let p1 = N (0 , σ 2 
+
+> p
+
+) with σ2 
+
+> p
+
+≤ 1, and let xτ = τ x 1 + (1 − τ )ϵ with x1 ∼ p1, ϵ ∼ N (0 , 1) , and 
+
+x1 ⊥ ϵ. Then xτ ∼ N (0 , σ 2 
+
+> τ
+
+) with σ2 
+
+> τ
+
+:= τ 2σ2 
+
+> p
+
++ (1 − τ )2. The instantaneous denoiser and velocity are linear: 
+
+Dτ (x) = Aτ x, Aτ = τ σ 2
+
+> p
+
+σ2
+
+> τ
+
+, vτ (x) = Bτ x, Bτ = Aτ − 11 − τ = τ (σ2 
+
+> p
+
++ 1) − 1
+
+σ2
+
+> τ
+
+. (23) By linearity, the ODE ˙xτ = vτ (xτ ) = Bτ xτ admits the closed-form solution xt = Φ( t, s ) xs with 
+
+Φ( t, s ) = exp  R ts Bτ dτ . The average velocity over [s, t ] then satisfies xt = xs + ( t − s) vs,t (xs)
+
+with vs,t (xs) = [Φ( t, s ) − 1] /(t − s) · xs, and the average denoiser Ds,t (x) = x + (1 − s) vs,t (x)
+
+becomes Ds,t (xs) = Λ( s, t ) xs with: 
+
+Λ( s, t ) = (1 − s) Φ( t, s ) − (1 − t)
+
+t − s . (24) We now introduce a few useful Lemmas. 
+
+Lemma 1 (Closed form for Φ( t, s ) and Λ( s, t )) Φ( t, s ) = σt/σ s.
+
+Proof: A direct computation gives ddτ  
+
+> 12
+
+log σ2 
+
+> τ
+
+= ˙ σ2 
+
+> τ
+
+/(2 σ2 
+
+> τ
+
+) = [ τ (σ2 
+
+> p
+
++ 1) − 1] /σ 2 
+
+> τ
+
+= Bτ . Hence 
+
+R ts Bτ dτ = log( σt/σ s) and Φ( t, s ) = σt/σ s. □
+
+Substituting Lemma 1 into (24) yields the closed form stated in (11): 
+
+Λ( s, t ) = (1 − s)σt − (1 − t)σs
+
+σs(t − s) . (25) 
+
+Boundary values. At t = 1 , σ1 = σp gives directly Λ( s, 1) = σp/σ s. At t = s, applying L’Hôpital to (11) and using ˙στ = [ τ (σ2 
+
+> p
+
++ 1) − 1] /σ τ :
+
+Λ( s, s ) = (1 − s) ˙ σs + σs
+
+σs
+
+= 1 + (1 − s)[ s(σ2 
+
+> p
+
++ 1) − 1] 
+
+σ2
+
+> s
+
+= sσ 2
+
+> p
+
+σ2
+
+> s
+
+= As, (26) where the last equality uses σ2 
+
+> s
+
++ (1 − s)[ s(σ2 
+
+> p
+
++ 1) − 1] = sσ 2 
+
+> p
+
+, which one verifies by expanding 
+
+σ2 
+
+> s
+
+= s2σ2 
+
+> p
+
++ (1 − s)2.
+
+Lemma 2 (Monotonicity of Λ( s, t )) For fixed s ∈ (0 , 1) , t 7 → Λ( s, t ) is strictly increasing on [s, 1] .
+
+Proof: Differentiating (11) in t and writing σt − σs = R ts ˙σu du :
+
+∂tΛ( s, t ) = 1 − sσs(t − s)2
+
+
+
+(t − s) ˙ σt −
+
+Z ts
+
+˙σu du 
+
+
+
+. (27) A direct calculation shows ¨στ > 0 for all τ ∈ (0 , 1) , so ˙στ is strictly increasing. Therefore 
+
+R ts ˙σu du < (t − s) ˙ σt for s < t , giving ∂tΛ > 0. □
+
+D.2.2 Connection to the optimal DP estimator The DP optimal estimator from Freirich et al. (2021). The MMSE estimator ˆX0 = Asxs has standard deviation ˆσ = Asσs = sσ 2 
+
+> p
+
+/σ s, and its perceptual gap to the prior is P ∗ = W2(p ˆX0 , p 1) = 
+
+|σp − ˆσ|. The W2-optimal transport map from N (0 , ˆσ2) to p1 = N (0 , σ 2 
+
+> p
+
+) is the scaling T ∗ = σp/ˆσ.38 By Freirich et al. (2021, Theorem 3), the minimum-distortion deterministic estimator at perception level P = αP ∗ (α ∈ [0 , 1] ) is the displacement interpolant 
+
+ˆXdet  
+
+> α
+
+= α + (1 − α)T ∗As xs =: Γ( α) xs, (28) with Γ(1) = As (MMSE) and Γ(0) = T ∗As = σp/σ s (perfect perception). The corresponding distortion-perception function is D(P ) = D∗ + ( P ∗ − P )2.
+
+Proposition 2 (Average denoiser is exactly optimal) For any s ∈ (0 , 1) and t ∈ [s, 1] , Λ( s, t ) = Γ( α(s, t )) where 
+
+α(s, t ) = σp/σ s − Λ( s, t )
+
+σp/σ s − As
+
+(29) 
+
+decreases monotonically from 1 at t = s to 0 at t = 1 .
+
+Proof: By (28) , Γ is affine in α and maps [0 , 1] bijectively onto [As, σ p/σ s] (since σp/σ s > A s
+
+whenever s < 1). By the boundary values of Λ and Lemma 2, Λ( s, ·) is continuous and strictly increasing on [s, 1] with Λ( s, s ) = As = Γ(1) and Λ( s, 1) = σp/σ s = Γ(0) . Inverting the affine relation Γ( α) = Λ( s, t ) yields α(s, t ) as stated, and the monotonicity follows because Γ is decreasing in α while Λ is increasing in t. □
+
+Summary. As t increases from s to 1, the average denoiser gain Λ( s, t ) traces the affine segment from the MMSE gain As to the perfect-perception gain σp/σ s. This segment parametrizes the W2
+
+geodesic from the MMSE output distribution p ˆX0 to the target p1, and by Freirich et al. (2021, s), every point on it achieves the minimum distortion at its perception level. A visual comparison is shown in Fig. 30. Clean Noisy ( = 0.3) MMSE ( t = s) t= s+0.10 t= s+0.20 t= s+0.30 t= s+0.70 
+
+Figure 30: Visual comparison for α = 0 .3. From left to right: clean image, noisy input, and reconstructions at increasing lookahead. The estimator smoothly transitions from a blurry conditional mean (MMSE) to a sharp sample, progressively restoring texture, contrast, and color saturation. 
+
+D.3 Experiment on Mixture-of-Gaussians D.3.1 MMSE denoiser for a mixture of Gaussians Setup. Let p0 = N (0 , I) and p1 = 12 N (μa, σ 2 
+
+> c
+
+I) + 12 N (μb, σ 2 
+
+> c
+
+I). Under the linear interpolant 
+
+xt = (1 − t)x0 + tx1, we seek to compute the MMSE denoiser: 
+
+Dt(x) = E[x1 | xt = x]. (30) 39 Step 1: Marginal distribution of xt. Conditioned on x1 originating from component k ∈ { a, b },we have x1 ∼ N (μk, σ 2 
+
+> c
+
+I) and x0 ∼ N (0 , I). Thus: 
+
+xt | component k ∼ N  t μk, σ 2 
+
+> t
+
+I , where σ2 
+
+> t
+
+= (1 − t)2 + t2σ2 
+
+> c
+
+. (31) The marginal distribution is the mixture: 
+
+p(xt) = 12 N (xt; tμa, σ 2 
+
+> t
+
+I) + 12 N (xt; tμb, σ 2 
+
+> t
+
+I). (32) 
+
+Step 2: Posterior weights. By Bayes’ rule, the posterior probability wk(x, t ) that x1 originated from component k given xt = x is: 
+
+wk(x, t ) = N (x; tμk, σ 2 
+
+> t
+
+I)
+
+N (x; tμa, σ 2 
+
+> t
+
+I) + N (x; tμb, σ 2 
+
+> t
+
+I) . (33) In log-space, this is proportional to − ∥x−tμk ∥2
+
+> 2σ2
+> t
+
+, and the weights are normalized via softmax such that wa + wb = 1 .
+
+Step 3: Conditional mean within components. Given that x1 comes from component k, the posterior mean of x1 given xt = x is: 
+
+E[x1 | xt = x, component k] = μk + At(x − t μk), (34) where At = t σ 2
+
+> c
+> σ2
+> t
+
+is the regression coefficient (Tweedie’s formula applied component-wise). 
+
+Step 4: Full MMSE denoiser. By the law of total expectation, the denoiser is the weighted average: 
+
+Dt(x) = wa(x, t ) [ μa + At(x − tμa)] + wb(x, t ) [ μb + At(x − tμb)] . (35) This is a softmax-weighted average of the within-component posterior means. Its behavior is intuitive: • When x is close to tμa, wa ≈ 1 and Dt(x) ≈ μa + At(x − tμa) (assigned to component 
+
+a). • When x is equidistant from tμa and tμb, wa ≈ wb ≈ 0.5, and Dt(x) averages the two, producing an output between the modes (the posterior averaging artifact). We compute the average denoiser by ODE integration using the instantaneous velocity field. The nonlinearity introduced by the softmax weights makes the MoG fundamentally different from the single Gaussian case: the denoiser is non-linear in x, the flow map lacks a closed-form solution, and the posterior averaging artifact (blurring between modes) emerges as a direct consequence of the mixture structure. However, given the simplicity of the instantaneous denoiser, we can approximate the average denoiser numerically. 
+
+D.3.2 DP analysis 
+
+In this section, we consider a controlled setting based on a 2D mixture of Gaussians. For this distsribution, the marginal velocity admits a closed-form expression, allowing both the average denoiser Ds,t and the optimal DP estimator of Freirich et al. (2021) to be evaluated with high precision, bypassing the requirement of a learned model. 
+
+Setup. We consider μa = ( −2, 0) , μb = (2 , 0) , and σc = 0 .3, and compute the average denoiser 
+
+Ds,t by integrating ˙xτ = v(xτ , τ ) from τ = s to τ = t with a fourth-order Runge–Kutta scheme (200 steps). 
+
+Optimal DP construction. To construct the optimal DP curve, we follow Freirich et al. (2021, Theorem 3). At perception level P ∈ [0 , P ∗], the optimal estimator is given by (9). We approximate this construction empirically by drawing N = 5000 samples, computing ˆx(i)0 =
+
+Ds(x(i) 
+
+> s
+
+), and solving the discrete optimal transport problem between the empirical distributions 40 {ˆx(i)0 } and {x(j)1 } ∼ p1 using (Flamary et al., 2021). Let π denote the optimal coupling; we then form the interpolated samples as 
+
+ˆx(i)
+
+P =
+
+
+
+1 − PP ∗
+
+
+
+ˆx(i)0 + PP ∗ x(π(i)) 1 .
+
+Distortion is measured as MSE with respect to the ground truth, while perception is quantified via the squared 2-Wasserstein distance W 22 (ˆ p, p 1) between empirical distributions. 
+
+Results. Fig. 31 compares the resulting curves at three noise levels s ∈ 0.3, 0.5, 0.7, corresponding to heavy, moderate, and light noise (recall that smaller s implies heavier noise, with ξ := 1 − s). Three observations stand out. 1. Endpoints coincide at MMSE. At t = s (equivalently, α = 1 ), both curves reduce to the MMSE estimator by construction, yielding identical distortion–perception coordinates across all panels. 2. Near-optimal behavior in the interior. For intermediate lookaheads, the average denoiser traces a DP curve that lies slightly above the Freirich optimum, with a small and nearly uniform gap. At s = 0 .3 (heavy noise), this gap remains below 0.02 in MSE across the full perception range. This discrepancy is not a numerical artifact: it persists when using higher-order integration (RK4) and when increasing the sample size from N = 2000 to 
+
+N = 5000 . Instead, it reflects a structural limitation—while the flow-map trajectory matches the W2 geodesic in the Gaussian case, it deviates slightly for nonlinear velocity fields (here induced by the softmax-weighted mixture). 3. Endpoint behavior at t = 1 . At the perceptual endpoint, the distribution Ds, 1(pxs ) closely approximates p1 but does not match it exactly, resulting in a small residual W 22 gap. This gap decreases as noise increases (from 9.4 × 10 −3 at s = 0 .5 to 3.8 × 10 −3 at s = 0 .3,compared to a sampling floor of 2.2 × 10 −3). This is consistent with the intuition that the integrable 1/(1 − τ ) singularity in the velocity field has a stronger effect when the final integration interval is short. Taken together, these results show that the average denoiser is near-optimal in a controlled setting: the resulting curves are smooth, monotone, and convex, match the MMSE endpoint exactly, and exhibit only small, well-characterized deviations from the Freirich optimum. This complements the exact optimality established in the Gaussian case (Theorem 1) and supports the behavior observed at image scale (Fig. 2a). 0.0 0.1 0.2 0.3 0.4 0.5                                             
+
+> Perception W22(p,p1)[lower = better]
+> 1.2
+> 1.3
+> 1.4
+> 1.5
+> 1.6
+> 1.7
+> Distortion  MSE  [lower = better]
+> MMSE
+> (t=s, =1)
+> Perf. perc.
+> (t=1, =0)
+> s= 0.3
+> Avg denoiser Ds,t
+> Optimal DP (Freirich)
+> MMSE (t=s, =1)
+> 0.00 0.02 0.04 0.06 0.08 0.10 0.12 0.14
+> Perception W22(p,p1)[lower = better]
+> 0.62
+> 0.64
+> 0.66
+> 0.68
+> 0.70
+> 0.72
+> 0.74
+> 0.76
+> Distortion  MSE  [lower = better]
+> MMSE
+> (t=s, =1)
+> Perf. perc.
+> (t=1, =0)
+> s= 0.5
+> Avg denoiser Ds,t
+> Optimal DP (Freirich)
+> MMSE (t=s, =1)
+> 0.005 0.010 0.015 0.020 0.025 0.030 0.035 0.040
+> Perception W22(p,p1)[lower = better]
+> 0.18
+> 0.19
+> 0.20
+> 0.21
+> 0.22
+> Distortion  MSE  [lower = better]
+> MMSE
+> (t=s, =1)
+> Perf. perc.
+> (t=1, =0)
+> s= 0.7
+> Avg denoiser Ds,t
+> Optimal DP (Freirich)
+> MMSE (t=s, =1)
+
+Figure 31: Distortion–perception comparison on a 2D mixture of Gaussians at three noise levels 
+
+s ∈ { 0.3, 0.5, 0.7} (heavy, moderate, light noise). Blue: average denoiser Ds,t swept over lookahead 
+
+t ∈ [s, 1] . Red: Freirich et al. (2021) optimal DP estimator swept over perception level α ∈ [0 , 1] ,computed via exact W 2-optimal transport between the MMSE pushforward and p1. Both curves share the MMSE endpoint exactly ( ★); small residual gaps at the perfect-perception extreme ( ▲) reflect the velocity singularity near τ = 1 . The near-optimality of Ds,t in the interior confirms that the flow-map trajectory closely approximates the W 2 geodesic even in a non-Gaussian setting, bridging Theorem 1 to the image experiments in Section 3.3. 41 D.4 Fixed point characterization 
+
+We characterize the fixed-point solution of the PnP iteration and show its dependence on the lookahead 
+
+t. For simplicity, we consider linear inverse problems f (x) = Hx and analyze the deterministic variant of Algorithm 1 (i.e., ϵ = 0 ). In this variant, the stochastic renoising step reduces to the deterministic map Rs(z) = s z, and the per-iteration operator becomes 
+
+Tt(x) := Ds,t 
+
+ Rs(Fλ(x)) , with Fλ(x) = x − λ∇g(x), Rs(z) = s z. (36) Let LD (t) denote the Lipschitz constant of Ds,t and LF = ∥I − λ H⊤H∥ that of Fλ. Global convergence would require Tt to be a contraction, i.e., s L D (t) LF < 1. The gradient step satisfies 
+
+LF ≤ 1 for any λ ∈ (0 , 2/∥H⊤H∥], with equality (i.e., LF = 1 ) when H⊤H has zero eigenvalues, as in inpainting. In such ill-posed cases, contraction must come entirely from the composition 
+
+s L D (t). Empirically, however, s L D (t) LF exceeds 1 across all (s, t ) we tested as shown in Fig. 32, so global contraction fails. Instead, we consider local convergence. Since Tt = Ds,t ◦ Rs ◦ Fλ, its local Lipschitz constant satisfies 
+
+Lloc  
+
+> Tt
+
+≤ s L loc  
+
+> D
+
+(t) LF . (37) While LF ≤ 1, the denoiser constant Lloc  
+
+> D
+
+(t) typically increases with t, reflecting the transition from an averaging (MMSE) estimator at t = s to a more mode-seeking estimator as t → 1.Consequently, the contraction factor degrades with t, explaining the empirically observed loss of monotonic convergence for large lookaheads in Appendix C.7. We assume there exists a closed neighborhood U ⊂ Rd of a fixed point x⋆(t) such that Tt(U ) ⊆ U
+
+and 
+
+∥Tt(x) − Tt(x′)∥ ≤ ρ(t) ∥x − x′∥, ∀x, x′ ∈ U, (38) with ρ(t) ≤ s L loc  
+
+> D
+
+(t) LF < 1. This local contraction assumption is standard in PnP (Ryu et al., 2019) and consistent with our empirical observations. 
+
+Theorem 2 (Local convergence to a lookahead-dependent fixed point) Under (38) , if the itera-tion enters U , it converges geometrically to a unique fixed point x⋆(t) ∈ U :
+
+∥xk − x⋆(t)∥ ≤ ρ(t)k∥x0 − x⋆(t)∥. (39) 
+
+Moreover, x⋆(t) satisfies 
+
+x⋆(t) = Ds,t 
+
+
+
+Rs
+
+ Fλ(x⋆(t)) 
+
+= Ds,t 
+
+ s (x⋆(t) − λ∇g(x⋆(t))) ,
+
+so different lookaheads yield distinct fixed points whenever Ds,t is genuinely t-dependent. 
+
+The proof follows directly from the Banach fixed-point theorem applied to Tt on (U, ∥ · ∥ ) and is given in Appendix D.4.1. 
+
+D.4.1 Proof of Theorem 2 
+
+Since U is a closed subset of the complete metric space (Rd, ∥·∥ ), it is itself complete. By assumption, 
+
+Tt maps U into itself ( Tt(U ) ⊆ U ) and, by Equation 38, is a strict contraction on U with constant 
+
+ρ(t) < 1. The Banach fixed-point theorem then yields a unique x⋆(t) ∈ U with Tt(x⋆(t)) = x⋆(t).For the convergence rate, applying the contraction inequality with x′ = x⋆(t) gives 
+
+∥xk+1 − x⋆(t)∥ = ∥Tt(xk) − Tt(x⋆(t)) ∥ ≤ ρ(t) ∥xk − x⋆(t)∥,
+
+and iterating yields the bound (39). Finally, the fixed-point identity x⋆(t) = Tt(x⋆(t)) together with the operator definition (36) gives 
+
+x⋆(t) = Ds,t 
+
+ Rs(Fλ(x⋆(t)))  = Ds,t 
+
+ s (x⋆(t) − λ∇g(x⋆(t))) ,
+
+which depends on t explicitly through Ds,t . Whenever Ds,t ̸ = Ds,t ′ for t̸ = t′, the corresponding fixed points x⋆(t) and x⋆(t′) differ. 42 Empirical Lipschitz analysis. In Fig. 32, we plot the composite bound s L D (t) LF for the deter-ministic PnP operator Tt = Ds,t ◦ Rs ◦ Fλ on CelebA 128 × 128 (Gaussian kernel of size 45 , std 
+
+3.0, λ = 1 .0, giving LF = 1 .000 ). The denoiser Lipschitz constant LD (t) is estimated by alternating power iteration on the Jacobian of Ds,t at noisy samples xs = s x1 + (1 − s) ϵ, taking the worst case over 20 samples. Across all (s, t ) tested, the bound exceeds 1 (red line), so Tt is never a global contraction; the algorithm’s empirical convergence is therefore explained by the local-contraction analysis of Theorem 2 rather than by a global Banach argument. 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0                     
+
+> Lookahead t
+> 2
+> 4
+> 6
+> 8
+> 10
+> 12
+> LD(t)
+> 1/( sL F)
+> 1/( sL F)
+> 1/( sL F)
+> 1/( sL F)
+> (a) Denoiser Lipschitz LD(t)
+> s= 0.3
+> s= 0.5
+> s= 0.7
+> s= 0.9
+> 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0
+> Lookahead t
+> 1
+> 2
+> 3
+> 4
+> 5
+> s LD(t) LF
+> contraction ( = 1)
+> (b) Composite contraction bound
+> s= 0.3
+> s= 0.5
+> s= 0.7
+> s= 0.9
+> Lipschitz analysis on Gaussian deblur celeba (kernel=45, std=3.0, LF=1.000)
+
+Figure 32: The composite bound s L D (t) LF exceeds 1 across all (s, t ), so Tt is never a global contraction — empirical convergence relies on the local analysis of Theorem 2. LD (t) is estimated via power iteration on ∂D s,t /∂ x at noisy samples (worst case over 20 ). The bound increases with t,with steepest growth at low noise (large s). 
+
+On the validation of assumption (38) . Empirical validation of (38) and the t-dependence of fixed points is provided in the Gaussian linear-inverse setting (Appendix D.5.1, Fig. 33), where Tt
+
+admits a closed-form analysis and the iterates converge to the predicted Tikhonov solution to machine precision. For image priors, the deterministic operator analyzed in Theorem 2 is of theoretical interest; the algorithm deployed in practice (Algorithm 1) uses stochastic renoising, which both stabilizes the iteration and induces the variance restoration that drives the empirical distortion–perception behavior (Section 3.3). 
+
+D.5 Gaussian case: global contraction. 
+
+We now generalize the analysis from Section 3.2.1 (where the denoiser was treated as a standalone estimator without a forward model) to general linear inverse problems. Focusing on the multivariate case with a Gaussian prior p1 = N (0, σ 2 
+
+> p
+
+I), the average denoiser remains a linear map Ds,t (x) = Λ( s, t ) x with the same scalar gain (11) . In this case, Tt is a global contraction and (38) holds with 
+
+U = Rd.Since the denoiser gain is a scalar, LD (t) = Λ( s, t ) and LF = ∥I − λ H⊤H∥. The contraction rate is ρ(t) = m(t) ∥I − λ H⊤H∥, where m(t) := s Λ( s, t ) < 1 for all t ∈ [s, 1] and s ∈ (0 , 1) 
+
+(Appendix D.2). For any λ ∈ (0 , 2/∥H⊤H∥), we have ∥I − λ H⊤H∥ ≤ 1. Consequently, ρ(t) < 1
+
+on all of [s, 1] : the Gaussian case admits unconditional global convergence across all lookaheads, even for ill-posed forward models. Solving the fixed-point equation yields the closed form 
+
+x⋆(t) =  c(t) I + λ H⊤H−1 λ H⊤y, c(t) = 1
+
+m(t) − 1, (40) i.e., a Tikhonov-regularized estimator whose regularization parameter c(t) depends on both the forward model H and the lookahead t. Since Λ( s, t ) is strictly increasing in t (Appendix D.2), c(t) is strictly decreasing. As the lookahead increases from s to 1, the Tikhonov regularization progressively weakens, yielding a continuum of estimators with decreasing shrinkage toward the prior mean. In contrast to the denoising setting, these fixed points do not, in general, correspond to the MMSE 43 or lie on the optimal distortion–perception frontier; instead, the lookahead acts as a regularization parameter that controls the bias–variance trade-off of the reconstruction. 
+
+D.5.1 Proof of Equation (40) : Fixed Point for the Gaussian Case 
+
+By definition, the fixed point x⋆(t) satisfies x⋆(t) = Tt(x⋆(t)) . For a linear inverse problem with data fidelity g(x) = 12 ∥Hx − y∥2, the gradient is ∇g(x) = H⊤(Hx − y). The gradient descent step is given by: 
+
+Fλ(x) = s x − λH⊤(Hx − y).
+
+In the multivariate Gaussian case, the average denoiser is the linear map Ds,t (x) = Λ( s, t )x.Substituting this into the fixed-point equation yields: 
+
+x⋆(t) = Ds,t 
+
+ Fλ(x⋆(t)) 
+
+x⋆(t) = Λ( s, t ) · s x⋆(t) − λH⊤(Hx ⋆(t) − y).
+
+Defining the effective scaling factor m(t) := s Λ( s, t ), we can distribute m(t) across the terms: 
+
+x⋆(t) = m(t)x⋆(t) − m(t)λH⊤Hx ⋆(t) + m(t)λH⊤y.
+
+Since m(t) ∈ (0 , 1) across all valid lookaheads t ∈ [s, 1] (as shown in Appendix D.2), it is strictly positive. We can therefore divide both sides by m(t):
+
+1
+
+m(t) x⋆(t) = x⋆(t) − λH⊤Hx ⋆(t) + λH⊤y.
+
+Subtracting x⋆(t) from both sides and rearranging to group all terms involving x⋆(t) on the left yields:  1
+
+m(t) − 1
+
+
+
+x⋆(t) + λH⊤Hx ⋆(t) = λH⊤y.
+
+Factoring out x⋆(t) gives: 
+
+ 1
+
+m(t) − 1
+
+
+
+I + λH⊤H
+
+
+
+x⋆(t) = λH⊤y.
+
+Finally, defining the regularization parameter as c(t) := 1 
+
+> m(t)
+
+− 1, we invert the matrix on the left-hand side to arrive at the closed-form solution: 
+
+x⋆(t) =  c(t)I + λH⊤H−1λH⊤y,
+
+which completes the derivation. 
+
+Empirical validation. To corroborate the closed form (40) , we consider a 2D Gaussian prior 
+
+p1 = N (0, σ 2 
+
+> p
+
+I) with σp = 2 , and two linear forward models: an isotropic rotation H1 = 0 .8 R(π/ 6) 
+
+and an anisotropic operator H2 = R(π/ 6) diag(1 .0, 0.3) R(π/ 4) , whose Gram matrix H⊤ 
+
+> 2
+
+H2
+
+has eigenvalues {1.0, 0.09 } and couples the coordinates. Observations are y = Hk x1 + η with 
+
+η ∼ N (0, σ 2obs I), σobs = 0 .1.We run deterministic PnP-Flow ( ϵ = 0 ) with λ = 0 .1 and 0.5, anchor s = 0 .45 , and lookaheads t ∈{s, s + 0 .27 , 1}. The iterates converge to x⋆(t) to machine precision ( ∥ˆx − x⋆(t)∥mean < 5 · 10 −16 ), validating (40) . As t increases, the effective regularization c(t)/λ decreases ( 0.93 → 0.59 → 0.43 ), yielding a continuum of Tikhonov estimators with progressively weaker shrinkage toward the prior mean. The result is shown in Fig. 33 44 PnP-Flow( Ds, t = s) PnP-Flow( Ds, t = s + 0.27 ) PnP-Flow( Ds, t = 1 )           
+
+> = 0.1
+> Measurements yGround truth x1, iWiener / MAP xMAP Tikhonov x(t) [theory] PnP [numerical] PnP (renoise samples)
+
+(a) PnP-Flow( Ds, t = s) PnP-Flow( Ds, t = s + 0.27 ) PnP-Flow( Ds, t = 1 )           
+
+> = 0.5
+> Measurements yGround truth x1, iWiener / MAP xMAP Tikhonov x(t) [theory] PnP [numerical] PnP (renoise samples)
+
+(b) 
+
+Figure 33: Two forward models are tested: (a) isotropic rotation H1 = 0 .8 R(π/ 6) with λ = 0 .1, and (b) 
+
+anisotropic operator H2 = R(π/ 6) diag(1 .0, 0.3) R(π/ 4) with λ = 0 .5. Black: measurements y. Gold crosses: ground truth x1,i . Yellow: Wiener/MAP estimator. Red dots: Tikhonov fixed point x⋆(t) predicted by Eq. (40) . Red ×: PnP iterates after convergence (matching theory to machine precision, ∥ˆx − x⋆(t)∥mean <
+
+5 · 10 −16 ). Blue dots: samples from the stochastic PnP variant, illustrating the variance restoration discussed in Section 2.2. As t increases (left to right), the Tikhonov regularization weakens and the iterates spread further from the prior mean toward the Wiener solution. 
+
+In this Gaussian inverse problem, the lookahead acts as a regularization knob rather than a parameter-ization of the distortion–perception frontier. Since the regime is strongly over-regularized, increasing 
+
+t reduces bias and decreases the empirical MSE. This does not contradict the image experiments: exact distortion–perception optimality holds only in the denoising setting, while in inverse problems the interaction with the forward model breaks this guarantee. Here, the Gaussian case isolates the algorithmic role of the lookahead through its closed-form Tikhonov interpretation. This highlights that the exact DP interpretation holds in the denoising setting, while in inverse problems the lookahead acts as a forward-model-dependent regularization parameter. 
+
+Why x⋆(t) is not the MAP/Wiener estimator. One might expect PnP with Ds,t =s (the MMSE denoiser) to recover the MAP estimator xMAP , as in classical PnP with proximal operators. This is not the case. The flow-map denoiser Ds,t (x) = Λ( s, t ) x is not a proximal map: it operates at the intrinsic noise level σs of the interpolant xs, rather than the measurement noise σobs .Matching (40) to xMAP would require c(t)/λ = σ2obs /σ 2 
+
+> p
+
+, which is incompatible with the con-traction regime. Consequently, PnP-Flow operates at an effectively higher noise level, yielding 45 over-regularized estimates. As the lookahead t increases, c(t) decreases and x⋆(t) moves toward the Wiener solution, reducing bias. Thus, the lookahead controls a bias–variance trade-off induced by this noise mismatch, rather than traversing the optimal distortion–perception curve. In general, x⋆(t)
+
+should be interpreted as a lookahead-controlled Tikhonov estimator. 
+
+Effect of renoising in the Gaussian setting. To isolate the role of the renoising step, we repeat the experiment with the full stochastic PnP iteration. While the deterministic case converges to a single Tikhonov solution, the stochastic iteration produces a distribution of estimates whose spread is largely independent of the step size λ.Across different λ, the sample clouds consistently exhibit meaningful variance and align with the geometry of the data distribution, even when the mean estimate remains over-regularized. This indicates that the renoising step, together with the denoiser, primarily controls the variance of the estimator, while λ governs its mean through the data-consistency update. As the lookahead increases, this variability is progressively amplified, yielding the distortion– perception behavior observed in the experiment. 46
