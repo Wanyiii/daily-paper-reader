@@ -1,0 +1,1162 @@
+Title: Training-Free Semantic Correction for Autoregressive Visual Models
+
+URL Source: https://arxiv.org/pdf/2606.22550v1
+
+Published Time: Tue, 23 Jun 2026 02:17:30 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# Training-Free Semantic Correction for Autoregressive Visual Models 
+
+Junhao Chen 1, Chanyu Zhu 2, Zheqi Lv 1, Keting Yin 1, Shengyu Zhang 1
+
+> 1
+
+Zhejiang University, 2Shandong University  
+
+> {chenjunhao100, zheqilv, yinkt, sy_zhang}@zju.edu.cn ,zhuchanyu@mail.sdu.edu.cn
+
+Abstract 
+
+Autoregressive visual models (AVMs) based on next-scale prediction have emerged as a promi-nent paradigm for image and video synthesis. However, decomposing the generation process into discrete scales with varying granularities in AVM makes semantic errors difficult to identify and correct, thereby undermining the quality of the final output. Prior efforts to enhance AVM can be categorized into training-based and training-free approaches. Although training-based efforts to enhance AVM generation qual-ity come at substantial computational cost, ex-isting training-free methods neglect intermedi-ate generation states, leaving semantic errors undiagnosed and allowing them to accumulate into the final output. In this paper, we focus on training-free paradigms and propose GAZER, a framework that integrates multimodal large language model feedback into the AVM sam-pling loop for in-generation semantic correc-tion. Concretely, GAZER operates via two cooperating stages: the Reflective Diagnosis stage diagnoses semantic errors from intermedi-ate states, while the Semantic Correction stage rewinds and rectifies the generation trajectory to realign with the target prompt. Experiments on compositional image and video benchmarks demonstrate that GAZER improves semantic alignment and compositional accuracy across multiple AVMs without additional training. 1
+
+1 Introduction 
+
+Autoregressive (AR) visual models (AVMs) have become a leading paradigm for image and video synthesis (Ramesh et al., 2021; Chen et al., 2020; Lee et al., 2022; Yu et al., 2022b). Following a coarse-to-fine design, recent models such as VAR (Tian et al., 2024), Infinity (Han et al., 2025), InfinityStar (Liu et al., 2025), and STAR (Ma et al., 2025) have achieved strong results in image and  
+
+> 1Code is available at https://github.com/June-Hall/ Gazer .
+
+video generation by structuring generation as hier-archical next-scale prediction across progressively refined semantic scales. However, decomposing generation into discrete scales with varying granu-larities introduces a fundamental tension that com-promises semantic alignment between the gener-ated output and the input prompt. Such degradation stems from two compounding challenges: seman-tic errors within intermediate states are difficult to diagnose, and the unidirectional nature of AVM generation precludes revisitation or correction once such errors arise, allowing them to propagate across scales and degrade the quality of the final output. Prior efforts to improve semantic alignment in AVM can be divided into two categories: (i) 
+
+Training-based alignment. Frameworks such as T2I-R1 (Jiang et al., 2025) fine-tune the genera-tor with reinforcement learning to reshape its out-put distribution toward prompt semantics, yield-ing measurable improvements in semantic align-ment. However, they require large-scale training on massive high-quality data, demanding substan-tial computational resources and limiting their ap-plicability in the real world. (ii) Training-free alignment. This category includes prompt opti-mization before generation and output refinement after generation. For instance, Promptist (Hao et al., 2023) and OPT2I (Mañas et al., 2024) refine the input prompt to provide a stronger initial condi-tion, while PARM and PARM++ (Guo et al., 2025) score generated candidates and iteratively regen-erate them until alignment improves. However, existing training-free alignment methods operate only at the beginning or the end of the generation process, neglecting intermediate generation states and leaving semantic errors undiagnosed until they accumulate into the final output. To address this gap, we focus on training-free paradigms and propose GAZER, a framework that integrates multi-modal large language model (MLLM) feedback into the AVM sampling loop 1                
+
+> arXiv:2606.22550v1 [cs.CV] 21 Jun 2026 Standard Gazer
+> A backpack
+> on the top of a
+> chicken
+> A cat hiding
+> behind a large
+> cardboard box
+> One kite flew
+> alongside three
+> strawberries
+> Four blue
+> cups on a
+> wooden table
+> Standard Gazer
+> A dog chases after a balloon drifting in the wind Agirl is blowing bubbles in the yard, while a
+> puppy is jumping
+> Four lamps and
+> four dogs
+> A panda gives
+> bamboo to
+> another panda Figure 1: Qualitative comparison across text-to-image (T2I) and text-to-video (T2V) tasks. Each block corresponds to a text prompt. We show results from the baseline and our method for both image generation (top) and video generation (bottom, visualized as frame sequences). Our approach achieves better semantic alignment with the prompt and more coherent temporal dynamics.
+
+for in-generation semantic correction. Intuitively, the AVM, like a sketching artist, should gaze at its evolving draft and revise it before adding finer detail. Concretely, at selected intermediate scales, GAZER lets the model gaze at its own generation through an MLLM, extracting a diagnostic signal that drives the next sampling step toward the target semantics. As a result, GAZER transforms a pas-sive sampler into a generator that revises its own draft via MLLM feedback, improving semantic alignment at inference time. As illustrated in Figure 2, GAZER consists of two cooperating stages: (i) Reflective Diagnosis .Intermediate generation states cannot be reliably diagnosed, since they do not yet carry the coherent visual semantics required for accurate diagnosis. To this end, the Reflective Diagnosis stage con-structs rollout previews at selected intermediate scales, transforming incomplete states into seman-tically readable visual predictions that enable the AVM to reflect on its evolving generation via an MLLM. Based on these previews, the MLLM pro-duces semantic evaluations and corrective cues for subsequent refinement. (ii) Semantic Correction .With these corrective cues from Reflective Diagno-sis, the remaining challenge is how to incorporate semantic correction into a unidirectional AVM tra-jectory without retraining the generator or breaking the structure already produced. To address this, the Semantic Correction stage rewinds the gener-ation to the previous scale and rectifies the gener-ation trajectory by resampling from the rewound scale under the enhancement and suppression cues, redirecting the trajectory toward the target prompt. Together, the two stages enable in-generation se-mantic correction for existing AVM. Our contributions are summarized as follows: • We propose GAZER, a training-free framework that mitigates the accumulation and propaga-tion of semantic errors across scales in AVM by introducing MLLM-driven diagnosis and correction during sampling. • We design two stages for in-generation seman-tic correction in AVM: Reflective Diagnosis constructs rollout previews from intermedi-ate states to enable MLLM feedback, and Se-mantic Correction turns that diagnosis into a trajectory-level correction without retraining. • Experiments on image and video composi-tional benchmarks show that GAZER improves semantic alignment and compositional accu-racy across multiple AVMs. 
+
+2 Related Work 
+
+Autoregressive Visual Generation. Autoregres-sive (AR) visual generation spans several predic-tion paradigms (Yan et al., 2021; Wu et al., 2021; 2Villegas et al., 2022; Kondratyuk et al., 2024; Wu et al., 2022), including next-token (raster-scan) prediction (Parti (Yu et al., 2022a), Llam-aGen (Sun et al., 2024)), masked parallel decod-ing (MaskGIT (Chang et al., 2022), MAGE (Li et al., 2023)), continuous-token AR (MAR (Li et al., 2024)), and next-scale prediction (VAR (Tian et al., 2024)). The next-scale family, extended by Infin-ity (Han et al., 2025), InfinityStar (Liu et al., 2025), HART (Tang et al., 2024), and STAR (Ma et al., 2025), predicts visual tokens scale by scale and refines a low-resolution layout into fine-grained detail. A shared property of this family is that sam-pling proceeds strictly from coarse to fine in one di-rection, so semantic decisions made at early scales are carried into all subsequent scales without re-visiting. GAZER targets the next-scale AR family, introducing training-free in-generation semantic correction directly into the sampling process. 
+
+Semantic Alignment in Visual Generation. Se-mantic alignment has been explored in diffu-sion (Chefer et al., 2023; Feng et al., 2023; Rassin et al., 2023; Lv et al., 2025), language genera-tion (Madaan et al., 2023; Shinn et al., 2023), and visual evaluation (Kirstain et al., 2023; Lin et al., 2025), but semantic alignment in AVM has received comparatively less attention. Efforts to im-prove semantic alignment in AVM fall into training-based and training-free approaches. 
+
+Training-based alignment. Training-based meth-ods improve alignment by reshaping the output dis-tribution of AVM through fine-tuning or reward optimization. T2I-R1 (Jiang et al., 2025) fine-tunes the generator with RL on compositional re-wards, Diffusion-DPO (Wallace et al., 2024) and DDPO (Black et al., 2024) adapt preference op-timization to diffusion, and ImageReward (Xu et al., 2023) and HPS (Wu et al., 2023) provide reward models from human preferences. However, these methods demand substantial computational resources and large-scale preference data, limiting their practical applicability. 
+
+Training-free alignment. Training-free methods avoid retraining and operate entirely at inference time, but differ in when the alignment signal is applied. (i) Pre-generation methods condition on a refined input before sampling begins. Prompt-side methods such as Promptist (Hao et al., 2023), an RL-trained rewriter, and OPT2I (Mañas et al., 2024), which iteratively refines the prompt with an LLM, supply a stronger conditioning signal be-fore sampling. However, they cannot detect or respond to semantic drift that emerges during sam-pling. (ii) Post-generation methods instead evaluate or refine completed outputs after sampling. After sampling, PARM and PARM++ (Guo et al., 2025) score completed candidates and trigger regenera-tion, and ReNO (Eyring et al., 2024) optimizes the initial noise to maximize a reward. However, cor-rection operates outside the generation trajectory and cannot intervene where errors first arise. GAZER requires no parameter updates or pref-erence data, distinguishing it from training-based alignment methods. Unlike prompt optimization and output refinement approaches that operate out-side the generation trajectory, GAZER introduces semantic correction directly during sampling, ad-dressing errors before they propagate across scales. 
+
+3 Methodology 
+
+As illustrated in Figure 2, GAZER applies a two-stage correction, namely Reflective Diagnosis 
+
+(§3.2) and Semantic Correction (§3.3), at a small set of intermediate scales, without modifying any model components. Reflective Diagnosis reflects on the current trajectory by constructing rollout previews, enabling semantic evaluation via MLLM consultation, and producing enhancement and sup-pression cues for subsequent correction. Semantic Correction rewinds the trajectory to an earlier scale and rectifies subsequent generation under enhance-ment and suppression cues, redirecting the trajec-tory toward improved semantic alignment before resuming standard scale-by-scale sampling. 
+
+3.1 Preliminaries 
+
+We apply GAZER to AVM that predict visual to-kens via next-scale prediction (Tian et al., 2024). Let x1: K = ( x1, . . . , x K ) denote the multi-scale token sequence produced by a backbone with pa-rameters θ. The backbone is conditioned on a text prompt c, which is first mapped to a continuous condition vector ˆc = τϕ(c) by a frozen text en-coder τϕ. The backbone follows the next-scale autoregressive factorization, under which the joint distribution decomposes as 
+
+pθ(x1: K | ˆc) = 
+
+> K
+
+Y
+
+> k=1
+
+pθ(xk | x<k , ˆc), (1) where each next-scale conditional pθ(xk | x<k , ˆc)
+
+predicts the tokens at scale k from the preceding scales and the prompt. Let D denote the decoder that maps tokens to a visual output (an image or 3𝑥 ! 𝑥 " 𝑥 # 𝑥 #$"𝑥 #$! 𝑥 %
+
+Rollout Preview          
+
+> Direct Decoding
+> Decoder
+> Raw Decoding
+> 𝑥 !:#
+> Lookahead Preview
+> Autoregressive
+> Transformer
+> 𝑥 !:#
+> "𝑥 #$!:%
+> Decoder
+> Original
+> Prompt
+> Rollout
+> Preview
+> Diagnostic
+> Criteria
+> Multi -Modal Encoder
+> Multi -Modal Large Language Model
+> Enhancement Cue Suppression Cue
+> Text Encoder ̂
+> 𝑐 #
+> $̂𝑐 #
+> &
+
+Reflective Evaluation  
+
+> 𝑥 !:#&!
+> Autoregressive Transformer
+> 𝑥 !"#
+> 𝑥 !"$
+> 𝑥 !
+> 𝑥 !"#
+> 𝑥 !"$
+> Rewind
+> 𝑥 !:#&!𝑥 !:#̂
+> 𝑐 #
+> $̂
+> 𝑐 #
+> &
+> Conditioning
+> "𝑥 !:#
+
+Reflective Diagnosis Semantic Correction 
+
+Hierarchical Generation Trajectory 
+
+Scale tokens Preview tokens Rewind Operation Forward Operation Condition tokens Figure 2: Overview of GAZER. 
+
+a video), and M a pretrained MLLM that takes this visual output and a text query as input and returns natural-language feedback. Sampling pro-ceeds strictly from coarse to fine, and once x<k is sampled it remains fixed throughout the remaining generation, so semantic decisions made at early scales are not revisited. Given a text prompt c, its encoding ˆc, and a pretrained next-scale AR back-bone pθ with decoder D, our goal is to produce a visual output D(x1: K ) whose semantics match c as closely as possible, under the constraint that θ, D,and M remain frozen at inference. 
+
+3.2 Reflective Diagnosis 
+
+Directly feeding the partial token map D(x1: k) to 
+
+M is unreliable, as the decoded output at coarse scales lacks the high-frequency detail required for 
+
+M to recognize objects, attributes, or relations. To obtain a semantically diagnosable state, we con-struct a rollout preview by extending the current trajectory to scale K under the original sampling process. The resulting preview exposes the seman-tic tendency of the partially generated trajectory while preserving the macro structure already estab-lished, enabling reliable semantic diagnosis before the final output is produced. Given x1: k, we autoregressively sample the re-maining tokens under pθ,
+
+˜xk+1: K ∼
+
+> K
+
+Y
+
+> j=k+1
+
+pθ
+
+ ˜xj | x1: k, ˜xk+1: j−1, ˆc, (2) and decode the preview ˜I = D(x1: k, ˜xk+1: K ). ˜I
+
+preserves the macro structure already committed in x1: k while exposing the semantic consequence that the current trajectory would produce under unaltered sampling. Because the preview follows the same autoregressive factorization as the final generation, the semantic feedback returned by M
+
+reflects the future semantic tendency of the current trajectory rather than an arbitrary completion, al-lowing for diagnostics of semantic errors before they propagate across scales. We reflect on the current trajectory through the rollout preview ˜I with M under the original prompt c, asking whether each compositional ele-ment of c (e.g., objects, attributes, and relations) is faithfully reflected in the emerging semantics. The reflection produces two forms of corrective feed-back: an enhancement cue c+ 
+
+> k
+
+that reinforces miss-ing or weakly expressed semantics, and a suppres-sion cue c− 
+
+> k
+
+that identifies inconsistent attributes or undesired visual patterns. Both cues are encoded by τϕ, yielding ˆc+ 
+
+> k
+
+= τϕ(c+ 
+
+> k
+
+) and ˆc− 
+
+> k
+
+= τϕ(c− 
+
+> k
+
+),before being passed to Semantic Correction for tra-jectory rectification. When c+ 
+
+> k
+
+≡ c and c− 
+
+> k
+
+= ∅,4no corrective signal is introduced, recovering the sampling behavior of the original backbone. 
+
+3.3 Semantic Correction 
+
+Given the cues from Reflective Diagnosis, correct-ing the trajectory requires re-sampling xk itself, since the autoregressive factorization conditions every subsequent scale on x1: k, preventing later scales from removing semantic errors already com-mitted at xk.We therefore rewind the trajectory to x1: k−1 and re-sample xk under the enhancement and suppres-sion cues, steering the trajectory toward the tar-get semantics while preserving the macro structure committed in x1: k−1. Formally, the rewind opera-tion is defined as 
+
+Rk
+
+ x1: k
+
+ = x1: k−1, (3) which removes the semantic commitment at xk
+
+and restores the trajectory to x1: k−1, leaving the preceding prefix intact. We realize semantic steering through classifier-free guidance (Ho and Salimans, 2022) (CFG), treating corrective cues as additional conditions derived from diagnosis of the current trajectory rather than fixed prompts. Let ℓθ(· | x<k , ˆc) de-note the next-scale logits produced by the back-bone under text condition ˆc, which may comprise multiple prompts attended to jointly through cross-attention. Let ℓ+ 
+
+> k
+
+≡ ℓθ(· | x<k , {ˆc, ˆc+ 
+
+> k
+
+}), and 
+
+ℓ− 
+
+> k
+
+≡ ℓθ(· | x<k , ˆc− 
+
+> k
+
+), denote the logits under the positive and negative conditions, respectively. The re-sampling of k takes the form 
+
+xk ∼ softmax  ℓ− 
+
+> k
+
++ ω (ℓ+ 
+
+> k
+
+− ℓ− 
+
+> k
+
+), (4) where ω ≥ 1 is the CFG guidance scale. Although Eq. (4) follows the standard CFG formulation, the conditioning cues are generated dynamically from MLLM diagnosis of the current trajectory. After re-sampling xk, the backbone resumes standard scale-by-scale sampling for j ∈ { k +1, . . . , K } under unmodified pθ(· | x<j , ˆc). Since every subsequent scale conditions on x1: k, rectify-ing xk implicitly propagates the semantic correc-tion to all later scales. Semantic inconsistencies may nevertheless emerge progressively and accu-mulate across scales along the trajectory, so a single correction step is insufficient to resolve all seman-tic drift. GAZER therefore applies diagnosis and correction at multiple scales along the trajectory, defined by the intervention scale set: 
+
+S = k k = κs + i · ∆, i = 0 , 1, . . . ,  κe−κs
+
+> ∆
+
+ ,
+
+(5) where κs = ⌊rs · K⌋ and κe = ⌊re · K⌋ for normal-ized ratios rs, r e ∈ [0 , 1) with rs < r e, and ∆ ≥ 1,jointly determining where diagnosis begins, where it ends, and how frequently it is triggered along the trajectory for semantic correction. 
+
+3.4 Theoretical Foundations 
+
+We provide theoretical guarantees that jointly jus-tify the design of GAZER. 
+
+Assumption 3.1 (Local Semantic Refinement) . For all scales k′ > k, the conditional distribution 
+
+pθ(xk′ | x<k ′ , ˆc) performs only local refinement and introduces no semantic factors outside the coarse semantic support of the committed prefix. Formally, 
+
+ϕ(x1: k′ ) ⊆ ϕ(x1: k) ∀ k′ > k. (6) 
+
+Theorem 3.2 (Semantic Commitment) . Under As-sumption 3.1, if a semantic factor s is absent from the committed prefix ϕ(x1: k), then s cannot appear in any continuation xk+1: K ∼ QKk′=k+1 pθ(xk′ |
+
+x<k ′ , ˆc). Formally, 
+
+s / ∈ ϕ(x1: k) ⇒ s / ∈ ϕ(x1: K ). (7) 
+
+Theorem 3.3 (Rewind Expands Reachable Seman-tic Support) . Under Assumption 3.1, define the reachable semantic support of a prefix x1: k as 
+
+S(x1: k) = 
+
+n
+
+s ∃ xk+1: K , s ∈ ϕ(x1: K )
+
+o
+
+. (8) 
+
+(i) If s / ∈ S (x1: k), then no intervention confined to scales k > k satisfies s ∈ ϕ(x1: k, x ′ 
+
+> k+1: K
+
+).(ii) If the rewind operator R(1)  
+
+> k
+
+is applied and a replacement sample x′ 
+
+> k
+
+satisfies s ∈
+
+ϕ(x1: k−1, x ′
+
+> k
+
+), then s ∈ S (x1: k−1, x ′
+
+> k
+
+).
+
+Remark 3.4 (Implication for Semantic Correc-tion) . Theorems 3.2 and 3.3 together imply that correcting semantic failures requires rewinding to an earlier scale where the desired semantic fac-tors remain reachable, motivating the rewind-and-resample mechanism of Semantic Correction. The proof is provided in Appendix A. 
+
+5Model Method Color Shape Texture 2D Spatial 3D Spatial Non-spatial Numeracy Complex InfinityStar Standard 0.8121 0.5459 0.7384 0.2739 0.3466 0.2995 0.4970 0.3819 GAZER 0.8288 0.6348 0.7676 0.2760 0.3535 0.2998 0.5436 0.3862                  
+
+> STAR Standard 0.5327 0.4270 0.5293 0.1952 0.3676 0.3110 0.4589 0.3418 GAZER 0.5543 0.4386 0.5299 0.1942 0.3808 0.3109 0.4680 0.3437
+
+Table 1: Main results on T2I-CompBench. For each model, GAZER is compared with the corresponding standard sampling baseline under the same model sampling configuration.                                       
+
+> Model Method Consistent Attr. Dynamic Attr. Spatial Motion Action Binding Object Interaction Numeracy InfinityStar Standard 0.8657 0.0274 0.6248 0.3212 0.7258 0.6770 0.3408 GAZER 0.8826 0.0265 0.6614 0.3383 0.7285 0.7169 0.3745
+> Helios Standard 0.7550 0.0232 0.5484 0.2683 0.6496 0.5546 0.3203 GAZER 0.7875 0.0296 0.5857 0.2793 0.7091 0.6741 0.3508
+
+Table 2: Main results on T2V-CompBench. GAZER improves most video compositional dimensions, especially action binding, object interactions, and video-level numeracy. 
+
+4 Experiments 
+
+4.1 Experimental Setup Tasks and benchmarks. We evaluate GAZER on both text-to-image and text-to-video generation to examine whether the proposed training-free inter-vention generalizes across AVM visual generation settings. For text-to-image generation, we use T2I-CompBench (Huang et al., 2025), which covers color, shape, texture, 2D-spatial relationships, 3D-spatial relationships, non-spatial relations, numer-acy, and complex compositional prompts. For text-to-video generation, we use T2V-CompBench (Sun et al., 2025), which evaluates consistent attributes, dynamic attributes, spatial relations, motion, ac-tion binding, object interactions, and video-level numeracy. These benchmarks allow us to measure whether in-generation diagnosis and correction im-prove fine-grained text-visual semantic alignment rather than only visual fidelity. 
+
+Models and baselines. We apply GAZER to three AVMs: InfinityStar (Liu et al., 2025), He-lios (Yuan et al., 2026), and STAR (Ma et al., 2025), where InfinityStar supports both tasks. For text-to-image generation, we evaluate InfinityStar and STAR, using each unmodified model as the paired baseline. For text-to-video generation, we evalu-ate InfinityStar and Helios against their respective unmodified baselines. For each model, the base-line and GAZER share the same tokenizer, decoder, model parameters, and base sampling configura-tion. The setup isolates and evaluates the effect of introducing in-generation diagnosis and correction into the inference-time trajectory. 
+
+Implementation details. All experiments are conducted on NVIDIA A100 GPUs. By default, we set the diagnosis interval to κs = 0 and κe = 1 ,and set the scale step to ∆ = 4 , which triggers di-agnosis and correction along the full coarse-to-fine trajectory. We use Qwen3-VL (Bai et al., 2025) as the MLLM to evaluate rollout previews and gener-ate enhancement and suppression cues. To ensure a fair comparison, all models are evaluated in a training-free setting, and standard sampling and GAZER use the same random seed and the same sampling configuration unless otherwise stated. 
+
+Evaluation metrics. T2I-CompBench and T2V-CompBench serve as the compositional bench-marks. For text-to-image generation, we addi-tionally report CLIP Score (Radford et al., 2021), PickScore (Kirstain et al., 2023), HPSv2 (Wu et al., 2023), and ImageReward (Xu et al., 2023) to assess text-image similarity, human preference alignment. All metrics are used to compare standard sampling and GAZER under the same model. All evalua-tors are used solely for evaluation purposes, and none serve as optimization objectives or reranking signals in either the baseline or GAZER. 
+
+4.2 Main Results Quantitative results. Tables 1 and 2 report the main results of GAZER on T2I-CompBench and T2V-CompBench. In general, GAZER improves the compositional alignment across both bench-marks and across the evaluated models. In T2I-CompBench, InfinityStar shows notable gains in shape, texture, and numeracy, while GAZER in STAR improves in color, shape, texture, 3D-spatial 6Correction Diagnosis Preview Color Shape Texture 2D Spatial 3D Spatial Non-spatial Numeracy Complex 0.8121 0.5459 0.7384 0.2739 0.3466 0.2995 0.4970 0.3819                              
+
+> ✓0.8137 0.5633 0.7517 0.2604 0.3482 0.2984 0.4934 0.3874
+> ✓✓0.8068 0.5439 0.7420 0.2230 0.3621 0.2995 0.5135 0.3919
+> ✓✓✓0.8288 0.6348 0.7676 0.2760 0.3535 0.2998 0.5436 0.3862
+> Table 3: Ablation study on InfinityStar with T2I-CompBench. Preview denotes rollout preview construction and Diagnosis denotes MLLM-guided semantic diagnosis(Reflective Diagnosis). Correction denotes cue-guided re-sampling after trajectory rewind(Semantic Correction). Each row progressively enables additional stages of the proposed framework.
+
+relationships, numeracy, and complex prompts. In T2V-CompBench, both InfinityStar and Helios show consistent gains in numeracy, spatial rela-tions, and object interaction. These results are con-sistent with the hypothesis that rollout previews enable early detection of semantic errors, and that rewind-and-resample under corrective cues can redirect the trajectory toward the target semantics before errors propagate across scales. GAZER also improves relational composition-ality. The gains are particularly visible in video generation, where spatial relations, action binding, and object interactions require consistency beyond a single frame. For InfinityStar, GAZER improves spatial relations and object interactions. For Helios, the strongest gains appear in action binding and ob-ject interactions. This pattern is consistent with the design of GAZER, which targets and corrects se-mantic errors at coarse scale before they propagate through the trajectory. The improvement is not strictly monotonic on every metric. STAR shows small decreases on 2D-spatial and non-spatial attributes, and InfinityStar shows a small decrease on dynamic attributes in T2V-CompBench. These mixed cases indicate that the current intervention is most reliable when the rollout preview provides sufficient visual signal for diagnosing objects, attributes, relations, and numeracy. Fine-grained dynamic attributes and some model-specific dimensions remain challeng-ing under the current intervention design. Never-theless, the overall trend supports the effectiveness of training-free Reflective Diagnosis and Semantic Correction for improving compositional alignment without updating the model. 
+
+Qualitative results. Figure 1 provides qualita-tive comparisons on both text-to-image and text-to-video prompts. In image generation, standard sampling often produces visually plausible images but may omit objects, confuse attributes, or bind an attribute to the wrong entity. GAZER exposes such errors through rollout previews and uses the resulting cues to strengthen missing elements and suppress conflicting ones during re-sampling. In video generation, the baseline errors are not limited to individual frames and can propagate into incor-rect actions or incoherent object interactions. The examples show that GAZER yields more stable sub-jects, more accurate action relationships, and more coherent interactions, which agrees with the im-provements observed on T2V-CompBench. These cases indicate that the main benefit of GAZER lies in correcting semantic misalignments with respect to the target prompt, rather than overall visual qual-ity enhancement. Additional qualitative examples are provided in Appendix D.5. 
+
+4.3 Ablation and Hyperparameter Analysis Ablation study. Table 3 analyzes the key com-ponents of the two-stage design on InfinityStar with T2I-CompBench. The evaluated components include Semantic Correction for cue-guided re-sampling after trajectory rewind, MLLM-guided diagnosis in Reflective Diagnosis for identifying semantic mismatches from intermediate generation states, and rollout preview construction in Reflec-tive Diagnosis for exposing a semantically readable visual proxy to the MLLM. The ablation shows that Semantic Correction alone is insufficient for stable compositional im-provement. It improves several appearance-related dimensions, but its effect on spatial relationships and numeracy is weaker, suggesting that correc-tion requires a reliable diagnostic signal. Notably, adding diagnosis without preview can degrade pre-formance on certain dimensions, suggesting that diagnosis on incomplete intermerdiate states intro-duces unreliable cues. The full system achieves the most stable overall improvement, especially on color, shape, texture, 2D-spatial relationships, non-spatial attributes, and numeracy. This result supports the cooperative design of GAZER: roll-7                    Baseline Full Early Late                                 
+
+> Interval step Δ
+> 
+> 
+>  
+>  
+>  
+> 
+> 0.54
+> 0.52
+> 0.50
+> Numeracy
+> 4816 
+> 
+> 
+> 
+> 
+>  
+> Interval step Δ
+> 4816
+> 0.60
+> 0.55
+> 0.50
+> 0.45
+> Image  Reward
+>   
+> 
+> 
+> 
+> 
+> Shape 2D 3D Num.
+> 0.50
+> 0.40
+> 0.30
+> Score
+>    
+>   
+> 
+>  
+> 
+> 0.55
+> 0.50
+> 0.45
+> Image  Reward  Early -4
+> Early -8
+> Early -16
+> Late -4
+> Late -8
+> Late -16
+> Full -4
+> Full -8
+> Full -16
+> 0.5 1.0 2.0 4.0
+> (b) Intervention region (c) Relative trigger density
+> (a) Trigger frequency
+
+Figure 3: Schedule behavior on InfinityStar with T2I-CompBench. Full, Early, and Late denote [rs, r e] = [0 , 1] , [0 , 0.5] , and [0 .5, 1] , respectively. (a) shows the effect of trigger frequency ∆. (b) compares high-frequency intervention regions. (c) relates relative trig-ger density to ImageReward. 
+
+out preview provides readable evidence, MLLM-guided diagnosis converts that evidence into cor-rective cues, and correction steers the trajectory toward the target semantics under corrective cues. 
+
+Intervention schedule. We study how the inter-vention range (κs, κ e) and trigger interval ∆ affect compositional generation on InfinityStar with T2I-CompBench, with representative trends summa-rized in Figure 3. Smaller ∆ consistently improves numeracy and ImageReward across all interven-tion regions (Figure 3a), and full-range interven-tion achieves more balanced gains across compo-sitional dimensions than early or late intervention alone (Figure 3b). Higher trigger density is further associated with better ImageReward, with early intervention dominating late intervention at compa-rable density (Figure 3c). We therefore adopt the full-range ∆ = 4 schedule as the default setting, which provides the strongest overall balance at a moderate inference overhead. Full schedule results are provided in Appendix D.2. 
+
+4.4 Efficiency Analysis 
+
+GAZER introduces additional inference-time over-head from rollout preview construction and MLLM-based diagnosis, but the overall cost remains below that of Best-of-2 sampling. As shown in Table 4, GAZER requires 1.63 × the inference time of stan-dard sampling, compared with 2.00 × for Best-of-2, 
+
+Method Time ↓ Mem. ↓ Consist. Attr. ↑ IR ↑
+
+Baseline 1.00 × 59.40 13.07 0.2811 Baseline Best-of-2 2.00 × 59.40 13.23 0.2802 GAZER 1.63 × 77.44 14.20 1.1452 
+
+Table 4: Budget-aware comparison. GAZER achieves higher compositional consistency and human preference alignment than Best-of-2 sampling, while re-quiring lower inference cost. Memory is reported in GB. Full metric breakdowns are provided in Appendix D.3. 
+
+while achieving higher compositional consistency and human preference alignment. This indicates that the performance gain stems from targeted se-mantic correction rather than increased sampling diversity. The model memory footprint remains unchanged; the additional overhead stems entirely from the MLLM loaded during diagnosis. Full met-ric breakdowns and memory statistics are provided in Appendix D.3. 
+
+5 Conclusion 
+
+We presented GAZER, a training-free framework for in-generation semantic correction in next-scale autoregressive visual generation, demonstrating that MLLM feedback can be effectively incorpo-rated into the AR sampling process to diagnose and rectify semantic errors before they propagate across scales. Experiments on T2I-CompBench and T2V-CompBench show consistent improve-ments in compositional alignment across image and video backbones without any additional train-ing. We hope this work offers a modest step toward in-generation correction as an underexplored direc-tion for autoregressive visual generation, and may serve as a reference for future work on real-time semantic calibration during AR sampling, includ-ing more efficient feedback mechanisms, adaptive intervention schedules, and extensions to broader generative architectures. 
+
+Limitations 
+
+Although our experiments demonstrate the effec-tiveness of GAZER across text-to-image and text-to-video generation, several aspects merit further study. GAZER is most suitable for errors that can be identified from intermediate semantic evidence, such as objects, attributes, relations, and visible events. More ambiguous prompts or very fine-grained temporal requirements may benefit from stronger feedback models and more specialized ver-ification signals. Furthermore, GAZER is designed 8for next-scale prediction models and does not di-rectly transfer to next-token prediction backbones, where raster-scan intermediate states lack the glob-ally coherent visual structure required for reliable rollout preview diagnosis (see Appendix C for de-tails). Future work will explore these directions to make training-free semantic correction more effi-cient and broadly applicable. 
+
+Ethics Statement 
+
+This work is intended solely for research on improv-ing semantic alignment in text-to-image and text-to-video generation. Our experiments use public benchmarks and publicly available or open-source generation backbones and evaluation models, and we follow the licenses and usage policies associ-ated with these resources. The generated examples are used only for analysis and illustration of model behavior. Since stronger alignment and correction methods could also be misused to create more con-vincing synthetic content, we encourage respon-sible deployment with appropriate safeguards, in-cluding prompt filtering, provenance tracking, and human review in sensitive applications. We do not use private user data or personally identifying information in our experiments. We used AI as-sistants for minor writing assistance in preparing this manuscript. All technical content, experiments, and conclusions are the work of the authors. 
+
+References 
+
+Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, Lianghao Deng, Wei Ding, Chang Gao, Chunjiang Ge, and 1 others. 2025. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 .Kevin Black, Michael Janner, Yilun Du, Ilya Kostrikov, and Sergey Levine. 2024. Training diffusion models with reinforcement learning. Preprint ,arXiv:2305.13301. Huiwen Chang, Han Zhang, Lu Jiang, Ce Liu, and William T. Freeman. 2022. Maskgit: Masked gen-erative image transformer. In 2022 IEEE/CVF Con-ference on Computer Vision and Pattern Recognition (CVPR) , pages 11305–11315. Hila Chefer, Yuval Alaluf, Yael Vinker, Lior Wolf, and Daniel Cohen-Or. 2023. Attend-and-excite: Attention-based semantic guidance for text-to-image diffusion models. ACM Trans. Graph. , 42(4). Mark Chen, Alec Radford, Rewon Child, Jeffrey Wu, Heewoo Jun, David Luan, and Ilya Sutskever. 2020. Generative pretraining from pixels. In Proceedings of the 37th International Conference on Machine Learning , volume 119 of Proceedings of Machine Learning Research , pages 1691–1703. PMLR. Luca Eyring, Shyamgopal Karthik, Karsten Roth, Alexey Dosovitskiy, and Zeynep Akata. 2024. Reno: Enhancing one-step text-to-image models through reward-based noise optimization. In Advances in Neural Information Processing Systems , volume 37, pages 125487–125519. Curran Associates, Inc. Weixi Feng, Xuehai He, Tsu-Jui Fu, Varun Jam-pani, Arjun Akula, Pradyumna Narayana, Sugato Basu, Xin Eric Wang, and William Yang Wang. 2023. Training-free structured diffusion guidance for compositional text-to-image synthesis. Preprint ,arXiv:2212.05032. Ziyu Guo, Renrui Zhang, Chengzhuo Tong, Zhizheng Zhao, Rui Huang, Haoquan Zhang, Manyuan Zhang, Jiaming Liu, Shanghang Zhang, Peng Gao, Hong-sheng Li, and Pheng-Ann Heng. 2025. Can we gener-ate images with cot? let’s verify and reinforce image generation step by step. Preprint , arXiv:2501.13926. Jian Han, Jinlai Liu, Yi Jiang, Bin Yan, Yuqi Zhang, Zehuan Yuan, Bingyue Peng, and Xiaobing Liu. 2025. Infinity: Scaling bitwise autoregressive modeling for high-resolution image synthesis. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 15733–15744. Yaru Hao, Zewen Chi, Li Dong, and Furu Wei. 2023. Optimizing prompts for text-to-image generation. In 
+
+Advances in Neural Information Processing Systems ,volume 36, pages 66923–66939. Curran Associates, Inc. Jonathan Ho and Tim Salimans. 2022. Classifier-free diffusion guidance. Preprint , arXiv:2207.12598. Kaiyi Huang, Chengqi Duan, Kaiyue Sun, Enze Xie, Zhenguo Li, and Xihui Liu. 2025. T2i-compbench++: An enhanced and comprehensive benchmark for compositional text-to-image gener-ation. IEEE Transactions on Pattern Analysis and Machine Intelligence , 47(5):3563–3579. Dongzhi Jiang, Ziyu Guo, Renrui Zhang, Zhuofan Zong, Hao Li, Le Zhuo, Shilin Yan, Pheng-Ann Heng, and Hongsheng Li. 2025. T2i-r1: Reinforcing image gen-eration with collaborative semantic-level and token-level cot. Preprint , arXiv:2505.00703. Yuval Kirstain, Adam Polyak, Uriel Singer, Shahbuland Matiana, Joe Penna, and Omer Levy. 2023. Pick-a-pic: An open dataset of user preferences for text-to-image generation. In Advances in Neural Informa-tion Processing Systems , volume 36, pages 36652– 36663. Curran Associates, Inc. Dan Kondratyuk, Lijun Yu, Xiuye Gu, José Lezama, Jonathan Huang, Grant Schindler, Rachel Hornung, Vighnesh Birodkar, Jimmy Yan, Ming-Chang Chiu, Krishna Somandepalli, Hassan Akbari, Yair Alon, Yong Cheng, Josh Dillon, Agrim Gupta, Meera Hahn, 
+
+9Anja Hauth, David Hendon, and 12 others. 2024. Videopoet: A large language model for zero-shot video generation. Preprint , arXiv:2312.14125. Doyup Lee, Chiheon Kim, Saehoon Kim, Minsu Cho, and Wook-Shin Han. 2022. Autoregressive image generation using residual quantization. In Proceed-ings of the IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition (CVPR) , pages 11523– 11532. Tianhong Li, Huiwen Chang, Shlok Mishra, Han Zhang, Dina Katabi, and Dilip Krishnan. 2023. Mage: Masked generative encoder to unify representation learning and image synthesis. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pat-tern Recognition (CVPR) , pages 2142–2152. Tianhong Li, Yonglong Tian, He Li, Mingyang Deng, and Kaiming He. 2024. Autoregressive image gen-eration without vector quantization. In Advances in Neural Information Processing Systems , volume 37, pages 56424–56445. Curran Associates, Inc. Zhiqiu Lin, Deepak Pathak, Baiqi Li, Jiayao Li, Xide Xia, Graham Neubig, Pengchuan Zhang, and Deva Ramanan. 2025. Evaluating text-to-visual generation with image-to-text generation. In Computer Vision – ECCV 2024 , pages 366–384, Cham. Springer Nature Switzerland. Jinlai Liu, Jian Han, Bin Yan, Hui Wu, Fengda Zhu, Xing Wang, Yi Jiang, Bingyue Peng, and Zehuan Yuan. 2025. Infinitystar: Unified spacetime autore-gressive modeling for visual generation. Preprint ,arXiv:2511.04675. Zheqi Lv, Junhao Chen, Qi Tian, Keting Yin, Shengyu Zhang, and Fei Wu. 2025. Multimodal llm-guided semantic correction in text-to-image diffusion. 
+
+Preprint , arXiv:2505.20053. Xiaoxiao Ma, Mohan Zhou, Tao Liang, Yalong Bai, Tiejun Zhao, Biye Li, Huaian Chen, and Yi Jin. 2025. Star: Scale-wise text-conditioned autoregressive im-age generation. Preprint , arXiv:2406.10797. Aman Madaan, Niket Tandon, Prakhar Gupta, Skyler Hallinan, Luyu Gao, Sarah Wiegreffe, Uri Alon, Nouha Dziri, Shrimai Prabhumoye, Yiming Yang, Shashank Gupta, Bodhisattwa Prasad Majumder, Katherine Hermann, Sean Welleck, Amir Yazdan-bakhsh, and Peter Clark. 2023. Self-refine: Itera-tive refinement with self-feedback. In Advances in Neural Information Processing Systems , volume 36, pages 46534–46594. Curran Associates, Inc. Oscar Mañas, Pietro Astolfi, Melissa Hall, Candace Ross, Jack Urbanek, Adina Williams, Aishwarya Agrawal, Adriana Romero-Soriano, and Michal Drozdzal. 2024. Improving text-to-image consis-tency via automatic prompt optimization. Preprint ,arXiv:2403.17804. Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sas-try, Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen Krueger, and Ilya Sutskever. 2021. Learn-ing transferable visual models from natural language supervision. In Proceedings of the 38th International Conference on Machine Learning , volume 139 of 
+
+Proceedings of Machine Learning Research , pages 8748–8763. PMLR. Aditya Ramesh, Mikhail Pavlov, Gabriel Goh, Scott Gray, Chelsea Voss, Alec Radford, Mark Chen, and Ilya Sutskever. 2021. Zero-shot text-to-image gen-eration. In Proceedings of the 38th International Conference on Machine Learning , volume 139 of 
+
+Proceedings of Machine Learning Research , pages 8821–8831. PMLR. Royi Rassin, Eran Hirsch, Daniel Glickman, Shauli Ravfogel, Yoav Goldberg, and Gal Chechik. 2023. Linguistic binding in diffusion models: Enhancing attribute correspondence through attention map align-ment. In Advances in Neural Information Processing Systems , volume 36, pages 3536–3559. Curran Asso-ciates, Inc. Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. 2023. Re-flexion: language agents with verbal reinforcement learning. In Advances in Neural Information Process-ing Systems , volume 36, pages 8634–8652. Curran Associates, Inc. Kaiyue Sun, Kaiyi Huang, Xian Liu, Yue Wu, Zi-han Xu, Zhenguo Li, and Xihui Liu. 2025. T2v-compbench: A comprehensive benchmark for com-positional text-to-video generation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 8406–8416. Peize Sun, Yi Jiang, Shoufa Chen, Shilong Zhang, Bingyue Peng, Ping Luo, and Zehuan Yuan. 2024. Autoregressive model beats diffusion: Llama for scal-able image generation. Preprint , arXiv:2406.06525. Haotian Tang, Yecheng Wu, Shang Yang, Enze Xie, Jun-song Chen, Junyu Chen, Zhuoyang Zhang, Han Cai, Yao Lu, and Song Han. 2024. Hart: Efficient visual generation with hybrid autoregressive transformer. 
+
+Preprint , arXiv:2410.10812. Keyu Tian, Yi Jiang, Zehuan Yuan, Bingyue Peng, and Liwei Wang. 2024. Visual autoregressive modeling: Scalable image generation via next-scale prediction. In Advances in Neural Information Processing Sys-tems , volume 37, pages 84839–84865. Curran Asso-ciates, Inc. Ruben Villegas, Mohammad Babaeizadeh, Pieter-Jan Kindermans, Hernan Moraldo, Han Zhang, Moham-mad Taghi Saffar, Santiago Castro, Julius Kunze, and Dumitru Erhan. 2022. Phenaki: Variable length video generation from open domain textual descrip-tion. Preprint , arXiv:2210.02399. 
+
+10 Bram Wallace, Meihua Dang, Rafael Rafailov, Linqi Zhou, Aaron Lou, Senthil Purushwalkam, Stefano Ermon, Caiming Xiong, Shafiq Joty, and Nikhil Naik. 2024. Diffusion model alignment using direct prefer-ence optimization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recog-nition (CVPR) , pages 8228–8238. Chenfei Wu, Jian Liang, Xiaowei Hu, Zhe Gan, Jianfeng Wang, Lijuan Wang, Zicheng Liu, Yuejian Fang, and Nan Duan. 2022. Nuwa-infinity: Autoregressive over autoregressive generation for infinite visual synthesis. 
+
+Preprint , arXiv:2207.09814. Chenfei Wu, Jian Liang, Lei Ji, Fan Yang, Yuejian Fang, Daxin Jiang, and Nan Duan. 2021. Nüwa: Visual synthesis pre-training for neural visual world creation. 
+
+Preprint , arXiv:2111.12417. Xiaoshi Wu, Yiming Hao, Keqiang Sun, Yixiong Chen, Feng Zhu, Rui Zhao, and Hongsheng Li. 2023. Hu-man preference score v2: A solid benchmark for eval-uating human preferences of text-to-image synthesis. 
+
+Preprint , arXiv:2306.09341. Jiazheng Xu, Xiao Liu, Yuchen Wu, Yuxuan Tong, Qinkai Li, Ming Ding, Jie Tang, and Yuxiao Dong. 2023. Imagereward: Learning and evaluating hu-man preferences for text-to-image generation. In 
+
+Advances in Neural Information Processing Systems ,volume 36, pages 15903–15935. Curran Associates, Inc. Wilson Yan, Yunzhi Zhang, Pieter Abbeel, and Ar-avind Srinivas. 2021. Videogpt: Video genera-tion using vq-vae and transformers. arXiv preprint arXiv:2104.10157 .Jiahui Yu, Yuanzhong Xu, Jing Yu Koh, Thang Luong, Gunjan Baid, Zirui Wang, Vijay Vasudevan, Alexan-der Ku, Yinfei Yang, Burcu Karagol Ayan, Ben Hutchinson, Wei Han, Zarana Parekh, Xin Li, Han Zhang, Jason Baldridge, and Yonghui Wu. 2022a. Scaling autoregressive models for content-rich text-to-image generation. Preprint , arXiv:2206.10789. Jiahui Yu, Yuanzhong Xu, Jing Yu Koh, Thang Luong, Gunjan Baid, Zirui Wang, Vijay Vasudevan, Alexan-der Ku, Yinfei Yang, Burcu Karagol Ayan, and 1 others. 2022b. Scaling autoregressive models for content-rich text-to-image generation. arXiv preprint arXiv:2206.10789 , 2(3):5. Shenghai Yuan, Yuanyang Yin, Zongjian Li, Xinwei Huang, Xiao Yang, and Li Yuan. 2026. Helios: Real real-time long video generation model. Preprint ,arXiv:2603.04379. 
+
+11 A Proofs of Theorems 
+
+A.1 Proof of Theorem 3.2 Theorem A.1 (Semantic Commitment, Restate-ment) . Under Assumption 3.1, if a semantic factor 
+
+s is absent from the committed prefix ϕ(x1: k), then 
+
+s cannot appear in any continuation xk+1: K ∼QKk′=k+1 pθ(xk′ | x<k ′ , ˆc). Formally, 
+
+s / ∈ ϕ(x1: k) ⇒ s / ∈ ϕ(x1: K ). (9) We use the next-scale AR factorization in Eq. (1) from Section 3.1, under which sampling pro-ceeds strictly from coarse to fine and x<k remains fixed once sampled. We further invoke the local-refinement assumption stated in the theorem: for all k′ > k , the conditional pθ(xk′ | x<k ′ , ˆc) intro-duces no semantic factors outside the support of 
+
+ϕ(x1: k), i.e., ϕ(x1: k′ ) ⊆ ϕ(x1: k) for all k′ > k .We proceed by induction on k′ over {k +1, . . . , K }.
+
+Base case ( k′ = k + 1 ). By the local-refinement assumption applied at k′ = k + 1 ,
+
+ϕ(x1: k+1 ) ⊆ ϕ(x1: k). (10) Since s / ∈ ϕ(x1: k) by hypothesis, it follows that 
+
+s / ∈ ϕ(x1: k+1 ).
+
+Inductive step. Suppose s / ∈ ϕ(x1: k′ ) for some 
+
+k < k ′ < K . Because x<k ′ remains fixed under the AR factorization in Eq. (1) once committed, applying the local-refinement assumption at scale 
+
+k′ + 1 gives 
+
+ϕ(x1: k′+1 ) ⊆ ϕ(x1: k′ ), (11) where the containment holds because pθ(xk′+1 |
+
+x<k ′+1 , ˆc) introduces no semantic factors outside those already present in ϕ(x1: k′ ) ⊇ ϕ(x1: k). Since 
+
+s /∈ ϕ(x1: k′ ), it follows immediately that s /∈
+
+ϕ(x1: k′+1 ).Applying the induction through all scales k < k′ ≤ K yields 
+
+ϕ(x1: K ) ⊆ ϕ(x1: k), (12) and therefore s / ∈ ϕ(x1: K ) for any continuation 
+
+xk+1: K ∼ QKk′=k+1 pθ(xk′ | x<k ′ , ˆc). □
+
+The semantic-commitment result shows that semantic factors absent at commitment scale k
+
+are irrecoverable by any continuation under the local-refinement assumption, which motivates the rewind-and-resample mechanism in Semantic Cor-rection (Section 3.3): a forward-only continuation cannot recover s, so GAZER rewind to an earlier scale and re-sample xk under cue-guided condition-ing. 
+
+A.2 Proof of Theorem 3.3 Theorem A.2 (Rewind Expands Reachable Seman-tic Support, Restatement) . Under Assumption 3.1, define the reachable semantic support of a prefix 
+
+x1: k as 
+
+S(x1: k) = 
+
+n
+
+s ∃ xk+1: K , s ∈ ϕ(x1: K )
+
+o
+
+. (13) 
+
+(i) If s /∈ S(x1: k), then no intervention con-fined to scales k′ > k satisfies s ∈
+
+ϕ(x1: k, x ′ 
+
+> k+1: K
+
+).(ii) If the rewind operator Rk is applied and a replacement sample x′ 
+
+> k
+
+satisfies s ∈
+
+ϕ(x1: k−1, x ′
+
+> k
+
+), then s ∈ S (x1: k−1, x ′
+
+> k
+
+).
+
+We use the next-scale AR factorization in Eq. (1) from Section 3.1, the rewind operator Rk defined in Eq. (3) , and the reachable semantic support S(·)
+
+defined in Eq. (8) . We further invoke the local-refinement assumption from Theorem 3.2: for all 
+
+k′ > k , each conditional pθ(xk′ | x<k ′ , ˆc) intro-duces no semantic factors outside ϕ(x1: k). By Theorem 3.2, the local-refinement assumption im-plies ϕ(x1: K ) ⊆ ϕ(x1: k) for any continuation 
+
+xk+1: K ∼ QKk′=k+1 pθ(xk′ | x<k ′ , ˆc). We prove parts (i) and (ii) separately. 
+
+Proof of part (i). 
+
+Suppose for contradiction that there exists an intervention x′ 
+
+> k+1: K
+
+confined to scales k′ > k such that s ∈ ϕ(x1: k, x ′ 
+
+> k+1: K
+
+). By definition of S in Eq. (8), the intervention would require 
+
+s ∈ ϕ(x1: k, x ′ 
+
+> k+1: K
+
+) ⊆ [
+
+> x′
+> k+1: K
+
+ϕ(x1: K ) = S(x1: k).
+
+(14) The conclusion contradicts the hypothesis s /∈S(x1: k). Therefore no intervention confined to scales k′ > k can introduce s into the semantic content of the final output, regardless of how the continuation x′ 
+
+> k+1: K
+
+is chosen or modulated. □(i) 
+
+Proof of part (ii). 
+
+Apply Rk to the committed trajectory. By Eq. (3) , the rewind operator discards xk while leav-ing x1: k−1 unchanged: 
+
+Rk(x1: k) = x1: k−1. (15) Let x′ 
+
+> k
+
+be a replacement sample satisfying s ∈
+
+ϕ(x1: k−1, x ′
+
+> k
+
+) by hypothesis. We must show s ∈S(x1: k−1, x ′
+
+> k
+
+), i.e., that there exists some continua-tion x′ 
+
+> k+1: K
+
+such that s ∈ ϕ(x1: k−1, x ′
+
+> k
+
+, x ′ 
+
+> k+1: K
+
+).12 Algorithm 1 GAZER sampling loop 
+
+Require: c, τ ϕ, p θ, M, D, κ s, κ e, ∆, ω 
+
+Ensure: IK 
+
+> 1:
+
+ˆc ← τϕ(c) 
+
+> 2:
+
+S ← { κs + i · ∆}⌊(κe−κs)/∆⌋ 
+
+> i=0
+> 3:
+
+for k = 1 , . . . , K do  
+
+> 4:
+
+xk ∼ pθ(· | x<k , ˆc) 
+
+> 5:
+
+if k ∈ S then  
+
+> 6:
+
+˜xk+1: K ∼ QKj=k+1 pθ(·| x1: k, ˜xk+1: j−1, ˆc)
+
+▷Eq. (2)  
+
+> 7:
+
+˜I ← D (x1: k, ˜xk+1: K ) 
+
+> 8:
+
+(c+ 
+
+> k
+
+, c − 
+
+> k
+
+) ← M ( ˜I, c ) 
+
+> 9:
+
+if c+
+
+> k
+
+̸ = c or c−
+
+> k
+
+̸ = ∅ then  
+
+> 10:
+
+ˆc+ 
+
+> k
+
+← τϕ(c+ 
+
+> k
+
+); ˆc− 
+
+> k
+
+← τϕ(c− 
+
+> k
+
+) 
+
+> 11:
+
+x1: k−1 ← R k(x1: k) ▷Eq. (3)  
+
+> 12:
+
+ℓ+ 
+
+> k
+
+← ℓθ(· | x<k , {ˆc, ˆc+ 
+
+> k
+
+}) 
+
+> 13:
+
+ℓ− 
+
+> k
+
+← ℓθ(· | x<k , ˆc− 
+
+> k
+
+) 
+
+> 14:
+
+xk ∼ softmax  ℓ− 
+
+> k
+
++ ω (ℓ+ 
+
+> k
+
+− ℓ− 
+
+> k
+
+)
+
+▷Eq. (4)  
+
+> 15:
+
+end if  
+
+> 16:
+
+end if  
+
+> 17:
+
+end for  
+
+> 18:
+
+return IK ← D (x1: K )
+
+Take the trivial continuation x′ 
+
+> k+1: K
+
+= ∅ (i.e., 
+
+K = k), or, for K > k , any continuation that performs only local refinement. Under the local-refinement assumption applied to the new prefix 
+
+(x1: k−1, x ′
+
+> k
+
+),
+
+ϕ x1: k−1, x ′
+
+> k
+
+, x ′
+
+> k+1: K
+
+ ⊆ ϕ x1: k−1, x ′
+
+> k
+
+, (16) where the containment follows from Theorem 3.2 applied to the prefix (x1: k−1, x ′
+
+> k
+
+) in place of x1: k.Since s ∈ ϕ(x1: k−1, x ′
+
+> k
+
+) by hypothesis, it follows that s is not excluded by any subsequent local-refinement step. The factor s therefore persists in 
+
+ϕ(x1: k−1, x ′
+
+> k
+
+, x ′ 
+
+> k+1: K
+
+) for any such continuation, which witnesses s ∈ S (x1: k−1, x ′
+
+> k
+
+). □(ii) 
+
+Together, parts (i) and (ii) establish that a single-scale rewind followed by guided re-sampling is both necessary and sufficient to recover the reach-able semantic support, providing the principled basis for Semantic Correction. 
+
+B GAZER Sampling Procedure 
+
+Algorithm 1 presents the complete GAZER sam-pling loop, expanding the overview in Section 3 with full algorithmic detail. Prompt: a round pizza and a  
+
+> rectangular slice of bread
+> Prompt: a big bear and a small
+> rabbit
+
+Figure 4: Failure mode. Rollout previews at four inter-vention points on a next-token prediction model, where spatially truncated intermediate states prevent reliable MLLM diagnosis. 
+
+C Limitations On Next-Token Prediction Models 
+
+GAZER relies on rollout previews to produce se-mantically readable intermediate states, but next-token prediction models generate tokens in raster-scan order, yielding spatially truncated partial im-ages that lack global semantic structure and cannot support reliable MLLM diagnosis. In next-scale prediction, each intermediate state corresponds to a complete but low-resolution im-age, so a rollout preview only needs to fill in finer details to produce a globally coherent output. In next-token prediction, the intermediate state covers only the upper portion of the image in raster-scan order, and the decoded output is spatially incom-plete, leaving the MLLM unable to assess the over-all semantic composition. The rewind mechanism faces an analogous mismatch. Rewinding in next-scale prediction discards the last scale while pre-serving a complete low-resolution prefix. Rewind-ing in next-token prediction returns to an earlier token position, producing a spatially incoherent prefix from which subsequent generation cannot reliably recover the macro structure. Figure 4 illustrates this failure mode. The four previews shown for each prompt correspond to roll-out previews at successive intervention scales. For 
+
+a round pizza and a rectangular slice of bread ,early previews consist largely of uninformative re-gions, providing no signal for detecting the missing bread. For a big bear and a small rabbit , the absent rabbit remains invisible in the previews until late scales, by which point the semantic commitment is already difficult to reverse. Extending GAZER to next-token prediction models would require an alternative preview mechanism that produces glob-13 Benchmark State Object Attribute Relation Num./Action Avg. T2I-CompBench Raw 0.278 0.308 0.263 0.251 0.286 Preview 0.409 0.415 0.383 0.361 0.405            
+
+> T2V-CompBench Raw 0.211 0.213 0.200 0.181 0.205 Preview 0.324 0.321 0.316 0.289 0.316
+
+Table 5: Rollout preview readability validation under the current GAZER setting. Raw denotes direct inter-mediate decoding, and Preview denotes rollout preview. Qwen3-VL evaluates whether prompt-relevant semantic constraints are recognizable from each state. 
+
+ally coherent visual predictions from partial raster-scan sequences, which we leave for future work. 
+
+D Additional Experimental Analysis 
+
+D.1 Rollout Preview Readability Validation 
+
+Table 5 evaluates the diagnostic readability of roll-out previews. The comparison is restricted to visual states available before the final output is committed, namely direct intermediate decoding and rollout preview. Final outputs are omitted because they cannot be queried for intervention-time diagnosis. For each visual state, Qwen3-VL judges whether prompt-relevant objects, attributes, relations, and numeracy/action constraints are recognizable. Across both T2I-CompBench and T2V-CompBench, rollout previews yield higher recognizability than direct intermediate decoding across all evaluated semantic dimensions. The improvement is especially relevant for Reflective Diagnosis, where the MLLM must diagnose a still-evolving trajectory rather than a completed sample. The readability validation therefore supports the use of rollout preview as a semantic proxy for intermediate AR states. Instead of asking the MLLM to inspect a partially decoded and often ambiguous state, GAZER evaluates a forward rollout that exposes more prompt-relevant visual evidence while preserving the ability to intervene before final generation. 
+
+D.2 Intervention Schedule Sweep 
+
+Table 6 summarizes the schedule sweep on Infini-tyStar with T2I-CompBench. The schedule is con-trolled by the diagnosis interval boundaries κs and 
+
+κe and the scale step ∆. Figure 5 further shows task-level evaluator scores across all schedules and evaluators. The results show that the preferred intervention window depends on the evaluated compositional di-mension. (i) Shape. Shape scores vary only mildly across schedules. All non-baseline schedules im-                                                                             
+
+> Schedule κsκe∆Shape 2D Spatial 3D Spatial Numeracy Baseline –––0.5459 0.2739 0.3466 0.4970 Full-4 0140.5525 0.2874 0.3546 0.5367
+> Late-8 0.5 180.5582 0.2852 0.3594 0.5103 Late-16 0.5 116 0.5565 0.2787 0.3603 0.5173 Early-4 00.5 40.5613 0.2698 0.3575 0.5201 Early-8 00.5 80.5598 0.2791 0.3496 0.5138 Full-8 0180.5697 0.2578 0.3543 0.5197 Early-16 00.5 16 0.5656 0.2648 0.3405 0.5242 Full-16 0116 0.5708 0.2626 0.3438 0.5122 Late-4 0.5 140.5687 0.2618 0.3496 0.4984
+
+Table 6: Schedule sweep on InfinityStar with T2I-CompBench. Full, Early, and Late denote diagnosis intervals [κs, κ e] = [0 , 1] , [0 , 0.5] , and [0 .5, 1] .
+
+prove over standard sampling, and the highest score is achieved by a full-range schedule with ∆ = 16 .The shape results indicate that shape correction is relatively robust to the exact intervention interval. (ii) Numeracy. Numeracy is more sensitive to in-tervention density, with the full-range schedule at 
+
+∆ = 4 giving the best score among all schedules. The numeracy results support using frequent cor-rections when the target prompt requires multiple object instances to remain separable throughout generation. (iii) 3D spatial reasoning. The best 3D Spatial score comes from a late-interval schedule with ∆ = 16 , suggesting that depth-related cor-rections benefit from previews that already contain sufficient mid- and fine-scale structure. The dimension-specific variation indicates a practical trade-off. Early schedules provide earlier semantic steering, late schedules operate on more visually informative previews, and full-range sched-ules cover both regimes. We use the full-range schedule with ∆ = 4 as a balanced default because it gives the best 2D Spatial and Numeracy scores while improving all four reported dimensions over the baseline. When computation is constrained, larger ∆ values are reasonable for shape-oriented prompts. When numeracy or mixed compositional-ity is central, a smaller ∆ over the full interval is preferable. For depth-sensitive spatial prompts, a late-biased interval can be competitive. 
+
+D.3 Inference Cost and Detailed Efficiency Analysis 
+
+Table 7 provides a detailed breakdown of inference cost, memory usage, and generation quality. Ta-ble 8 further decomposes the full GAZER pipeline into its main runtime components. Compared with standard sampling, GAZER in-creases inference time by approximately 63% due to the additional rollout-preview and diagnosis stages. Nevertheless, the total runtime remains 14 Full-16                                 
+
+> Full-8
+> Full-4
+> Early-16
+> Early-8
+> Early-4
+> Late-16
+> Late-8
+> Late-4
+> Shape
+> 2D spatial
+> 3D spatial
+> Numeracy
+> Task
+> 28.10 28.12 28.50 28.44 28.16 28.35 28.29 28.40 28.34
+> 29.27 29.48 29.41 29.41 29.32 29.36 29.21 29.24 29.21
+> 28.46 28.84 29.10 28.67 28.86 28.79 28.49 28.76 28.59
+> 29.28 29.22 29.95 29.48 29.60 29.82 29.17 29.09 29.21
+
+A CLIP Score                                 
+
+> Full-16
+> Full-8
+> Full-4
+> Early-16
+> Early-8
+> Early-4
+> Late-16
+> Late-8
+> Late-4
+> Shape
+> 2D spatial
+> 3D spatial
+> Numeracy
+> Task
+> 21.28 21.28 21.40 21.33 21.26 21.32 21.27 21.23 21.24
+> 21.82 21.78 21.88 21.83 21.80 21.87 21.79 21.79 21.81
+> 21.46 21.48 21.54 21.46 21.51 21.50 21.41 21.46 21.40
+> 21.46 21.62 21.74 21.61 21.67 21.72 21.50 21.56 21.54
+
+B PickScore                                 
+
+> Full-16
+> Full-8
+> Full-4
+> Early-16
+> Early-8
+> Early-4
+> Late-16
+> Late-8
+> Late-4
+> Shape
+> 2D spatial
+> 3D spatial
+> Numeracy
+> Task
+> 0.477 0.479 0.496 0.504 0.441 0.457 0.401 0.393 0.377
+> 0.622 0.548 0.596 0.655 0.575 0.687 0.592 0.610 0.608
+> 0.406 0.382 0.475 0.355 0.506 0.453 0.381 0.427 0.408
+> 0.606 0.583 0.735 0.634 0.625 0.705 0.451 0.488 0.509
+
+C ImageReward                                 
+
+> Full-16
+> Full-8
+> Full-4
+> Early-16
+> Early-8
+> Early-4
+> Late-16
+> Late-8
+> Late-4
+> Shape
+> 2D spatial
+> 3D spatial
+> Numeracy
+> Task
+> 0.252 0.253 0.253 0.253 0.252 0.251 0.249 0.250 0.249
+> 0.283 0.283 0.283 0.283 0.283 0.284 0.284 0.284 0.283
+> 0.271 0.270 0.273 0.271 0.272 0.272 0.272 0.273 0.273
+> 0.283 0.282 0.286 0.283 0.283 0.285 0.278 0.280 0.280
+
+D HPSv2 
+
+> 28.5
+> 29.0
+> 29.5
+> Score
+> 21.4
+> 21.6
+> 21.8
+> Score
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Score
+> 0.25
+> 0.26
+> 0.27
+> 0.28
+> Score
+
+Figure 5: Task-level evaluator scores across T2I intervention schedules. Each heatmap corresponds to one evaluator, with rows denoting T2I-CompBench task groups and columns denoting intervention schedules. Cell colors and annotations report the raw evaluator scores. Black boxes mark the best schedule for each task and evaluator pair. 
+
+substantially lower than Best-of-2 sampling under a comparable compute budget. The module-level breakdown in Table 8 clarifies where the additional cost is spent. Among the intervention-specific com-ponents, MLLM evaluation is the dominant term, taking 44.91 seconds on average and accounting for 
+
+27 .46% of the full pipeline. Preview construction is smaller at 12.86 seconds, while reflection adds only 1.87 seconds. The cost is therefore concentrated in visual evaluation by the MLLM rather than in the subsequent reflection step. Most wall-clock time still comes from remaining generation and de-coding, which takes 103.93 seconds and accounts for 63 .54% of the pipeline. The breakdown sug-gests that future efficiency gains should primarily come from reducing the number or cost of MLLM evaluations, for example through adaptive trigger-ing, preview reuse, or batched evaluation across intervention points. Importantly, the generator-side peak memory re-mains almost unchanged (59.64 GB vs. 59.40 GB), indicating that the proposed intervention mecha-nism does not introduce significant overhead to the frozen model itself. The additional memory con-sumption mainly originates from the MLLM used for trajectory diagnosis. Despite operating under a lower inference bud-get than Best-of-2 sampling, GAZER achieves con-sistently stronger performance across all composi-tional and preference-related metrics, suggesting that trajectory correction through semantic feed-back is substantially more effective than increasing sampling diversity through repeated generation. 
+
+D.4 Qualitative Effect of Rollout Preview 
+
+Figure 6 compares raw intermediate decoding with rollout previews at selected scales along the coarse-to-fine trajectory. At each intervention scale k, the raw decoded state D(x1: k) provides only a low-resolution, semantically incomplete representation, from which the MLLM cannot reliably assess ob-ject presence, attributes, or compositional relations. The rollout preview D(x1: k, ˜xk+1: K ), by contrast, extends the partial trajectory to full resolution un-der the original sampling distribution, yielding a 15 Inference Cost Memory Usage Generation Quality Method Avg Time (s) Relative Time Gen Peak (GB) MLLM Peak (GB) Combined Peak (GB) Consist. Attr. CLIP Score PickScore ImageReward Baseline (seed 42) 100.09 1.00 × 59.40 0 59.40 13.07 26.66 21.51 0.2811 Baseline (seed 43) 100.09 1.00 × 59.40 0 59.40 12.52 26.61 21.62 0.2690 Baseline Best-of-2 200.18 2.00 × 59.40 0 59.40 13.23 26.62 21.43 0.2802 GAZER 163.57 1.63 × 59.64 17.80 77.44 14.20 27.77 22.28 1.1452 
+
+Table 7: Detailed inference cost and efficiency comparison. GAZER introduces additional overhead due to rollout preview and MLLM-based trajectory diagnosis, but still operates below the cost of Best-of-2 sampling. The generator-side peak memory remains nearly unchanged, while the additional memory mainly comes from the MLLM. Despite the lower inference budget, GAZER consistently achieves superior compositional and preference-alignment scores. 
+
+Module Avg Time (s) Share of Full Pipeline Relative to Baseline Total Avg Calls per Video Preview 12.86 7.86% 12.85% 4MLLM Evaluation 44.91 27.46% 44.87% 4Reflection 1.87 1.14% 1.87% 4Remaining Generation 103.93 63.54% 103.83% –
+
+Table 8: Module-level runtime breakdown of the full GAZER pipeline. The percentage of baseline total time is computed relative to standard sampling runtime. 
+
+globally coherent visual prediction that faithfully reflects the semantic tendency of the current gener-ation. This enables the MLLM to produce accurate diagnostic feedback, which Reflective Diagnosis converts into enhancement and suppression cues for subsequent trajectory correction. 
+
+D.5 More Qualitative Results 
+
+We provide additional qualitative comparisons on both text-to-image and text-to-video compositional benchmarks to further illustrate the effectiveness of GAZER in improving semantic alignment dur-ing hierarchical autoregressive generation. Fig-ures 7 and 8 present representative results on T2I-CompBench using InfinityStar and STAR, respec-tively, while Figures 9 and 10 show text-to-video results on T2V-CompBench using InfinityStar and Helios. Across diverse prompts involving object compo-sition, attribute binding, spatial relations, and tem-poral consistency, the baseline models frequently exhibit semantic inconsistencies such as missing objects, incorrect attributes, relation confusion, or progressive drift across scales and frames. In con-trast, GAZER produces generations that better pre-serve the compositional semantics specified in the prompt, yielding improved object completeness, attribute correctness, relational fidelity, and overall semantic coherence. Notably, the improvements are consistently ob-served across different autoregressive backbones and generation modalities, demonstrating that the proposed reflective diagnosis and semantic correc-tion mechanism generalizes effectively to both im-age and video generation settings. These examples further support our claim that semantic inconsis-tencies in hierarchical autoregressive generation often emerge progressively along the generation trajectory, and can be mitigated through iterative rollout-based diagnosis and correction. 
+
+E Prompt Templates for MLLM Feedback 
+
+GAZER elicits the MLLM using three structured prompt templates corresponding to the three feed-back signals produced by Reflective Diagnosis: Di-agnosis , Enhancement Cue , and Suppression Cue .As shown in Figure 11, each template is organized into five functional components: Expert Framing 
+
+defines the role and perspective of the MLLM; Con-textual Grounding provides the input prompt and rollout preview; Reasoning Instructions guide the MLLM through the diagnostic or rewriting task; 
+
+Behavioral Constraints restrict undesired outputs such as hallucinated objects or aesthetic sugges-tions; and Output Specification enforces a struc-tured, generation-ready format. This modular de-sign ensures consistent and controllable MLLM behavior across varied inputs and strengthens the reliability of in-generation semantic correction. 16 Raw Preview 
+
+𝑥 !! 𝑥 !!"# 𝑥 !"
+
+𝑥 !"$#…Figure 6: Qualitative Effect of Rollout Preview. At each intervention scale k along the coarse-to-fine trajectory, the raw decoded state D(x1: k) (top) is compared with the rollout preview D(x1: k, ˜xk+1: K ) (bottom). The preview provides a semantically coherent visual prediction that enables reliable MLLM diagnosis, whereas the raw interme-diate state lacks sufficient visual semantics for accurate evaluation. Prompt: ’A cat sitting under a wooden chair.’ A fish swims 
+
+around a sea 
+
+turtle 
+
+A star -shaped 
+
+cookie on a round 
+
+ceramic plate 
+
+A monkey 
+
+steals a banana 
+
+from another 
+
+monkey 
+
+Two gray 
+
+towers on 
+
+both sides of a
+
+blue gate 
+
+A small purple 
+
+tent placed 
+
+between two 
+
+large rocks 
+
+> Standard Gazer
+
+A bird lands 
+
+on the back of 
+
+an elephant 
+
+Figure 7: Qualitative comparisons with InfinityStar on compositional text-to-image generation. Standard Gazer 
+
+a boy on the 
+
+right of a pig 
+
+A pink chair 
+
+placed in front 
+
+of a green wall 
+
+A tiny flower 
+
+growing beside 
+
+a large stone 
+
+Two green 
+
+trees on both 
+
+sides of a 
+
+narrow road 
+
+Four orange 
+
+pumpkins 
+
+arranged in a 
+
+straight line 
+
+A long bridge 
+
+crossing over 
+
+a narrow rive r
+
+Figure 8: Qualitative comparisons with STAR on compositional text-to-image generation. 
+
+17 Standard Gazer 
+
+Prompt: A dog runs through a field while a cat climbs a tree 
+
+> Standard Gazer Standard Gazer  Standard Gazer
+
+Prompt: A cat pushes a ball toward a puppy 
+
+Prompt: girl walks beside a white horse 
+
+Prompt: A man jogs and a car drives on the road Figure 9: Qualitative comparisons with InfinityStar on compositional text-to-video generation. 
+
+18 Standard Gazer 
+
+Prompt: A cat sits on a windowsill and a dog plays in the yard 
+
+> Standard Gazer Standard Gazer  Standard Gazer
+
+Prompt: A kangaroo bounds across the plain and a cow grazes 
+
+Prompt: A swimmer dives into a pool, creating ripples 
+
+Prompt: Dog snatches a rolling ball Figure 10: Qualitative comparisons with Helios on compositional text-to-video generation. 
+
+19 Analyze the {media_name } and identify ONLY the mismatches with the original prompt. 
+
+Original prompt: "{original_prompt}" 
+
+1. First infer the explicit requirements in the prompt: requested objects, attributes, quantity, spatial 
+
+relationships, temporal relationships, and actions. 
+
+2. List ONLY what is missing, incorrect, contradicted, or added beyond the prompt in the current { media_name }. 
+
+3. Pay special attention to object identity, count, left/right/top/bottom relations, relative order, and 
+
+required attributes such as shape, color, size, or state. 
+
+4. DO NOT invent hidden story, scene, symbolism, or extra intent that is not explicitly stated in the prompt. 
+
+5. DO NOT suggest new background, camera language, artistic style, or aesthetic improvements unless they are 
+
+required by the original prompt. 
+
+Format: 
+
+- Return a numbered list of issues only. 
+
+- Include extra objects as explicit errors, not as optional commentary. 
+
+You are an expert prompt engineer for {model_type } models. 
+
+Original prompt: "{ original_prompt }" 
+
+Issues with the current { media_name }: {diagnosis} 
+
+1. Rewrite the prompt so that it more directly enforces the original task requirements. 
+
+2. Preserve the original requested objects, attributes, counts, spatial relationships, temporal relationships, 
+
+and actions. 
+
+3. Fix mismatches by making the original requirements clearer or more explicit, not by changing the task. 
+
+4. DO NOT add new objects, new scene setting, new background, new camera angle, new art style, new mood, or 
+
+new aesthetic goals unless they are explicitly required by the original prompt. 
+
+5. DO NOT replace object -to -object relationships with image -layout language such as "centered", "main focus", 
+
+"balanced composition", or similar generic composition terms. 
+
+6. If the original prompt does not specify a quantity, do not invent one. 
+
+7. Keep the prompt concise and task -focused. 
+
+Return only one concise sentence and nothing else. 
+
+Based on the original prompt and analysis of the current {media_name }, list only generic failure modes that 
+
+should be avoided in future { media_name } generation. 
+
+Original prompt: "{ original_prompt }" 
+
+Current { media_name } issues: {diagnosis} 
+
+1. List short failure terms to avoid 
+
+2. Focus on generic error types such as blur, artifacts, extra objects, missing secondary object, duplicated 
+
+object, malformed object, incorrect count, incorrect spatial relationship, wrong attribute, cropped subject, 
+
+clutter, or low contrast. 
+
+3. DO NOT include any object, attribute, count, direction word, relation word, or concept that is actually 
+
+wanted by the original prompt. 
+
+4. NEVER output phrases such as "no pig", "no painting", "no left", "no right", or any negation of a wanted 
+
+concept. 
+
+Return only comma -separated terms for negative prompting.     
+
+> Expert Framing Contextual Grounding Task Directives Behavioral Constraints Output Formatting Types
+
+Figure 11: Prompt templates for MLLM feedback elicitation. Three structured templates correspond to the three feedback signals produced by Reflective Diagnosis: Diagnosis , Enhancement Cue , and Suppression Cue .Each template is organized into five functional components: Expert Framing, Contextual Grounding, Reasoning Instructions, Behavioral Constraints, and Output Specification. 
+
+20

@@ -1,0 +1,658 @@
+Title: Learning Cross-View Semantic Priors for Single-Reference Unseen Object Pose Estimation
+
+URL Source: https://arxiv.org/pdf/2606.22076v2
+
+Published Time: Fri, 26 Jun 2026 01:24:24 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 1
+
+# Learning Cross-View Semantic Priors for Single-Reference Unseen Object Pose Estimation 
+
+Jiahong Chen, Jinghao Wang, Ziwen Wang, Zi Wang ∗, Banglei Guan, Member, IEEE , and Qifeng Yu 
+
+Abstract —Single-reference unseen object 6D pose estimation reduces object onboarding by estimating poses of arbitrary novel objects from only one reference view. Recent correspondence-based pipelines have achieved robust performance with vision foundation model (VFM) features. However, they typically treat these features as intra-view descriptors, leaving dense visual-semantic cues, including appearance, structure, and context, insufficiently exchanged across views before geometric decod-ing. Consequently, the decoded point features may lack joint semantic and geometric discriminability, making correspondence estimation still difficult in challenging cases. Instead of processing features independently, we build the correspondence pipeline around an early cross-view semantic prior. Specifically, cross-view semantic interaction (CVSI) enables dense query and reference VFM tokens to exchange semantic context and form a cross-view prior. Nevertheless, direct CVSI may disturb the VFM token structure, while the resulting semantic prior still needs 3D representation consistency for rigid correspondence. To make this CVSI prior reliable for 3D correspondence learning, we in-troduce two complementary training-time constraints: the intra-view structure preservation (IVSP) loss preserves the original intra-view token affinity structure during interaction, while the reference-anchored geometric consistency (RAGC) loss enforces spatial representation consistency of decoded point features. The final pose is recovered from learned correspondences through weighted SVD. We further construct a challenging view-pair protocol from the BOP Challenge datasets YCB-V and TUD-L to evaluate robustness in difficult matching scenarios. Extensive experiments on six benchmarks under different view-pair settings show that our method achieves state-of-the-art performance while maintaining comparable inference speed. Code, data, and models will be available at chenjiahongbq.github.io/LCVSP .
+
+Index Terms —Single-reference unseen object 6D pose estima-tion, cross-view semantic priors, vision foundation models. 
+
+I. I NTRODUCTION 
+
+# OBJECT 6D pose estimation recovers the 3D rotation and translation of an object from visual observations, and is a fundamental capability for robotic manipulation [1– 4], embodied perception [5, 6], and augmented reality [7, 8]. Existing methods are commonly studied under instance-level, category-level, and unseen-object settings. Instance-level [9–14] and category-level methods often achieve strong performance [15–19], but remain limited by supervision for specific objects or predefined categories, making new object 
+
+Jiahong Chen, Jinghao Wang, Ziwen Wang, Zi Wang, Banglei Guan and Qifeng Yu are with the College of Aerospace Science and Engi-neering, National University of Defense Technology, Changsha 410073, China, and also with the Hunan Provincial Key Laboratory of Im-age Measurement and Vision Navigation, Changsha 410073, China (e-mail: chenjiahong@nudt.edu.cn; wangjinghao16@nudt.edu.cn; wangzi-wen24a@nudt.edu.cn; wangzi16@nudt.edu.cn; guanbanglei12@nudt.edu.cn; yuqifeng@nudt.edu.cn). Corresponding authors: Zi Wang. Query         
+
+> VFM
+> Ref.
+> Query
+> Geometric Decoder
+> Cross-View
+> Interaction
+> VFM
+> VFM
+> VFM
+> Point Cloud Matching
+> Point Cloud Matching
+> (a)
+> (b)
+> Noise
+> Point
+> Parallel input
+> Current methods
+> Proj .
+> Proj .
+> Proj .
+> Proj .
+> Ours
+> Sparse point features
+> False correspondences
+> Geo embedding
+> Geo embedding
+> Image token
+> Ref.
+> Semantic prior
+> Geo embedding
+> Geo embedding
+> Reliable correspondences
+> Cross-view conditioned token
+> Independent intra-view descriptors
+> Dense cross -view semantic prior
+> Intra-view
+> Geometric Decoder
+
+Fig. 1: Comparison with existing correspondence-based methods. 
+
+(a) Existing methods [26, 28–30] mainly use VFM features as intra-view descriptors for point cloud matching. (b) Our method performs cross-view semantic interaction on dense VFM tokens, forming a cross-view semantic prior for geometry-aware matching. 
+
+onboarding costly [20, 21]. These limitations motivate unseen object pose estimation, which targets arbitrary novel objects beyond known instances and predefined categories [22–27]. To further reduce object onboarding, recent studies have moved toward the single-reference setting [28–38]. In this setting, only one RGB-D observation of the target object is available as the reference. A common solution is to follow a correspondence-based formulation [26, 28–30], where the rela-tive pose is estimated from correspondences between the query and reference observations. The central challenge is to make these correspondences reliable under large viewpoint changes and noisy observations. Vision foundation models (VFMs) [39, 40] provide strong visual representations and have recently been adopted in single-reference pose estimation. However, existing methods typically use VFM features as intra-view descriptors. As illustrated in Fig. 1(a), dense VFM feature maps are extracted independently from the query and refer-ence images, projected onto sampled foreground point clouds, and then processed by a geometric decoder [41] for point matching and pose recovery. This design has been effective for geometry-aware matching, but it does not fully condition dense visual-semantic cues across views before geometric decoding.   
+
+> arXiv:2606.22076v2 [cs.CV] 25 Jun 2026 SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 2
+> Fig. 2: A sample with large viewpoint changes. Although the overlapping regions are very small, our method still achieves accurate pose estimation. Blue and green contours denote GT and estimated poses, respectively.
+
+Appearance, part structure, and contextual relations encoded by VFM tokens are therefore weakened when they are used only as independent view-wise descriptors. As a result, the decoded point features may lack joint semantic and geometric discriminability: they can encode local 3D consistency, but remain weak at distinguishing truly corresponding object re-gions from geometrically plausible yet semantically unrelated regions. This limitation becomes evident in two typical cases. First, under noisy segmentation masks, as shown in Fig. 1(a), the sampled foreground point cloud may contain nearby objects whose local geometry resembles the target. If the decoder mainly relies on geometry at this stage, these distractor points can receive high matching salience and lead to false correspondences. Second, under large viewpoint changes, the visible overlap between the query and reference observations becomes sparse and spatially ambiguous, as shown in Fig. 2. In both cases, reliable matching requires a cross-view semantic prior before geometric decoding, so that point-level correspon-dence learning can be guided by reference-conditioned visual semantics rather than relying only on sparse geometric cues. Motivated by this observation, we build the correspon-dence pipeline around an early cross-view semantic prior. As shown in Fig. 1(b), our method introduces cross-view semantic interaction (CVSI) at the dense VFM token level before projection and geometric decoding. Instead of treating query and reference VFM features as independent intra-view descriptors, CVSI allows dense tokens from the two views to exchange semantic context and condition each other. The resulting tokens form a visual semantic prior conditioned cross views. When fused with geometry-aware embeddings in the decoder, this prior encourages the decoded point features to be both semantically selective and geometrically consistent for correspondence estimation. However, learning such a prior is non-trivial because the query and reference observations are unposed, partially overlapping, and may contain mask-induced distractors. Direct dense token interaction can therefore cause excessive feature mixing and over-smooth the spatial organiza-tion encoded by the VFM. In addition, the learned prior should be translated into spatially consistent point features to benefit rigid 3D correspondence estimation. To address these issues, we introduce two complementary training-time constraints that jointly make the CVSI prior reliable for 3D correspon-dence learning. The intra-view structure preservation (IVSP) loss preserves the original intra-view token affinity structure during cross-view interaction, avoiding over-smoothed spatial organization. The reference-anchored geometric consistency (RAGC) loss enforces spatial representation consistency of decoded point features in a shared reference frame, mak-ing the semantic prior compatible with rigid correspondence estimation. The final pose is recovered from learned corre-spondences through weighted SVD. Together, CVSI, IVSP, and RAGC are designed to improve correspondence reliability under large viewpoint changes and noisy masks. To evaluate this capability, we further construct a challenging view pair protocol from the BOP Challenge datasets YCB-V [9] and TUD-L [42]. Extensive experiments on LM-O [43], TUD-L [42], YCB-V [9], REAL275 [15], Toyota-Light [42], and LINEMOD [44] demonstrate that our method achieves state-of-the-art performance across different view pair settings while maintaining comparable inference speed. The main contributions of this work are as follows:  
+
+> •
+
+We identify the absence of an explicit cross-view seman-tic prior as a key limitation of existing correspondence-based methods, where VFM features are mainly used as intra-view descriptors before geometric decoding.  
+
+> •
+
+We introduce cross-view semantic interaction (CVSI) at the dense VFM token level, forming an early cross-view semantic prior for subsequent geometry-aware point cloud matching.  
+
+> •
+
+We introduce two complementary training-time con-straints to make the CVSI prior reliable for 3D correspon-dence learning. IVSP preserves the intra-view token affin-ity structure during cross-view interaction, while RAGC enforces spatial representation consistency of decoded point features in a shared reference frame.  
+
+> •
+
+We construct a challenging view-pair protocol from the BOP Challenge datasets YCB-V and TUD-L, focusing on robustness to noisy masks and large viewpoint changes in single-reference unseen object pose estimation. II. RELATED WORK 
+
+A. Novel Object Pose Estimation 
+
+Novel object pose estimation aims to recover the 6D pose of arbitrary objects beyond known instances and predefined cate-gories. One line of work addresses this setting by using object models, rendered templates, or generalizable matching at test time. MegaPose [23] follows a render-and-compare paradigm, where CAD-based renderings are retrieved and refined for pose estimation. GigaPose [45] improves CAD-based novel object pose estimation with discriminative rendered templates and a compact correspondence formulation. Recent methods further exploit vision foundation models [39, 40] and general segmentation priors [46]. SAM-6D [26] combines SAM-based object proposal generation with semantic, appearance, and geometric matching, and formulates pose estimation as partial-to-partial point matching. When CAD models are unavailable, another direction rep-resents the target object using multiple reference observa-tions [25, 47–50]. OnePose [47] reconstructs a sparse object model from a video scan using SfM, matches 2D query points to 3D SfM points, and estimates the object pose with PnP. SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 3
+
+OnePose++ [48] further removes the dependence on repeat-able keypoint detection by using keypoint-free matching and reconstructing a semi-dense object point cloud. Gen6D [49] assumes several posed reference images and estimates pose through detection, viewpoint selection, and refinement. Foun-dationPose [25] unifies model-based and model-free pose estimation by using either a CAD model or a small set of reference images. These methods improve generalization to novel objects, but they still typically rely on either CAD models or multiple reference views. Recent works therefore move toward the more constrained single-reference setting [28–31, 33–38]. NOPE [31] predicts pose-conditioned discriminative embeddings from a single reference image and estimates the query pose by match-ing them to generated viewpoint embeddings. Oryon [33] and Horyon [34] study open-vocabulary relative pose es-timation, where a text prompt identifies the target object across two scenes and visual-language features are used for cross-scene matching and 3D registration. One2Any [35] and CoordAR [37] predict reference object coordinates from the query observation, converting single-reference pose estimation into alignment in a shared reference coordinate space. UN-OPose [28] casts single-reference pose estimation as point cloud registration by combining VFM semantic descriptors with an SE(3)-invariant geometric representation for matching. COG [29] extends this correspondence-based formulation with confidence-aware optimal transport to obtain soft correspon-dences guided by point confidence. Unlike UNOPose [28] and COG [29], which mainly improve geometric decoding or correspondence assignment, we focus on feature construction before matching. Our method performs cross-view semantic interaction at the dense VFM token level, forming a cross-view semantic prior for geometry-aware correspondence learning. 
+
+B. Point Cloud Registration 
+
+Point cloud registration is closely related to single-reference unseen object pose estimation, as both require reliable corre-spondences between partial 3D observations. Classical regis-tration methods mainly rely on geometric matching. ICP and its variants [51, 52] iteratively refine closest point associa-tions, FPFH [53] describes local surface neighborhoods, and PPF [54] encodes oriented point pair relations for pose hy-pothesis generation. These methods provide useful geometric baselines, but are sensitive to outliers, repeated local structures, and limited overlap. Learning methods improve registration by estimating more discriminative correspondence cues. Preda-tor [55] predicts overlap-aware features to focus matching on shared regions under low overlap. GeoTransformer [41] encodes pairwise distances and angular relations to obtain geometric features that are invariant to rigid transformations for robust superpoint matching. Unlike generic registration, single-reference unseen object pose estimation operates on mask-cropped partial RGB-D point clouds, where mask noise and large viewpoint changes introduce distractors and sparse overlap. In such cases, ge-ometry alone is often insufficient, and VFM cues [39, 40] can provide complementary appearance, layout, and contextual information. This motivates a cross-view semantic prior before geometry-aware matching. 
+
+C. Cross-View Correspondence Learning 
+
+Cross-view correspondence learning has been studied in image matching, object association, and visual geometry rea-soning. LoFTR [56] shows that transformer feature interaction can establish dense local correspondences without explicit key-point detection. O-MaMa [57] formulates ego-exo object cor-respondence as mask matching, using DINOv2 features [39] and cross-attention for object level alignment. V 2-SAM [58] adapts SAM2 to cross-view object correspondence by com-bining geometry-aware anchor prompts from DINOv3 [40] with visual prompts for appearance alignment. VGGT [59] further demonstrates that cross-view spatial consistency can be encoded through unified visual geometry representations. These studies show the value of cross-view interaction for transferring appearance, structure, and spatial cues, but mainly target image-level correspondence, mask association, or general visual geometry reasoning. We study cross-view cues for single-reference unseen object pose estimation, where they must be grounded by geometric consistency for RGB-D correspondence learning and rigid pose recovery. III. M ETHOD 
+
+A. Problem Formulation 
+
+Given a query RGB-D image [Iq | Dq ] and a single reference RGB-D image [Ir | Dr ] of the same unseen rigid object, our goal is to estimate the relative object pose from the query view to the reference view, denoted by ∆Tq→r ∈ SE (3) .The reference image is accompanied by an object mask M r
+
+indicating the target object. For the query image, the object mask M q can be obtained either by a segmentation foundation model [46] in the full pipeline or by ground-truth annotation when evaluating the pose estimator in isolation. Using M q and M r , we filter out background pixels, back-project the masked depth maps into 3D space, and sample the same number of foreground points to construct a query point cloud Pq = {pqi }Ni=1 and a reference point cloud Pr =
+
+{pri }Ni=1 , where pqi , p ri ∈ R3. Our method takes these sampled partial observations as input and predicts their relative rigid transformation ∆Tq→r . If the absolute pose of the reference object is available, the absolute pose of the query object can be recovered by T q = ∆ Tq→r T r , where T r denotes the absolute pose of the reference object. 
+
+B. Overview 
+
+As shown in Fig. 3, our framework follows a coarse-to-fine correspondence pipeline. The coarse stage estimates an initial relative pose from sparse query and reference point clouds, while the fine stage repeats the pipeline with denser points after coarse alignment for pose refinement. For clarity, we describe the main flow using the coarse stage as an example. Given the query and reference RGB images, we first extract VFM tokens Xq and Xr [39, 40]. Instead of using them as independent view-wise descriptors, we process them with SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 4Pixel Feature         
+
+> Geo embedding
+> Geo embedding
+> Query
+> Geo Encoder
+> Ref.
+> Geometric Transformer
+> VFM
+> VFM
+> Point Cloud Matching
+> WSVD
+> RAGC Loss
+> RAGC Loss
+> Inference
+> Train MLP
+> Pixel Feature
+> ×L
+> Self-Attention
+> Sample GRF
+> Geo Encoder
+> Sample GRF
+> Proj .
+> Proj .
+> Cross-View Semantic Interaction
+> ×3
+> GT RAC RAC
+> MLP
+> RAC GT RAC
+> Overlap Prediction
+> Correlation Matrix
+> Co arse-to-fine
+> Frozen
+> Input
+> RGB-D
+> Cross -Attention
+> Self-Attention
+> Cross -Attention
+> Cross Attention
+> Cross Attention
+> q
+
+I
+
+> q
+
+D
+
+> r
+
+D
+
+> r
+
+I
+
+> rG
+> qG
+> q
+
+X
+
+> r
+
+X
+
+> qX
+> r
+
+X
+
+> qpX
+> rpX
+> q
+
+F
+
+> r
+
+F
+
+> q
+
+P
+
+> r
+
+P
+
+> q
+
+U
+
+> r
+
+U
+
+ˆ qU
+
+ˆ rU
+
+> qO
+> qO
+> rO
+> r
+
+O
+
+A
+
+> Point Feature
+> Upsample
+
+Fig. 3: Overview of the proposed pipeline. Given query and reference RGB-D observations after mask filtering, denoted by [Iq | Dq ] and 
+
+[Ir | Dr ], we first extract image tokens Xq and Xr with a VFM [39, 40]. The sampled point clouds are then transformed into a global reference frame (GRF) [28] and processed by a geometric encoder [41] to produce geometric features Gq and Gr . Meanwhile, the image tokens exchange cross-view semantic information through L CVSI blocks. The resulting tokens, which encode a cross-view semantic prior, together with the geometric features are fed into the geometric transformer [41], where semantic and geometric cues jointly guide decoding to obtain the final point features F q and F r .
+
+L CVSI blocks to obtain cross-view enhanced tokens ˜Xq
+
+and ˜Xr . These tokens are upsampled and projected onto the sampled point clouds as point-wise semantic features. In parallel, the sampled point clouds are transformed into a pose-invariant global reference frame (GRF) [28] and encoded by a geometric encoder [41] to obtain geometric embeddings. The point-wise semantic features and geometric embeddings are then fused by a geometric decoder [41], producing corre-spondence features Fq and Fr together with overlap confi-dences Oq and Or . During training, the decoded features are additionally supervised by the RAGC loss through reference-anchored coordinate prediction, while the CVSI tokens are regularized by IVSP to preserve their intra-view structure. At inference time, the features and overlap confidences form an overlap-aware correlation matrix A, from which correspon-dences and pose hypotheses are generated following [28]. The best hypothesis initializes the fine stage, and the final relative pose is recovered from the refined correspondences by rigid registration: 
+
+min 
+
+> ∆R, ∆t
+
+X  
+
+> (pqi,p rj)∈C
+
+∆R p qi + ∆ t − prj 2 (1) where C denotes the correspondence set extracted from A.The fine stage follows the same semantic interaction and geometric decoding pipeline, but differs in two aspects. First, it samples denser point clouds Pqf and Prf with Nf > N c.Second, after coarse alignment, its geometric encoding further concatenates local reference frame (LRF) [28] features and global position features encoded by a mini-PointNet [60], enabling more precise correspondence estimation and pose refinement. 
+
+C. Cross-view Semantic Interaction 
+
+To further exploit cross-view semantic cues before point-level geometric decoding, we introduce cross-view semantic interaction (CVSI) to exchange semantic context between query and reference at the image token level. As illustrated in Fig. 4, this interaction conditions each view on the other, enabling dense tokens to highlight semantically related object regions and provide a cross-view prior for subsequent geomet-ric point matching. Given the semantic image tokens Xq and Xr , we first project them to a lower-dimensional space through linear layers. Let ¯Xq,l and ¯Xr,l denote the resulting normalized low-dimensional features at the l-th block. We then compute the projected queries, keys, and values and apply shared bidirec-tional multi-head cross-attention. Taking the query branch as an example, the query vectors are computed from the query tokens, while the key and value vectors are computed from the reference tokens: 
+
+Qq,l = ¯Xq,l WQ, Kr,l = ¯Xr,l WK , Vr,l = ¯Xr,l WV
+
+(2) where WQ, WK , and WV are learnable projection matrices. The attended response at the l-th CVSI block is: 
+
+∆Xq,l = softmax Qq,l Kr,l ⊤
+
+√d
+
+!
+
+Vr,l (3) SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 5Norm  Norm       
+
+> Cross -Attention
+> QKVQVK
+> Cross -Attention
+> Linear Linear
+> FFN FFN
+> Query Token Ref. Token
+> H
+> q
+
+X rX 
+
+> qXr
+
+X
+
+> ISP Loss
+> ISP Loss
+> Share
+
+Fig. 4: Illustration of cross-view semantic interaction. The query and reference tokens are first projected to a lower-dimensional space, and then exchange semantic information through shared bidirectional cross-attention. 
+
+The reference branch is updated in the same way through the shared cross-attention module, allowing semantic evidence to flow in both directions. The attended response is then injected back into the original token stream through residual updates and feed-forward refinement: 
+
+Xq,l +1 = Xq,l + ∆ Xq,l + FFN  LN( Xq,l + ∆ Xq,l ) (4) The reference update follows the same form. This residual design stabilizes cross-view interaction by suppressing se-mantic noise while preserving the informative content of the original tokens. After L blocks, we obtain the cross-view enhanced tokens ˜Xq = Xq,L and ˜Xr = Xr,L , which have already exchanged semantic information across views. These tokens are then projected to the sampled points as semantic features, allowing the geometric decoder to start from cross-view conditioned representations for point matching. 
+
+D. Intra-view Structure Preservation 
+
+As illustrated in Fig. 4, to stabilize CVSI, we further introduce intra-view structure preservation (IVSP) to preserve the intrinsic intra-view organization of visual tokens during cross-view interaction. We therefore treat Xq and Xr as teacher tokens before CVSI, and ˜Xq and ˜Xr as student tokens after CVSI. For each view v ∈ { q, r }, let Mv denote the number of tokens in that view. We first define the teacher similarity matrix from the pre-interaction tokens: 
+
+AvD (i, j ) = cos Xvi
+
+∥Xvi ∥2
+
+, Xvj
+
+∥Xvj ∥2
+
+!
+
+(5) We then define the student similarity matrix from the post-interaction tokens. For the student branch, we keep only the nonnegative part of the cosine similarity, so that the supervision focuses on structurally relevant affinities. This also prevents negatively correlated regions in the post-interaction token space from being directly perturbed by the teacher signal: 
+
+AvS (i, j ) = max cos ˜Xvi
+
+∥ ˜Xvi ∥2
+
+,
+
+˜Xvj
+
+∥ ˜Xvj ∥2
+
+!
+
+, 0
+
+!
+
+(6) Here, i, j ∈ { 1, . . . , M v } index token pairs within the same view. Although pretrained VFM features provide semantically meaningful correlations, their raw cosine similarities are not specifically optimized as direct supervision signals for the post-interaction token space [61]. We therefore center the teacher similarity matrix to remove the global cosine bias and retain relative intra-view structure: 
+
+¯AvD (i, j ) = AvD (i, j ) − 1
+
+M 2
+
+> v
+
+X
+
+> m,n
+
+AvD (m, n ) (7) where m, n ∈ { 1, . . . , M v } enumerate all token pairs in view 
+
+v. We then regularize the intra-view structure for each view by: 
+
+Lv 
+
+> IVSP
+
+= 1
+
+M 2
+
+> v
+
+X
+
+> i,j
+
+− ¯AvD (i, j )AvS (i, j ) (8) The final token structure preservation loss averages the two views: 
+
+LIVSP = 12 (Lq 
+
+> IVSP
+
++ Lr
+
+> IVSP
+
+) (9) This regularization preserves the structural topology of the original token manifold, so that CVSI learns to reweight se-mantically relevant regions across views rather than collapsing unrelated tokens into an over-smoothed representation. 
+
+E. Reference-anchored Geometric Consistency 
+
+To make the CVSI prior beneficial for 3D matching, we impose a reference-anchored geometric consistency (RAGC) loss on the decoded point features, inspired by explicit 3D representation learning [59]. RAGC supervises auxiliary co-ordinate prediction in a shared reference frame, encouraging the features to couple cross-view semantic compatibility with geometric consistency for reliable correspondence estimation. To stabilize network training, we adopt the reference-anchored coordinate (RAC) normalization strategy of [35] and define an RAC space from the reference point cloud 
+
+Pr = {pri }Ni=1 . Let cr denote the center of Pr , and let 
+
+wr = max i,j ∥pri − prj ∥2 denote the maximum distance be-tween reference points. Following this normalization strategy, the scale is given by sr = 1 /(1 .1 wr ) and the translation by tr = −sr cr , yielding the reference-anchored transform 
+
+T r
+
+> rac
+
+(p) = sr p+tr , which maps the reference object into a nor-malized RAC space. Importantly, this transform is computed from the original unsampled reference point cloud rather than the sampled coarse or fine points, so that the target coordinate system remains stable across different sampling stages. Based on T r
+
+> rac
+
+, we define the RAC targets for the reference and query points as Ur = {urj }Nj=1 and Uq = {uqi }Ni=1 , respectively: 
+
+urj = T r
+
+> rac
+
+(prj ), uqi = T r
+
+> rac
+
+(R∗pqi + t∗) (10) SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 6
+
+where (R∗, t ∗) is the ground-truth relative pose. In this way, reference points and ground-truth aligned query points are represented in the same reference-anchored coordinate system. To inject this constraint into feature learning, we feed the fused point features Fq and Fr into a multi-layer MLP. Con-cretely, the MLP predicts RAC coordinates by ˆUq = f (Fq )
+
+and ˆUr = f (Fr ), where f (·) denotes the mapping function. Let ρ(·, ·) denote the SmoothL1 loss. We then supervise the predicted coordinates ˆUq = {ˆuqi }Ni=1 and ˆUr = {ˆurj }Nj=1 with: 
+
+LRAGC = 12
+
+ 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+ρ(ˆ uqi , u qi ) + 1
+
+N
+
+> N
+
+X
+
+> j=1
+
+ρ(ˆ urj , u rj )
+
+ (11) This loss turns RAC into a geometric consensus signal for the fused representation. By anchoring the decoded point features to a common reference geometry, it complements the semantic compatibility learned by CVSI and improves the stability and discriminability of cross-view correspondence estimation. 
+
+F. Training objective 
+
+Our training objective combines overlap-aware correspon-dence supervision with two training-time regularization terms: RAGC for reference-anchored geometric consistency and IVSP for intra-view token structure preservation. For correspondence learning, we adopt a coarse-to-fine supervision strategy following recent RGB-D matching pipelines [28]. The matching term LA uses the InfoNCE [62] loss to supervise the overlap-aware correlation matrix, while the overlap term Lo supervises the predicted overlap confi-dences with the weighted binary cross-entropy (WBCE) loss. For the t-th geometric transformer block, both terms are applied at the coarse and fine stages: 
+
+Lmatch =
+
+> 3
+
+X
+
+> t=1
+
+ Lc,t A + Lc,t o
+
+ +
+
+> 3
+
+X
+
+> t=1
+
+ Lf,t A + Lf,t o
+
+ (12) where the superscripts c and f denote the coarse and fine stages, respectively. The proposed auxiliary losses are also applied at both stages. The full training objective is therefore 
+
+L = Lmatch + X 
+
+> s∈{ c,f }
+
+(λRAGC Ls 
+
+> RAGC
+
++ λIVSP Ls
+
+> IVSP
+
+) (13) where λRAGC and λIVSP balance the contribution of the geo-metric and structural regularization terms. IV. EXPERIMENTS 
+
+A. Experimental Setup 
+
+Implementation Details. Our method is implemented in PyTorch [63]. For image encoding, we use a DINOv3 [40] pretrained ViT-Base backbone [64]. Following [28, 29], the network is trained on the standard MegaPose synthetic dataset [23] for the BOP unseen object pose estimation track [65]. We train the network for 440K steps with a batch size of 8 on the RTX 4090 GPU. Optimization is performed with Adam [66] and cosine annealing [67], using a base learning rate of 10 −4. Unless otherwise specified, the number of CVSI blocks is set to L = 3 , the number of attention heads is set to H = 8 , and the loss weights are fixed to λRAGC = 1 
+
+and λIVSP = 1 . In the coarse stage, we sample Nc = 196 
+
+points and generate 300 pose hypotheses. In the fine stage, we increase the number of sampled points to Nf = 2048 .
+
+Datasets. We conduct experiments on six benchmark datasets: LM-O [43], TUD-L [42], YCB-V [9], Real275 [15], Toyota-Light [42], and LINEMOD [44]. LM-O, TUD-L, and YCB-V follow the predefined view-pair protocol of [28], where SAM masks [46] introduce realistic segmentation noise and the scenes cover clutter, occlusion, lighting variation, and sensor noise. Real275 and Toyota-Light are evaluated under the Oryon protocol [33], with 2,000 reference-query pairs and ground-truth masks for each test set, covering diverse indoor objects and challenging illumination conditions. To further assess sensitivity to the reference view, we also evaluate the first-frame single-reference setting on YCB-V [9] and LINEMOD [44], following [25, 35], where LINEMOD provides large viewpoint changes across object sequences. 
+
+Challenging Benchmark. We further construct a challeng-ing view-pair benchmark based on YCB-V [9] and TUD-L [42]. For each query object in the test split, we randomly select a reference view from the training or validation split and constrain the relative rotation angle to the range of 60 to 90 degrees. For the object masks, we start from the segmentation results of UNOPose [28] and further inject noise by applying random morphological dilation. 
+
+Evaluation Metrics. For LM-O, TUD-L, and YCB-V un-der the predefined view-pair protocol, we follow the BOP evaluation protocol and report AR BOP , averaged over VSD, MSSD, and MSPD [42]. For Real275, Toyota-Light, and LINEMOD, we report ADD(-S) at 0.1d with ADD-S for symmetric objects [44, 68]. For YCB-V under the first-frame reference setting, we report AUC of ADD and ADD-S following PoseCNN [9]. 
+
+B. Comparison with State-of-the-Art Methods 
+
+Since the checkpoint of the best-performing (supervised version) COG model [29] is not publicly available, we report its results only in Table I using the numbers from the original paper. 
+
+Comparison under the Predefined View Pair Protocol. 
+
+Table I compares different methods under the predefined view-pair protocol of UNOPose [28]. Pure point cloud registration methods are limited in this setting, with the best one reaching only 56.9% mean AR BOP . This indicates that geometry alone is insufficient for mask-cropped partial point clouds with dis-tractors and limited overlap. RGB-D single-reference methods perform better by combining visual and geometric information, with the strongest baselines UNOPose [28] and COG [29] reaching 70.9% and 73.8% mean AR BOP , respectively. Our method achieves the best performance on all three datasets, reaching 76.6% mean AR BOP and improving over UNOPose and COG by 5.7% and 2.8%, respectively. Compared with the strongest baseline on each dataset, our gains are 0.4% on LM-O, 2.0% on TUD-L, and 3.6% on YCB-V. 
+
+Runtime Analysis . Due to differences in hardware from the original papers, we re-evaluate the inference time of SinRef-6D [30], UNOPose [28], COG [29], and CoordAR [37] on a SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 7
+
+Table I: Pose estimation results on LM-O, TUD-L, and YCB-V under the view-pair setting of UNOPose [28]. Object masks are obtained by SAM [46]. The mean Average Recall (AR) of the BOP metric and the average time (s) per image are reported. The runtime includes all instances from the SAM proposals.                                                                                                                       
+
+> Method Modality Reference AR BOP (%) Time (s) ↓
+> LM-O [43] ↑TUD-L [42] ↑YCB-V [9] ↑Mean ↑
+> FPFH+RANSAC [53] DImage 31.0 31.0 50.0 37.3 6.38 FPFH+MAC [69] DImage 22.5 22.1 49.6 31.4 136.94 PPF [54] DImage 29.7 14.8 38.3 27.6 11.79 PPF 3D ICP [54] DImage 44.7 29.1 66.8 46.9 14.27 FCGF+RANSAC [70] DImage 38.9 59.0 57.6 51.8 10.96 FCGF+MAC [69] DImage 33.9 48.3 51.0 44.4 60.53 UTOPIC [71] DImage 13.7 35.4 10.5 19.9 4.00
+> GeDi [72] DImage 42.8 67.3 60.6 56.9 48.89 FreeZe [73] RGB-D Image 45.5 68.3 65.5 59.8 52.96 SAM-6D [26] RGB-D Posed Image 54.5 29.7 68.1 50.8 4.21 SinRef-6D [30] RGB-D Posed Image 51.1 34.0 73.9 53.0 4.231 CoordAR [37] RGB-D Image 46.7 52.1 67.3 55.4 6.063 UNOPose [28] RGB-D Image 58.7 71.0 83.1 70.9 4.179 COG [29] RGB-D Image 60.8 80.0 80.5 73.8 4.324
+> Ours RGB-D Image 61.2 82.0 86.7 76.6 4.232
+
+single RTX 4090 GPU. Our method runs at 4.232 s per image, including 2.68s for segmentation (taken from UNOPose) and 1.552s for pose estimation. Compared with UNOPose, it introduces only 0.053 s additional latency, while improving the average AR by 5.7%. 
+
+Table II: pose estimation results on Real275 [15] and Toyota-Light [42] under the view-pair protocol of Oryon [33] and Ho-ryon [34], where ground truth object masks are used. We compare RGB and RGB-D methods with only a single reference view.                                                                                 
+
+> Methods Modality Real275 [15] Toyota-Light [42] AR ↑ADD(-S) ↑AR ↑ADD(-S) ↑
+> PoseDiffusion [74] RGB 9.2 0.8 7.8 1.2 RelPose++ [75] RGB 22.8 11.9 30.9 11.6 LatentFusion [22] RGB 22.6 9.6 28.2 10.2 SIFT [76] RGB-D 34.1 16.4 30.3 14.1 ObjectMatch [77] RGB-D 26.0 13.4 9.8 5.4 Oryon [33] RGB-D 46.5 34.9 34.1 22.9 One2Any [35] RGB-D 54.9 41.0 42.0 34.6 Horyon [34] RGB-D 57.9 51.6 33.0 25.1 Any6D [36] RGB-D 51.0 53.5 43.3 32.2 UNOPose [28] RGB-D 77.9 84.4 74.9 73.2 SinRef-6D [30] RGB-D 74.4 81.1 66.7 67.1 ConceptPose [38] RGB-D 60.4 71.5 51.6 55.0 CoordAR [37] RGB-D 71.0 82.2 62.5 82.6
+> Ours RGB-D 78.1 86.2 78.4 80.0
+
+Table II reports the results on Real275 and Toyota-Light under the view-pair protocol of Oryon [33] and Horyon [34]. RGB-only methods remain clearly behind RGB-D methods, showing that depth is important for accurate relative pose estimation. Among RGB-D single-reference methods, the strongest baseline UNOPose [28] reaches 77.9% AR and 84.4% ADD(-S) on Real275, and 74.9% AR and 73.2% ADD(-S) on Toyota-Light. Our method achieves the best AR on both datasets and the best ADD(-S) on Real275. Compared with UNOPose, it improves AR and ADD(-S) from 77.9% to 78.1% and from 84.4% to 86.2% on Real275, and from 74.9% to 78.4% and from 73.2% to 80.0% on Toyota-Light. On Toyota-Light, our ADD(-S) is second only to CoordAR [37], while our AR remains substantially higher. 
+
+Comparison under the One-Reference Per Object Set-ting. To evaluate the robustness of our method to the reference view, we further fix one reference image for each object and test under a stricter single-reference protocol on YCB-V [9] and LINEMOD [44]. Table III reports the results on YCB-V [9] under the first-frame reference setting. Founda-tionPose [25] achieves the best overall result with 16 CAD-rendered references, but drops from 91.5% to 76.1% AUC of ADD when using a single CAD reference. Under the single-image reference setting, our method achieves the best AUC of ADD at 88.1%, outperforming One2Any [35], UNOPose [28], and CoordAR [37] by 3.7%, 5.3%, and 9.6%, respectively. For AUC of ADD-S, our method obtains 95.7%, which is close to UNOPose at 96.0% and higher than the other single-reference baselines. 
+
+Table III: Pose estimation results on on YCB-V [9] dataset. We compare with point cloud registration methods, multi-view methods, and single-view methods. Predator [55], LoFTR [56] and FS6D [50] are fine-tuned on the YCB-Video dataset. Results of multi-view methods are adopted from [25]. For single-view methods, we provide the first image in the test set as the reference.                                          
+
+> Method Ref. Images AUC of ADD-S ↑AUC of ADD ↑
+> Predator [55] 16 71.0 24.3 LoFTR [56] 16 52.5 26.2 FS6D [50] 16 88.4 42.1 FoundationPose [25] 16 - CAD 97.4 91.5
+> FoundationPose [25] 1 - CAD 90.4 76.1 Oryon [33] 113.3 7.4 NOPE [31] 1 + GT trans 86.0 25.1 One2Any [35] 193.7 84.4 SinRef-6D [30] 193.9 78.4 CoordAR [37] 195.5 78.5 UNOPose [28] 196.0 82.8 Ours 195.7 88.1
+
+Table IV reports the results on LINEMOD [44], which contains large viewpoint variations across object sequences. Multi-reference methods can achieve high recalls, with FS6D+ICP [50] reaching 91.5%, but they use multiple ref-erence views and are not directly comparable to the single-SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 8
+
+Table IV: Pose estimation results on LINEMOD [44] dataset. The upper block reports multi-reference methods, and the lower block reports single-reference methods. For all single-reference image methods, the first view is used as the reference. We report the recall of ADD(-S)-0.1d metric. Results of multi-view methods are taken from FoundationPose [25].                                                                                                                                                                                                                     
+
+> Methods Modality Ref. Images ape benchvise cam can cat driller duck eggbox glue holepuncher iron lamp phone Mean
+> OnePose [47] RGB 200 11.8 92.6 88.1 77.2 47.9 74.5 34.2 71.3 37.5 54.9 89.2 87.6 60.6 63.6 OnePose++ [48] RGB 200 31.2 97.3 88.0 89.8 70.4 92.5 42.3 99.7 48.0 69.7 97.4 97.8 76.0 76.9 LatentFusion [22] RGB-D 16 88.0 92.4 74.4 88.8 94.5 91.7 68.1 96.3 49.4 82.1 74.6 94.7 91.5 83.6 FS6D [50] + ICP RGB-D 16 78.0 88.5 91.0 89.5 97.5 92.0 75.5 99.5 99.5 96.0 87.5 97.0 97.5 91.5
+> FoundationPose [25] RGB-D 1-CAD 36.5 55.5 84.2 71.7 65.3 16.3 49.8 42.6 64.8 52.7 20.7 15.8 51.7 48.3 NOPE [31] RGB 1 + GT trans 2.0 4.5 2.5 2.2 0.7 4.7 0.5 100.0 79.4 2.9 4.5 4.2 3.9 16.3 Oryon [33] RGB-D 11.2 1.3 3.9 0.8 12.7 8.5 0.8 63.2 18.4 1.6 0.6 2.9 11.7 9.8 One2Any [35] RGB-D 133.1 15.7 72.7 37.0 66.2 68.2 35.8 100.0 99.9 42.0 28.2 31.9 53.2 52.6 UNOPose [28] RGB-D 144.6 54.9 80.2 47.1 80.7 89.4 45.2 99.2 97.2 75.3 51.8 64.0 76.6 69.7 CoordAR [37] RGB-D 145.6 76.9 70.7 77.3 88.1 96.5 50.2 97.0 99.8 67.5 52.7 91.4 61.2 75.0 SinRef-6D [30] RGB-D 149.4 82.1 63.2 58.1 88.3 76.9 53.7 99.7 83.5 46.4 86.5 99.6 85.8 74.9 Ours RGB-D 143.0 92.6 82.8 81.4 87.5 78.9 63.2 99.7 75.4 77.4 66.1 72.6 85.9 77.4 UNOPose SinRef-6D Ours
+> Real275 TOY-L LINEMOD LMO YCB-V TUD-L
+
+Fig. 5: Qualitative comparison on six datasets. We visualize the pose estimation results of UNOPose [28], SinRef-6D [30], and our method. Blue and green contours denote GT and estimated poses, respectively. For clearer visualization, we also show the depth error heatmap of each detected object with respect to the ground-truth pose, namely the distance between each 3D point in the ground-truth depth map and its transformed position under the predicted pose (legend: 0 cm 10 mm). More results can be found in the homepage .
+
+reference setting. Under the stricter single-reference setting, the single CAD-based FoundationPose [25] obtains 48.3%, while RGB-D image-based methods perform substantially better. Our method achieves the best ADD(-S) among all single-reference methods, reaching 77.4%. It improves over CoordAR [37], SinRef-6D [30], and UNOPose [28] by 2.4%, 2.5%, and 7.7%, respectively. 
+
+Comparison under Our Predefined Challenging View Pair Protocol. Table V reports results under the proposed challenging view-pair protocol, which includes large viewpoint changes and perturbed object masks. Our method achieves the best AR BOP on both datasets, with 67.0% on TUD-L, 64.2% on YCB-V, and 65.6% on average. Compared with the strongest baseline, UNOPose [28], it improves AR by 11.1% on TUD-L, 5.7% on YCB-V, and 8.4% on average. This margin is larger than that under the standard UNOPose view-pair setting, where the viewpoint gap is more restricted. These results highlight the advantage of our cross-view semantic prior when large viewpoint changes and mask noise make point-level matching ambiguous. SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 9
+
+Table V: Pose estimation results on TUD-L [42] and YCB-V [9] under the proposed challenging view-pair protocol. We report the BOP average recall, AR BOP (%).                    
+
+> Method AR BOP (%) TUD-L [42] ↑YCB-V [9] ↑Mean ↑
+> UNOPose [28] 55.9 58.5 57.2 CoordAR [37] 36.7 50.2 43.5 SinRef-6D [30] 24.5 49.0 36.8 Ours 67.0 64.2 65.6
+
+C. Qualitative Results Analysis 
+
+We present extensive qualitative results, including pose estimation visual comparisons on each dataset, results under the challenging view pair protocol, and visualizations of cross-view interaction, to better analyze and demonstrate the superiority of our method. 
+
+Qualitative Results on Six Datasets. Fig. 5 shows qualita-tive results on all six evaluated datasets, with object-level visu-alizations for each tested object. These examples cover diverse challenges, including heavy occlusion, illumination variation, textureless objects, and geometric ambiguity. Compared with UNOPose [28] and SinRef-6D [30], our method produces more accurate pose alignment and lower object-level depth errors across different datasets. Reference  SinRef-6D Query  UNOPose  Ours   
+
+> (a) Large viewpoint changes
+> (b) Cluttered observations
+
+Fig. 6: Qualitative comparison under the challenging view pair protocol. (a) Large viewpoint changes. (b) Cluttered observations with heavy mask noise. 
+
+Qualitative Results under the Challenging View Pair Protocol. Fig. 6 shows qualitative results under the challenging view-pair protocol, including large viewpoint changes and cluttered observations with heavy mask noise. Under large viewpoint gaps, our projected contours remain better aligned with the ground truth than UNOPose [28] and SinRef-6D [30], even when the visible overlap is limited. Under heavy mask noise, nearby objects with similar geometry and appearance can introduce highly ambiguous correspondences. Our method remains more stable in these cases because the cross-view Query token      
+
+> Structure cue Contextual cue Appearance cue Contextual cue
+> Reference attention map
+> driller
+> cat
+> clamp
+
+Fig. 7: Visualization of the attention maps in cross-view interac-tion. We select one token in the query view (red box) and visualize the responses of different attention heads. 
+
+semantic prior provides appearance, structure, and spatial guidance before geometry-aware matching. 
+
+Visualization of Cross-View Interaction. Fig. 7 visualizes the attention responses from a selected query token to refer-ence tokens in different CVSI heads. Different heads attend to complementary reference regions, such as local parts, object boundaries, and broader body structures. For example, in the driller case, the selected query token activates the handle area, the elongated body, and their junction. Similar patterns appear in the cat and clamp examples, suggesting that CVSI aggregates appearance, structural, and contextual cues across views rather than simply averaging features. These cross-view responses provide a semantic prior for point-level matching under viewpoint changes and local ambiguities. 
+
+D. Ablation Studies 
+
+We conduct ablation studies to verify the contribution of the proposed cross-view semantic prior and its training constraints. We further examine key architectural choices and robustness under different reference viewpoint gaps. Unless otherwise specified, all ablations are performed on YCB-V [9]. 
+
+Impact of Backbone Networks. We first study the influ-ence of the VFM backbone to separate backbone improve-ments from the contribution of the proposed components. As shown in Table VI, replacing DINOv2 [39] with DINOv3 [40] improves the baseline AR BOP from 83.1% to 84.2% (A0 vs. B0). This indicates that a stronger VFM backbone pro-vides better visual representations for correspondence learning. However, after introducing the proposed components, the gap between the two backbones becomes much smaller: the DINOv2 variant reaches 86.0% (A1), while the corresponding DINOv3 variant reaches 86.2% (B3). This suggests that the performance gain is not mainly explained by the backbone replacement. Since DINOv3 also uses a larger patch size than DINOv2 and is computationally lighter in our setting, we use DINOv3 as the default backbone in the remaining experiments. 
+
+Effectiveness and Complementarity of CVSI, RAGC, and IVSP. Table VI analyzes the contribution of the proposed components on YCB-V [9]. This ablation is designed to SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 10 
+
+Table VI: Ablation study of the backbone and proposed components on the YCB-V [9] dataset. Results are reported with DINOv2 [39] and DINOv3 [40] backbones. (*) denotes the variant with shared cross-attention weights between the query and reference branches.                                                                 
+
+> Row Backbone CVSI RAGC IVSP VSD MSSD MSPD AR BOP
+> A0 DINOv2 ✗✗✗82.6 87.4 79.4 83.1 A1 ✓✓✓83.0 90.4 84.5 86.0 B0 DINOv3
+> ✗✗✗82.4 88.4 81.7 84.2 B1 ✓✗✗82.9 90.1 84.0 85.7 B2 ✗✓✗83.0 89.0 82.2 84.7 B3 ✓✓✓83.5 90.7 84.5 86.2 B4 ✓✓✓83.9* 91.1* 85.1* 86.7*
+> B5 ✓✓✗82.9 90.2 84.1 85.7
+
+separate the effects of early cross-view semantic interaction, reference-anchored geometric supervision, and token structure preservation. Under the DINOv3 backbone, adding only CVSI improves AR BOP from 84.2% to 85.7% (B1 vs. B0), giving a gain of 1.5%. The improvement is also consistent on MSSD and MSPD, which increase from 88.4% to 90.1% and from 81.7% to 84.0%, respectively. This result shows that performing cross-view interaction before geometric decoding provides more discriminative features for correspondence estimation. In particular, the larger gains on MSSD and MSPD suggest that CVSI improves both 3D surface alignment and projec-tion accuracy, which are directly affected by correspondence quality. The RAGC-only variant improves AR BOP from 84.2% to 84.7% (B2 vs. B0). This moderate gain indicates that reference-anchored geometric supervision provides a useful geometric regularization signal, but it is not the main source of the overall improvement. This comparison is important because it controls for the effect of the auxiliary coordinate prediction head: adding the RAGC head and loss alone cannot explain the full gain of the proposed method. Instead, RAGC is most useful when it works with cross-view semantic condi-tioning, where it encourages the decoded point features to be consistent in a shared 3D reference frame. The role of IVSP is also clarified by comparing B1, B3, and B5. When CVSI and RAGC are used without IVSP, the AR BOP remains 85.7% (B5), the same as CVSI alone (B1). After adding IVSP, the performance increases to 86.2% (B3), with consistent gains on VSD, MSSD, and MSPD. This shows that IVSP is not merely an additional auxiliary loss, but a stabilizing regularizer for cross-view token interaction. By preserving the intra-view token affinity structure, IVSP prevents the interacted tokens from losing the original VFM organization, allowing the semantic prior introduced by CVSI and the geometric constraint imposed by RAGC to better complement each other. Finally, sharing the cross-attention weights between the query and reference branches further improves AR BOP from 86.2% to 86.7% (B4 vs. B3). This shared design encourages the two branches to follow a consistent interaction pattern and reduces redundant parameters. Compared with the DI-NOv3 baseline, the full model improves AR BOP by 2.5%, from 84.2% to 86.7%. The improvements are also observed Query Reference Query Reference Query Reference  
+
+> Only Dinov3 Ours
+
+Fig. 8: Visualization of correspondence estimation. We compare the predicted correspondences obtained using only the DINOv3 [40] backbone and our full method. Green and red lines denote geomet-rically consistent and inconsistent correspondences, respectively. 
+
+across all three BOP metrics, with gains of 1.5, 2.7, and 3.4% on VSD, MSSD, and MSPD, respectively. These results support the complementary design of the proposed framework: CVSI provides the main cross-view semantic prior, RAGC grounds the decoded features in 3D reference coordinates, and IVSP stabilizes the token structure during interaction. Since RAGC and IVSP are used only during training, they improve feature learning without adding inference time computation. We therefore adopt the shared CVSI design with both RAGC and IVSP as the default configuration. 
+
+Visualization of Correspondences. Fig. 8 visualizes the correspondences produced by the DINOv3-only baseline and our full model. The DINOv3-only baseline produces scattered matches, often connecting non-corresponding or locally simi-lar object parts under partial overlap and noisy observations. In contrast, our method yields more spatially coherent corre-spondences concentrated on geometrically compatible regions. This indicates that the cross-view semantic prior improves point-feature discriminability before matching and provides cleaner correspondences for subsequent weighted SVD pose estimation. 
+
+Intra-View Similarity Structure Analysis. Fig. 9 com-pares the intra-view token similarity matrices before and after cross-view interaction. Raw DINO features show clear local affinity structures related to object parts, boundaries, and spatial layouts. Without IVSP, cross-view interaction tends to over-smooth these structures, weakening the contrast of the highlighted local regions. With IVSP, the interacted tokens preserve the major similarity topology of the original DINO features while keeping local regions more distinguishable. This suggests that IVSP stabilizes CVSI by preventing ex-cessive feature mixing, rather than simply suppressing cross-view adaptation. The corresponding pose visualizations further show that preserving such token structure leads to more accurate contour alignment. SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 11 Pose Visualization    
+
+> Raw Dino
+> Similarity matrix
+> w IVSP w/o IVSP w IVSP w/o IVSP
+
+Fig. 9: Effectivenes of IVSP loss. Without IVSP, cross-view in-teraction over-smooths the intra-view similarity structure, weakening local part and boundary contrast. With IVSP, the interacted features preserve sharper relative similarity patterns inherited from DINO features. Best viewed when zoomed in. 
+
+Number of Cross-View Semantic Interaction Layers. 
+
+Table VII studies the effect of the number of CVSI layers. Removing token-level cross-view interaction ( L = 0 ) gives 84.7% AR BOP , while adding one CVSI layer improves it to 85.7%. Increasing the depth further brings the best result at 
+
+L = 3 , reaching 86.2% AR BOP . Compared with L = 0 , L = 3 
+
+improves VSD, MSSD, MSPD, and AR BOP by 0.5%, 1.7%, 2.3%, and 1.5%, respectively, showing that repeated cross-view interaction refines semantic context for correspondence learning. We therefore use L = 3 as the default setting. 
+
+Table VII: Pose estimation performance under different numbers of CVSI layers on YCB-V [9]. The study is based on the B3 setting in Table VI, with L = 0 denoting the variant without token-level cross-view interaction.                      
+
+> Number of LVSD MSSD MSPD AR BOP
+> 083.0 89.0 82.2 84.7 182.8 90.2 84.0 85.7 283.1 90.2 84.0 85.8 383.5 90.7 84.5 86.2
+
+Geometric Decoder Depth and Cross-View Semantic Prior. Table VIII studies the relation between geometric decoder depth and the proposed CVSI semantic prior. This ablation aims to examine whether stronger geometric decoding alone can replace the early cross-view semantic prior. We first evaluate the effect of increasing the geometric decoder depth when the CVSI prior is used. Increasing the decoder from 1 to 3 layers improves AR BOP from 84.6% to 86.7% (C0, D0, and E1), showing that geometric decoding is important for fusing semantic and geometric cues into corre-spondence features. However, further increasing the decoder from 3 to 5 layers slightly decreases AR BOP from 86.7% to 86.5% (E1 vs. G1), while increasing trainable parameters, FLOPs, and runtime. This suggests that 3 decoder layers are sufficient once the point features are guided by the CVSI prior. We then remove the CVSI prior and increase only the geometric decoder depth. Without CVSI, increasing the de-coder from 3 to 5 layers improves AR BOP only marginally from 84.2% to 84.6% (E0 vs. G0), while runtime increases from 0.686 s to 0.777 s. The geometry only control H1 further increases the trainable parameters to 29.68M and the compu-tation to 316.46 GFLOPs, but still obtains only 84.5% AR BOP .In contrast, our 3-layer decoder with the CVSI prior achieves 86.7% AR BOP with 28.88M trainable parameters and 249.02 GFLOPs. Compared with H1, our model improves AR BOP by 2.2% while using fewer parameters and 21.3% fewer FLOPs. Compared with the 5-layer geometry only baseline G0, our model improves AR BOP by 2.1% with 13.8% fewer FLOPs and lower runtime. These results indicate that the improvement is not mainly caused by decoder depth, parameter count, or computation. Instead, geometric decoding provides 3D consistency, while the CVSI prior supplies cross-view semantic guidance before decoding, enabling the point features to better combine se-mantic discriminability with geometric consistency. 10 20 30 40 50 60 70 80 90     
+
+> Reference Rotation Distance (°)
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> 90
+> Average Recall (%)
+> Only DINOv3
+> Ours
+> AR BOP: 80.4
+> AR BOP: 77.4
+> +2.1
+> +2.6 +2.4 +3.0
+> +2.5
+> +2.0 +6.8
+> +6.8 +3.9
+
+Fig. 10: Effect of the reference viewpoint gap on YCB-V [9]. We compare the performance of using only the DINOv3 [40] backbone and our full method. We divide the rotation angles into nine groups. Our method consistently improves AR BOP across all bins, with larger gains under severe viewpoint changes. 
+
+Effect of Reference Viewpoint Gap. To evaluate ro-bustness under different viewpoint gaps, we randomly select reference views on YCB-V [9] with relative rotations from 0 to 90 degrees and divide the results into nine bins. As shown in Fig. 10, our method consistently outperforms the DINOv3-only baseline across all rotation ranges, improving the overall AR BOP from 77.4% to 80.4%. The gain is moderate from 10 to 60 degrees, but becomes larger under severe viewpoint changes, reaching 6.8% at both 70 and 80 degrees and 3.9% at 90 degrees. This trend shows that the cross-view semantic prior is particularly beneficial when valid overlap becomes sparse and ambiguous. 
+
+E. Failure cases 
+
+Although our method improves correspondence reliabil-ity under large viewpoint changes and mask noise, it is still subject to the observability limits of single-reference correspondence-based pose estimation. As shown in Fig. 11, failures mainly occur in two cases: near-zero visible overlap between the query and reference views, and highly incomplete object masks. In the first case, too few shared regions are SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 12 
+
+Table VIII: Pose estimation performance under different geometric decoder [41] depths on YCB-V [9]. The column “CVSI Prior” denotes whether the dense cross-view semantic prior is introduced before geometric decoding. H1 is a geometry only control with a parameter scale comparable to our default model. The runtime includes only pose estimation and excludes segmentation. 
+
+Row Geo. Dec. Layers CVSI Prior VSD MSSD MSPD AR BOP Train Params (M) GFLOPs Runtime (s) C0 1 ✓ 81.9 89.7 82.3 84.6 23.35 193.79 0.625 D0 2 ✓ 82.5 89.7 83.0 85.1 26.12 221.41 0.662 E0 3 ✗ 82.4 88.4 81.7 84.2 21.37 233.61 0.686 E1 ✓ 83.9 91.1 85.1 86.7 28.88 249.02 0.711 F0 4 ✗ 82.5 88.5 82.0 84.3 24.14 261.23 0.721 F1 ✓ 83.3 90.7 84.8 86.3 31.65 276.64 0.789 G0 5 ✗ 82.6 88.8 82.4 84.6 26.91 288.85 0.777 G1 ✓ 83.8 90.8 84.9 86.5 34.42 304.26 0.794 H1 6 ✗ 82.6 88.5 82.4 84.5 29.68 316.46 0.803 Reference Query Pose vis.   
+
+> Near-zero cross-view overlap Incomplete object mask
+
+Fig. 11: Failure cases under challenging scenes across different datasets. These examples include cases with nearly zero cross-view overlap and incomplete object masks. 
+
+available to support valid cross-view correspondences. In the second case, missing discriminative object parts provide insufficient evidence for both token-level semantic interaction and point-level geometric matching. These cases represent boundary conditions of the single-reference correspondence formulation. V. CONCLUSIONS This paper studied single-reference unseen object 6D pose estimation and identified the insufficient cross-view exchange of dense visual-semantic cues as a key limitation of existing correspondence-based pipelines. To address this issue, we proposed a cross-view semantic prior learning framework that introduces dense token-level CVSI before geometric decoding, preserves intra-view token structure with IVSP, and grounds decoded features through RAGC. Together, these components improve the semantic and geometric discriminability of cor-respondence features for more reliable point cloud matching and weighted SVD pose estimation. Extensive experiments on six benchmark datasets and a challenging view-pair protocol demonstrate state-of-the-art performance with comparable in-ference speed. 
+
+Limitations and Future Work. Despite these improve-ments, the proposed method remains limited by the input evidence available in the single-reference setting. When the query and reference views have near-zero overlap or the masks remove discriminative object regions, reliable correspondences remain difficult to establish. Future work will extend the framework to multiple query observations and explicit multi-view geometric reasoning, which may provide richer object evidence and alleviate these failure cases. REFERENCES [1] Oliver Kroemer, Scott Niekum, and George Konidaris. “A Review of Robot Learning for Manipulation: Challenges, Representations, and Algorithms”. In: JMLR 22.30 (2021), pp. 1–82. [2] Guoguang Du et al. “Vision-based robotic grasping from object localization, object pose estimation to grasp estimation for parallel grippers: a review”. In: Artificial Intelligence Review 54.3 (2021), pp. 1677–1734. [3] Jianwei Guo et al. “Efficient Center Voting for Object Detection and 6D Pose Estimation in 3D Point Cloud”. In: IEEE Transactions on Image Processing 30 (2021), pp. 5072–5084. [4] Christos Papaioannidis, Vasileios Mygdalis, and Ioannis Pitas. “Domain-Translated 3D Object Pose Estimation”. In: IEEE Trans-actions on Image Processing 29 (2020), pp. 9279–9291. [5] Yinyu Nie et al. “Total3DUnderstanding: Joint layout, object pose and mesh reconstruction for indoor scenes from a single image”. In: 
+
+CVPR . 2020, pp. 55–64. [6] Siyuan Huang et al. “Cooperative holistic scene understanding: Uni-fying 3d object, layout, and camera pose estimation”. In: NeurIPS .2018. [7] Eric Marchand, Hideaki Uchiyama, and Fabien Spindler. “Pose estimation for augmented reality: a hands-on survey”. In: IEEE Transactions on Visualization and Computer Graphics 22.12 (2015), pp. 2633–2651. [8] Yongzhi Su et al. “Deep multi-state object pose estimation for augmented reality assembly”. In: IEEE International Symposium on Mixed and Augmented Reality Adjunct (ISMAR-Adjunct) . 2019, pp. 222–227. [9] Yu Xiang et al. “PoseCNN: A Convolutional Neural Network for 6D Object Pose Estimation in Cluttered Scenes”. In: RSS . 2018. [10] Yongzhi Su et al. “Zebrapose: Coarse to fine surface encoding for 6dof object pose estimation”. In: CVPR . 2022, pp. 6738–6748. [11] Sida Peng et al. “PVNet: Pixel-Wise Voting Network for 6DoF Object Pose Estimation”. In: IEEE Transactions on Pattern Analysis and Machine Intelligence 44.6 (2022), pp. 3212–3223. [12] Yongliang Lin et al. “Resolving Symmetry Ambiguity in Correspondence-Based Methods for Instance-Level Object Pose Estimation”. In: IEEE Transactions on Image Processing 34 (2025), pp. 1700–1711. [13] Xingyu Liu et al. “Gdrnpp: A geometry-guided and fully learning-based object pose estimator”. In: IEEE Transactions on Pattern Analysis and Machine Intelligence (2025). [14] Zibin Liu et al. “Line-Based 6-DoF Object Pose Estimation and Tracking With an Event Camera”. In: IEEE Transactions on Image Processing 33 (2024), pp. 4765–4780. [15] He Wang et al. “Normalized object coordinate space for category-level 6D object pose and size estimation”. In: CVPR . 2019, pp. 2642–2651. SUBMITTED TO IEEE TRANSACTIONS ON IMAGE PROCESSING 13 
+
+[16] Lu Zou et al. “6D-ViT: Category-Level 6D Object Pose Estimation via Transformer-Based Instance Representation Learning”. In: IEEE Transactions on Image Processing 31 (2022), pp. 6907–6921. [17] Xiaolong Li et al. “Leveraging SE(3) Equivariance for Self-supervised Category-Level Object Pose Estimation from Point Clouds”. In: 
+
+NeurIPS . 2021. [18] Yamei Chen et al. “Secondpose: Se (3)-consistent dual-stream feature fusion for category-level pose estimation”. In: CVPR . 2024, pp. 9959– 9969. [19] Huan Ren et al. “ComPose: A Unified Completion-Pose Framework for Robust Category-Level Object Pose Estimation”. In: CVPR . 2026, pp. 14315–14324. [20] Jian Liu et al. “Deep learning-based object pose estimation: Acomprehensive survey”. In: arXiv preprint arXiv:2405.07801 (2024). [21] Stefan Thalhammer et al. “Challenges for monocular 6-d object pose estimation in robotics”. In: IEEE Transactions on Robotics 40 (2024), pp. 4065–4084. [22] Keunhong Park et al. “Latentfusion: End-to-end differentiable recon-struction and rendering for unseen object pose estimation”. In: CVPR .2020, pp. 10710–10719. [23] Yann Labb´ e et al. “MegaPose: 6D Pose Estimation of Novel Objects via Render & Compare”. In: CoRL . PMLR. 2023, pp. 715–725. [24] Evin Pınar ¨ Ornek et al. “FoundPose: Unseen Object Pose Estimation with Foundation Features”. In: CVPR . 2024. [25] Bowen Wen et al. “FoundationPose: Unified 6D Pose Estimation and Tracking of Novel Objects”. In: CVPR . 2024. [26] Jiehong Lin et al. “Sam-6d: Segment anything model meets zero-shot 6d object pose estimation”. In: CVPR . 2024. [27] Wubin Shi, Shaoyan Gai, and Feipeng Da. “PoseGaussian: 6D Pose Estimation for Unseen Objects via Sparse-View Object-Level 3D Gaussian Splatting”. In: CVPR . 2026, pp. 4698–4707. [28] Xingyu Liu et al. “UNOPose: Unseen Object Pose Estimation with an Unposed RGB-D Reference Image”. In: CVPR . June 2025, pp. 22023–22034. [29] Yuchen Che et al. “COG: Confidence-aware Optimal Geometric Correspondence for Unsupervised Single-reference Novel Object Pose Estimation”. In: CVPR . 2026, pp. 11567–11578. [30] Jian Liu et al. “Scalable Unseen Objects 6-DoF Absolute Pose Esti-mation with Robotic Integration”. In: IEEE Transactions on Robotics 
+
+42 (2026), pp. 1884–1901. [31] Van Nguyen Nguyen et al. “Nope: Novel object pose estimation from a single image”. In: CVPR . 2024, pp. 17923–17932. [32] Zhiwen Fan et al. “Pope: 6-dof promptable pose estimation of any object, in any scene, with one reference”. In: CVPR Workshops . 2024. [33] Jaime Corsetti et al. “Open-vocabulary object 6D pose estimation”. In: CVPR . 2024. [34] Jaime Corsetti et al. “High-Resolution Open-Vocabulary Object 6D Pose Estimation”. In: IEEE Transactions on Pattern Analysis and Machine Intelligence 48.2 (2026), pp. 2066–2077. [35] Mengya Liu et al. “One2Any: One-Reference 6D Pose Estimation for Any Object”. In: CVPR . 2025, pp. 6457–6467. [36] Taeyeop Lee et al. “Any6D: Model-free 6D pose estimation of novel objects”. In: CVPR . 2025, pp. 11633–11643. [37] Dexin Zuo et al. “CoordAR: One-Reference 6D Pose Estimation of Novel Objects via Autoregressive Coordinate Map Generation”. In: 
+
+AAAI . Vol. 40. 16. 2026, pp. 14122–14130. [38] Liming Kuang et al. “ConceptPose: Training-Free Zero-Shot Object Pose Estimation using Concept Vectors”. In: CVPR . 2026, pp. 26582– 26592. [39] Maxime Oquab et al. “Dinov2: Learning robust visual features without supervision”. In: arXiv preprint arXiv:2304.07193 (2023). [40] Oriane Sim´ eoni et al. “Dinov3”. In: arXiv preprint arXiv:2508.10104 
+
+(2025). [41] Zheng Qin et al. “Geotransformer: Fast and robust point cloud registration with geometric transformer”. In: IEEE Transactions on Pattern Analysis and Machine Intelligence (2023). [42] Tomas Hodan et al. “BOP: Benchmark for 6D Object Pose Estima-tion”. In: ECCV . 2018, pp. 19–34. [43] Eric Brachmann et al. “Learning 6D object pose estimation using 3D object coordinates”. In: ECCV . 2014. [44] Stefan Hinterstoisser et al. “Model based training, detection and pose estimation of texture-less 3d objects in heavily cluttered scenes”. In: 
+
+ACCV . Springer. 2012, pp. 548–562. [45] Van Nguyen Nguyen et al. “GigaPose: Fast and Robust Novel Object Pose Estimation via One Correspondence”. In: CVPR . 2024. [46] Alexander Kirillov et al. “Segment anything”. In: ICCV . 2023, pp. 4015–4026. [47] Jiaming Sun et al. “Onepose: One-shot object pose estimation without cad models”. In: CVPR . 2022, pp. 6825–6834. [48] Xingyi He et al. “Onepose++: Keypoint-free one-shot object pose estimation without CAD models”. In: NeurIPS . 2022, pp. 35103– 35115. [49] Yuan Liu et al. “Gen6D: Generalizable Model-Free 6-DoF Object Pose Estimation from RGB Images”. In: ECCV . 2022. [50] Yisheng He et al. “Fs6d: Few-shot 6d pose estimation of novel objects”. In: CVPR . 2022, pp. 6814–6824. [51] Paul J. Besl and Neil D. McKay. “A Method for Registration of 3-D Shapes”. In: IEEE Transactions on Pattern Analysis and Machine Intelligence 14.2 (1992), pp. 239–256. [52] Szymon Rusinkiewicz and Marc Levoy. “Efficient variants of the ICP algorithm”. In: Proceedings third international conference on 3-D digital imaging and modeling . IEEE. 2001, pp. 145–152. [53] Radu Bogdan Rusu, Nico Blodow, and Michael Beetz. “Fast point feature histograms (FPFH) for 3D registration”. In: ICRA . IEEE. 2009, pp. 3212–3217. [54] Bertram Drost et al. “Model globally, match locally: Efficient and robust 3D object recognition”. In: CVPR . Ieee. 2010, pp. 998–1005. [55] Shengyu Huang et al. “Predator: Registration of 3d point clouds with low overlap”. In: CVPR . 2021, pp. 4267–4276. [56] Jiaming Sun et al. “LoFTR: Detector-free local feature matching with transformers”. In: CVPR . 2021, pp. 8922–8931. [57] Lorenzo Mur-Labadia et al. “O-MaMa: Learning Object Mask Match-ing between Egocentric and Exocentric Views”. In: ICCV . 2025. [58] Jiancheng Pan et al. “V 2-SAM: Marrying SAM2 with Multi-Prompt Experts for Cross-View Object Correspondence”. In: arXiv preprint arXiv:2511.20886 (2025). [59] Jianyuan Wang et al. “Vggt: Visual geometry grounded transformer”. In: CVPR . 2025, pp. 5294–5306. [60] Charles R Qi et al. “PointNet: Deep learning on point sets for 3D classification and segmentation”. In: CVPR . 2017. [61] Mark Hamilton et al. “Unsupervised semantic segmentation by dis-tilling feature correspondences”. In: arXiv preprint arXiv:2203.08414 
+
+(2022). [62] Aaron van den Oord, Yazhe Li, and Oriol Vinyals. “Representa-tion learning with contrastive predictive coding”. In: arXiv preprint arXiv:1807.03748 (2018). [63] Adam Paszke et al. “PyTorch: An Imperative Style, High-performance Deep Learning Library”. In: NeurIPS . 2019, pp. 8026–8037. [64] Alexey Dosovitskiy et al. “An image is worth 16x16 words: Trans-formers for image recognition at scale”. In: ICLR . 2021. [65] Tomas Hodan et al. “BOP Challenge 2023 on Detection, Segmentation and Pose Estimation of Seen and Unseen Rigid Objects”. In: CVPR Workshops . 2024. [66] Diederik P. Kingma and Jimmy Ba. “Adam: A Method for Stochastic Optimization”. In: ICLR . Ed. by Yoshua Bengio and Yann LeCun. 2015. [67] Frank Hutter Ilya Loshchilov. “SGDR: Stochastic Gradient Descent with Warm Restarts”. In: ICLR . 2017. [68] Tom´ aˇ s Hodaˇ n, Jiˇ r´ ı Matas, and ˇ Stˇ ep´ an Obdrˇ z´ alek. “On evaluation of 6D object pose estimation”. In: ECCV . Springer. 2016, pp. 606–619. [69] Xiyu Zhang et al. “3D Registration with Maximal Cliques”. In: CVPR .2023, pp. 17745–17754. [70] Christopher Choy, Jaesik Park, and Vladlen Koltun. “Fully convolu-tional geometric features”. In: ICCV . 2019, pp. 8958–8966. [71] Zhilei Chen et al. “UTOPIC: Uncertainty-aware Overlap Prediction Network for Partial Point Cloud Registration”. In: Computer Graphics Forum 41 (2022), pp. 87–98. [72] Fabio Poiesi and Davide Boscaini. “Learning general and distinctive 3D local deep descriptors for point cloud registration”. In: IEEE Transactions on Pattern Analysis and Machine Intelligence 45.3 (2022), pp. 3979–3985. [73] Andrea Caraffa et al. “FreeZe: Training-free Zero-shot 6D Pose Es-timation with Geometric and Vision Foundation Models”. In: ECCV .2024. [74] Jianyuan Wang, Christian Rupprecht, and David Novotny. “Posediffu-sion: Solving pose estimation via diffusion-aided bundle adjustment”. In: ICCV . 2023, pp. 9773–9783. [75] Amy Lin et al. “Relpose++: Recovering 6d poses from sparse-view observations”. In: 3DV . 2024. [76] David G Lowe. “Object recognition from local scale-invariant fea-tures”. In: ICCV . Vol. 2. IEEE. 1999, pp. 1150–1157. [77] Can G¨ umeli, Angela Dai, and Matthias Nießner. “Objectmatch: Ro-bust registration using canonical object correspondences”. In: CVPR .2023, pp. 13082–13091.
