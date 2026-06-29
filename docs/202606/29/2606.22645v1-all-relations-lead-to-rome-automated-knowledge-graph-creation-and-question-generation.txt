@@ -1,0 +1,278 @@
+Title: All Relations Lead to Rome: Automated Knowledge Graph Creation and Question Generation
+
+URL Source: https://arxiv.org/pdf/2606.22645v1
+
+Published Time: Tue, 23 Jun 2026 02:52:13 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# All Relations Lead to Rome: Automated Knowledge Graph Creation and Question Generation 
+
+# Matthijs Jansen op de Haar 
+
+m.m.t.p.jansenopdehaar@student.utwente.nl University of Twente Enschede, The Netherlands 
+
+# Tobias Stähle 
+
+tobias.staehle@inf.ethz.ch ETH Zürich Zürich, Switzerland 
+
+# Lorenzo Gatti 
+
+l.gatti@utwente.nl University of Twente Enschede, The Netherlands 
+
+Figure 1: In this work, we propose a framework for (i) knowledge graph construction and (ii) fact-grounded question-answer generation . (i) In the first phase, a corpus of documents is defined together with a weak ontology specifying entity and relation types. The corpus is then segmented into chunks, after which the ontology guides entity extraction from each chunk. Relations between extracted entities are then identified, and the resulting structured information is integrated into a knowledge graph. Finally, embeddings are computed for both chunks and entities to support downstream retrieval. (ii) In the second phase, question configurations are defined together with persona specifications used for question formulation. Chunks are retrieved from the constructed knowledge graph based on these configurations. An LLM selects a relevant chunk and extracts a fact, which is used to generate an initial question. This question is then rewritten according to the specified personas. Finally, embeddings are computed for each generated question to enable comparison and retrieval. 
+
+## Abstract 
+
+Large language models have substantially improved information retrieval and question answering; however, existing datasets gen-erally support either vector-based retrieval over unstructured text or reasoning over knowledge graphs, without providing a unified representation that combines both paradigms. Moreover, current benchmarks rarely provide ground-truth entities, relations, and fact-grounded question-answer pairs aligned with the underlying corpus. To address this gap, we introduce All Relations Lead to Rome ( ARLtR ), a unified framework for automated knowledge graph construction and fact-grounded question-answer genera-tion. ARLtR jointly constructs a knowledge graph, embeddings, and question-answer pairs that are explicitly grounded in extracted entities, relations, and supporting textual evidence. We further in-stantiate the framework as a historical dataset centered on the Roman Empire, comprising over 19,000 entities, 16,000 chunks, and 8,400 question-answer pairs 1. By tightly coupling symbolic graph 
+
+> 1https://huggingface.co/datasets/FaynePro/all-relations-lead-to-rome
+
+representations with dense retrieval representations, ARLtR facili-tates the evaluation and development of hybrid retrieval systems and semantic steering approaches within a single coherent resource. 
+
+## CCS Concepts 
+
+• Information systems → Information retrieval .
+
+## Keywords 
+
+Large Language Model, Artificial Intelligence, Information Retrieval, Knowledge Graph, Vector Database, History, Roman Empire, Rome 
+
+## 1 Introduction 
+
+Large language models (LLMs) have significantly advanced the state-of-the-art in information retrieval (IR) and question answer-ing, yet their performance remains highly dependent on the struc-ture and quality of the underlying knowledge bases and data rep-resentations [ 10 , 34 ]. In particular, modern IR approaches such as Retrieval Augmented Generation (RAG) [ 17 ] increasingly rely on 
+
+> arXiv:2606.22645v1 [cs.IR] 21 Jun 2026 Matthijs Jansen op de Haar
+
+two complementary paradigms: vector-based retrieval over unstruc-tured text chunks and structured reasoning over knowledge graphs (KGs) [ 13 ]. While both approaches have demonstrated strong per-formance on their own, they are rarely supported by a single unified dataset that enables reasoning across the two representations [ 13 ]. On the one hand, vector-based retrieval systems, as commonly used in RAG, operate on chunked text representations embedded in a high-dimensional vector space [ 17 ]. These systems are effec-tive at retrieving semantically relevant context, but they typically treat documents as isolated passages without explicit structure or relational grounding [ 5]. On the other hand, KG-based approaches encode information in terms of entities and relations, enabling structured querying and multi-hop reasoning [ 5, 10 ]. However, KG representations, on their own, can be detached from raw textual sources and are not always aligned with embedding-based represen-tations at the chunk level, and vice versa [ 3 , 5, 17 ]. This separation leads to a fundamental limitation in existing question-answering (QA) datasets. Most QA datasets or benchmarks are designed either for unstructured retrieval or for structured reasoning and, in many cases, do not include ground-truth semantics (i.e., entities or rela-tions) that can be used during retrieval to create selection spaces or to facilitate semantic steering (e.g., through entities) [ 7, 18 , 24 ]. The use of ground-truth semantics necessitates the inclusion of a knowledge base alongside unstructured chunks to facilitate selec-tions (e.g., using categories), which is omitted in state-of-the-art QA approaches such as HotpotQA [ 31 ]. Consequently, this limits the ability to design or evaluate systems that require simultaneous rea-soning over relational structure and dense semantic representations, as well as controlled retrieval guided by grounded semantics. To address these gaps, we introduce All Relations Lead to Rome (ARLtR ), a unified entity- and relation-centric framework that integrates vector-based retrieval, KG structure, and fact-grounded question-answer generation. Building on this framework, we addi-tionally provide an accompanying dataset in the historical domain, also dubbed ARLtR . Each question is explicitly grounded in enti-ties and relations extracted from a structured KG and linked to chunk-level representations that support dense retrieval. This dual alignment enables both symbolic reasoning and vector-based re-trieval to operate on the same underlying resource, thereby bridging a key gap in current QA and retrieval datasets. 
+
+## 2 Background 
+
+KGs have become a central representation for structuring textual information, such as chunks, into entities and relations [ 9]. A KG typically encodes knowledge as triples, where entities are con-nected by typed relations, enabling both semantic reasoning and structured retrieval. The construction of such graphs is commonly performed via a pipeline comprising document preprocessing, en-tity extraction, and relation extraction, often guided by an ontol-ogy that defines the expected schema for entity and relation types [9 , 11 , 33 ]. Depending on the setting, this ontology can be fully spec-ified or weakly defined, allowing for more flexible extraction across domain-specific or open-domain corpora [ 33 ]. The resulting graph structure provides a compact representation of the underlying text while preserving explicit semantic relationships [9]. Question-answer generation has been widely studied as a means of producing training and validation data for applications such as IR [ 7, 8, 31 ]. QA generation systems typically operate by first identifying facts from a corpus and then transforming them into natural-language question-and-answer pairs [ 7]. More advanced approaches further condition question generation on additional variables such as difficulty level, context constraints, or persona specifications, enabling controlled generation of diverse question sets [ 1, 8 , 31 ]. In fact-grounded settings, the key requirement is that each generated question can be traced back to an explicit supporting fact in the corpus, ensuring verifiability and reducing hallucina-tion in downstream models trained on the data [ 7, 8 , 31 ]. Both knowledge graphs and QA generation have been extensively used in information retrieval systems. KGs enable structured retrieval by allowing systems to query over entities and relations, while also supporting hybrid retrieval strategies when combined with vector-based embeddings. In modern RAG systems, unstructured text is typically split into chunks, embedded in a vector space, and retrieved using dense retrieval [ 17 ]. These chunks are then used as context for LLMs, which are used as evidence for responses [ 17 ]. In other pipelines, structured knowledge bases such as KGs are combined with dense retrieval to improve both precision and inter-pretability, allowing systems to retrieve not only relevant passages but also explicitly related entities and relational context [5]. Despite these advances, a gap remains in existing methodolo-gies for dataset construction. No existing dataset jointly provides 
+
+(i) vector-based querying over embedded chunks, (ii) an explicit knowledge graph structure linking entities and relations, (iii) ground-truth entity and relation annotations (i.e., tags), and (iv) question-answer pairs that are explicitly grounded in factual content ex-tracted from the same underlying corpus [ 7, 8 , 18 , 24 ]. Existing resources typically address only subsets of these components, such as purely vector-based retrieval datasets or KG-centric benchmarks without aligned QA pairs [ 18 , 24 ]. This limits the ability to evaluate or train systems that combine hybrid retrieval or alternatively use selection spaces and semantic steering to influence the IR process. In this work, we address this gap by proposing ARLtR , a unified framework that simultaneously constructs all four components in a consistent and fact-grounded manner, illustrated in Figure 2 
+
+Figure 2: ARLtR facilitates QA in both a knowledge graph and vector embeddings. Resulting in ground-truth facts, or answers, that coincide with ground-truth tags, or annotations. All Relations Lead to Rome: Automated Knowledge Graph Creation and Question Generation 
+
+## 3 Related Work 
+
+In this section, we address QA datasets and frameworks related to 
+
+ARLtR . In particular, we address the bottom segments as presented in Figure 2, namely (i) Vector-Based QA, (ii) Knowledge Graph QA, and (iii) Hybrid QA. 
+
+Vector-based QA datasets have become central to the devel-opment of RAG systems, using dense retrieval over large unstruc-tured corpora. Prominent benchmarks such as Natural Questions [ 15 ], TriviaQA [ 12 ], and HotpotQA [ 31 ] provide question-answer pairs aligned with chunks, supporting vector-based retrieval. These datasets are typically derived from unstructured text corpora such as Wikipedia 2 and are designed to evaluate chunk retrieval and answer-generation pipelines. However, they largely operate in a purely unstructured setting, without explicit modeling of underly-ing semantics, such as entities and relations. 
+
+Knowledge graph QA datasets, in contrast, focus on structured reasoning over explicit relational representations. Benchmarks such as WebQuestionsSP [ 32 ], ComplexWebQuestions [ 26 ], and MetaQA [ 23 ] ground questions in triples derived from knowledge graphs such as Wikidata 3 or DBpedia 4. These datasets emphasize compo-sitional and multi-hop reasoning over entities and relations, often requiring graph traversal. This enables precise symbolic reasoning; however, they typically abstract away from the rich context found in chunk embeddings. 
+
+Hybrid QA datasets that combine vector-based retrieval with knowledge graph structure remain comparatively underexplored [ 7, 8, 18 , 24 ]. Recent efforts, such as KILT [ 22 ], partially bridge this gap by aligning textual evidence with structured semantics, yet they do not fully unify dense retrieval and relational information within a single coherent framework. As a result, few benchmarks support simultaneous reasoning over entities and relations, as well as vector-based retrieval over aligned textual representations. We address this gap in the literature by introducing ARLtR .
+
+## 4 Framework and Methodology 
+
+In this section, we illustrate the various phases and stages as de-scribed in Figure 1. The phases include: (i) knowledge graph cre-ation and (ii) question-answer generation. Moreover, we include a running example that corresponds to the implementation in the 
+
+ARLtR dataset. 
+
+## 4.1 Knowledge Graph Creation 
+
+In the knowledge graph creation phase, a given unstructured text dataset is split into chunks, after which entities are extracted us-ing an LLM according to an ontology. These are then added to a knowledge graph, after which embeddings are computed for both entities and chunks to enable vector retrieval. 
+
+4.1.1 Inputs. In the input stage, a set of unstructured textual doc-uments is specified alongside an ontology. The ontology defines the allowed entity types and relations and can be either strongly or weakly defined; this is enforced during the annotation stage. It is important to note that, unlike standard ontologies [ 25 ], the on-tology is encoded in a textual representation and generally weakly 
+
+> 2https://www.wikipedia.org/
+> 3https://www.wikidata.org/
+> 4https://www.dbpedia.org/
+
+defined (i.e., only entity and relation types). This will allow an LLM to enforce the ontology through instructions provided in a system prompt. Nevertheless, it is possible to enforce an ontology after extraction, as entities and relations can be selectively added to a KG. In the ARLtR dataset, a list of entities and relation types is specified. 
+
+Example: 
+
+A set of HTML pages and PDF documents is used that contain relevant information about the Roman Empire . Furthermore, an ontology is defined that includes entity types PERSON and 
+
+LOCATION , and relation type LIVES .
+
+4.1.2 Sampling. In the sampling stage, the documents are chunked into chunks, or strings; these chunks have a fixed size (i.e., tokens) and also exhibit overlap with other chunks. The latter is to ensure that relevant context is not lost during the chunking process, in which sentences or meaning are split [ 5, 17 ]. The right balance of chunk length is a fundamental design decision in creating a knowl-edge graph, as larger chunks will require fewer LLM calls during annotation, while smaller chunks can improve recall of information [ 5, 14 ]. In the design of the ARLtR dataset, medium-sized chunks of 100 tokens were used. However, overlap was omitted due to the small chunk size and to prevent over-representation of facts in the QA Generation stage. 
+
+Example: 
+
+Based on the provided HTML pages and PDF documents, each is chunked into 600-token chunks with 100-token overlap between chunks. This result strikes a good balance between annotation efficiency and the avoidance of context loss across poorly split documents. 
+
+4.1.3 Annotation. After the corpus has been chunked, the annota-tion stage is applied using an LLM-based entity tagger, a method commonly used in knowledge graph generation pipelines [ 5, 33 ]. In this stage, entities can be extracted and used directly as metadata within a standard vector database. However, for knowledge graph construction, additional relational information is required. This can be obtained either by directly extracting triplets containing entities and relations, or by separating the process into entity annotation followed by relation extraction over the identified entities. The latter approach follows a chain of thought [ 30 ], in which relations are inferred from previously extracted entities. While this increases the number of LLM calls, it improves annotation accuracy, partic-ularly in settings with larger or more complex ontologies [ 30 ]. In constructing the ARLtR dataset, we adopt this two-step process for triplet identification. 
+
+Example: 
+
+Using the specified ontology, a chunk is tagged by an LLM-based entity tagger, extracting entities (e.g. Augustus ) according to the specified entity types. These are subsequently used to extract relations, using both the chunk and specified entities (e.g., Augustus → ruled → Roman Empire ). Using a chain of thought ensures better knowledge graph annotation quality. 
+
+4.1.4 Generation. During the knowledge graph generation stage, extracted entities and relations are integrated into the knowledge Matthijs Jansen op de Haar 
+
+graph. Entities are merged based on their title, regardless of capi-talization, to avoid duplicate entries when an entity with the same name already exists. Subsequently, relations are added using the same merging strategy to ensure consistency at the graph level. While this reduces redundancy in the constructed dataset, its ef-fectiveness depends on the underlying domain and naming con-ventions, particularly when distinct entities share the same name. Furthermore, this stage should enforce that entities and relations conform to valid types, as LLM-based annotation may introduce in-correct or inconsistent labels [ 2, 28 ]. In practice, annotations can be added in batches or one by one during knowledge graph creation. 
+
+Example: 
+
+Each of the annotated entities (e.g., Augustus ), and relations (e.g., LIVES ) is added one-by-one into the dataset. Entities with different capitalization are merged upon insertion to the knowl-edge graph (e.g., augustus or AUGUSTUS .
+
+4.1.5 Embedding. In the embedding stage, vector representations are computed for each chunk using a pre-trained embedding model. These embeddings are defined in a fixed-dimensional vector space, where higher dimensionality generally allows for a richer repre-sentation of semantic information. The resulting vectors are stored as attributes of the corresponding chunks and can be leveraged for dense retrieval methods, such as cosine similarity. In addition, embeddings can also be computed for entities, enabling entity-level matching and comparison via dense retrieval. In the ARLtR dataset, both chunk-level and entity-level embeddings are computed and stored within the knowledge graph to support retrieval tasks. 
+
+Example: 
+
+Given some chunk, embeddings are computed using a pre-trained embedding model. These are then added as an attribute to the knowledge graph. Moreover, to facilitate dense retrieval, entities and their descriptions have been turned into embed-dings. 
+
+## 4.2 Question-Answer Generation 
+
+In the question-answer generation phase, question configurations and persona specifications are pre-defined and guide the subsequent process. Based on this configuration, relevant entities are selected, and associated chunks are then retrieved to ensure contextual rel-evance. An LLM-based fact extractor then selects one or multiple facts from the retrieved chunks. Using these extracted facts, a base question is formulated, where the facts serve as the ground-truth answer. This base question is subsequently rewritten according to the specified persona configurations. Finally, embeddings are computed over the generated questions to support retrieval. 
+
+4.2.1 Inputs. During the input stage, question configurations are specified, defining and constraining the subsequent stages. These configurations are summarized in Table 1, but can be extended depending on the target domain and specific QA use cases. Based on this configuration, different strategies for chunk retrieval, selec-tion, and question generation can be applied. In addition, persona specifications are defined to describe user profiles and their cor-responding levels of expertise. These personas are subsequently 
+
+Table 1: Question Configurations in ARLtR 
+
+Category Type Description 
+
+Question Type Factoid Requiring a single fact Open Requiring multiple facts Relational Entity Regarding an entity Relation Regarding a relation Complexity Single Single entity, or relation Double Two entities, or neighbor Persona Novice Lowest user-experience Intermediate Average user-experience Expert Advanced user-experience Existent In Dataset Supported by facts Not in Dataset Unsupported by facts used in the persona reformulation stage to guide the generation of tailored question variants. The categories presented in Table 1 are grounded in the liter-ature. The question type category distinguishes between factoid and open questions, which require one or multiple facts to answer, respectively. Factoid questions are typically used to assess whether a response is discretely correct, whereas open questions are evalu-ated based on their exhaustiveness [ 6 , 15 ]. The relation category encodes whether a question concerns a single entity or one of its relations. Alternatively, questions may involve neighboring entities, requiring multi-hop reasoning [ 4, 16 ]. This aspect is captured by the complexity category, which differentiates between single-entity and two-entity configurations for entity-based questions. For rela-tional questions, it determines whether the query targets a direct relation or a neighboring entity, the latter requiring an entity hop. Furthermore, the persona category encodes varying levels of user expertise and is commonly used in Human-Computer Interaction research to better model user diversity [ 21 ]. Lastly, the existent category indicates whether a question-answer pair is supported by the dataset, thereby enabling the inclusion of unanswerable or misleading questions to evaluate system precision. 
+
+Example: 
+
+Each question is constructed by selecting a question type (e.g., factoid or open), an entity (e.g., Augustus ), and a relation (e.g., 
+
+RULED ); depending on the complexity setting, a neighbor en-tity (e.g., Roman Empire ) may be added, which will result in a question being asked about said neighbor. (e.g., “When was the empire ruled by Augustus founded?”) 
+
+4.2.2 Sampling. In the sampling stage, the provided question con-figuration is used to retrieve chunks for fact extraction. This is achieved by randomly selecting entities and relations associated with a sufficient number of chunks, ensuring they are meaningfully connected and can support factual extraction across the dataset. This process guarantees that extracted facts are grounded in the KG and remain aligned with the selected entities. The different sampling strategies are illustrated in Figure 3. Each configuration is defined as follows: (i) Single-Entity: all chunks associated with a given entity are considered relevant for fact extraction; (ii) Double-Entity: chunks are selected based on the intersection between two All Relations Lead to Rome: Automated Knowledge Graph Creation and Question Generation 
+
+entities, capturing shared information relevant for extraction; (iii) 
+
+Single-Relation: a specific relation type is selected for a given en-tity, and the corresponding chunks are used to extract a relevant fact; and (iv) Double-Relation: a relational hop is required, where chunks from a neighboring entity are included, and the intersection is used to extract the multi-hop relation. In ARLtR for each retrieval method, for a given configuration, the number of chunks should at least be five. This ensures that entities are always related and relevant, given the underlying dataset. 
+
+Figure 3: Sampling Variations between Complexity and Relational Question Categories between Entity (A) and Neighbor (B) 
+
+Example: 
+
+Given some combination of question categories, an entity with sufficient chunks is randomly selected (e.g., Augustus ). In this case, a Double-Entity question was specified. Therefore, a neigh-boring entity that has a sufficient amount of chunks shared with Augustus is chosen, in this case Rome . The intersection of shared chunks is then sampled for the proceeding steps. 
+
+4.2.3 Annotation. During the annotation stage, an LLM is given a set of chunks and tasked with extracting one or multiple facts. This fact extraction is framed from the question configuration, as different configurations require different facts. Each fact should correspond to the previously specified entity and possible relations, rather than being an unrelated fact from a given chunk. Doing the extraction prior to question generation also benefits from chain of thought [30]. 
+
+Example: 
+
+Given a set of chunks related to Augustus and the relation 
+
+LIVES , the LLM is prompted to extract a fact aligned with this configuration. From chunks such as “Augustus spent much of his reign in Rome,” it extracts the fact Augustus → lived in → Rome . For a Double-Relation configuration, additional chunks may lead to a multi-hop fact (e.g., Augustus → ruled 
+
+→ Roman Empire → capital → Rome ). 
+
+4.2.4 Generation. Using the extracted facts, an LLM generates a base question that requires those facts to answer. Furthermore, the 
+
+Table 2: Persona Expertise Levels and Base Descriptions Personsa Lvl. Description 
+
+Novice Informal terminology and omitted context Intermediate Adequate terminology and base context Expert Precise terminology and additional context subjects (i.e., entities) are added to the question, enabling assess-ment of automated tagging strategies. This results in a question-answer pair, where the answer is equivalent to a fact that is aligned with a ground-truth entity. After the base question formulation is created, it is reformulated for each persona specification, resulting in formulation variations to facilitate comparisons across different user experience levels. These specifications should include a de-scription of the persona (or user) and indicate whether they can provide additional details or leave a question ambiguous. The per-sona configurations used in ARLtR are specified in Table 2, and the descriptions and prompt are in Appendix A. 
+
+Example: 
+
+Given the extracted fact Augustus → ruled → Roman Empire ,the LLM generates a base question such as “Which empire did Augustus rule?”. The entity Augustus is explicitly included to enable evaluation of entity recognition. The answer corresponds directly to the fact (i.e., Roman Empire ). This base question is then reformulated based on persona specifications; e.g., a novice may ask “What place did Augustus rule?”, while an expert may ask “Which political entity was governed by Augustus during his reign?”, producing multiple variations aligned with different user expertise levels. 
+
+4.2.5 Embedding. During the final stage, embeddings are com-puted using a pre-trained embedding model applied to the persona-formulated questions. This will enable dense retrieval over the chunks in the KG, using methods such as cosine similarity . These embeddings should be compatible with the ones presented in the KG and use the same embedding model. 
+
+Example: 
+
+The question “Which empire did Augustus rule?” is encoded using a pre-trained embedding model, producing a dense vec-tor representation. This embedding can then be compared with chunk embeddings in the KG using cosine similarity to retrieve chunks that mention Augustus and the Roman Empire . By using the same embedding model as the KG, the retrieved chunks re-main semantically aligned with the question for accurate dense retrieval. 
+
+## 5 Dataset 
+
+In this section, we discuss the ARLtR dataset, which uses the ARLtR 
+
+framework to create a KG and QA for historical documents related to the Roman Empire . We provide our dataset as a knowledge graph, and both existent and non-existent question-answer pairs 5.
+
+> 5https://huggingface.co/datasets/FaynePro/all-relations-lead-to-rome Matthijs Jansen op de Haar
+
+## 5.1 All Relations Lead to Rome 
+
+All Relations Lead to Rome ( ARLtR ) is a KG and QA dataset with entities and relations about the Roman Empire , made in Neo4j 6.In the extraction and embeddings, we used an LLM (i.e., minimax 2.7 7) and an embedding model (i.e., gemini-embedding-2 8) for the various stages as illustrated in Figure 1. The input dataset comprises a representative sample of 300 articles from Wikipedia, spanning the Roman Empire to the Byzantine Empire and covering people, locations, and historical events. 
+
+ARLtR contains 16,069 chunks, each approximately 100 tokens, totaling 1.6M tokens . All chunks are linked to at least one entity, this being the corresponding Wikipedia article, making for 19,374 total entities, ranging from people to locations. These entities have 25,304 total relations and are linked to various chunks 88,135 times. This means that each chunk contains an average of 4.55 entities. A subset of approximately 1000 nodes from the knowledge graph is shown in Figure 4, where the entity Rome is highlighted as having the highest degree in the graph (i.e., 3,476 total links). Therefore, 
+
+All Relations Lead to Rome .
+
+Figure 4: Subset of the ARLtR KG, with Rome Highlighted Furthermore, the knowledge includes embedding attributes for all chunks and entities, generated using the pre-trained gemini-embedding-2 model 7 (i.e., with 3,072 dimensions). This ensures that embeddings do not need to be recomputed for any future studies that use ARLtR . Moreover, the dataset contains vector indices for both entities and chunks , which is supported in Neo4j 5. This allows for efficient dense retrieval over the graph without needing to compute embeddings one by one. 
+
+> 6https://neo4j.com/
+> 7https://www.minimax.io/models/text/m27
+> 8https://deepmind.google/models/gemini/embedding/
+
+Figure 5: Ontology Grounded in the Historical Domain 
+
+## 5.2 Ontology 
+
+In the design of ARLtR , we adopt an ontology grounded in existing historical and ontological literature [ 19 , 20 , 27 ]. As discussed, we employ a weak ontology to facilitate extraction, meaning that all defined entity types are allowed to relate to one another without hard constraints on admissible relation pairs. This ensures that the dataset is more aligned with KGs used in practice. In the historical domain, the primary categories are commonly identified as Actors, Locations, and Historical Events [20, 27]. We further refine Actors into two subtypes: PERSON and STATE .For Locations, we distinguish between CITY , COUNTRY , and REGION .For Historical Events, while the literature differentiates between event classes such as wars, scientific discoveries, and religious events, we collapse these into a single unified category, HISTORI-CAL EVENT . This abstraction ensures that any historically salient event can be consistently identified and tagged by the LLM-based annotator, without requiring fine-grained event-type supervision. The resulting ontology is illustrated in Figure 5, with all entity types summarized in the entity type box. During the construction of ARLtR , we manually resolved ontological inconsistencies, in-cluding mislabeled entities and conflicting relation assignments [ 5, 29 , 33 ]. Additionally, any articles that were not considered one of the aforementioned entity types were simply labeled as ARTICLE ,as each entity has exactly one type. 
+
+Entity Types: 
+
+CITY, COUNTRY, REGION, HISTORICAL EVENT, PERSON, STATE, ARTICLE 
+
+The relation types are further grounded in the literature [ 19 , 20 ,27 ]. However, sources commonly diverge on the precise relation types, and often focus on specifying entities or specific triplets. Therefore, we created an exhaustive list that combines the speci-fied relation types from the literature. In addition, by specifying relation types, the quality of the KG improves drastically, as the All Relations Lead to Rome: Automated Knowledge Graph Creation and Question Generation 
+
+LLM-annotator will not include irrelevant relation types. The vari-ous relation types are specified in the relation types box 
+
+Relation Types: 
+
+FOUNDED BY, LEADER OF, MAJOR EVENT IN, LOCATED IN, CAPITAL OF, INVOLVED IN, OCCURRED IN, MEMBER OF, ENEMY OF, ALLY OF, DIED IN, FOUGHT IN, MINOR EVENT IN, BORN IN, HAS CHUNK, MENTIONS 
+
+It should be noted that for MENTIONS and HAS CHUNK , these indicate whether an entity is connected to a given chunk. This facilitates the retrieval of chunks and defines whether an entity appears or is connected to a given chunk. 
+
+## 5.3 Question-and-Answers 
+
+Alongside the knowledge graph, ARLtR also provides an extensive list of entity and fact-grounded question-and-answer pairs. A total of 8,400 QA pairs is provided. 6,000 of these questions are grounded in entities in the knowledge base, and the remaining 2,400 concern entities or facts not present in the knowledge base. It is important to note that some of the latter questions might have entities in the knowledge graph, but no facts. For example, United States is included as an entity because it is mentioned in one of the arti-cles, even though it is not relevant to the Roman Empire . This is a natural result of using underlying documents for fact extraction. Nevertheless, facts or answers remain nonexistent in the dataset. This facilitates the evaluation of retrieval precision, as false posi-tives may be retrieved for a question with no answer. Each possible question configuration from Table 1 is equally represented using 350 distinct entities (i.e., number of entities, or #𝐸𝑛𝑡 . ) in the dataset. Described with: 
+
+𝑄𝐴 𝑝𝑎𝑖𝑟𝑠 = #𝐸𝑛𝑡 . ∗ #𝑃𝑒𝑟 . ∗ #𝐶𝑜𝑚𝑝. ∗ #𝑅𝑒𝑙 . ∗ #𝑄𝑢𝑒. (1) In the case of ARLtR this results in the following equation: 
+
+𝑄𝐴 𝑝𝑎𝑖𝑟𝑠 = #𝐸𝑛𝑡 . ∗ 24 (2) 
+
+## 6 Discussion 6.1 General Implications 
+
+We present ARLtR , a unified framework and dataset that facilitates both dense retrieval and knowledge graph construction in a tightly coupled manner. In addition, ARLtR enables the generation of QA-pairs that are explicitly grounded in textual chunks, extracted facts, and structured entity–relation representations derived from the un-derlying corpus. This joint grounding introduces a stronger form of supervision than text-only QA generation, as answers can be traced simultaneously to raw evidence and to symbolic graph structure. As a result, ARLtR provides a controlled environment for systematically comparing retrieval strategies, particularly retrieval-augmented generation methods such as base RAG [ 17 ] and graph-based ex-tensions such as GraphRAG [ 5], which are otherwise difficult to evaluate in current benchmarks. Beyond evaluation, the availability of ground-truth entities and relations enables a range of structured selection and control mech-anisms over the dataset. In particular, retrieval can be explicitly conditioned on entity sets or relation types, enabling semantic steering of the retrieval process, in which the high-level graph structure determines the most appropriate retrieval strategy for a given query. This introduces a more fine-grained interface between symbolic structure and neural retrieval, and enables hybrid systems that dynamically adapt retrieval pathways based on graph-aware semantics rather than relying solely on embedding similarity. Furthermore, ARLtR provides direct utility for downstream sys-tem design and domain-specific analysis, particularly in the histori-cal domain of the Roman Empire, where structured representations enable new forms of exploratory analysis, retrieval, and reason-ing over interconnected entities and events. While the current instantiation is grounded in this domain, the underlying ARLtR 
+
+framework is intentionally domain-agnostic. By adopting a weakly defined ontology, the framework reduces the need for extensive upfront ontological engineering, while still preserving sufficient structure for reliable entity and relation extraction. This design choice significantly lowers the barrier to constructing comparable knowledge graphs in other domains. Consequently, the approach generalizes naturally to settings such as the medical or financial domains, where structured knowledge representations are simi-larly valuable, yet rigid ontological design is often costly and dif-ficult to maintain. Overall, ARLtR not only provides a dataset for benchmarking retrieval and generation systems but also serves as a reusable infrastructure for constructing, manipulating, and evaluating knowledge graphs and grounded QA datasets within a unified, extensible framework. 
+
+## 6.2 Limitations and Future Work 
+
+ARLtR makes use of automated LLM-based annotation in order to extract entities and relations from each chunk. This results in inherent inaccuracies in the tagging process when compared to hu-man annotation, as extraction errors, missing relations, or incorrect entity boundaries may occur. While it is possible to incorporate human annotation within the proposed framework, this introduces a trade-off between annotation quality, time, and cost. Future work may explore hybrid approaches that combine LLM-based annota-tion with selective human verification to improve overall quality while maintaining scalability. Furthermore, answer generation within ARLtR is not constrained to uniquely identifiable facts. In practice, a given question may be answerable using multiple valid facts or combinations of entities, resulting in ambiguity in the ground-truth answer space. While this introduces challenges for strict evaluation, it also reflects re-alistic retrieval settings in which multiple supporting facts may exist. As such, the dataset is better suited for evaluation under recall-oriented metrics, where systems are required to retrieve a set of appropriate answers rather than a single exact match. Future work may investigate mechanisms for clustering or normalizing equivalent answers to enable more fine-grained evaluation. Finally, the ARLtR dataset is constructed in the historical domain, introducing domain-specific characteristics in both the knowledge graph and the underlying text. In particular, historical data often exhibits moderate graph density and well-defined entity relation-ships, which may not generalize to domains with either sparser or significantly denser relational structures. While ARLtR itself is of above-moderate size, the proposed framework is not limited to Matthijs Jansen op de Haar 
+
+this setting and can be used to construct datasets of varying scale and complexity. This includes both smaller subsets of ARLtR that may serve as proxies for low-resource knowledge graphs and larger, domain-specific extensions. Future work should therefore explore the application of the framework across diverse domains and graph configurations to better understand its generalizability. 
+
+## 7 Conclusion 
+
+In this work, we presented ARLtR , a unified framework and ac-companying dataset that bridges the gap between vector-based retrieval and knowledge graph reasoning. Unlike existing resources that only provide subsets of these components, ARLtR jointly con-structs chunk embeddings, structured entity-relation representa-tions, ground-truth annotations, and fact-grounded question-answer pairs from a shared corpus. This unified design enables both sym-bolic reasoning and dense retrieval to operate over the same under-lying resource, facilitating controlled evaluation of hybrid retrieval approaches and graph-enhanced retrieval-augmented generation systems. Furthermore, the use of a weak ontology and automated construction pipeline lowers the barrier to creating comparable datasets in other domains. Consequently, ARLtR serves not only as a benchmark for retrieval and question-answering research but also as a reusable and extensible framework for constructing grounded knowledge graphs and hybrid retrieval resources across diverse application settings. 
+
+## Acknowledgments 
+
+This work was made in preparation for a subsequent study called 
+
+GuidedRAG . This constitutes as a draft submission, in future corre-spondence, additional datasets of various sizes alongside an evalua-tion and extended analysis of the dataset will be provided. 
+
+## References 
+
+[1] 2025. Persona-SQ: A Personalized Suggested Question Generation Framework For Real-world Documents. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (System Demonstrations) , Nouha Dziri, Sean (Xiang) Ren, and Shizhe Diao (Eds.). 210–247. doi:10.18653/v1/2025.naacl-demo.20 [2] Dang Anh-Hoang, Vu Tran, and Le-Minh Nguyen. 2025. Survey and analysis of hallucinations in large language models: attribution to prompting strategies or model behavior. Frontiers in Artificial Intelligence Volume 8 - 2025 (2025). doi:10.3389/frai.2025.1622292 [3] Xin Dong, Evgeniy Gabrilovich, Geremy Heitz, et al . 2014. Knowledge vault: a web-scale approach to probabilistic knowledge fusion. In Proceedings of the 20th ACM SIGKDD International Conference on Knowledge Discovery and Data Mining .601–610. doi:10.1145/2623330.2623623 [4] Mohnish Dubey, Debayan Banerjee, Debanjan Chaudhuri, et al . 2018. EARL: Joint Entity and Relation Linking for Question Answering over Knowledge Graphs. In The Semantic Web – ISWC 2018: 17th International Semantic Web Conference, Monterey, CA, USA, October 8–12, 2018, Proceedings, Part I . 108–126. doi:10.1007/978-3-030-00671-6_7 [5] Darren Edge, Ha Trinh, Newman Cheng, et al . 2025. From Local to Global: A Graph RAG Approach to Query-Focused Summarization. arXiv:2404.16130 [cs.CL] https://arxiv.org/abs/2404.16130 [6] Amer Farea, Zhen Yang, Kien Duong, et al . 2025. Evaluation of Question An-swering Systems: Complexity of Judging a Natural Language. ACM Comput. Surv. 58, 1 (2025), 1–43. doi:10.1145/3744663 [7] Bin Fu, Yunqi Qiu, Chengguang Tang, et al . 2020. A Survey on Complex Question Answering over Knowledge Base: Recent Advances and Challenges. arXiv:2007.13069 [cs.CL] https://arxiv.org/abs/2007.13069 [8] Shash Guo, Lizi Liao, Cuiping Li, et al . 2024. A survey on neural question generation: methods, applications, and prospects. In Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence . Article 889, 8038– 8047 pages. doi:10.24963/ijcai.2024/889 [9] Aidan Hogan, Eva Blomqvist, Michael Cochez, et al . 2021. Knowledge Graphs. 54, 4, Article 71 (2021), 37 pages. doi:10.1145/3447772 [10] Yizheng Huang and Jimmy Xiangji Huang. 2026. A Survey on Retrieval-Augmented Text Generation for Large Language Models. ACM Comput. Surv. 58, 12, Article 300 (2026), 38 pages. doi:10.1145/3805774 [11] Shaoxiong Ji, Shirui Pan, Erik Cambria, et al . 2022. A Survey on Knowledge Graphs: Representation, Acquisition, and Applications. IEEE Transactions on Neural Networks and Learning Systems 33, 2 (2022), 494–514. doi:10.1109/TNNLS. 2021.3070843 [12] Mandar Joshi, Eunsol Choi, Daniel Weld, et al . 2017. TriviaQA: A Large Scale Distantly Supervised Challenge Dataset for Reading Comprehension. In Proceed-ings of the 55th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 1601–1611. doi:10.18653/v1/P17-1147 [13] Amir Abbas Kamalipour, Shahrokh Asadi, and Mohammad Mahyar Amiri Chimeh. 2026. From vectors to knowledge graphs: A comprehensive analy-sis of modern retrieval-augmented generation architectures. Computer Science Review 61 (2026), 100925. doi:10.1016/j.cosrev.2026.100925 [14] Yuri Kuratov, Aydar Bulatov, Petr Anokhin, et al . 2024. In Search of Needles in a 11M Haystack: Recurrent Memory Finds What LLMs Miss. arXiv:2402.10790 [cs.CL] https://arxiv.org/abs/2402.10790 [15] Tom Kwiatkowski, Jennimaria Palomaki, Olivia Redfield, et al . 2019. Natural Questions: A Benchmark for Question Answering Research. Transactions of the Association for Computational Linguistics 7 (2019), 452–466. doi:10.1162/tacl_a_ 00276 [16] Yunshi Lan, Gaole He, Jinhao Jiang, et al . 2023. Complex Knowledge Base Question Answering: A Survey. IEEE Transactions on Knowledge and Data Engineering 35, 11 (2023), 11196–11215. doi:10.1109/TKDE.2022.3223858 [17] Patrick Lewis, Ethan Perez, Aleksandra Piktus, et al . 2020. Retrieval-augmented generation for knowledge-intensive NLP tasks. In Proceedings of the 34th In-ternational Conference on Neural Information Processing Systems . Article 793, 9459–9474 pages. [18] Chuangtao Ma, Yongrui Chen, Tianxing Wu, et al . 2025. Large Language Models Meet Knowledge Graphs for Question Answering: Synthesis and Opportunities. arXiv:2505.20099 [cs.CL] https://arxiv.org/abs/2505.20099 [19] Albert Meroño-Peñuela, Ashkan Ashkpour, Marieke van Erp, et al . 2015. Semantic technologies for historical research: A survey. Semantic Web 6, 6 (2015), 539–564. doi:10.3233/SW-140158 [20] Gabor Nagypal. 2005. History ontology building: The technical view. In Pro-ceedings of the 16th International Conference of the Association for History and Computing (AHC 2005) . Royal Netherlands Academy of Arts and Sciences, 207– 214. [21] Antti Oulasvirta, Mikael Wahlström, and K. Anders Ericsson. 2011. What does it mean to be good at using a mobile device? An investigation of three levels of experience and skill. International Journal of Human-Computer Studies 69, 3 (2011), 155–169. doi:10.1016/j.ijhcs.2010.11.003 [22] Fabio Petroni, Aleksandra Piktus, Angela Fan, et al . 2021. KILT: a Benchmark for Knowledge Intensive Language Tasks. In Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies . 2523–2544. doi:10.18653/v1/2021.naacl-main.200 [23] Haritz Puerto, Gözde Şahin, and Iryna Gurevych. 2023. MetaQA: Combining Expert Agents for Multi-Skill Question Answering. In Proceedings of the 17th Con-ference of the European Chapter of the Association for Computational Linguistics .3566–3580. doi:10.18653/v1/2023.eacl-main.259 [24] Mikhail Salnikov, Hai Le, Prateek Rajput, et al . 2023. Large Language Models Meet Knowledge Graphs to Answer Factoid Questions. In Proceedings of the 37th Pacific Asia Conference on Language, Information and Computation . 635–644. https://aclanthology.org/2023.paclic-1.63/ [25] Rudi Studer, V. Richard Benjamins, and Dieter Fensel. 1998. Knowledge en-gineering: principles and methods. Data Knowl. Eng. 25, 1–2 (1998), 161–197. doi:10.1016/S0169-023X(97)00056-6 [26] Alon Talmor and Jonathan Berant. 2018. The Web as a Knowledge-Base for Answering Complex Questions. In Proceedings of the 2018 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long Papers) . 641–651. doi:10.18653/v1/N18-1059 [27] Esther Travé Allepuz, Pablo del Fresno Bernal, and Alfred Mauri Martí. 2020. Ontology-Mediated Historical Data Modeling: Theoretical and Practical Tools for an Integrated Construction of the Past. Information 11, 4 (2020). doi:10.3390/ info11040182 [28] Elena Volkanovska. 2025. A Study of Errors in the Output of Large Language Models for Domain-Specific Few-Shot Named Entity Recognition. Journal for Language Technology and Computational Linguistics 38, 2 (2025), 31–42. doi:10. 21248/jlcl.38.2025.281 [29] Yuze Wang, Mingxiang Shi, Xiulei Qin, et al . 2025. Research on Construction and Application of Knowledge Graph in Science and Technology Field Based on Large Language Model. In Proceedings of the 2025 6th International Conference on Education, Knowledge and Information Management . 343–349. doi:10.1145/ 3756580.3756635 All Relations Lead to Rome: Automated Knowledge Graph Creation and Question Generation 
+
+[30] Jason Wei, Xuezhi Wang, Dale Schuurmans, et al . 2022. Chain-of-thought prompt-ing elicits reasoning in large language models. In Proceedings of the 36th Interna-tional Conference on Neural Information Processing Systems . Article 1800. [31] Zhilin Yang, Peng Qi, Saizheng Zhang, et al . 2018. HotpotQA: A Dataset for Diverse, Explainable Multi-hop Question Answering. In Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing . 2369–2380. doi:10.18653/v1/D18-1259 [32] Wen-tau Yih, Matthew Richardson, Chris Meek, et al . 2016. The Value of Semantic Parse Labeling for Knowledge Base Question Answering. In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers) . 201–206. doi:10.18653/v1/P16-2033 [33] Lingfeng Zhong, Jia Wu, Qian Li, et al . 2023. A Comprehensive Survey on Automatic Knowledge Graph Construction. ACM Comput. Surv. 56, 4, Article 94 (2023), 62 pages. doi:10.1145/3618295 [34] Yutao Zhu, Huaying Yuan, Shuting Wang, et al . 2025. Large Language Models for Information Retrieval: A Survey. ACM Trans. Inf. Syst. 44, 1, Article 12 (2025), 54 pages. doi:10.1145/3748304 Matthijs Jansen op de Haar 
+
+## A Persona Descriptions and Prompt 
+
+In this section, we present the persona descriptions used in ARLtR 
+
+for reformulating each base question. These descriptions, along with their descriptors (e.g., Novice), are passed to an LLM to reformulate the base question. 
+
+## A.1 Persona Descriptions 
+
+Novice: 
+
+You are an inexperienced user with limited knowl-edge of the Roman Empire and no experience with RAG systems. You may use informal language, vague references, abbreviations, or incomplete terminol-ogy. Your questions might be more brief, or alter-natively, too verbose without relevant additional context. Your questions should still convey the orig-inal intent, but may be less precise and may omit important contextual details, such as dates or use abbreviated terms and names. 
+
+Intermediate: 
+
+You are a user with moderate knowledge of the Ro-man Empire. You are familiar with common historical figures, events, and concepts, but are far from aspecialist. Your response can be of varying length, mostly containing relevant context, but occasion-ally throwing in unnecessary context. Your questions should generally be of moderate quality and under-standable, on occasion using historical terminology, while preserving the original intent of the question, and sometimes omitting relevant details. 
+
+Expert: 
+
+You are a domain expert on the Roman Empire with extensive historical knowledge. You are comfortable using precise terminology, formal names, historical context, and specialized vocabulary. Your questions should be highly specific or detailed, unambiguous, and technically accurate while preserving the exact semantic meaning of the original question. 
+
+## A.2 Persona Prompt 
+
+Persona Reformulation: 
+
+CONTEXT: You are a system that rewrites questions from the perspective of a specific user role without changing their se-mantic meaning. All questions concern the Roman Empire or related topics. The assigned user role defines the perspective and expertise from which the question should be phrased. These questions are intended for a RAG system to retrieve rele-vant information. ROLE: You are a { persona } user. ROLE DESCRIPTION: { description } TASK: 1. Rewrite the question provided under ’QUESTION TO REWRITE’ without changing its semantic meaning. 2. Ensure the rewritten question reflects the assigned user role and role description. 3. Return only a JSON object. Do not include any additional text, explanations, or formatting. QUESTION TO REWRITE: { base question } OUTPUT FORMAT: { "question": "..." }

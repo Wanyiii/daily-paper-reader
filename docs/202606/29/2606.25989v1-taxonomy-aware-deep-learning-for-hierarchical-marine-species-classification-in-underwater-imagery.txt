@@ -1,0 +1,269 @@
+Title: Taxonomy-aware deep learning for hierarchical marine species classification in underwater imagery
+
+URL Source: https://arxiv.org/pdf/2606.25989v1
+
+Published Time: Thu, 25 Jun 2026 01:12:20 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Taxonomy-aware deep learning for hierarchical marine species classification in underwater imagery 
+
+## Dan Zimmerman a, Dimitris A. Pados a, and George Sklivanitis aaCenter for Connected Autonomy and AI 
+
+> 1
+
+## Florida Atlantic University, Boca Raton, FL 33431, USA 
+
+ABSTRACT 
+
+Automated classification of marine species from underwater imagery is essential for scalable ocean biodiversity monitoring and conservation policy. Existing approaches struggle with severe domain shift across collection platforms, fine-grained visual similarity between closely related species, and uneven annotation granularity, where many specimens can only be identified to genus or a coarser taxonomic rank. We present a taxonomy-aware deep learning framework that aligns both the training loss and the inference rule with the hierarchical structure of biological classification, combining a taxonomy-weighted loss, minimum-risk Bayesian inference, multi-scale feature encoding, and independent per-rank classification heads. Evaluated on the FathomNet 2025 dataset 1 (79 marine classes across seven taxonomic ranks), the system achieves a mean taxonomic distance of 1.581, within 3% of the 1st-place solution (1.535), with the largest gains from metric-aligned inference and simple, decoupled components that generalize better than learned dependencies under distribution shift. 
+
+Keywords: marine species classification, hierarchical classification, taxonomic distance, DINOv2, minimum-risk inference 
+
+1. INTRODUCTION 
+
+Marine biodiversity monitoring is fundamental to understanding ocean ecosystems, tracking the effects of climate change, and guiding conservation policy. 2 Underwater camera systems deployed on remotely operated vehicles, autonomous underwater vehicles, and fixed observatories now generate millions of images annually, far exceeding the capacity of human experts to annotate. Automated visual classification of marine organisms is therefore essential, but presents challenges distinct from terrestrial recognition: severe domain shift across collection platforms, fine-grained visual similarity between closely related species, and uneven annotation granularity, where many specimens can only be identified to genus or a coarser rank rather than to species. In biology, organisms are organized into a taxonomy, a hierarchical classification system with ranks from broad (kingdom, phylum) to specific (genus, species). When species-level identification is uncertain, predicting at a coarser rank (genus, family) is vastly preferable to an incorrect species prediction. This motivates taxonomy-aware classification, where prediction quality is measured not by flat accuracy but by the severity of the error within the biological hierarchy. Standard cross-entropy training is misaligned with this objective: it treats all misclassifications equally, whether the confusion is between species in the same genus or between organisms in different phyla. We present a taxonomy-aware deep learning framework that directly addresses this misalignment by aligning both the training loss and the inference rule with the hierarchical evaluation metric. The framework combines a taxonomy-weighted loss, minimum-risk Bayesian inference, multi-scale feature encoding, and independent per-rank classification heads. Two design principles produce disproportionate gains: (1) metric-aligned training and inference account for roughly 11% of the total improvement, with minimum-risk inference providing the most consistent gain; and (2) simple, decoupled components consistently outperform learned dependencies under 
+
+Further author information: (Send correspondence to D.Z.) D.Z.: E-mail: dzimmerman2021@fau.edu D.P.: E-mail: dpados@fau.edu G.S.: E-mail: gsklivanitis@fau.edu 
+
+> arXiv:2606.25989v1 [cs.CV] 24 Jun 2026
+
+distribution shift. Built on DINOv2-Base 3 with layer-wise learning rate decay, 4 the system achieves a mean taxonomic distance of 1.581 on the FathomNet 2025 dataset, 1 within 3% of the 1st-place solution (1.535). Abackbone comparison against ConvNeXtV2-Base 5 (1.782) further isolates the importance of fine-tuning recipe: naive uniform fine-tuning of DINOv2 yields 2.225, and only layer-wise decay recovers the gains of self-supervised pretraining. The same problem class, fine-grained classification under sensor and environmental domain shift with hierar-chically structured label costs, recurs across automatic target recognition (ATR) and intelligence, surveillance, and reconnaissance (ISR) pipelines, where decision-theoretic inference over taxonomies of vehicles, vessels, or threats faces analogous challenges. The empirical findings reported here therefore inform a broader class of imaging applications constrained by similar data regimes. 
+
+2. RELATED WORK 
+
+Several families of methods have been proposed to exploit hierarchical label structure in classification. Structural constraint approaches enforce consistency between predictions at different levels of the hierarchy: Hierarchical Cross-Entropy (HXE) 6 decomposes the softmax likelihood along the class tree via conditional probabilities at each rank, and C-HMCNN 7 uses a max-constraint module to guarantee that parent-class probabilities exceed those of their children. Branching architectures such as B-CNN 8 attach coarse-level classifiers to earlier layers of the backbone, matching feature abstraction to the granularity of each rank. A third strategy parameterizes only the finest-level (leaf) distribution and recovers coarse-level probabilities by marginalization over descendants; 9
+
+this avoids explicit inter-level coupling but forgoes direct supervision at coarser ranks. Our approach falls into a different tradition: cost-sensitive classification ,10 where the loss function encodes the relative severity of different errors. Rather than enforcing structural constraints or factoring the predictive distribution, our taxonomic distance loss directly penalizes the expected value of the evaluation metric, and minimum-risk Bayesian inference selects predictions that minimize expected cost at test time. We additionally find that simple feature concatenation across spatial scales generalizes better than learned attention-based fusion under distribution shift (four variants — hierarchy-aware, patch self-attention, part-based, and combined — each 7.3–16.9% worse on test despite better cross-validation scores), consistent with recent observations that simpler fusion is more robust to domain mismatch. 11 Concurrent work on the FathomNet 2025 dataset includes MATANet, 12 which combines multi-context attention with hierarchical separation learning on DINOv2 backbones to achieve first place, and a fourth-place solution 13 that also adopts minimum-risk inference. 
+
+3. PROBLEM FORMULATION 
+
+We consider the problem of hierarchical classification of marine organisms from underwater imagery. Marine organisms may belong to any of the following 7 biological taxonomic ranks (Kingdom → Phylum → Class →
+
+Order → Family → Genus → Species). Given an image region containing a marine organism, the challenge is to develop a model that can accurately classify its leaf-level taxon and ideally leverage its taxonomic information to do so. Let s denote the true leaf taxon and ˆ s the predicted leaf taxon. Model performance is evaluated by the taxonomic distance between ˆ s and s, defined as the total number of tree edges traversed from ˆ s to s through their lowest common ancestor 14 (LCA): 
+
+d(ˆ s, s ) = depth(ˆ s) + depth( s) − 2 depth(LCA(ˆ s, s )) , (1) where depth( ·) returns the level of a node in the taxonomic tree (i.e., 0 for root, 1 for kingdom, 7 for species), and LCA(ˆ s, s ) is the deepest node that is an ancestor of both ˆ s and s. This distance is zero for an exact match and accommodates predictions at any taxonomic rank: a coarser prediction trades exact-match precision for a bounded penalty. We average taxonomic distance across all N test organisms, to calculate a Score = 
+
+> 1
+> N
+
+PNn=1 d(ˆ sn, s n). This metric creates a fundamental misalignment with cross-entropy. For example, confusing species within the same genus ( d = 2) is six times less costly than confusing across phyla ( d = 12), yet cross-entropy treats both equally. A defining additional challenge is distribution shift between training and deployment. Underwater imagery collected across different geographic regions, depths, and camera systems exhibits substantial variation 1× ROI Patch Embed          
+
+> 14 ×14 , 768-D
+> +
+> +Pos
+> LN MHSA 12 heads
+> +
+> LN MLP 3072-D
+> +
+> ×12
+> LN CLS 768-D
+> 3×Context DINOv2-Base
+> ViT-B/14
+> (same as above)
+> CLS 768-D
+> 5×Context DINOv2-Base
+> ViT-B/14
+> (same as above)
+> CLS 768-D
+> Full Image DINOv2-Base
+> ViT-B/14
+> (same as above)
+> CLS 768-D
+
++           
+
+> 2048
+> LN →FC →GELU
+> 3072-D
+> 2822 43 66 75
+> 80
+> Kingdom Phylum Class Order Family Genus Species
+> Taxonomic Loss Min-Risk Inference
+> α= 0 .3
+> sˆ = arg min
+> i∈S
+> ∑
+> j∈S
+> [¯ p]j·Dij
+> L=
+> ∑
+> ℓ∈T wℓ·CE (fℓ(z), y ℓ)
+> ∑
+> ℓ∈T wℓ
+> +α
+> |S
+> ∑|
+> i=1
+> [yˆs]i·Di,y s
+
+Figure 1. DINOv2-Base ViT-B/14 architecture. Four crops at 1 × (ROI), 3 ×, 5 ×, and full-image scales are processed by independent ViT-B/14 backbones (86M parameters each, ∼344M across all four scales); the 768-D CLS tokens are concatenated (3072-D), projected to 2048-D through a fusion layer (6.3M), and fed to seven independent classification heads (0.2M total). Full model: ∼351M parameters. The taxonomy-aware loss combines cross-entropy with expected taxonomic distance ( α = 0 .3); minimum-risk inference selects the species minimizing expected distance. 
+
+in organisms, scale, lighting, and annotation density, motivating techniques that generalize robustly over those that may overfit to the training distribution. 
+
+4. METHOD 
+
+We propose a taxonomy-aware deep-learning framework for hierarchical marine species classification comprising: 1) multi-scale feature extraction; 2) per-level classification heads at all seven taxonomic ranks; 3) a taxonomy-aware loss function; and 4) minimum-risk Bayesian inference over a cross-validation ensemble. Figure 1 depicts the end-to-end pipeline. 
+
+4.1 Multi-Scale Context Encoding 
+
+As illustrated in Figure 1, the model takes as input not only the region of interest (ROI) containing the target marine organism, but also contextual regions at 3 ×, 5 ×, and full-image scales, all center-cropped for the ROI. Figure 2 depicts each one of the four scaled images for two test marine organisms. When expanded crops exceed image boundaries, coordinates are clamped to preserve real content rather than padding artifacts. All crops are resized to 224 × 224 and normalized using ImageNet statistics. Each scale is processed by an independent DINOv2-Base 3 backbone (ViT-B/14, 768-D CLS-token output). Specifically, each ViT encoder extracts the classification (CLS) token embedding g from the marine organism ROI and the patch embeddings pcr from each context region cr to form an output feature vector zc ∈ R768 . The four output feature vectors at each context level are then concatenated with the ROI embedding along the embedding dimension to form an embedding Figure 2. Multi-scale context crops for two test specimens. Each row shows the same organism at 1 × (tight ROI), 3 ×,5×, and full-image scales. Increasing context reveals substrate type, co-occurring organisms, and environmental cues that aid classification, while the ROI crop preserves fine-grained morphological detail. 
+
+vector zmc ∈ R3072 , and passed through a normalization layer and a projection layer proj( ·) to produce a final fused embedding vector z ∈ R2048 . A GELU (Gaussian Error Linear Unit) activation function and a dropout layer are subsequently applied to the projected embedding. 
+
+4.2 Hierarchical Classification Heads 
+
+Marine animals show different visual characteristics across the seven taxonomic levels. We maintain seven classification heads, one per taxonomic level, each operating independently on the fused embedding vector z.Higher-level categories rely on global shape and morphology, whereas lower-level categories depend more on subtle, fine-grained features. Coupling heads via parent conditioning (each head receiving its parent’s softmax( ·)as additional input) slightly degrades performance under distribution shift (as we will discuss in Section 6.2), so we adopt independent classification as the default. For each level ℓ, an individual auxiliary classifier fℓ(·) is attached, and the ground-truth label yℓ at that level is used to compute the cross-entropy loss. 
+
+4.3 Taxonomy-Aware Objective Function 
+
+We propose to combine a weighted cross-entropy loss across all levels with a taxonomic distance penalty at the species level. The complete objective function is therefore written as 
+
+L =
+
+P 
+
+> ℓ∈T
+
+wℓ · CE( fℓ(z), y ℓ)
+
+P 
+
+> ℓ∈T
+
+wℓ
+
++ α ·
+
+> |S|
+
+X
+
+> i=1
+
+ˆyspecies (i) · Di,y ℓ|ℓ=species , (2) where T = {kingdom , phylum , . . . , species } is the set of seven taxonomic levels, wℓ is the weight for each level ℓ,and CE denotes cross-entropy with label smoothing ( ϵ = 0 .1). In the second term, S is the set of leaf-level taxa (species head), ˆ yspecies ∈ R|S| is the species-head softmax output vector, ˆ yspecies (i) denotes its i-th component (the predicted probability of leaf taxon i), D ∈ R|S|×|S| is the precomputed pairwise tree-path distance matrix (normalized to [0 , 1]; see below), and α = 0 .3 controls the trade-off between the cross-entropy and distance terms. The weights-per-level wℓ increase from coarse to fine ranks (kingdom: 0.5, phylum: 0.75, class: 1.0, order: 1.25, family: 1.5, genus: 2.0, species: 2.5). Since the first term in Equation 2 is normalized by P 
+
+> ℓ∈T
+
+wℓ, only the ratios between weights affect training. We set |S| = 80 leaf labels (33 species, 46 coarse taxa identified from genus to phylum, and 1 “unknown” class) as a label set, and define D ∈ R80 ×80 as the pairwise matrix of taxonomic distances over all leaves, with entries Dij computed by Eq. 1. The training loss therefore descends directly on the evaluation metric, applied to the flat leaf label set S.The matrix is normalized to [0 , 1] by dividing by the observed maximum pairwise distance ( Dmax = 14, corresponding to two leaves in different kingdoms). This makes ys well-defined for every sample (i.e., it is always the assigned leaf) and the expected-distance loss applies uniformly, without per-sample masking or descendant aggregation. The “unknown” class is placed under a designated parent at each level; its distances to all named taxa are set to Dmax , so confusing “unknown” with a named taxon (or vice versa) incurs the maximum penalty. The taxonomic distance term can be viewed as a form of structured label smoothing: 15 whereas standard label smoothing distributes ϵ uniformly, our term distributes it proportionally to taxonomic proximity. 
+
+4.4 Ensemble and Minimum-Risk Inference 
+
+We train a K-fold stratified cross-validation ensemble using identical hyperparameters across folds and average species-level softmax probabilities during inference: p = 1
+
+> K
+
+PKk=1 ˆy(k)species , where K = 10 is the number of ensemble members and ˆ y(k)species ∈ R|S| is the species-head output of the k-th fold. Rather than calculating the predicted leaf taxon as ˆ s = arg max 1≤i≤|S| pi, we apply minimum-risk inference following Bayesian decision theory: 10 
+
+ˆs = arg min 
+
+> 1≤i≤|S| |S|
+
+X
+
+> j=1
+
+pj · Dij , (3) where pj is the j-th component of the averaged probability vector p, Dij is the pairwise taxonomic distance between leaf taxa i and j (as defined in Equation 2), and the minimization selects the leaf taxon with the lowest expected taxonomic distance under the predicted distribution. Min-risk biases toward taxonomically central predictions when the model is uncertain, improving mean taxonomic distance by 4.8% at a small cost to top-1 accuracy ( −1.1%)—a favorable trade-off given the evaluation metric. We additionally apply horizontal-flip test-time augmentation, providing a further 1.2% improvement. 
+
+5. DATASET 
+
+The FathomNet 2025 dataset 1 provides 23,699 training ROIs from 79 known categories of marine animals of varying taxonomic ranks (e.g., family, genus, species) plus 1 “unknown” category, and 788 test ROIs. For every category, the taxonomy spans 2 kingdoms (including unknown), 8 phyla, 22 classes, 43 orders, 66 families, 75 genera, and 80 leaf labels. The species-level classification head outputs a softmax over all |S| = 80 leaves; both the 79 named taxa and “unknown” are valid prediction targets, and the leaderboard scores submissions against the same 80-class label space. Critically, only 33 of the 79 named categories of marine animal are identified down to the species level; the remaining 46 marine animals are identified only to genus, family, order, class, or phylum because finer identification was unavailable. Coarse-labeled taxa account for 58% of test organisms. Taxa are approximately balanced ( ∼300 instances per category), so the difficulty lies in distribution shift rather than class imbalance. Figure 3 shows a random sample of full-scale training images illustrating the diversity of underwater scenes and organisms. 
+
+Distribution shift. The competition deliberately sources test images from different geographic locations, depths, and time periods than training images. Test ROIs are significantly smaller (84 ×75 px vs. 124 ×115 px train, scale ratio 0.68 ×, Cohen’s d = 0 .27), darker (mean ROI brightness 0.379 vs. 0.396), and from less densely populated scenes (max 23 annotations/image vs. 107 train). These shifts produce a large gap between validation (∼0.3 mean taxonomic distance) and test performance ( ∼1.6), though validation remains a reliable relative signal for model selection. For external generalization assessment, we additionally constructed an independent validation set of 5,802 annotations covering 70 of the 79 target taxa, queried from the FathomNet Database API 2
+
+and excluding all images appearing in the competition splits. Figure 3. Random sample of 24 full-scale training images from the FathomNet 2025 dataset. Images span a wide range of depths, lighting conditions, substrates, and organism types, illustrating the environmental variability that drives dis-tribution shift between training and test sets. 
+
+6. EXPERIMENTS 6.1 Implementation Details 
+
+Our primary backbone is DINOv2-Base 3 (ViT-B/14, 86M parameters per scale, 351M total including the fusion layer and seven heads). Fine-tuning uses layer-wise learning rate decay (LLRD) 4 with decay factor γ = 0 .70 across 14 parameter groups: the backbone base learning rate is 0 .1× the head rate, and each group i is further scaled by γN −1−i. The combined effect is a ∼1,000 × ratio between the classification head (3 × 10 −4) and the earliest parameter group ( ∼3 × 10 −7), preserving robust low-level features while adapting high-level representa-tions. Optimization uses AdamW 16 with weight decay 0.05, cosine annealing, batch size 12, and 16-bit mixed precision; training is conducted on a single NVIDIA H200 GPU using PyTorch Lightning, with each fold requir-ing approximately 2 GPU-hours. At inference, a single fold processes one sample (4 sequential backbone passes) in ∼27 ms on an H200 at batch size 1; the 10-fold ensemble scales linearly to ∼270 ms/sample with negligible overhead for probability averaging and min-risk decoding ( <0.1 ms). 
+
+Design freeze and statistical validation. All hyperparameters—backbone choice, fusion method, α,head weights, and parent-conditioning—were finalized on cross-validation scores before any test-set evaluation; the chronological order was design, train, freeze, then evaluate. The ablation tables in this section therefore report test scores retrospectively to characterize generalization, not to guide selection. The taxonomic distance weight α = 0 .3 was chosen via a sweep α ∈ { 0.0, 0.1, 0.2, 0.3, 0.5} with complete 10-fold ensembles: results are robust over α ∈ [0 .1, 0.3] (within 0.05 of the optimum) and only α = 0 .5 is significantly worse ( p = 0 .02); pure cross-entropy ( α = 0) trails the optimum by 2.5%. We compute bias-corrected and accelerated (BCa) bootstrap confidence intervals 17 with 10,000 resamples on per-sample distances and paired bootstrap tests for pairwise comparisons. Reported p-values are unadjusted; under Holm–Bonferroni correction across the seven ablation rows, the highest-confidence findings (backbone p = 0 .001, external multi-scale/ensemble/min-risk all p < 0.001) remain significant, while marginal results ( p = 0 .011 for min-risk on the 788-sample test) should be interpreted in light of the much tighter external-set evidence. 
+
+6.2 Component-Wise Ablation 
+
+Table 1 presents the additive contribution of each component on the 788-sample test set. The additive chain shows a cumulative 24.0% improvement over the baseline. The largest individual gains come from the taxonomy-aware loss ( −6.7%) and ensemble averaging ( −6.2%); minimum-risk inference is statis-tically significant ( p = 0 .011). A scale subset ablation (omitted for brevity) shows that all four scales contribute, with the intermediate 3 × and 5 × context crops more valuable than the full image. A species-only variant that Table 1. Component-wise ablation (additive chain). Each row adds one component to the previous configuration. 
+
+# Configuration Score 95% CI ∆ p
+
+1 1× ROI, CE+LS, single model, argmax 2.345 [2.083, 2.622] — —2 + Multi-scale (4 scales) 2.235 —† −4.7% —3 + Taxonomic distance loss ( α = 0 .3) 2.085 [1.850, 2.339] −6.7% —4 + 10-fold ensemble 1.956 [1.743, 2.192] −6.2% —5 + Minimum-risk inference 1.863 [1.653, 2.095] −4.8% 0.011 6 + Horizontal-flip TTA 1.840 [1.622, 2.074] −1.2% 0.450 7 − Parent conditioning 1.782 [1.571, 2.013] −3.2% 0.214 
+
+> †Single-model checkpoint not preserved; CI unavailable.
+
+removes all six auxiliary heads achieves 1.962 versus 1.782 (+10 .1%), confirming that auxiliary supervision at coarse levels benefits both the 58% of coarse-labeled samples and the species-level samples through multi-task regularization. 
+
+External validation. We re-evaluate the same checkpoints on the independent 5,802-sample external set described in Section 5 (Table 2). The 7 × larger sample yields BCa CI widths of ∼0.12 (vs. ∼0.49 on the competition test), providing substantially more statistical power for detecting component-wise effects without any test-set probing.   
+
+> Table 2. External ablation on 5,802 independent annotations (same checkpoints as Table 1). Paired bootstrap pvalues compare each row to the previous; all add-one comparisons are on the external set.
+
+# Configuration Score 95% CI p vs. prev. 1 1× ROI, CE+LS, single model, argmax 2.379 [2.310, 2.451] —2 + Multi-scale (4 scales) 2.141 [2.077, 2.206] <0.001 3 + Taxonomic distance loss ( α = 0 .3) 2.105 [2.044, 2.170] 0.106 4 + 10-fold ensemble 2.014 [1.953, 2.076] <0.001 5 + Minimum-risk inference 1.851 [1.793, 1.910] <0.001 6 + Horizontal-flip TTA 1.859 [1.802, 1.919] 0.325 7 − Parent conditioning 1.873 [1.814, 1.932] 0.331 The three largest components—multi-scale encoding ( −10.0%, p < 0.001), ensemble averaging ( −4.3%, p < 
+
+0.001), and minimum-risk inference ( −8.1%, p < 0.001)—all replicate with high significance on the external set. The taxonomy-aware loss is smaller and not significant here ( p = 0 .106), suggesting its benefit is partially distribution-dependent. TTA and removing parent conditioning are non-significant on both datasets. 
+
+6.3 Backbone Comparison 
+
+Table 3 compares ConvNeXtV2-Base 5 (FCMAE pretraining with supervised ImageNet-22K fine-tuning) with DINOv2-Base 3 (self-supervised distillation on 142M images). All other components are identical. 
+
+> Table 3. Backbone comparison (10-fold ensemble, min-risk + hflip TTA, no parent conditioning).
+
+Backbone Accuracy ∗ Tax. Distance 95% CI p
+
+ConvNeXtV2-Base 67.8% 1.782 [1.571, 2.013] —DINOv2-Base (uniform LR) — 2.225 † — —
+
+DINOv2-Base (LLRD) 72.2% 1.581 [1.376, 1.805] 0.001    
+
+> ∗Top-1 species-level accuracy. †5-fold, argmax inference, uniform backbone LR 3 ×10 −5.
+
+DINOv2-Base with LLRD achieves 1.581—an 11.3% improvement over ConvNeXtV2-Base ( p = 0 .001), with DINOv2 outperforming on all 10 individual folds. This overturns a preliminary finding where DINOv2 with uniform fine-tuning (2.225) appeared substantially worse: applying a uniform learning rate destroys the robust low-level features learned during self-supervised pretraining, a form of catastrophic forgetting. 18 LLRD preserves these features by fine-tuning lower layers slowly while adapting upper layers more aggressively. We note that ConvNeXtV2 was fine-tuned with a 2-group schedule rather than per-stage decay, so the 11.3% gap should be interpreted as an upper bound on the pure architectural advantage; the finding nevertheless underscores that backbone comparisons across CNN/ViT architectures are confounded by fine-tuning recipe. 
+
+6.4 Comparison with Competition Solutions 
+
+> Table 4. Comparison with top FathomNet 2025 solutions.
+
+Rank Team Score Key Technique 1 Yonsei+SSL 12 1.535 Multi-context attention + ViT 2 Databaes 19 1.560 EfficientNetV2 + uncertainty — Ours (post-competition) 1.581 DINOv2 LLRD + tax. loss + min-risk 3 DalhousieAI 20 2.015 WideResNet + self-training 4 911 13 2.235 Swin-T + min-risk inference Our team’s official competition submission placed 8th on the public leaderboard; the refined framework presented here, incorporating improvements developed after the competition window closed, achieves 1.581— competitive with the 1st-place solution (1.535) without specialized attention mechanisms. MATANet uses a single DINOv2 ViT-L/14 backbone ( ∼300M parameters) with cross-attention between multi-scale patch tokens; our approach uses the smaller ViT-B/14 (351M per fold, comparable per-model, with 10-fold ensemble averaging at inference). The proximity of our concatenation-based result to MATANet’s attention-based result suggests that much of the advantage comes from DINOv2’s features rather than the attention mechanism itself. 
+
+6.5 Discussion 
+
+Independent components generalize better. A recurring theme is that methods adding learned inter-component dependencies—parent-conditioned heads, attention-based fusion, post-hoc hierarchy repair—tend to overfit or degrade under distribution shift, while independent components allow ensemble averaging to recover from individual errors. A greedy post-hoc repair strategy that restricts species predictions to descendants of the coarse-level argmax changes only 4.6% of predictions but worsens taxonomic distance from 1.581 to 1.666 (+5 .4%): incorrect coarse predictions force species into the wrong subtree. Inference-time strategies reinforce this pattern: minimum-risk inference and TTA together provide 6.0% improvement on the competition test set at zero training cost by exploiting problem structure (the distance matrix) and input symmetry; on the external set, the gain is concentrated in minimum-risk inference ( −8.1%, p < 0.001), with TTA effectively neutral. 
+
+Compute-efficient variants. DINOv2-Small (ViT-S/14, 22M parameters per backbone, 88M total vs. 348M for DINOv2-Base) with independent backbones achieves 1.594—statistically indistinguishable from DINOv2-Base (p = 0 .844) despite using 74% fewer backbone parameters. Sharing a single backbone across all four scales ( ∼90M total) costs ∼8% performance (1.716) but remains competitive with ConvNeXtV2-Base independent (1.782). For edge deployment, DINOv2-Small with a shared backbone (24M parameters) achieves 1.713, demonstrating that shift-robust features transfer to the compute-constrained regime. 
+
+Calibration. The 10-fold ensemble is moderately overconfident 21 (mean confidence 85% vs. 72.2% accuracy). Cross-validated temperature scaling on out-of-fold predictions (no test leakage) yields T = 1 .88 and reduces expected calibration error by 42%; applying this temperature to the locked test predictions improves min-risk performance by 3.8% (from 1.581 to 1.521—within 1% of the 1st-place MATANet). We emphasize that 1.521 is a local post-hoc evaluation on the public test set; this configuration was not submitted to the leaderboard during the competition window, and we report 1.581 as the headline result to preserve the chronological design freeze and avoid conflating method performance with post-competition refinement. External-set calibration was not analyzed in this study—the external set was held out specifically for the unbiased component-wise replication in Table 2—and remains a clear next step before deployment. 
+
+Distance matrix normalization. The distance matrix D enters both the loss (as the expectation P
+
+> i
+
+[ˆ ys]i ·
+
+Di,y s ) and inference (as the risk P 
+
+> j
+
+[¯ p]j ·Dij ). Normalization by Dmax = 14 keeps loss magnitudes comparable to cross-entropy and avoids the need to retune α when scaling to deeper hierarchies; replacing it with un-normalized integer distances rescales gradients but leaves the relative cost ordering—and therefore both the optimal α region and the min-risk argmin—unchanged. Non-uniform per-rank penalties are an alternative we did not explore; this would express domain priorities (e.g., higher cost for cross-class confusions) explicitly in D, while keeping the same machinery. 
+
+7. CONCLUSION 
+
+Hierarchical classification of marine species from underwater imagery is complicated by severe domain shift, fine-grained visual similarity, and uneven annotation granularity. We presented a taxonomy-aware framework that addresses these challenges by aligning both training and inference with the hierarchical evaluation met-ric, combining a taxonomy-weighted loss, minimum-risk Bayesian inference, multi-scale feature encoding, and independent per-rank classification heads. Three empirical findings emerge from the component-wise ablation, validated on both the FathomNet 2025 test set and a 7 × larger independent validation set. First, aligning the loss and inference rule with the evaluation metric produces consistent, significant gains, with minimum-risk inference alone improving performance by 4.8% at no training cost. Second, under distribution shift, simple decoupled components (feature concatenation, independent heads) consistently outperform learned dependencies (attention fusion, parent conditioning, post-hoc hierarchy repair). Third, backbone fine-tuning recipe matters as much as architecture: DINOv2-Base with layer-wise learning rate decay improves over ConvNeXtV2-Base by 11.3% ( p = 0 .001), but only when fine-tuned to preserve pretrained features. The full system achieves a mean taxonomic distance of 1.581, within 3% of the 1st-place solution (1.535) on the FathomNet 2025 public leaderboard. These lessons—metric-aligned training, robust decoupled design, and careful fine-tuning—are not specific to marine imagery. Any hierarchical classification task under domain shift where errors carry structured costs, including ATR and ISR applications with vehicle or threat taxonomies, faces the same design trade-offs and can apply the same principles. 
+
+Limitations and future work. The competition test set (788 samples) yields wide confidence intervals (∼0.49); our independent external validation (5,802 samples, CIs ∼0.12) confirms the core conclusions with substantially more statistical power. The ConvNeXtV2 comparison did not use stage-wise learning rate decay, so the backbone conclusion may be partially confounded by fine-tuning recipe. Post-hoc temperature scaling improves the result to 1.521 (within 1% of first place), suggesting that probability calibration is a natural next refinement for minimum-risk inference. The species-leaf distance matrix scales as O(|S| 2) in memory, which is trivial at the current scale ( |S| = 80) but would require tree-based dynamic programming for substantially larger hierarchies (e.g., iNaturalist 22 with >10K species). Both evaluation sets originate from the FathomNet database; validating on other hierarchical domains and integrating open-set recognition for novel species remain future work. 
+
+ACKNOWLEDGMENTS 
+
+This work was conducted at the Center for Connected Autonomy and Artificial Intelligence (CAAI), Florida At-lantic University. D.Z. is supported by the Department of Defense (DoD) Science, Mathematics, and Research for Transformation (SMART) Scholarship-for-Service Program. We thank the CAAI graduate students for feedback during manuscript preparation, Shruti Shukla and Pavan Poluri for their initial work on the competition, and the FathomNet team and Kaggle for organizing the competition. Source code and configuration files will be released at https://github.com/C2A2-at-Florida-Atlantic-University/fathomnet-taxonomy upon publication. 
+
+REFERENCES 
+
+[1] L. Chrobak and K. Barnard, “FathomNet2025,” 2025. [Online]. Available: https://kaggle.com/ competitions/fathomnet-2025 
+
+[2] K. Katija, E. Orenstein, B. Schlining, L. Lundsten, K. Barnard, G. Sainz, et al., “FathomNet: A global image database for enabling artificial intelligence in the ocean,” Scientific Reports , vol. 12, no. 15914, 2022. [3] M. Oquab, T. Darcet, T. Moutakanni, H. Vo, M. Szafraniec, V. Khalidov, et al., “DINOv2: Learning robust visual features without supervision,” Trans. Machine Learning Research , 2024. [4] J. Howard and S. Ruder, “Universal language model fine-tuning for text classification,” in Proc. ACL , 2018, pp. 328–339. [5] S. Woo, S. Debnath, R. Hu, X. Chen, Z. Liu, I. S. Kweon, and S. Xie, “ConvNeXt V2: Co-designing and scaling ConvNets with masked autoencoders,” in Proc. IEEE/CVF CVPR , 2023, pp. 16133–16142. [6] L. Bertinetto, R. Mueller, K. Tertikas, S. Samber, and P. H. S. Torr, “Making better mistakes: Leveraging class hierarchies with deep networks,” in Proc. IEEE/CVF CVPR , 2020, pp. 12506–12515. [7] E. Giunchiglia and T. Lukasiewicz, “Coherent hierarchical multi-label classification networks,” in Proc. NeurIPS , vol. 33, 2020, pp. 9662–9673. [8] X. Zhu and M. Bain, “B-CNN: Branch convolutional neural network for hierarchical classification,” 
+
+arXiv:1709.09890 , 2017. [9] J.-C. Su and S. Maji, “Semi-supervised learning with taxonomic labels,” in Proc. BMVC , 2021. [10] R. O. Duda, P. E. Hart, and D. G. Stork, Pattern Classification , 2nd ed. Wiley-Interscience, 2001. [11] B. Nguyen, S. Uhlich, F. Cardinaux, L. Mauch, M. Edraki, and A. C. Courville, “SAFT: Towards out-of-distribution generalization in fine-tuning,” in Proc. ECCV , 2024, pp. 138–154. [12] D. Lee, B. Kim, G. Kim, H. Kwon, N. Maeng, and W. Kim, “MATANet: A multi-context attention and taxonomy-aware network for fine-grained underwater recognition of marine species,” arXiv:2601.03729 ,2026. [13] Health9819, “FathomNet 2025 – 4th place solution,” 2025. [Online]. Available: https://github.com/ Health9819/FGVC-FathomNet25 
+
+[14] A. V. Aho, J. E. Hopcroft, and J. D. Ullman, “On finding lowest common ancestors in trees,” in Proc. ACM STOC , 1976, pp. 253–265. [15] R. M¨ uller, S. Kornblith, and G. Hinton, “When does label smoothing help?” in Proc. NeurIPS , vol. 32, 2019, pp. 4694–4703. [16] I. Loshchilov and F. Hutter, “Decoupled weight decay regularization,” in Proc. ICLR , 2019. [17] B. Efron, “Better bootstrap confidence intervals,” Journal of the American Statistical Association , vol. 82, no. 397, pp. 171–185, 1987. [18] H. Touvron, M. Cord, and H. J´ egou, “Three things everyone should know about Vision Transformers,” in 
+
+Proc. ECCV , 2022, pp. 497–515. [19] kidshock, “FathomNet 2025 – 2nd place solution,” 2025. [Online]. Available: https://www.kaggle.com/ competitions/fathomnet-2025/discussion 
+
+[20] DalhousieAI, “FathomNet 2025 – 3rd place solution,” 2025. [Online]. Available: https://github.com/ DalhousieAI/fathomnet_comp 
+
+[21] C. Guo, G. Pleiss, Y. Sun, and K. Q. Weinberger, “On calibration of modern neural networks,” in Proc. ICML , vol. 70, 2017, pp. 1321–1330. [22] G. Van Horn, O. Mac Aodha, Y. Song, Y. Cui, C. Sun, A. Shepard, H. Adam, P. Perona, and S. Belongie, “The iNaturalist species classification and detection dataset,” in Proc. IEEE/CVF CVPR , 2018, pp. 8769– 8778.
