@@ -1,0 +1,1456 @@
+Title: PointVG-R: Internalizing Geometric Reasoning in MLLMs for Precise Pointing Localization via Visual Chain of Thought
+
+URL Source: https://arxiv.org/pdf/2606.24539v1
+
+Published Time: Wed, 24 Jun 2026 01:00:51 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# PointVG-R: Internalizing Geometric Reasoning in MLLMs for Precise Pointing Localization via Visual Chain of Thought 
+
+# Ling Li 
+
+Tsinghua University Beijing Shi, China liling25@mails.tsinghua.edu.cn 
+
+# Bowen Liu 
+
+Dalian University of Technology Dalian Shi, China liubw20050702@mail.dlut.edu.cn 
+
+# Zinuo Zhan 
+
+Northwestern Polytechnical University Xi’an Shi, China jklwmdwmd@mail.nwpu.edu.cn 
+
+# Jianhui Zhong 
+
+Dalian University of Technology Dalian Shi, China zhongjianhui@mail.dlut.edu.cn 
+
+# Ziyu Zhu 
+
+Tsinghua University Beijing Shi, China zhuziyu.edward@gmail.com 
+
+# Bingcai Wei 
+
+Wuhan University Wuhan City, China weibc97@whu.edu.cn 
+
+# Kenglun Chang 
+
+Dalian University of Technology Dalian Shi, China genglun_zhang@apple.com 
+
+# Zhidong Deng 
+
+Dalian University of Technology Dalian Shi, China michael@tsinghua.edu.cn Please locate the item I pointed out. 
+
+The item is at 
+
+<bbox> .
+
+GT 
+
+Pred 
+
+GT 
+
+Pred 
+
+Please locate the item I pointed out. 
+
+<think> 
+
+the hand is locate d at <bbox> 
+
+the finger start from <point> to 
+
+<point> 
+
+</think> 
+
+<tool_call> 
+
+{\"name\": \"draw_ray\"......} 
+
+</tool_call> 
+
+GT 
+
+Pred 
+
+CoT 
+
+Direct Pred Think with Textual CoT 
+
+Please locate the item I pointed out. 
+
+Your hand is pointing 
+
+from the bottom of 
+
+the frame to the 
+
+monitor in the center 
+
+of the picture, and it 
+
+is at <bbox> .
+
+Task not Understand 
+
+1. Reasoning Ambiguity 
+
+2. Lack of Integration of 
+
+Spatial Information 
+
+Effectively Find the Target 
+
+With the visual aid of the drawn ray , I can 
+
+clearly see it intersects with the 
+
+<caption> ,The target object is locate at <bbox> .
+
+Think with Image （Ours ）
+
+CoT 
+
+Effectively Find the Target Full Use of Spatial Information Precise Reasoning 
+
+Figure 1: Comparative analysis between PointVG-R and mainstream Multimodal Large Language Models (MLLM) in first-person pointing localization tasks. Above (baseline models): Traditional LVLMs are prone to geometric localization failure, saliency bias, and semantic misinterpretation due to a lack of logical reasoning when processing complex spatial relationships. Below (our method): In stark contrast, PointVG-R achieves a highly interpretable self-explanation process through the Visual Chain-of-Thought (V-CoT). The model not only outputs the final bounding box but also demonstrates a complete logical trajectory from hand localization and geometric ray estimation to target semantic identification. This "thinking with images" paradigm enables it to overcome the black-box limitations of traditional models and achieve more robust spatial understanding. 
+
+## Abstract 
+
+Pointing-based visual grounding requires models to precisely locate target objects by deciphering complex spatial relationships between 
+
+Code: https://github.com/lingli1724/PointVG-R .
+
+the visual scene and pointing gestures. Traditional methods typi-cally encode input images into static feature representations and perform reasoning primarily within the linguistic domain, often overlooking the rich perceptual cues and explicit spatial geometry inherent in images. In this study, we aim to mitigate the cognitive  
+
+> arXiv:2606.24539v1 [cs.CV] 23 Jun 2026 Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al.
+
+vulnerability of models in interpreting gestural spatial relations by proposing PointVG-R, a reasoning-guided Multi-modal Large Language Model (MLLM). PointVG-R introduces geometric-aware reasoning for pointing-based grounding, enabling the model to think with images through the strategic integration of Reinforce-ment Learning (RL) and cold-start data. Specifically, we design a novel geometric reasoning pipeline that simulates the iterative cog-nitive process humans employ when interpreting pointing gestures. Furthermore, we construct EgoPoint-CoT, a high-quality visual Chain-of-Thought (CoT) dataset featuring detailed reasoning trajec-tories to guide the model via Supervised Fine-Tuning (SFT) and RL. To address the varying quality of learning signals encountered dur-ing training, we further propose an Adaptive Importance Weighting strategy based on Group Variance, which dynamically adjusts re-ward signals to optimize the learning process. Experimental results demonstrate that PointVG-R achieves SOTA performance, outper-forming the baseline by 15.86 points in mIoU. Extensive ablation studies further validate the efficacy of our proposed modules. Our code and models will be made publicly available. 
+
+## CCS Concepts 
+
+• Computing methodologies → Artificial intelligence ; Object detection ; Spatial and physical reasoning ; Computer vision .
+
+## Keywords 
+
+Visual Grounding, Visual Chain-of-Thought, Spatial Reasoning, Group Relative Policy Optimization (GRPO) 
+
+## 1 Introduction 
+
+Visual grounding [ 3, 20 , 97 , 99 , 109 , 118 ] serves as a fundamental bridge between computer vision and natural language processing [ 29 , 98 ], aiming to precisely localize target objects in images based on specific referential expressions [ 55 , 86 , 99 , 109 ]. While tradi-tional research has primarily focused on semantic descriptions (e.g., "the red cup on the left")[ 61 , 63 , 94 , 106 ], gestural pointing pro-vides a more intuitive means of referencing objects within a shared physical environment [ 7, 12 , 23 , 24 , 31 ]. This shift toward gesture-based visual grounding [ 16 , 28 , 45 , 60 ] necessitates that models effectively exploit the physical and geometric cues embedded in visual information to achieve accurate localization [44, 117]. We argue that simply treating pointing gestures as another "vi-sual prompt" within existing Multimodal Large Language Model (MLLM) [ 9, 104 , 108 ] architectures is insufficient [ 65 , 69 ]. Stan-dard MLLMs typically encode input images into holistic feature representations and reason primarily through linguistic associa-tions [ 54 , 70 ]. Consequently, they fail to explicitly account for the spatial-geometric constraints inherent in pointing behaviors. These models often exhibit "cognitive fragility," leading to hallucinated localization biases in complex interactive scenarios [47, 74]. To address this challenging task, as illustrated in Figure 1, we propose PointVG-R, a reasoning-guided MLLM that internalizes geometric reasoning [ 29 , 41 , 53 ] into the visual grounding process. At the core of our approach is the "Thinking with Images" para-digm [ 76 , 89 , 92 ], which advocates for bridging the gap between gesture perception [ 22 , 35 ] and object localization via a Visual Chain-of-Thought (Visual CoT) [ 59 , 64 , 71 , 113 ]. Rather than per-forming one-step direct predictions, PointVG-R is trained to execute a human-like, iterative cognitive process: identifying pointing cues, projecting implicit geometric trajectories, and anchoring the target through spatial reasoning. To facilitate this, we constructed a pio-neering dataset, EgoPoint-CoT [ 45 ], featuring fine-grained spatial reasoning trajectories. We employ a two-stage training protocol combining Supervised Fine-Tuning (SFT) [ 6 , 32 , 39 ] and Reinforce-ment Learning (RL) [ 29 , 62 , 90 , 115 ] to ensure the model’s internal reasoning aligns with objective spatial logic. During the reinforcement learning phase, we define a reward function with multi-dimensional verifiable rewards to provide pre-cise geometric feedback tailored to gesture-based grounding. In this process, we identify a critical bottleneck in applying RL to local-ization: the heterogeneity in learning signal quality [ 36 , 67 ]. Due to the stochastic nature of sampling in RL, different sample groups offer varying levels of optimization value, where noisy samples can severely destabilize the training of precise bounding box (BBox) coordinates [ 19 , 80 ]. To resolve this, we introduce a Group-Variance-based Adaptive Importance Weighting strategy. By dynamically recalibrating the contribution of reward signals based on intra-group consistency, we significantly enhance both training stability and localization precision. Experimental evaluations on egocentric benchmarks demon-strate that PointVG-R establishes a new state-of-the-art (SOTA) performance, surpassing competing baselines by 15 .86% . Our re-sults underscore the necessity of explicit geometric reasoning for robust gesture-based grounding. Our contributions include: (1) PointVG-R: We propose PointVG-R, a reasoning-guided MLLM that enhances gesture-based grounding by internalizing ex-plicit spatio-geometric reasoning. (2) Paradigm and Dataset: We introduce the "Thinking with Images" paradigm and the EgoPoint-CoT dataset, utilizing exhaustive visual reasoning chains to guide the model’s iterative cognitive process. (3) Algorithmic Opti-mization: We design multi-dimensional geometric rewards and a group-variance-based adaptive weighting strategy to address the challenges of signal quality variance and training instability in RL-based coordinate regression. (4) SOTA Performance: PointVG-R achieves superior results across relevant tasks. We will release our code, dataset, and model weights to the public. 
+
+## 2 Method 2.1 Problem Formulation 
+
+Task Definition and Notation. Given an egocentric image 𝐼 ∈
+
+R𝐻 ×𝑊 ×3 containing a human pointing gesture 𝐺 , the objective of this study is to learn a parameterized model 𝑓 𝜃 that accurately localizes the target object referenced by the gesture. We define the output as a spatial bounding box 𝑏 = [𝑥 1, 𝑦 1, 𝑥 2, 𝑦 2] ∈ [ 0, 1]4,where (𝑥 1, 𝑦 1) and (𝑥 2, 𝑦 2) denote the normalized coordinates of the top-left and bottom-right corners, respectively. 
+
+Probabilistic Reasoning Modeling. Differing from conventional end-to-end direct mapping, we formulate the interpretation of pointing behaviors as an explicit spatial reasoning process. To this end, we introduce a set of intermediate reasoning variables 
+
+𝑅 = {𝑟 1, 𝑟 2, . . . , 𝑟 𝑛 }, referred to as the Visual Chain-of-Thought (CoT) .PointVG-R: Internalizing Geometric Reasoning in MLLMs for Precise Pointing Localization via Visual Chain of Thought Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 3
+
+> ToolCall:
+> tool_name = ‘draw ray’
+> st art_point = (200,532)
+> end_point = (471, 360)
+> Attention Heatmap
+> Attention Heatmap
+
+## 4
+
+> Attention Heatmap
+> Deduce target based on
+> step3:
+> The target is the red and
+> white boat in the middle
+> of the picture, locate at
+> [86, 304, 856, 416]
+
+## 1
+
+STEP1: Hand Detection STEP3: Pointing Geometry 
+
+STEP4: Target Alignment  
+
+> Attention Heatmap
+
+## 2
+
+STEP2: Key point extraction 
+
+Figure 2: Visual Chain-of-Thought (V-CoT) reasoning trajectory of PointVG-R for pointing localization. The process comprises four sequential steps: (1) hand detection, (2) fingertip keypoint extraction, (3) pointing geometry (ray drawing and endpoint prediction), and (4) target bounding box alignment. Each step is accompanied by its corresponding attention heatmap, visualizing where the model focuses during inference. 
+
+The grounding task is thus modeled as a joint probability distribu-tion over the target box 𝑏 and the reasoning trajectory 𝑅 :
+
+𝑃 (𝑏, 𝑅 |𝐼 ; 𝜃 ) = 𝑃 (𝑅 |𝐼 ; 𝜃 ) · 𝑃 (𝑏 |𝐼, 𝑅 ; 𝜃 ) (1) In this framework, the model first generates a logically consistent reasoning trajectory 𝑅 based on visual cues in 𝐼 , and subsequently determines the geometric boundary 𝑏 guided by 𝑅 . This explicit modeling replaces black-box mapping with structured spatial pars-ing, enhancing robustness against ambiguity. 
+
+Cold-start Knowledge Injection (SFT). To provide the model with a stable initial policy and mitigate the sparsity of rewards in reinforcement learning, we first perform Supervised Fine-Tuning (SFT) as a cold-start phase. Utilizing a dataset D with expert-level reasoning annotations (𝑅 ∗, 𝑏 ∗), we minimize the negative log-likelihood loss to inject foundational geometric priors into 𝜃 :
+
+L𝑆𝐹𝑇 (𝜃 ) = −E(𝐼,𝑅 ∗,𝑏 ∗ )∼D [log 𝑃 (𝑅 ∗, 𝑏 ∗ |𝐼 ; 𝜃 )] (2) 
+
+Alignment and Enhancement Phase (RL). Upon establishing a reliable baseline via cold-start, we further optimize the model via Policy Gradient [ 40 , 78 ] to align its reasoning with diverse spatial scenarios. To address the non-uniform signal quality in sampled trajectories, we introduce an Adaptive Importance Weight 𝑤 𝑔 .The optimization objective 𝐽 (𝜃 ) is defined as: 
+
+𝐽 (𝜃 ) = E𝐼 ∼D ,𝑏 ∼𝑃 𝜃 
+
+𝑤 𝑔 · R ( 𝑏, 𝑏 ∗) · ∇ 𝜃 log 𝑃 (𝑏, 𝑅 |𝐼 ; 𝜃 ) (3) where R is the reward function integrating localization accuracy and reasoning consistency. The weight 𝑤 𝑔 is dynamically computed based on Group Variance , effectively attenuating the interference of low-value or noisy samples on gradient updates, ensuring that 𝜃 
+
+converges toward the optimal reasoning and grounding path. 
+
+## 2.2 Model Architecture 
+
+The architecture of PointVG-R is built upon the Qwen2.5-VL-Instruct [5] multimodal foundation model, consisting of a visual encoder E𝑉 and an LLM backbone E𝐿 . To enable explicit spatial geometry parsing, the model processes inputs through a four-stage Visual Chain-of-Thought, coupled with an image-ray re-encoding module. As illustrated in Figure 3, PointVG-R is trained using a two-stage framework that includes CoT-SFT warm-up followed by Adaptive GRPO alignment. 
+
+2.2.1 Structured V-CoT and Feature Re-encoding. 
+
+Given an image 𝐼 and query 𝑄 , we first extract global visual features 
+
+𝐹 𝑉 = E𝑉 (𝐼 ). To explicitly model the visual chain-of-thought (V-CoT), we augment the tokenizer with structured spatial anchors, enabling step-wise geometric reasoning via the decoder E𝐿 . As illustrated in Fig. 2, the reasoning process is decomposed into four sequential stages. 
+
+Step 1: Hand Detection. We localize the interaction source by pre-dicting the hand bounding box 𝑟 1 = 𝑏 hand , enclosed by <|box_start|> 
+
+and <|box_end|> tokens. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. Base Model  PointVG -R     
+
+> Update
+> 1234…n
+> Response
+> Reward Score
+
+Var  𝜎 1    
+
+> 2ω1=𝜎 1
+> 2
+> 𝜎 𝑔𝑙𝑜𝑏𝑎𝑙
+> 2+𝜖
+
+More 
+
+Weight            
+
+> Global Variance
+> 𝝈 𝑔𝑙𝑜𝑏𝑎𝑙
+> 𝟐 ←𝜶 𝝈 𝑔𝑙𝑜𝑏𝑎𝑙
+> 𝟐 +(𝟏 −𝜶 )𝝈 𝑏𝑎𝑡𝑐ℎ
+> 𝟐
+> 1234…n
+> Response
+> Reward Score
+
+Var  𝜎 2    
+
+> 2
+> Rollout
+> Rollout
+> ω2=𝜎 2
+> 2
+> 𝜎 𝑔𝑙𝑜𝑏𝑎𝑙
+> 2+𝜖
+
+Less 
+
+Weight 
+
+Stage 2: Adaptive Module          
+
+> Update Name: Draw Ray
+> Start: [x 1, y 1]
+> End: [x 2, y 2]
+> 𝑅 ℎ𝑎𝑛𝑑 =
+> 𝐼𝑜𝑈 (෠𝑏 ℎ𝑎𝑛𝑑 ,𝑏 ℎ𝑎𝑛𝑑
+> 𝑔𝑡 )
+> 𝑅 𝑟𝑎𝑦 =
+> cos (𝑑 𝑝𝑟𝑒𝑑 ,𝑑 𝑔𝑡 )+1
+> 2
+> 𝑅 𝑘𝑝𝑡 =
+> MPJPE
+> 𝑅 𝑖𝑜𝑢 =
+> 𝐼𝑜𝑈 (෠𝑏 𝑜𝑏𝑗 ,𝑏 𝑜𝑏𝑗
+> 𝑔𝑡 )
+> Caption
+> Format
+> Tool Call
+> Format
+> A Tennis
+> Player…
+> Obj -Bbox
+> Format
+
+Stage 2: GRPO Reward Function                       
+
+> 𝑅 𝑓𝑚𝑡
+> 𝑅 𝑏𝑎𝑠𝑒 =𝑅 ℎ𝑎𝑛𝑑 +𝑅 𝑟𝑎𝑦 +𝑅 𝑘𝑝𝑡 +𝜆 1𝑅 𝑖𝑜𝑢 +𝜆 2𝑅 𝑓𝑚𝑡 ,ℛ(𝒯 )=𝑅 𝑏𝑎𝑠𝑒 ∙1
+> max (1,𝑁 𝑡𝑜𝑜𝑙 )∙൝
+> 1
+> 𝑁 𝑏𝑜𝑥 ,𝑁 𝑏𝑜𝑥 >0
+> 0.1,𝑁 𝑏𝑜𝑥 =0.
+
+Large Language Model 
+
+Image  Query 
+
+<Hand>  <Caption> <Ray> 
+
+Tokenizer 
+
+> QUESTION ：
+> Please locate the
+> item I pointed out .
+
+Image Token  Text Token  Coordinate or  Tool_call  Token  Answer Token 
+
+Stage 1: CoT -SFT 
+
+> Visual
+> Encoder
+
+## Stage 1 ：CoT -SFT  Stage 2 ：Adaptive GRPO 
+
+Visual 
+
+Encoder 
+
+BBox I need to 
+
+> focus on
+> the hand …
+> …
+
+Coord 
+
+inate 
+
+Image 
+
+_Ray   
+
+> I need
+> to draw
+> a ray …
+> <tool_call >
+> {tool_name :
+> “draw_ray ” ...}
+> </ tool_call >
+> ……
+> I need to
+> focus on
+> the target
+> object …
+> The catogary
+> of the target
+> object is ...
+> ANS:
+> |Box_Start |
+> |Box_End |
+> …
+> <| box_start |>
+> [x1, y1, x2, y2]
+> <| box_end |>
+> ………
+
+Figure 3: Overview of the PointVG-R system architecture. (a) The first stage injects human-like iterative reasoning priors through CoT-SFT; (b) the second stage adopts an improved GRPO algorithm to achieve efficient optimization through group-variance adaptive weights; (c) structured reward functions designed for the intermediate trajectories of V-CoT. This architecture achieves a leap from primitive spatial perception to high-level logical alignment through two-stage synergy. Step 2: Keypoint Extraction. The model predicts finger root and tip keypoints 𝑟 2 = (proot , ptip ) to parameterize the pointing direction, structured by <|point_start|> and <|point_end|> .
+
+Step 3: Pointing Geometry. A ray is constructed from 𝑟 2 to guide spatial sampling. We extract a ray-aligned region 𝐼 ray = Φ(𝐼, 𝑟 2) and fuse its features with global context: 
+
+𝐹 ′
+
+𝑉 = 𝐹 𝑉 ⊕ E 𝑉 (𝐼 ray ).
+
+Step 4: Target Alignment. Conditioned on geometry and en-riched features 𝐹 ′
+
+𝑉 , the model predicts the final target box 𝑟 4 = 𝑏 ,again using <|box_start|> and <|box_end|> tokens. Structural transitions are regulated by <tool_call> tokens. The overall process is factorized as: 
+
+𝑃 (𝑏, 𝑅 | 𝐼, 𝑄 ; 𝜃 ) = 𝑃 (𝑟 1 |𝐹 𝑉 )𝑃 (𝑟 2 |𝐹 𝑉 , 𝑟 1)· 𝑃 (𝑟 3 |𝐹 𝑉 , 𝑟 1:2 )𝑃 (𝑟 4 |𝐹 ′
+
+𝑉 , 𝑟 1:3 ), (4) where 𝑅 = {𝑟 1, 𝑟 2, 𝑟 3 } and 𝐹 𝑉 , 𝐹 ′
+
+𝑉 denote global and geometry-enhanced features. 
+
+2.2.2 Two-stage Adaptive Joint Framework. 
+
+To drive the parameters 𝜃 to stably converge toward the optimal geometric deduction path, the architectural evolution is divided into two stages. Throughout this process, to prevent catastrophic forgetting and reduce memory overhead, we keep the parameters of the visual encoder E𝑉 completely frozen to preserve its pre-trained generalized perception. Gradients are only backpropagated through the vision-language projector and E𝐿 .
+
+Cold-start Knowledge Injection (SFT). Rather than relying on free-form text generation, which is prone to parsing errors dur-ing RL, the rigorous formatting protocol described above trans-forms the raw reasoning text into a highly deterministic decision sequence. During the cold-start phase, we apply Low-Rank Adap-tation (LoRA) [ 33 , 101 ] for parameter-efficient fine-tuning of E𝐿 .The model absorbs this rigid syntax and spatial reasoning pattern on the EgoPoint-CoT dataset, providing an optimal initial policy distribution 𝜋 ref and tightly constraining the generation space. 
+
+Adaptive RL with GRPO [ 72 , 114 ]. In the policy alignment phase, the rigid syntax established in Stage 1 enables the precise, rule-based calculation of the format reward 𝑅 𝑓 𝑚𝑡 . To address reward noise caused by coordinate fluctuations during RL sampling, we embed an Adaptive Importance Weight module into the gradient backpropagation path. This module computes the reward variance within the sampled group in real-time to dynamically generate a weight 𝑤 𝑔 ∝√︁ Var (R 𝐺 ). By penalizing the gradient contribution of high-variance (i.e., unstable and noisy) groups, the joint training PointVG-R: Internalizing Geometric Reasoning in MLLMs for Precise Pointing Localization via Visual Chain of Thought Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+mechanism ensures that the model robustly filters invalid explo-rations and converges to a physically consistent optimal solution. 
+
+## 2.3 Reward Design 
+
+We design a structured reward to evaluate the generated V-CoT trajectory from both geometric accuracy and output validity. The reward is defined hierarchically as 
+
+𝑅 base = 𝜆 2𝑅 acc + 𝑅 fmt ,
+
+where 𝑅 acc measures geometric prediction accuracy, and 𝑅 fmt en-courages a valid output structure. 
+
+Accuracy Reward. The accuracy reward is further defined as 
+
+𝑅 acc = 𝜆 1𝑅 iou + 𝑅 toolcall ,
+
+where 𝑅 iou evaluates the final target grounding, and 𝑅 toolcall mea-sures the quality of the intermediate pointing process. The target box reward is computed as the IoU between the final predicted object box and the ground-truth target box, where the final predicted object box is defined as the last box appearing after the final tool call: 
+
+𝑅 iou = IoU ( ˆ𝑏 obj , 𝑏 gt obj ).
+
+The tool-call reward is composed of keypoint, hand-box, and ray rewards: 
+
+𝑅 toolcall = 𝑅 kpt + 𝑅 hand + 𝑅 ray .
+
+Specifically, 𝑅 hand evaluates the first predicted box in the trajec-tory, treated as the hand box, using IoU with the ground-truth hand box. 𝑅 ray measures the angular consistency between the predicted ray from the draw_ray tool call and the ground-truth ray, and nor-malizes the reward to the range [0, 1]. 𝑅 kpt supervises two pointing keypoints using scale-normalized MPJPE [79]: 
+
+𝑅 kpt = clip 1 − 1
+
+𝐾𝐷 hand 
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =1
+
+∥ ˆ𝑝 𝑘 − 𝑝 gt  
+
+> 𝑘
+
+∥2, 0, 1
+
+!
+
+, 𝐾 = 2.
+
+Format Reward. The format reward 𝑅 fmt checks whether the response contains a valid final grounding structure, including both a predicted object box after the final tool call and a valid caption reference. 
+
+Repetition Penalty. To discourage redundant reasoning steps, we penalize repeated ray tool calls and repeated object box predictions. Let 𝑁 tool denote the number of draw_ray calls and 𝑁 box the number of object boxes generated after the final tool call. The final reward is given by 
+
+R (T ) = 𝑅 base · 1max (1, 𝑁 tool ) ·
+
+( 1 
+
+> 𝑁 box
+
+, 𝑁 box > 00.1, 𝑁 box = 0.
+
+Negative Samples. For images without valid pointing annotations, we apply a penalty-only rule. If the model still produces tool calls, boxes, point tokens, or caption spans, corresponding penalties are applied to suppress hallucinated reasoning traces. 
+
+## 2.4 Adaptive Reward Strategy 
+
+During training, we observe that not all rollout groups provide equally informative learning signals. In some groups, the trajec-tory scores are concentrated within a consistently high or low range, which provides limited guidance for policy improvement. In contrast, groups with larger score variance indicate stronger relative preference among sampled trajectories and therefore offer more informative supervision. Motivated by this observation, we introduce an adaptive reward reweighting strategy that scales the contribution of each sample according to the variance of its rollout group. Given a batch of trajectories, we first compute the sequence-level score 𝑅 𝑖 for each sample 𝑖 by summing the token-level rewards penalized by the KL divergence [38]: 
+
+𝑅 𝑖 = 
+
+> | T 𝑖 |
+
+∑︁ 
+
+> 𝑡 =1
+
+ 𝑠 𝑖,𝑡 − 𝛽 KL 𝑖,𝑡 
+
+ , (5) where 𝑠 𝑖,𝑡 is the environment reward at step 𝑡 , and KL 𝑖,𝑡 = log 𝜋 𝜃 old (𝑎 𝑖,𝑡 |
+
+𝑥 𝑖 , 𝑎 𝑖, <𝑡 ) − log 𝜋 ref (𝑎 𝑖,𝑡 | 𝑥 𝑖 , 𝑎 𝑖, <𝑡 ) serves as a token-level penalty to prevent large deviations from the reference model. Samples are grouped by their prompt identifier. For each group 
+
+𝐺 containing |𝐺 | samples, we compute the mean 𝜇 𝐺 and estimate the reward variance 𝜎 2 
+
+> 𝐺
+
+:
+
+𝜇 𝐺 = 1
+
+|𝐺 |∑︁ 𝑗 ∈𝐺 
+
+𝑅 𝑗 , 𝜎 2 
+
+> 𝐺
+
+= 1
+
+|𝐺 |∑︁ 𝑗 ∈𝐺 
+
+(𝑅 𝑗 − 𝜇 𝐺 )2. (6) To stabilize scaling across training steps, we maintain a run-ning estimate of the global variance using an exponential moving average: 
+
+𝜎 2 
+
+> global
+
+← 𝛼𝜎 2 
+
+> global
+
++ ( 1 − 𝛼 )𝜎 2
+
+> batch
+
+, (7) where 𝜎 2 
+
+> batch
+
+is the mean variance across groups in the current batch and 𝛼 is a momentum coefficient. We then compute an importance weight 𝑤 𝑖 for each sample based on the ratio between its group variance and the global variance: 
+
+𝑤 𝑖 =
+
+vt 𝜎 2
+
+> 𝐺
+
+𝜎 2 
+
+> global
+
++ 𝜖 , (8) where 𝜖 is a small constant for numerical stability. This adaptive strategy emphasizes samples from high-variance groups while down-weighting more stable ones, improving training stability and exploration efficiency. We incorporate the proposed variance-based importance weight-ing into the GRPO objective by modulating the normalized advan-tages. The adjusted advantage for trajectory T𝑖 is defined as: 
+
+˜𝐴 𝑖 = clip (𝑤 𝑖 , 𝑤 min , 𝑤 max ) 𝑅 𝑖 − 𝜇 𝐺 
+
+𝜎 𝐺 + 𝜖 . (9) The resulting objective is formulated at the token level as: 
+
+LGRPO (𝜃 ) = −EX,{𝑅 𝑖 }
+
+"
+
+1
+
+|𝐺 |∑︁ 𝑖 ∈𝐺  
+
+> |𝑅 𝑖 |
+
+∑︁  
+
+> 𝑡 =1
+
+min 
+
+
+
+𝜌 𝑖,𝑡 ˜𝐴 𝑖 ,
+
+clip (𝜌 𝑖,𝑡 , 1 − 𝜖 𝑐 , 1 + 𝜖 𝑐 ) ˜𝐴 𝑖 
+
+#
+
+,
+
+(10) Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. Positive Samples 
+
+> MMPose
+> Images with
+> Initial Annotation
+> Expert Human
+> Verification
+> Images with
+> Refined Annotation
+> Construct
+> 2D rays
+> CoT
+> Construction
+
+FINAL DATASET  
+
+> Negative Samples
+> No hand is visible.
+> There is no target. Define Dedicated CoT Trajectories
+> Suggest Edits
+> Fleiss'k = 0.91
+> Images with rays
+> Construction
+
+Figure 4: Construction pipeline of the EgoPoint-CoT training dataset. PointVG -R
+
+(Ours) 
+
+LLaVA -
+
+OneVision -8B 
+
+DeepSeek -VL2 
+
+Qwen3 -VL -8B 
+
+Intern -VL -3.5 -
+
+8B 
+
+GT
+
+PRED 
+
+GT
+
+PRED 
+
+GT
+
+PRED 
+
+GT
+
+PRED 
+
+GT
+
+PRED 
+
+Figure 5: Comparative analysis of PointVG-R and baseline models on the EgoPoint-CoT. 
+
+where 𝜌 𝑖,𝑡 = 𝜋 𝜃 (𝑎 𝑖,𝑡 |𝑥 𝑖 ,𝑎 𝑖, <𝑡 )     
+
+> 𝜋 𝜃 old (𝑎 𝑖,𝑡 |𝑥 𝑖 ,𝑎 𝑖, <𝑡 )
+
+denotes the policy ratio for token 𝑡 in trajectory T𝑖 .The clipping on 𝜌 𝑖,𝑡 stabilizes policy updates, while clipping 
+
+𝑤 𝑖 prevents excessively large weights from outlier group vari-ances, improving robustness. Introducing 𝑤 𝑖 into the advantage explicitly modulates each trajectory’s contribution based on roll-out group variance. High-variance groups are up-weighted due to stronger preference signals, whereas low-variance groups are down-weighted for their limited informativeness. Importantly, 𝑤 𝑖 is independent of the policy ratio 𝜌 𝑖,𝑡 : 𝜌 𝑖,𝑡 cap-tures policy shift, while 𝑤 𝑖 reflects trajectory informativeness.Their combination gives an updated term: 𝑤 𝑖 𝜌 𝑖,𝑡 𝑅 𝑖 −𝜇 𝐺   
+
+> 𝜎 𝐺 +𝜖
+
+(with clipping), improving both optimization efficiency and training stability. This design allows GRPO to better exploit heterogeneous rollout quality without increasing gradient variance. 
+
+## 3 EgoPoint-CoT Dataset 
+
+To support the explicit spatial reasoning required during the SFT cold-start phase, we construct EgoPoint-CoT, whose annotation pipeline is illustrated in Figure 4. comprising approximately 15K images (split into train, validation, and test sets at a 7:2:1 ratio). Built upon EgoPoint-Ground [ 45 ], this dataset provides complete 
+
+(𝑅 ∗, 𝑏 ∗) supervision signals that strictly align with our four-stage reasoning trajectory. Specifically, we extract physical anchors ( 𝑟 1
+
+and 𝑟 2) via MMPose [ 18 ] coupled with expert cross-validation, and PointVG-R: Internalizing Geometric Reasoning in MLLMs for Precise Pointing Localization via Visual Chain of Thought Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+incorporate target semantics ( 𝑟 3) and ground-truth boxes ( 𝑟 4) to generate formatted reasoning sequences via LLMs, followed by manual verification. Furthermore, to suppress model hallucinations, we explicitly inject 1,052 negative samples (images without visible pointing hands) paired with blocking reasoning trajectories (e.g., “No hand detected”). By blending real-world smart-glass captures with synthetic renderings, EgoPoint-CoT ensures both rich scene diversity and robust distributional consistency. 
+
+## 4 Experiments 4.1 Main Results 
+
+We have conducted a comprehensive evaluation of PointVG-R against SOTA MLLMs on the EgoPoint-CoT test set. Table 1 presents the quantitative results across various training paradigms, from which we derive the following key insights: 
+
+Cognitive Vulnerability of Traditional Models. Baseline mod-els exhibit significant cognitive vulnerabilities in pointing-based visual grounding. Zero-shot results show consistently poor perfor-mance; even high-performing models like Qwen2.5-VL (7B) and LLaVA-OneVision (8B) struggle, with 𝑚𝐼𝑜𝑈 scores stagnating be-tween 0.42 and 0.45 . This highlights the inability of general-purpose models to decipher complex gestural spatial relations without spe-cialized reasoning. Qualitative comparisons in Figure 5 further corroborate these findings, showing that PointVG-R produces more spatially consistent and semantically accurate localizations than competing baselines. Comparing standard SFT with our V-CoT cold-start setting re-veals that structured intermediate supervision can strengthen geo-metric perception, although the effect varies across model families. Specifically, on the Qwen2.5-VL backbone, the V-CoT paradigm with explicit intermediate supervision improves 𝑚𝐼𝑜𝑈 from 0.5984 to 0.6453 ( ↑ 4.7 points), and Qwen3-VL also achieves a clear gain from 0.5734 to 0.6688 ( ↑ 9.5 points). In contrast, LLaVA-v1.5 shows only marginal improvement under CoT supervision, with 𝑚𝐼𝑜𝑈 
+
+changing from 0.5165 to 0.5225 , while InternVL-3.5 drops from 
+
+0.5867 to 0.5168 (↓ 7.0 points). This indicates that the efficacy of structured reasoning depends on the inherent capacity of the model backbone. By emulating human cognitive processes, we enable com-patible models to transcend simple feature matching and achieve sophisticated visual logical reasoning. 
+
+Performance Gains from Adaptive RL. PointVG-R (Ours) achieves SOTA performance across all metrics. By integrating the GRPO algorithm with our adaptive importance weighting strategy during the second stage, PointVG-R reaches an 𝑚𝐼𝑜𝑈 of 0.7570 on the Qwen2.5 (7B) backbone—representing a 8.82 points improvement over the strongest cold start baseline ( 0.6688 → 0.7570 ). This sub-stantial gain validates that our group-variance-based weighting dynamically optimizes learning signals, effectively addressing the challenge of inconsistent reward quality and further unleashing the model’s reasoning potential. 
+
+## 4.2 Ablation Study 
+
+Experiment I: Ablation on Intermediate V-CoT Supervision. 
+
+We conducted a progressive ablation study on the intermediate reasoning components ( 𝑓 1 ∼ 𝑓 3) to evaluate the effect of supervising explicit geometric deduction stages during the GRPO phase. As re-ported in Table 2, intermediate rewards are essential for establishing logical consistency, with the full model achieving overall gains of +4.07, +4.40, +5.88, and +4.03 points on 𝑃 @0 .3, 𝑃 @0 .5, 𝑃 @0 .7, and 
+
+𝑚𝐼𝑜𝑈 , respectively, over the baseline. First, incorporating hand lo-calization supervision ( 𝑓 1) significantly stabilizes the grounding pro-cess. Compared with the “w/o inter.” variant, adding the hand prior improves 𝑃 @0 .3 from 0.8398 to 0.8814 (↑ 4.16 points) and 𝑚𝐼𝑜𝑈 
+
+from 0.7167 to 0.7463 (↑ 2.96 points). This substantial improvement across all metrics—including gains of +4.11 on 𝑃 @0 .5 and +3.53 on 
+
+𝑃 @0 .7—confirms that the hand serves as a critical spatial anchor. Without this explicit supervision, the model must implicitly infer the interaction source, which increases spatial ambiguity and leads to suboptimal convergence. Second, introducing ray and keypoint supervision ( 𝑓 2) primarily improves fine-grained spatial alignment. Although 𝑃 @0 .3 remains nearly saturated ( 0.8814 → 0.8805 ), the inclusion of 𝑓 2 yields a clear improvement on the more stringent 
+
+𝑃 @0 .7 metric, increasing it from 0.7217 to 0.7452 (↑ 2.35 points), while further raising 𝑚𝐼𝑜𝑈 to 0.7570 (↑ 1.07 points). 
+
+Experiment II: Ablation on Group Statistic for Importance Estimation. 
+
+To investigate the optimal group-level statistic for guiding adap-tive reward weighting, we conducted a systematic ablation by com-paring Group Variance ( 𝜎 2 
+
+> 𝐺
+
+) against vanilla GRPO, reward entropy, top-bottom reward gap, and standard deviation, while keeping all other components constant. As summarized in Table 3, Group Vari-ance achieves superior performance across all metrics, reaching 
+
+0.8805/0.8360/0.7452 on 𝑃 @0 .3/𝑃 @0 .5/𝑃 @0 .7 and an 𝑚𝐼𝑜𝑈 of 0.7570. Compared to vanilla GRPO, it yields consistent precision im-provements exceeding 5.0 points and a 3.86 absolute gain in 𝑚𝐼𝑜𝑈 ,validating the critical role of modeling intra-group rollout hetero-geneity in stabilizing policy updates for complex spatial reasoning. Comparative analysis further reveals that Group Variance signifi-cantly outperforms first-order and information-theoretic measures. Specifically, the top-bottom reward gap exhibits the poorest per-formance, with an 𝑚𝐼𝑜𝑈 of 0.3618, due to its inherent sensitivity to sampling outliers, while reward entropy fails to directly reflect the geometric alignment quality essential for V-CoT trajectories. Notably, Group Variance outperforms standard deviation by 3.58 points in 𝑚𝐼𝑜𝑈 , suggesting that its second-order nature provides a more discriminative scaling signal. This enables the model to ef-fectively prioritize high-fidelity reasoning paths while suppressing noise from suboptimal rollouts. In summary, Group Variance serves as a robust proxy for rollout quality, substantially enhancing policy optimization efficiency. 
+
+Experiment III: Ablation on Importance Mapping Function. 
+
+Upon establishing group variance as the core statistic, we fur-ther investigate the functional form used to map it into the final importance weight 𝑤 𝐺 . Maintaining constant variance terms, we evaluate linear, power, and logarithmic scaling against our pro-posed square-root scaling ( 𝑤 𝐺 ∝√︃ 𝜎 2 
+
+> 𝐺
+
+). As summarized in Table 4, square-root scaling achieves the most robust performance with an 𝑚𝐼𝑜𝑈 of 0.7570, significantly outperforming the linear baseline Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. 
+
+Table 1: Main results on the EgoPoint-CoT benchmark. We compare our PointVG-R against a wide range of state-of-the-art VLMs and grounding models across zero-shot, fine-tuned, and CoT-based settings. By integrating structured V-CoT reasoning with Adaptive GRPO, PointVG-R substantially surpasses existing methods, effectively bridging the divide between current model capabilities and human-level spatial reasoning. Training Paradigm Model Backbone P@0.3 ↑ P@0.5 ↑ P@0.7 ↑ mIoU ↑
+
+Upper Bound Human Study – 0.9398 0.8850 0.8218 0.8265 
+
+Zero-shot Methods 
+
+N/A DeepSeek-OCR [87] – 0.3853 0.3207 0.2734 0.3367 DeepSeek-VL2-Small [95] – 0.4077 0.3738 0.3351 0.3619 Ferret-v1 [105] 7B 0.3489 0.2954 0.2428 0.2956 Ferret-v1 [105] 13B 0.3059 0.2471 0.1998 0.2634 Florence2-large [96] – 0.1079 0.0869 0.0791 0.1086 InternVL-v3.5 [85] 8B 0.4790 0.4264 0.3466 0.3989 LLaVA-OneVision [1] 8B 0.5258 0.3987 0.2562 0.4234 LLaVA-v1.5 [51] 13B 0.3810 0.2715 0.1138 0.2642 Qwen2.5-VL [82] 7B 0.5421 0.4976 0.4293 0.4549 Qwen3-VL [4] 8B 0.4814 0.4446 0.3896 0.4298 
+
+Fine-tuned Baselines (Standard SFT) 
+
+Non Thinking SFT LLaVA-v1.5 [51] 13B 0.6978 0.5913 0.3618 0.5165 InternVL-3.5 [85] 8B 0.6802 0.6319 0.5506 0.5867 Qwen2.5-VL [82] 7B 0.6873 0.6362 0.5674 0.5984 Qwen3-VL [4] 8B 0.6266 0.5932 0.5387 0.5734 
+
+Visual Chain-of-Thought (Cold Start) 
+
+SFT-CoT ( 𝑟 1 ∼ 𝑟 4)LLaVA-v1.5 [51] 13B 0.6934 0.5778 0.3517 0.5225 InternVL-3.5 [85] 8B 0.6089 0.5650 0.4947 0.5168 Qwen2.5-VL [82] 7B 0.8025 0.6935 0.5449 0.6453 Qwen3-VL [4] 8B 0.7347 0.7021 0.6438 0.6688 
+
+Ours: PointVG-R (V-CoT + Adaptive GRPO) V-CoT + RL PointVG-R (Qwen2.5) 7B 0.8805 0.8360 0.7452 0.7570 Table 2: Ablation study on the structured V-CoT reasoning paradigm. We evaluate the incremental contribution of each physical modeling component ( 𝑓 1 to 𝑓 3) and the impact of the image-ray re-encoding module. The results validate the necessity of each stage in forming a deterministic reasoning chain for precise grounding.                              
+
+> Method / Paradigm V-CoT Components Performance Metrics Hand ( 𝑓 1)Ray & Point ( 𝑓 2)Box ( 𝑓 3)P@0.3 ↑P@0.5 ↑P@0.7 ↑mIoU ↑
+> Baseline: Qwen2.5-VL-7B
+> Visual CoT (w/o inter.) ✗✗✓0.8398 0.7920 0.6864 0.7167 Visual CoT ( +𝑟 1)✓✗✓0.8814 0.8331 0.7217 0.7463
+> Ours PointVG-R (Full) ✓✓✓0.8805 0.8360 0.7452 0.7570
+
+Table 3: Ablation study on group statistics for reward nor-malization in GRPO Statistic Setting P@0.3 P@0.5 P@0.7 mIoU 
+
+None (Standard GRPO) 0.8240 0.7773 0.6921 0.7184 Reward Entropy 0.7490 0.6716 0.5822 0.6373 Top-Bottom Reward Gap 0.4010 0.3714 0.3303 0.3618 Standard Deviation 0.8436 0.7921 0.6916 0.7212 Group Variance (Ours) 0.8805 0.8360 0.7452 0.7570 
+
+(0.6017). These results indicate thato tackle pointing tasks with complex spatial structures effectively a stable optimization signal. While linear scaling proves overly aggressive—potentially inducing 
+
+Table 4: Ablation study on importance mapping functions for reward scaling. Mapping Function P@0.3 P@0.5 P@0.7 mIoU 
+
+Variance + Linear Scaling 0.7203 0.6644 0.5793 0.6017 Variance + Power Scaling 0.8369 0.7868 0.6826 0.7112 Variance + Log Scaling 0.8485 0.8006 0.7060 0.7269 Variance + Sqrt Scaling (Ours) 0.8805 0.8360 0.7452 0.7570 
+
+gradient instability during training—logarithmic scaling (0.7269) suffers from over-compression of inter-group heterogeneity, lead-ing to insufficient sensitivity toward high-fidelity reasoning paths. In contrast, square-root scaling implements a sub-linear growth PointVG-R: Internalizing Geometric Reasoning in MLLMs for Precise Pointing Localization via Visual Chain of Thought Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+pattern that effectively captures group-level distinctions while en-suring smooth weight transitions. This approach strikes an optimal balance between responsiveness and training stability, ultimately yielding superior performance. 
+
+## 5 Conclusion 
+
+MLLM is specifically designed for pointing gesture visual grounding through Visual Chain-of-Thought (V-CoT) reasoning. PointVG-R emulates human iterative cognitive processes to effectively tackle pointing tasks with complex spatial structures. We introduce a two-stage training framework: the first stage utilizes "cold-start" supervised fine-tuning (SFT) to establish a "thinking-with-images" geometric reasoning pipeline; the second stage leverages the GRPO algorithm to further bolster reasoning capabilities. Furthermore, we develop a group-variance-based adaptive importance weight-ing strategy, which enhances overall performance and conver-gence stability by dynamically prioritizing sample groups with pronounced relative preferences. Extensive evaluations demon-strate that PointVG-R achieves a 15.86% performance gain over baseline methods, while detailed ablation studies confirm the effi-cacy of our reasoning chain and innovative modules. Ultimately, PointVG-R exhibits superior versatility and robustness in handling human-centric spatial interaction tasks. 
+
+Limitation : The iterative V-CoT paradigm employed in PointVG-R requires sequential token generation for multiple intermediate reasoning steps (e.g., 𝑟 1 to 𝑟 4). Unlike traditional direct-regression approaches, this autoregressive process introduces non-negligible inference latency. For real-time applications on wearable devices such as AR glasses, maintaining complex logical reasoning while reducing token overhead or accelerating inference remains a critical challenge for future work. 
+
+## A Related Work A.1 Visual Grounding and First-Person Pointing Understanding 
+
+The visual grounding task has evolved from earlier referring ex-pression comprehension (RefCOCO [ 106 ][ 48 ], RefCOCO+ [ 61 ], Re-fCOCOg [ 63 ]) to open-vocabulary detection (GLIP [ 46 ], Grounding DINO [ 55 ], YoloWorld [ 17 ]) and integration with MLLMs (LLaVA-1.6 [ 50 ][ 49 ][ 49 ], Qwen-VL [ 83 ], Deepseek-OCR [ 88 ]). While these methods perform well in general scenarios, their designs typically assume static, third-person images as input, making them less ef-fective for handling dynamic interactions from a first-person per-spective. In recent years, Ego4D [ 23 ], EgoExo4D [ 25 ], and their extensions (EgoObjects [ 116 ]) have propelled research in egocen-tric vision, fostering tasks such as hand detection (HandNet), active object detection, and gesture-object association modeling (Point-ing Grounding in Ego4D [ 23 ], EgoPoint [ 21 ]). Recent works like EgoVLP [ 68 ] and EgoVLA [ 102 ] attempt to align language instruc-tions with first-person vision but still simplify the pointing task to end-to-end bounding box regression, lacking explicit modeling of the "gesture-direction-target" geometric chain. 
+
+## A.2 Multimodal Chain-of-Thought and Structured Reasoning 
+
+Chain-of-Thought (CoT) has expanded from the pure text domain [ 89 ] to visual reasoning (Think with image [ 37 , 43 , 52 , 56 – 58 , 73 ,76 , 89 , 93 , 107 , 111 ]. VisProg [ 30 ] and ViperGPT [ 77 ] achieve inter-pretable reasoning through program synthesis; Program-of-Thought [ 15 ] introduce external tools to enhance symbolic manipulation capabilities. Recently, end-to-end MLLMs have also begun to sup-port implicit CoT, such as LLaVA-CoT [ 100 ] and Qwen-VL-CoT [83 ]. However, their reasoning steps remain primarily text-based, without enforcing alignment between intermediate representations and visual geometric structure. Furthermore, some works have ex-plored structured outputs for spatial reasoning, such as GeoQA+ [ 11 ] (geometry problem solving) and Diagram-Guided Reasoning [ 84 ] (diagram understanding). Yet, these methods rely on domain-specific priors, making it difficult to generalize to open-domain first-person pointing tasks. 
+
+## A.3 Spatial Intelligence and Reinforcement Learning in MLLMs 
+
+Despite progress in perception tasks [ 10 ], the spatial reasoning capa-bilities of MLLMs remain questionable. Studies indicate systematic deficiencies in models’ understanding of coordinates, directional inference, and topological relationship modeling [ 2][ 66 ][ 103 ][ 42 ]. To enhance these capabilities, researchers have attempted to in-troduce synthetic data (SpatialVLM [ 13 ]), neuro-symbolic inter-faces (Neuro-Symbolic VQA [ 8]), or geometric pre-training (Geo-Former [ 112 ]). Concurrently, reinforcement learning with verifiable rewards (RLVR) [ 91 ][ 75 ][ 110 ][ 81 ][ 14 ][ 26 ] is widely employed to im-prove the reasoning performance of MLLMs (e.g., o1 [ 34 ], DeepSeek-R1 [ 27 ]). This work demonstrates that optimization based on verifi-able rewards can effectively enhance sampling efficiency. However, the focus has primarily been on mathematical/coding domains and Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. 
+
+has not yet been systematically applied to visual grounding tasks with strong geometric constraints. 
+
+## B Experiment Details B.1 Experimental Settings 
+
+Baselines and Evaluation Metrics. We compare our method against both large-model-based grounding approaches and general-purpose vision-language models, including Qwen-VL (2.5/3B–8B), LLaVA (v1.5/OneVision, 7B–13B), InternVL-3.5 (4B/8B), Ferret (7B/13B), DeepSeek (VL2-Small/OCR). All baselines use their official open-source implementations and generate target bounding boxes via native autoregressive decoding under the same input format (im-age + pointing query), without external tools or post-processing. Evaluation is conducted using Precision@0.3, Precision@0.5, Preci-sion@0.7, and mean IoU (mIoU) as metrics. Given a dataset of 𝑁 samples, Precision @𝐾 evaluates the pro-portion of predictions that exceed a specific IoU threshold 𝐾 :Precision @𝐾 = 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+I
+
+
+
+IoU ( ˆ𝑏 (𝑖 ) , 𝑏 ∗( 𝑖 ) ) > 𝐾 
+
+
+
+,
+
+and mIoU is computed as the average intersection-over-union across all samples: mIoU = 1
+
+𝑁 
+
+> 𝑁
+
+∑︁ 
+
+> 𝑖 =1
+
+IoU ( ˆ𝑏 (𝑖 ) , 𝑏 ∗( 𝑖 ) ),
+
+where I(·) is the indicator function, ˆ𝑏 (𝑖 ) represents the predicted bounding box, 𝑏 ∗( 𝑖 ) denotes the ground-truth bounding box, and 
+
+IoU ( ˆ𝑏, 𝑏 ∗) = | ˆ𝑏 ∩𝑏 ∗ || ˆ𝑏 ∪𝑏 ∗ | .
+
+Training and inference Details. We instantiate PointVG-R on top of Qwen2.5-VL-7B and optimize it with the two-stage training pro-tocol introduced in main paper, a cold-start CoT-SFT stage followed by an adaptive GRPO stage. In the SFT stage , we use the entire train split of EgoPoint-CoT for supervised learning. To improve training efficiency while preserving the structured reasoning capa-bility established by cold-start supervision, the subsequent GRPO stage uses a fixed random 30% subset of the train split. This subset is sampled once before RL training starts and is kept unchanged throughout all epochs, i.e., we do not re-sample the 30% subset at the beginning of each epoch. For the cold-start phase, we adopt LoRA for parameter-efficient fine-tuning. The SFT stage is trained for 3 epochs with LoRA rank 8 and LoRA alpha 16. The learning rate is set to 1 × 10 −4, and the global batch size is 384. In addition to the standard LoRA trainable parameters, we further unfreeze the token embedding layer and the lm_head, since our structured V-CoT formulation introduces additional special tokens for point-, caption-, and tool-related syn-tax. This stage is used to inject a stable geometric reasoning prior and to initialize the model with a well-formed, structured decoding policy before reinforcement learning. In the second stage, we perform full-parameter GRPO training for 7 epochs. The actor optimizer is AdamW with learning rate 
+
+1 × 10 −5, weight decay 0.01, and 𝛽 = (0.9, 0.999 ). We use a cosine learning-rate scheduler with a warmup ratio 0.1 and a minimum learning-rate ratio of 0.2. For policy updates, the actor global batch size is 128. We set the maximum gradient norm to 0.5 and use one PPO epoch per update. The policy clipping parameters are set to clip-ratio-low = 0.2, clip-ratio-high = 0.3, and dual-clip = 3.0.For rollout generation, we use a vLLM-based hybrid engine with rollout batch size 256. During training, we sample 𝑛 = 5 responses for each prompt in each rollout step, while during validation, we use 
+
+𝑛 = 3 sampled generations per instance. The sampling temperature is set to 0.9, with top-𝑝 = 0.95 and top-𝑘 = −1. Since our V-CoT rea-soning includes tool invocation and image-ray-based intermediate reasoning, we enable multi-turn rollout with at most 2 iterations. The maximum prompt length and maximum response length are both set to 1024, and the maximum generation length per turn is also 1024. During GRPO training, we additionally enable Flash Attention to improve memory efficiency and training throughput. The reward follows the structured design in Sec. 3.3. Specifically, the base reward is defined as 
+
+𝑅 base = 𝑅 hand + 𝑅 ray + 𝑅 kpt + 𝜆 1𝑅 iou + 𝜆 2𝑅 fmt ,
+
+where the coefficients are set to 𝜆 1 = 5 and 𝜆 2 = 2. We keep the repetition penalty and negative-sample penalty described in Sec. 3.3 unchanged during training. For KL control, we enable KL loss with coefficient 0.05, adopt the low_var_kl penalty, and use an adaptive KL controller with target KL 0.08 and horizon 10000. For the proposed adaptive reward strategy in Sec. 3.4, we use 
+
+group variance as the rollout-quality statistic and adopt the sqrt-ratio mapping to compute the importance weight. The global vari-ance is initialized as 0.1 and updated with an exponential moving average whose momentum coefficient is 𝛼 = 0.95 . The numerical stabilizer is set to 10 −6. The resulting importance weight is clipped to the interval [0.3, 3.0] before being applied to the normalized group advantage. We do not apply additional normalization to the importance weights. At the data-processing level, we shuffle the GRPO training subset and set the image resolution range to [262144, 1048576] pixels and filter out overlong prompts before training. During validation, the batch size is set to 256. We perform validation once every epoch and also evaluate once before training starts. For validation-time gener-ation, we use a more conservative decoding setup with temperature 0.6, top-𝑝 0.95, and 3 sampled generations per instance. All experiments are conducted on a single node with 8 NVIDIA H100 GPUs .
+
+## B.2 Details for Ablation Study 
+
+All ablation experiments follow the same training protocol as the standard model in the main paper. Concretely, all variants are ini-tialized with the same backbone and structured Visual Chain-of-Thought (V-CoT) framework, use 100% of the SFT training data for cold-start supervised fine-tuning, and further use 30% of the training data for RL optimization. All other optimization and model configurations are kept identical to those used in the main exper-iments, so that the comparisons isolate the effect of the ablated component. 
+
+B.2.1 Ablation on the Structured V-CoT Reasoning Paradigm. To verify the necessity of explicit intermediate supervision in the pro-posed reasoning framework, we perform a progressive ablation study by gradually adding reward supervision signals into the RL stage. Following the four-stage reasoning process described in the PointVG-R: Internalizing Geometric Reasoning in MLLMs for Precise Pointing Localization via Visual Chain of Thought Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+main paper, the final object box prediction is always retained, while the intermediate physical cues are introduced step by step. Specifi-cally, we start from a reduced setting that only supervises the final target box, then add hand localization supervision, and finally in-troduce ray and pointing keypoint supervision. The corresponding quantitative results are reported in Table 2 of the main paper. This design directly evaluates whether structured geometric supervision improves policy learning beyond final-box-only opti-mization. As shown in Table 2 of the main paper, the model with only final box supervision already provides a reasonable ground-ing baseline, but adding explicit hand supervision significantly improves all metrics, indicating that the pointing hand serves as a critical spatial anchor. Further introducing ray and point super-vision leads to additional gains, especially on stricter localization metrics such as P@0.7 and mIoU. These results support the central claim of our method: precise pointing localization benefits from decomposing the task into interpretable geometric sub-problems rather than optimizing only the final grounding output. 
+
+B.2.2 Ablation on Group Statistics for Importance Estimation. The main paper adopts group variance as the statistic used to estimate the informativeness of each rollout group. To verify whether this choice is indeed the most effective, we compare it against several alternative group-level statistics under the same RL setting. For one rollout group containing 𝐾 sampled responses, let the reward set be 
+
+r = {𝑟 1, 𝑟 2, . . . , 𝑟 𝐾 }, ¯𝑟 = 1
+
+𝐾 
+
+> 𝐾
+
+∑︁ 
+
+> 𝑖 =1
+
+𝑟 𝑖 .
+
+Based on this reward set, we consider the following candidate statistics. 
+
+(1) Variance 
+
+𝑆 var (r) = 1
+
+𝐾 
+
+> 𝐾
+
+∑︁ 
+
+> 𝑖 =1
+
+(𝑟 𝑖 − ¯𝑟 )2.
+
+(2) Standard deviation 
+
+𝑆 std (r) =
+
+vut 1
+
+𝐾 
+
+> 𝐾
+
+∑︁ 
+
+> 𝑖 =1
+
+(𝑟 𝑖 − ¯𝑟 )2.
+
+(3) Top-bottom gap 
+
+𝑆 gap (r) = max   
+
+> 1≤𝑖 ≤𝐾
+
+𝑟 𝑖 − min   
+
+> 1≤𝑖 ≤𝐾
+
+𝑟 𝑖 .
+
+(4) Reward entropy First, we partition the reward range 
+
+[𝑟 min , 𝑟 max ], 𝑟 min = min  
+
+> 𝑖
+
+𝑟 𝑖 , 𝑟 max = max  
+
+> 𝑖
+
+𝑟 𝑖 
+
+into 𝐵 histogram bins, and denote by 𝑝 𝑏 the normalized frequency of the 𝑏 -th bin, where 
+
+𝑝 𝑏 ≥ 0,
+
+> 𝐵
+
+∑︁ 
+
+> 𝑏 =1
+
+𝑝 𝑏 = 1.
+
+The entropy statistic is then defined as 
+
+𝑆 ent (r) = −
+
+> 𝐵
+
+∑︁ 
+
+> 𝑏 =1
+
+𝑝 𝑏 log (𝑝 𝑏 + 𝜀 ),
+
+where 𝜀 > 0 is a small constant for numerical stability. For degenerate groups, we follow a stable implementation rule. When 𝐾 ≤ 1, the statistic is set to zero: 
+
+𝑆 (r) = 0.
+
+For the entropy-based statistic, when 𝑟 max − 𝑟 min ≤ 𝜀 , we also set 
+
+𝑆 ent (r) = 0.
+
+The corresponding quantitative comparison is reported in Ta-ble 3 of the main paper. As shown there, group variance achieves the best performance across all metrics. Compared with standard GRPO without adaptive statistic-based weighting, variance-based scaling yields clear gains on both localization precision and mIoU. In con-trast, top-bottom gap is highly sensitive to outlier rewards, while entropy does not directly capture the relative geometric discrim-inability among sampled responses. Standard deviation performs substantially better than these alternatives, but still underperforms variance. These observations indicate that a second-order statistic over rollout rewards provides the most reliable signal for measur-ing the usefulness of a sampled group in our structured spatial reasoning setting. 
+
+B.2.3 Ablation on Importance Mapping Functions for Reward Scal-ing. After selecting the group statistic, we further study how the statistic value should be mapped into the final importance weight for advantage rescaling. Let 𝑠 𝑔 denote the statistic value of group 𝑔 ,computed by the selected statistic function. Each sample 𝑖 in group 
+
+𝑔 inherits the same statistic, 
+
+𝑠 𝑖 = 𝑠 𝑔 .
+
+Let the baseline statistic be denoted by 𝑏 . In implementation, 𝑏 
+
+can be either the current batch average statistic plus a numerical constant, or a running global baseline statistic. Specifically, the batch baseline is 
+
+𝑏 batch = ¯𝑠 batch + 𝜀, ¯𝑠 batch = 1
+
+𝐺 
+
+> 𝐺
+
+∑︁ 
+
+> 𝑔 =1
+
+𝑠 𝑔 ,
+
+where 𝐺 is the number of rollout groups in the batch. When a global baseline is used, it is updated by exponential moving average: 
+
+𝑏 (𝑡 ) 
+
+> global
+
+= max 
+
+
+
+𝜀, 𝑚 𝑏 (𝑡 −1) 
+
+> global
+
++ ( 1 − 𝑚 ) ¯𝑠 (𝑡 )
+
+> batch
+
+
+
+,
+
+where 𝑚 ∈ [ 0, 1) is the momentum coefficient. The actual baseline is then 
+
+𝑏 =
+
+(
+
+𝑏 batch , if batch statistic is used ,𝑏 global , otherwise .
+
+Given the per-sample statistic 𝑠 𝑖 and the baseline 𝑏 , we evaluate the following candidate mappings. 
+
+(1) Square-root ratio 
+
+𝑤 (sqrt ) 
+
+> 𝑖
+
+=√︂ 𝑠 𝑖 
+
+𝑏 .
+
+(2) Linear ratio 
+
+𝑤 (linear ) 
+
+> 𝑖
+
+= 𝑠 𝑖 
+
+𝑏 .
+
+(3) Power ratio 
+
+𝑤 (power ) 
+
+> 𝑖
+
+=
+
+ 𝑠 𝑖 
+
+𝑏 
+
+𝛾 
+
+,
+
+where 𝛾 > 0 controls the nonlinearity. In our implementation, the default choice is 𝛾 = 1.5.Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. 
+
+(4) Log ratio 
+
+𝑤 (log ) 
+
+> 𝑖
+
+= log 
+
+
+
+1 + 𝛼 𝑠 𝑖 
+
+𝑏 
+
+
+
+,
+
+where 𝛼 > 0 is a scaling factor. After computing the raw importance weights, we optionally apply clipping: 
+
+˜𝑤 𝑖 = clip (𝑤 𝑖 , 𝑤 min , 𝑤 max ).
+
+The final weight becomes 
+
+𝐴 ′ 
+
+> 𝑖
+
+= ˜𝑤 𝑖 𝐴 𝑖 .
+
+The corresponding quantitative comparison is reported in Ta-ble 4 of the main paper. Among all mapping functions, square-root scaling yields the strongest overall results. Linear scaling is too aggressive and can amplify unstable groups excessively, while log-arithmic scaling tends to over-compress the differences among groups. Power scaling provides a more moderate alternative, but still remains inferior to square-root scaling. Overall, these results suggest that sub-linear scaling offers the best balance between sensi-tivity to informative groups and robustness during RL optimization. 
+
+B.2.4 Summary. Overall, the ablation experiments consistently validate the two key design choices of PointVG-R. First, the struc-tured V-CoT reasoning paradigm benefits substantially from pro-gressively injected intermediate supervision, confirming that ex-plicit hand-, point-, and ray-level reasoning improves final ground-ing quality. Second, within adaptive RL optimization, group vari-ance serves as the most effective statistic for capturing rollout informativeness, while square-root scaling provides the most stable mapping from group-level uncertainty to sample-level importance. Together, these findings support the effectiveness of the proposed structured reasoning and adaptive reward weighting design for precise pointing localization. 
+
+## B.3 Pseudo-code for the Adaptive Reward Strategy 
+
+At each training iteration, a batch of prompt-image inputs is first sampled from the dataset. For each input 𝑥 , the current policy generates a group of 𝐺 responses via multi-turn rollout. These responses are then evaluated using a task-specific reward function (EgoReward), producing a set of reward signals. Based on these rewards, group-relative advantages are computed using the GRPO advantage estimator. To capture the variability of the generated responses, the algo-rithm computes the variance of rewards within each group as a group-level statistic. These statistics are averaged across the batch to obtain a batch-level estimate. A key component of the method is adaptive advantage scaling. For each input, a scaling weight is computed based on the ratio be-tween its group variance and a global running statistic. This weight is further clipped within predefined bounds to ensure stability, and then applied to rescale the corresponding advantages. This mech-anism encourages the model to place more emphasis on samples with higher reward diversity. The global statistic is updated using an exponential moving average (EMA), ensuring a smooth and stable estimate over time. 
+
+Algorithm 1 PointVG-R Training 
+
+Require: policy 𝜋 𝜃 , reference policy 𝜋 ref , dataset 𝐷 
+
+Require: group size 𝐺 , momentum 𝛽 , initial global statistic 𝑠 g,small constant 𝜖 
+
+Require: clipping bounds 𝑤 min , 𝑤 max  
+
+> 1:
+
+for each iteration do  
+
+> 2:
+
+𝐵 ← SampleBatch (𝐷 ) ⊲ 𝐵 : batch of prompt-image inputs  
+
+> 3:
+
+for each input 𝑥 ∈ 𝐵 do  
+
+> 4:
+
+𝑌 𝑥 ← MultiTurnRollout (𝜋 𝜃 , 𝑥, 𝐺 ) ⊲
+
+𝑌 𝑥 = {𝑦 𝑥, 1, . . . , 𝑦 𝑥,𝐺 } 
+
+> 5:
+
+𝑅 𝑥 ← EgoReward (𝑥, 𝑌 𝑥 ) ⊲ 𝑅 𝑥 = {𝑟 𝑥, 1, . . . , 𝑟 𝑥,𝐺 } 
+
+> 6:
+
+𝐴 𝑥 ← GRPOAdv (𝑅 𝑥 ) ⊲ 𝐴 𝑥 = {𝑎 𝑥, 1, . . . , 𝑎 𝑥,𝐺 } 
+
+> 7:
+
+𝑠 𝑥 ← Var (𝑅 𝑥 ) ⊲ group statistic  
+
+> 8:
+
+end for  
+
+> 9:
+
+𝑠 batch ← Mean ({ 𝑠 𝑥 | 𝑥 ∈ 𝐵 })  
+
+> 10:
+
+for each input 𝑥 ∈ 𝐵 do  
+
+> 11:
+
+𝑤 𝑥 ←√︂ 𝑠 𝑥 
+
+𝑠 g + 𝜖  
+
+> 12:
+
+𝑤 𝑥 ← Clip (𝑤 𝑥 , 𝑤 min , 𝑤 max ) 
+
+> 13:
+
+𝐴 𝑥 ← 𝑤 𝑥 · 𝐴 𝑥  
+
+> 14:
+
+end for  
+
+> 15:
+
+𝑠 g ← 𝛽𝑠 g + ( 1 − 𝛽 )𝑠 batch ⊲ EMA update of global statistic  
+
+> 16:
+
+𝜃 ← GRPOUpdate (𝜃, 𝐵, {𝐴 𝑥 }, 𝜋 ref ) ⊲ standard GRPO update with KL regularization  
+
+> 17:
+
+end for 
+
+Finally, the policy parameters are updated using the GRPO objec-tive with KL regularization against a reference policy 𝜋 ref , balancing exploration and stability. 
+
+## B.4 Detailed Breakdown of the Model Pipeline 
+
+As shown in Figure 6, our pipeline can be divided into three tightly coupled components. First, in the rollout stage , the model receives an egocentric image and a pointing-based query, and generates a struc-tured reasoning trajectory. This trajectory begins with identifying the pointing hand, then estimating the finger direction through keypoint prediction, followed by invoking a drawing tool to explic-itly construct a pointing ray. With the visual guidance provided by the ray, the model finally infers the semantic target and outputs the corresponding bounding box. Second, the generated trajectory is evaluated by a structured 
+
+reward function . Rather than only scoring the final localization result, our design decomposes the reward into multiple components that jointly supervise both intermediate reasoning quality and final prediction correctness. In particular, the tool-call reward measures whether the predicted intermediate geometric reasoning steps are physically meaningful, the prediction accuracy reward evaluates the final grounding result against the ground truth, and the format reward encourages valid and well-structured outputs. This design ensures that the model is optimized not only for correctness but also for reasoning faithfulness. Third, Figure 6 also illustrates our adaptive importance weighting strategy , which is applied during policy optimization. After col-lecting multiple rollout responses and their corresponding reward scores, we estimate the informativeness of each sampled response PointVG-R: Internalizing Geometric Reasoning in MLLMs for Precise Pointing Localization via Visual Chain of Thought Conference acronym ’XX, June 03–05, 2018, Woodstock, NY <think>I notice a pointing gesture. The hand is located at 
+
+<box> . The finger direction starts from  <|point|>  to 
+
+<point> . To find the target, I will extend a ray from the      
+
+> fingertip.</think>
+> <tool_call >{ \"name \": \"draw_ray \", \"start \": [x1, y1],
+> \"end \": [x2, y2], \"color \": \"red \"}</ tool_call >
+> Tool Call
+> <think> With the visual aid of the drawn
+> ray, I can clearly see it intersects with the
+> <| caption_start |>middle screen on the
+> table<| caption_end |>. The target object is
+> located there. \n</think>
+
+<bbox >
+
+> 4
+> 1
+> 2
+> Get Result
+
+## Rollout Stage 
+
+## Reward Function 
+
+Tool Call Reward 
+
+Predict Acc Reward 
+
+Format Reward 
+
+# …… 
+
+## Adaptive Importance Weighting Strategy 
+
+Response 1 
+
+Global 
+
+Var 
+
+Response 2 
+
+Response n 
+
+Response 
+
+> Reward Score
+> UPDATE
+
+Sample 
+
+Importance 
+
+Reference 
+
+model 
+
+𝑅𝑒𝑤𝑎𝑟 d1…n
+
+Advantage 1 
+
+Advantage 2 
+
+Advantage n 
+
+User: Please locate the 
+
+item I pointed out. 
+
+ሚ𝐴 𝑖 = 𝑐𝑙𝑖𝑝 𝑤 𝑖 , 𝑤 𝑚𝑖𝑛 , 𝑤 𝑚𝑎𝑥 𝑅 𝑖 − 𝜇 𝐺 
+
+𝜎 𝐺 + 𝜀 
+
+> 3
+
+## Policy update 
+
+Figure 6: Detailed breakdown of the full model pipeline. Starting from the user query and input image, the model first performs a structured rollout process, including hand localization, pointing keypoint prediction, ray construction via tool calling, and final target grounding. The generated responses are then evaluated by a multi-part reward function, including tool-call reward, prediction accuracy reward, and format reward. Finally, the adaptive importance weighting strategy computes sample-wise importance based on reward statistics, which is used to modulate the policy update during reinforcement learning. 
+
+according to group-level reward statistics. A global variance term is maintained and used to derive sample importance weights, which further modulate the normalized advantages before the policy up-date. In this way, more informative rollout groups contribute more strongly to training, while less informative or noisy groups are down-weighted, resulting in a more stable and efficient optimiza-tion process. Overall, Figure 6 provides an intuitive overview of how our method unifies structured visual reasoning, reward-guided learning, and adaptive policy optimization into a single coherent framework. 
+
+## B.5 Additional Experimental Analysis 
+
+To provide a more comprehensive understanding of the proposed method, we further present additional experimental analysis from two perspectives: the training dynamics during GRPO optimiza-tion and the qualitative comparison against representative baseline MLLMs. 
+
+B.5.1 Training Dynamics during GRPO.. We first visualize the evo-lution of the major reward components during reinforcement learn-ing in Figure 7. As shown in Figure 7, the reward signals exhibit an overall up-ward trend throughout training, indicating that the policy gradually learns to generate more accurate and more structured reasoning tra-jectories. In particular, the overall base reward increases steadily as optimization proceeds, suggesting that the model improves jointly on intermediate reasoning quality and final grounding accuracy. From the perspective of individual reward components, the geo-metric supervision terms also become progressively more stable. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. 
+
+Figure 7: Reward evolution during GRPO training. We visualize the trajectories of the overall base reward and several key reward components, including object IoU reward, hand IoU reward, ray reward, keypoint reward, and negative-sample reward. 
+
+The object IoU reward shows a clear upward tendency, indicating that the final target localization becomes increasingly accurate dur-ing GRPO optimization. Similarly, the hand IoU reward improves over training, showing that the model learns to identify the point-ing hand more reliably, which provides a stronger spatial anchor for subsequent reasoning. The keypoint reward and ray reward further demonstrate that the model gradually acquires more precise pointing-direction estimation and ray construction ability, which is well aligned with the design motivation of our structured V-CoT framework. Although several reward terms exhibit transient fluctuations in the early and middle stages of training, all major reward com-ponents recover and continue to improve afterward, eventually reaching relatively stable plateaus. This behavior is expected in rollout-based policy optimization and also empirically supports the effectiveness of our adaptive weighting strategy in maintaining robust training under heterogeneous reward quality. 
+
+B.5.2 Qualitative Comparison with Baseline Models. We further provide a qualitative comparison between PointVG-R and several representative baseline MLLMs in Figure 8. As shown in Figure 8, PointVG-R achieves substantially more ac-curate and stable localization results than competing models across a wide range of challenging scenarios. In most cases, the predicted bounding boxes of PointVG-R closely align with the ground-truth targets, whereas baseline models frequently exhibit systematic fail-ure patterns, including spatial drift, distraction by visually salient objects, and confusion among semantically similar instances. These issues become particularly pronounced in cluttered environments, small-object cases, and visually ambiguous scenes, where precise interpretation of pointing cues is essential. A key advantage of PointVG-R lies in its ability to explicitly model the geometric relationship between the pointing hand and candidate objects. Instead of relying on appearance-driven saliency or coarse semantic matching, PointVG-R consistently follows the pointing direction and constrains predictions along the hand-object spatial trajectory, leading to more accurate target disambiguation. In contrast, baseline MLLMs tend to attend to nearby salient regions or default to dominant semantic categories, often failing to localize the object that lies along the true pointing direction. These qualitative findings are consistent with the quantitative results reported in the main paper and further supported by the reward-evolution analysis in Figure 7. The comparison suggests that the proposed structured V-CoT reasoning, together with adaptive GRPO optimization, effectively enhances the model’s geometric reasoning capability and reduces reliance on spurious visual priors. Overall, the additional analyses provide strong evidence for the effectiveness of PointVG-R from both optimization and prediction perspectives. The reward curves demonstrate stable and progressive reinforcement learning dynamics under the proposed reward de-sign, while the qualitative results confirm that such improvements translate into more robust and geometry-aware visual grounding behavior, particularly in challenging real-world pointing scenarios. 
+
+B.5.3 Model Comparison. As illustrated in Fig. 9, existing mul-timodal large models exhibit several common failure modes in egocentric pointing-based grounding. Specifically, models such as LLaVA-OneVision, InternVL, Qwen3-VL, and Llama3.2-Vision often suffer from point grounding failure , semantic misinterpreta-tion , and saliency bias . For example, some models incorrectly select visually salient regions instead of following the pointing direction, while others fail to correctly align the finger direction with the intended target. In contrast, our proposed PointVG-R explicitly incorporates 
+
+human-like reasoning and spatial-aware inference . By model-ing the pointing direction and leveraging intermediate reasoning steps, our method can accurately trace the geometric relationship PointVG-R: Internalizing Geometric Reasoning in MLLMs for Precise Pointing Localization via Visual Chain of Thought Conference acronym ’XX, June 03–05, 2018, Woodstock, NY PointVG -R
+
+(Ours) 
+
+LLaVA -
+
+OneVision -8B 
+
+DeepSeek -VL2 
+
+Qwen3 -VL -8B 
+
+Intern -VL -3.5 -
+
+8B 
+
+GT
+
+PRED 
+
+GT
+
+PRED 
+
+GT
+
+PRED 
+
+GT
+
+PRED 
+
+GT
+
+PRED 
+
+PointVG -R
+
+(Ours) 
+
+LLaVA -
+
+OneVision -8B 
+
+DeepSeek -VL2 
+
+Qwen3 -VL -8B 
+
+Intern -VL -3.5 -
+
+8B 
+
+GT
+
+PRED 
+
+GT
+
+PRED 
+
+GT
+
+PRED 
+
+GT
+
+PRED 
+
+GT
+
+PRED 
+
+Figure 8: Qualitative comparison between PointVG-R and representative baseline MLLMs. Green boxes denote ground-truth targets and red boxes denote model predictions. Compared with baseline models, PointVG-R produces predictions that are more spatially consistent with the pointing gesture and more accurately aligned with the intended target object. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. 
+
+Table 5: Object category statistics. 
+
+Metric Value Number of categories 345 
+
+Number of instances 136,468 Table 6: Object count per image statistics. 
+
+Mean Median Min Max Std 
+
+8.83 5 1 76 12.14 
+
+between the fingertip and candidate objects. As shown in the bot-tom row, PointVG-R produces a clear and interpretable reasoning process, including fingertip localization, directional estimation, and target verification, leading to more precise and robust grounding results. 
+
+## C Dataset Details C.1 Dataset Statistics 
+
+Our dataset consists of egocentric images capturing scenarios where a human hand points to target objects. Each image is annotated with rich multimodal information, including the bounding boxes of the target object and the hand, object category labels, and fingertip keypoints. 
+
+C.1.1 Dataset Overview. The dataset contains a total of 15,455 
+
+annotated images, split into 10,837 for training, 1,546 for validation, and 3,072 for testing. Among them, 13,274 images contain both valid hand and target object annotations, which are used for spatial and geometric analysis in the following statistics. 
+
+C.1.2 Object Category Distribution. Our dataset exhibits strong semantic diversity, covering 345 distinct object categories with a total of 136,468 object instances . This large number of instances, together with the category richness, reflects the complexity and diversity of real-world egocentric interaction scenarios. 
+
+C.1.3 Object Density per Image. To evaluate scene complexity, we analyze the number of objects per image. As shown in Table 6, each image contains on average 8.83 objects, with a maximum of 76 
+
+objects. The relatively large standard deviation ( 12.14 ) indicates significant variation in scene clutter, suggesting the presence of both simple and highly crowded scenes. 
+
+C.1.4 Relative Scale of Hands and Objects. We further analyze the relative scale of hands and target objects, defined as the ratio between bounding box area and image area. As shown in Table 7, hands occupy a moderate portion of the image (mean 0.1136 ), while target objects tend to be larger (mean 
+
+0.1977 ). Notably, a substantial proportion of instances are large (area > 0.1), with 44.75% for hands and 61.94% for objects, in-dicating that most interactions occur at close range. In contrast, very small instances are relatively rare (below 3%), which reduces extreme scale ambiguity. 
+
+Table 7: Relative area statistics of hands and target objects. 
+
+Mean Median Small (<0.01) Large (>0.10) Hand 0.1136 0.0922 0.29% 44.75% 
+
+Object 0.1977 0.1382 2.97% 61.94% Table 8: Hand-object distance statistics. 
+
+Metric Mean Median Std Pixel distance 374.36 236.90 330.52 Normalized distance 0.2031 0.1944 0.0829 
+
+C.1.5 Spatial Relationship Between Hand and Object. We analyze the spatial relationship between the hand and the target object by measuring the distance between their bounding box centers. As shown in Table 8, the average pixel distance is 374.36 , with a median of 236.90. More importantly, the normalized distance (divided by the image diagonal) has a mean of 0.2031 , indicating that the hand and target object are typically located in close spatial proximity. This observation is consistent with natural pointing behavior in egocentric interactions. Overall, the dataset demonstrates high semantic diversity, signif-icant variation in scene complexity, and realistic spatial configura-tions between hands and target objects. These characteristics make it a challenging benchmark for egocentric visual grounding, espe-cially for tasks requiring precise spatial reasoning and multimodal understanding. 
+
+## C.2 Annotation Detail of the Dataset 
+
+EgoPoint-CoT is a Visual Chain-of-Thought dataset for egocentric pointing-based visual grounding, built upon EgoPoint Ground. To the best of our knowledge, this is the first dataset for pointing understanding that introduces structured intermediate geometric annotations, including hand bounding boxes, fingertip coordinates, 2D pointing rays, and aligned multi-step reasoning descriptions. Together, these annotations form a complete Visual CoT represen-tation, enabling models to jointly reason about spatial geometry and semantic intent. To construct the dataset, we first apply MMPose to all images for hand detection and keypoint estimation, obtaining an initial pool of candidate samples. Two expert annotators then independently verify the hand bounding boxes and fingertip coordinates, while a third senior annotator resolves disagreements. This process results in high annotation reliability, with an inter-annotator agreement of Fleiss’ 𝜅 = 0.91 .Based on the refined hand and fingertip annotations, we fur-ther construct 2D pointing rays and leverage an LLM to generate step-aligned reasoning descriptions. These reasoning chains are subsequently manually reviewed to ensure semantic consistency and correctness, thereby forming a structured reasoning sequence: 
+
+hand → direction → ray → target . For negative samples, we addi-tionally design dedicated CoT trajectories (e.g., “No hand is visible; therefore, no valid target exists.”) to explicitly model invalid point-ing scenarios. PointVG-R: Internalizing Geometric Reasoning in MLLMs for Precise Pointing Localization via Visual Chain of Thought Conference acronym ’XX, June 03–05, 2018, Woodstock, NY E: Th e p o i n t i n g f i n g e r a l i g n s   
+
+> directly with the central axis of the
+> white umbrella , creating a strong
+> visual vector that connects the
+> fingertip to the umbrella's focal
+> point. Its stark white color and high
+> c o n t r a s t a g a i n s t t h e d a r k e r
+> b a c k g r o u n d m a k e i t t h e m o s t
+> v i s u a l l y s a l i e n t o b j e c t i n t h e
+> immediate vicinity of the finger.
+
+E:The pointing hand is  
+
+> directed towards the person
+> in the foreground who is
+> smiling and in the water.
+> Since the hand is pointing at
+> this person, and the person
+> i s t h e n e a r e s t p l a u s i b l e
+> object in the direction of the
+> pointing , this person is the
+> target object
+
+Q: Given an image, detect the 2D bounding box of the object the person is pointing at. Definitions and rules: 
+
+1). [Object being pointed at] means the entire target object, not the hand or a part of the object. 
+
+2). If the hand touches and points to an object, then that object is the target. 
+
+3). If the hand is not touching any object, use the finger’s pointing direction to determine the nearest plausible target object along that direction. 
+
+4). If no reasonable target object can be inferred, return an empty list of boxes. Please provide the bounding box coordinate of the region this sentence describes: <ref>hand pointed item</ref>, return in format like 'hand pointed item[[x1, y1, x2, y2]]' 
+
+LLaVA-OneVision-1.5-8B InternVL3.5-8B-HF 
+
+The red boxes are drawn by the model.The green boxes are groundtruth. 
+
+Failure in Point 
+
+Grounding Prompt Overfitting Failure in Point 
+
+Grounding 
+
+Semantic 
+
+Misinterpretation 
+
+E:The zebra in the middle of the 
+
+> two zebras is the target object . It is
+> the only zebra that is not partially
+> obscured by the tree branches. The
+> other two zebras are either behind
+> the tree branches or partially
+> o b s c u r e d b y t h e m , m a k i n g i t
+> difficult to see the entire zebra.
+> The zebra in the middle is the only
+> one that is fully visible and can be
+> seen clearly .
+
+E :T h e p o i n t i n g   
+
+> target is likely the
+> pizza because it is
+> the most prominent
+> and central object in
+> the image that the
+> person is interacting
+> with, using a fork to
+> cut into it
+
+Qwen3-VL 
+
+Saliency Bias Category Prior 
+
+Bias 
+
+Semantic 
+
+Misinterpretation Saliency Bias 
+
+Llama3.2-Vision 
+
+E: <think>\n I notice a pointing gesture. The hand is located at <|box_start|>[144, 231, 290, 375]<|box_end|> . The 
+
+finger direction starts from <|point_start|>[236, 326]<|point_end|> to <|point_start|>[252, 239]<|point_end|> . To find 
+
+the target, I will extend a ray from the fingertip.\n </think>\n \n<tool_call>{\"name\": \"draw_ray\", \"start\": [252, 
+
+239], \"end\": [268, 0] , \"color\": \"red\"}</tool_call><|im_end|> 
+
+<think>\n With the visual aid of the drawn ray, I can clearly see it intersects with the <|caption_start|>Black monitor 
+
+displaying a white desktop with icons, open windows (one with a spreadsheet/data), and a black base.<|caption_end|> .
+
+The target object is located there.\n </think>\n \n <|box_start|>[66, 24, 406, 226]<|box_end|> <|im_end|> 
+
+PointVG-R (Ours) Human-like Reasoning Spatial Understanding Think with Image Logical Reasoning Trace 
+
+Figure 9: Comparison of different multimodal models on egocentric pointing-based grounding. Existing models (top row) suffer from common failure modes, including point grounding failure, semantic misinterpretation, and saliency bias, often selecting incorrect targets despite clear pointing cues. In contrast, our proposed PointVG-R (bottom row) leverages human-like reasoning and spatial understanding to explicitly model fingertip location and pointing direction, producing interpretable reasoning traces and more accurate grounding results. Red boxes denote model predictions, and green boxes indicate ground truth. 
+
+## References 
+
+[1] Xiang An, Yin Xie, Kaicheng Yang, Wenkang Zhang, Xiuwei Zhao, Zheng Cheng, Yirui Wang, Songcen Xu, Changrui Chen, Didi Zhu, et al . 2025. LLaVA-OneVision-1.5: Fully Open Framework for Democratized Multimodal Training. 
+
+arXiv preprint arXiv:2509.23661 (2025). [2] Dhruv Anand and Ehsan Shareghi. 2025. Cube Bench: A Benchmark for Spatial Visual Reasoning in MLLMs. arXiv preprint arXiv:2512.20595 (2025). [3] Peter Anderson, Qi Wu, Damien Teney, Jake Bruce, Mark Johnson, Niko Sünder-hauf, Ian Reid, Stephen Gould, and Anton Van Den Hengel. 2018. Vision-and-Language Navigation: Interpreting Visually-Grounded Navigation Instructions in Real Environments. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition . 3674–3683. [4] Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, Lianghao Deng, Wei Ding, Chang Gao, Chunjiang Ge, et al . 2025. Qwen3-VL Technical Report. arXiv preprint arXiv:2511.21631 (2025). [5] Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Tang, Humen Zhong, Yuanzhi Zhu, Mingkun Yang, Zhaohai Li, Jianqiang Wan, Pengfei Wang, Wei Ding, Zheren Fu, Yi-heng Xu, Jiabo Ye, Xi Zhang, Tianbao Xie, Zesen Cheng, Hang Zhang, Zhibo Yang, Haiyang Xu, and Junyang Lin. 2025. Qwen2.5-VL Technical Report. arXiv:2502.13923 [cs.CV] https://arxiv.org/abs/2502.13923 [6] Sule Bai, Mingxing Li, Yong Liu, Jing Tang, Haoji Zhang, Lei Sun, Xiangxiang Chu, and Yansong Tang. 2025. UniVG-R1: Reasoning Guided Universal Visual Grounding with Reinforcement Learning. arXiv preprint arXiv:2505.14231 (2025). [7] Siddhant Bansal, Chetan Arora, and CV Jawahar. 2022. My View is the Best View: Procedure Learning from Egocentric Videos. In Proceedings of the European Conference on Computer Vision . 657–675. [8] Ian Berlot-Attwell. 2021. Neuro-Symbolic VQA: A Review from the Perspective of AGI Desiderata. arXiv preprint arXiv:2104.06365 (2021). [9] Davide Caffagni, Federico Cocchi, Luca Barsellotti, Nicholas Moratelli, Sara Sarto, Lorenzo Baraldi, Marcella Cornia, and Rita Cucchiara. 2024. The Revolu-tion of Multimodal Large Language Models: A Survey. Findings of the Association for Computational Linguistics: ACL 2024 (2024), 13590–13618. [10] Davide Caffagni, Federico Cocchi, Luca Barsellotti, Nicholas Moratelli, Sara Sarto, Lorenzo Baraldi, Marcella Cornia, and Rita Cucchiara. 2024. The Revolu-tion of Multimodal Large Language Models: A Survey. Findings of the Association for Computational Linguistics: ACL 2024 (2024), 13590–13618. [11] Jie Cao and Jing Xiao. 2022. An Augmented Benchmark Dataset for Geometric Question Answering through Dual Parallel Text Encoding. In Proceedings of the International Conference on Computational Linguistics . 1511–1520. [12] Himanshu Chandel and Sonia Vatta. 2015. Occlusion Detection and Handling: A Review. International Journal of Computer Applications (2015), 33–38. [13] Boyuan Chen, Zhuo Xu, Sean Kirmani, Brain Ichter, Dorsa Sadigh, Leonidas Guibas, and Fei Xia. 2024. SpatialVLM: Endowing Vision-Language Models with Spatial Reasoning Capabilities. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 14455–14465. [14] Qiguang Chen, Libo Qin, Jinhao Liu, Dengyun Peng, Jiannan Guan, Peng Wang, Mengkang Hu, Yuhang Zhou, Te Gao, and Wanxiang Che. 2025. Towards Rea-soning Era: A Survey of Long Chain-of-Thought for Reasoning Large Language Models. arXiv preprint arXiv:2503.09567 (2025). [15] Wenhu Chen, Xueguang Ma, Xinyi Wang, and William W Cohen. 2022. Pro-gram of Thoughts Prompting: Disentangling Computation from Reasoning for Numerical Reasoning Tasks. arXiv preprint arXiv:2211.12588 (2022). [16] Yixin Chen, Qing Li, Deqian Kong, Yik Lun Kei, Song-Chun Zhu, Tao Gao, Yixin Zhu, and Siyuan Huang. 2021. YouRefIt: Embodied Reference Understand-ing with Language and Gesture. In Proceedings of the IEEE/CVF International Conference on Computer Vision . 1385–1395. [17] Tianheng Cheng, Lin Song, Yixiao Ge, Wenyu Liu, Xinggang Wang, and Ying Shan. 2024. YOLO-World: Real-Time Open-Vocabulary Object Detection. In Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition .16901–16911. [18] MMPose Contributors. 2020. OpenMMLab Pose Estimation Toolbox and Bench-mark. https://github.com/open-mmlab/mmpose. [19] Peng Cui, Guande He, Dan Zhang, Zhijie Deng, Yinpeng Dong, and Jun Zhu. 2024. Exploring Aleatoric Uncertainty in Object Detection via Vision Foundation Models. arXiv preprint arXiv:2411.17767 (2024). [20] Ming Dai, Lingfeng Yang, Yihao Xu, Zhenhua Feng, and Wankou Yang. 2024. SimVG: A Simple Framework for Visual Grounding with Decoupled Multi-modal Fusion. In Proceedings of the Advances in Neural Information Processing Systems .121670–121698. [21] Ahmad Darkhalil, Rhodri Guerrier, Adam W Harley, and Dima Damen. 2025. EgoPoints: Advancing Point Tracking for Egocentric Videos. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision . 8556–8565. [22] Anna Deichler and Jonas Beskow. 2025. Look and Tell: A Dataset for Mul-timodal Grounding Across Egocentric and Exocentric Views. arXiv preprint Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. 
+
+arXiv:2510.22672 (2025). [23] Kristen Grauman, Andrew Westbury, Eugene Byrne, Zachary Chavis, Antonino Furnari, Rohit Girdhar, Jackson Hamburger, Hao Jiang, Miao Liu, Xingyu Liu, et al . 2022. Ego4D: Around the World in 3,000 Hours of Egocentric Video. In Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition .18995–19012. [24] Kristen Grauman, Andrew Westbury, Lorenzo Torresani, Kris Kitani, Jitendra Malik, Triantafyllos Afouras, Kumar Ashutosh, Vijay Baiyya, Siddhant Bansal, Bikram Boote, et al . 2024. Ego-Exo4D: Understanding Skilled Human Activ-ity from First- and Third-Person Perspectives. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 19383–19400. [25] Kristen Grauman, Andrew Westbury, Lorenzo Torresani, Kris Kitani, Jitendra Malik, Triantafyllos Afouras, Kumar Ashutosh, Vijay Baiyya, Siddhant Bansal, Bikram Boote, et al . 2024. Ego-Exo4D: Understanding Skilled Human Activ-ity from First- and Third-Person Perspectives. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 19383–19400. [26] Anisha Gunjal, Anthony Wang, Elaine Lau, Vaskar Nath, Yunzhong He, Bing Liu, and Sean Hendryx. 2025. Rubrics as Rewards: Reinforcement Learning Beyond Verifiable Domains. arXiv preprint arXiv:2507.17746 (2025). [27] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et al . 2025. DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning. arXiv preprint arXiv:2501.12948 (2025). [28] Hao Guo, Jianfei Zhu, Wei Fan, Chunzhi Yi, and Feng Jiang. 2025. Beyond Object Categories: Multi-Attribute Reference Understanding for Visual Grounding. 
+
+arXiv preprint arXiv:2503.19240 (2025). [29] Keyu Guo, Yongle Huang, Tinglei Jia, Xiangyu Song, Shijie Sun, Hongkai Wei, Xian-Feng Han, Shuwen Huang, Nicola Strisciuglio, and Shuyan Li. 2025. Visual Grounding in 2D and 3D: A Unified Perspective and Survey. Information Fusion 
+
+(2025), 103625. [30] Tanmay Gupta and Aniruddha Kembhavi. 2023. Visual Programming: Com-positional Visual Reasoning Without Training. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 14953–14962. [31] Abdirahman Osman Hashi, Siti Zaiton Mohd Hashim, and Azurah Bte Asamah. 2024. A Systematic Review of Hand Gesture Recognition: An Update from 2018 to 2024. IEEE Access (2024), 143599–143626. [32] Ruozhen He, Paola Cascante-Bonilla, Ziyan Yang, Alexander C Berg, and Vicente Ordonez. 2024. Improved Visual Grounding through Self-Consistent Explana-tions. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 13095–13105. [33] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Liang Wang, Weizhu Chen, et al . 2022. LoRA: Low-Rank Adaptation of Large Language Models. ICLR (2022), 3. [34] Aaron Jaech, Adam Kalai, Adam Lerer, Adam Richardson, Ahmed El-Kishky, Aiden Low, Alec Helyar, Aleksander Madry, Alex Beutel, Alex Carney, et al .2024. OpenAI o1 System Card. arXiv preprint arXiv:2412.16720 (2024). [35] Xinyi Jiang, Guoming Wang, Huanhuan Li, Qinghua Xia, Rongxing Lu, and Siliang Tang. 2024. TALON: Improving Large Language Model Cognition with Tactility-Vision Fusion. In Proceedings of the IEEE International Conference on Industrial Electronics and Applications . 1–6. [36] Zhengbo Jiao, Shaobo Wang, Zifan Zhang, Wei Wang, Bing Zhao, Hu Wei, and Linfeng Zhang. 2026. Credit Where It is Due: Cross-Modality Connectivity Drives Precise Reinforcement Learning for MLLM Reasoning. arXiv preprint arXiv:2602.11455 (2026). [37] Takeshi Kojima, Shixiang Shane Gu, Machel Reid, Yutaka Matsuo, and Yusuke Iwasawa. 2022. Large Language Models are Zero-Shot Reasoners. Advances in Neural Information Processing Systems (2022), 22199–22213. [38] Solomon Kullback and Richard A Leibler. 1951. On Information and Sufficiency. 
+
+The Annals of Mathematical Statistics (1951), 79–86. [39] Hanyu Lai, Xiao Liu, Junjie Gao, Jiale Cheng, Zehan Qi, Yifan Xu, Shuntian Yao, Dan Zhang, Jinhua Du, Zhenyu Hou, et al . 2025. A Survey of Post-Training Scaling in Large Language Models. In Proceedings of the Meeting of the Association for Computational Linguistics . 2771–2791. [40] Matthias Lehmann. 2024. The Definitive Guide to Policy Gradients in Deep Reinforcement Learning: Theory, Algorithms and Implementations. arXiv preprint arXiv:2401.13662 (2024). [41] Chengzu Li, Wenshan Wu, Huanyu Zhang, Qingtao Li, Zeyu Gao, Yan Xia, José Hernández-Orallo, Ivan Vulić, and Furu Wei. 2025. 11PLUS-BENCH: Demys-tifying Multimodal LLM Spatial Reasoning with Cognitive-Inspired Analysis. 
+
+arXiv preprint arXiv:2508.20068 (2025). [42] F Li, DC Hogg, and AG Cohn. 2024. Reframing Spatial Reasoning Evaluation in Language Models: A Real-World Simulation Benchmark for Qualitative Reason-ing. In Proceedings of the International Joint Conference on Artificial Intelligence .6342–6349. [43] Junnan Li, Dongxu Li, Caiming Xiong, and Steven Hoi. 2022. BLIP: Bootstrapping Language-Image Pre-training for Unified Vision-Language Understanding and Generation. In Proceedings of the International Conference on Machine Learning .12888–12900. [44] Linjie Li, Mahtab Bigverdi, Jiawei Gu, Zixian Ma, Yinuo Yang, Ziang Li, Yejin Choi, and Ranjay Krishna. 2025. Unfolding Spatial Cognition: Evaluating Multi-modal Models on Visual Simulations. arXiv preprint arXiv:2506.04633 (2025). [45] Ling Li, Bowen Liu, Zinuo Zhan, Peng Jie, Jianhui Zhong, Kenglun Chang, and Zhidong Deng. 2026. Beyond Language: Grounding Referring Expressions with Hand Pointing in Egocentric Vision. arXiv:2603.26646 [cs.CV] https: //arxiv.org/abs/2603.26646 [46] Liunian Harold Li, Pengchuan Zhang, Haotian Zhang, Jianwei Yang, Chunyuan Li, Yiwu Zhong, Lijuan Wang, Lu Yuan, Lei Zhang, Jenq-Neng Hwang, et al .2022. Grounded Language-Image Pre-training. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 10965–10975. [47] Rang Li, Lei Li, Shuhuai Ren, Hao Tian, Shuhao Gu, Shicheng Li, Zihao Yue, Yudong Wang, Wenhan Ma, Zhe Yang, et al . 2025. GroundingME: Exposing the Visual Grounding Gap in MLLMs through Multi-Dimensional Evaluation. arXiv preprint arXiv:2512.17495 (2025). [48] Tsung-Yi Lin, Michael Maire, Serge Belongie, James Hays, Pietro Perona, Deva Ramanan, Piotr Dollár, and C Lawrence Zitnick. 2014. Microsoft COCO: Com-mon Objects in Context. In Proceedings of the European Conference on Computer Vision . 740–755. [49] Haotian Liu, Chunyuan Li, Yuheng Li, and Yong Jae Lee. 2024. Improved Base-lines with Visual Instruction Tuning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 26296–26306. [50] Haotian Liu, Chunyuan Li, Yuheng Li, Bo Li, Yuanhan Zhang, Sheng Shen, and Yong Jae Lee. 2024. LLaVA-NeXT: Improved Reasoning, OCR, and World Knowledge. [51] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. 2023. Visual Instruction Tuning. Advances in Neural Information Processing Systems (2023), 34892–34916. [52] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. 2023. Visual Instruction Tuning. Advances in Neural Information Processing Systems (2023), 34892–34916. [53] Jingping Liu, Ziyan Liu, Zhedong Cen, Yan Zhou, Yinan Zou, Weiyan Zhang, Haiyun Jiang, and Tong Ruan. 2025. Can Multimodal Large Language Models Understand Spatial Relations?. In Proceedings of the Meeting of the Association for Computational Linguistics . 620–632. [54] Shi Liu, Weijie Su, Xizhou Zhu, Wenhai Wang, and Jifeng Dai. 2025. CoMemo: LVLMs Need Image Context with Image Memory. In Proceedings of the Interna-tional Conference on Machine Learning . 39535–39551. [55] Shilong Liu, Zhaoyang Zeng, Tianhe Ren, Feng Li, Hao Zhang, Jie Yang, Qing Jiang, Chunyuan Li, Jianwei Yang, Hang Su, et al . 2024. Grounding DINO: Marrying DINO with Grounded Pre-training for Open-Set Object Detection. In 
+
+Proceedings of the European Conference on Computer Vision . 38–55. [56] Ziyu Liu, Zeyi Sun, Yuhang Zang, Xiaoyi Dong, Yuhang Cao, Haodong Duan, Dahua Lin, and Jiaqi Wang. 2025. Visual-RFT: Visual Reinforcement Fine-Tuning. 
+
+arXiv preprint arXiv:2503.01785 (2025). [57] Pan Lu, Hritik Bansal, Tony Xia, Jiacheng Liu, Chunyuan Li, Hannaneh Ha-jishirzi, Hao Cheng, Kai-Wei Chang, Michel Galley, and Jianfeng Gao. 2023. MathVista: Evaluating Mathematical Reasoning of Foundation Models in Visual Contexts. arXiv preprint arXiv:2310.02255 (2023). [58] Pan Lu, Swaroop Mishra, Tanglin Xia, Liang Qiu, Kai-Wei Chang, Song-Chun Zhu, Oyvind Tafjord, Peter Clark, and Ashwin Kalyan. 2022. Learn to Explain: Multimodal Reasoning via Thought Chains for Science Question Answering. 
+
+Advances in Neural Information Processing Systems (2022), 2507–2521. [59] Yunze Man, De-An Huang, Guilin Liu, Shiwei Sheng, Shilong Liu, Liang-Yan Gui, Jan Kautz, Yu-Xiong Wang, and Zhiding Yu. 2025. Argus: Vision-Centric Reasoning with Grounded Chain-of-Thought. In Proceedings of the Computer Vision and Pattern Recognition Conference . 14268–14280. [60] Atharv Mahesh Mane, Dulanga Weerakoon, Vigneshwaran Subbaraju, Sougata Sen, Sanjay E Sarma, and Archan Misra. 2025. Ges3ViG: Incorporating Pointing Gestures into Language-Based 3D Visual Grounding for Embodied Reference Understanding. In Proceedings of the Computer Vision and Pattern Recognition Conference . 9017–9026. [61] Junhua Mao, Jonathan Huang, Alexander Toshev, Oana Camburu, Alan L Yuille, and Kevin Murphy. 2016. Generation and Comprehension of Unambiguous Object Descriptions. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition . 11–20. [62] Ibomoiye Domor Mienye, Ebenezer Esenogho, and Cameron Modisane. 2026. Deep Reinforcement Learning in the Era of Foundation Models: A Survey. 
+
+Computers (2026), 40. [63] Varun K Nagaraja, Vlad I Morariu, and Larry S Davis. 2016. Modeling Context between Objects for Referring Expression Understanding. In Proceedings of the European Conference on Computer Vision . 792–807. [64] Minheng Ni, Yutao Fan, Lei Zhang, and Wangmeng Zuo. 2024. Visual-O1: Understanding Ambiguous Instructions via Multi-modal Multi-turn Chain-of-thoughts Reasoning. arXiv preprint arXiv:2410.03321 (2024). [65] Noriki Nishida, Koji Inoue, Hideki Nakayama, Mayumi Bono, and Katsuya Takanashi. 2025. Do Multimodal Large Language Models Truly See What We Point At? Investigating Indexical, Iconic, and Symbolic Gesture Comprehension. PointVG-R: Internalizing Geometric Reasoning in MLLMs for Precise Pointing Localization via Visual Chain of Thought Conference acronym ’XX, June 03–05, 2018, Woodstock, NY 
+
+In Proceedings of the Meeting of the Association for Computational Linguistics .514–524. [66] Kent O’Sullivan, Nicole R Schneider, and Hanan Samet. 2024. Metric Reasoning in Large Language Models. In Proceedings of the ACM International Conference on Advances in Geographic Information Systems . 501–504. [67] Cong Pang, Xuyu Feng, Yujie Yi, Zixuan Chen, Jiawei Hong, Tiankuo Yao, Nang Yuan, Jiapeng Luo, Lewei Lu, and Xin Lou. 2026. ICA: Information-Aware Credit Assignment for Visually Grounded Long-Horizon Information-Seeking Agents. 
+
+arXiv preprint arXiv:2602.10863 (2026). [68] Shraman Pramanick, Yale Song, Sayan Nag, Kevin Qinghong Lin, Hardik Shah, Mike Zheng Shou, Rama Chellappa, and Pengchuan Zhang. 2023. EgoVLPv2: Egocentric Video-Language Pre-training with Fusion in the Backbone. In Pro-ceedings of the IEEE/CVF International Conference on Computer Vision . 5285–5297. [69] Jiaxu Qian, Chendong Wang, Yifan Yang, Chaoyun Zhang, Huiqiang Jiang, Xufang Luo, Yu Kang, Qingwei Lin, Anlan Zhang, Shiqi Jiang, et al . 2025. Zoomer: Adaptive Image Focus Optimization for Black-box MLLM. arXiv preprint arXiv:2505.00742 (2025). [70] Kevin Qu, Haozhe Qi, Mihai Dusmanu, Mahdi Rad, Rui Wang, and Marc Pollefeys. 2026. Loc3R-VLM: Language-based Localization and 3D Reasoning with Vision-Language Models. arXiv preprint arXiv:2603.18002 (2026). [71] Hao Shao, Shengju Qian, Han Xiao, Guanglu Song, Zhuofan Zong, Letian Wang, Yu Liu, and Hongsheng Li. 2024. Visual CoT: Advancing Multi-Modal Language Models with a Comprehensive Dataset and Benchmark for Chain-of-Thought Reasoning. Advances in Neural Information Processing Systems (2024), 8612– 8642. [72] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al . 2024. DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models. arXiv preprint arXiv:2402.03300 (2024). [73] Chuming Shen, Wei Wei, Xiaoye Qu, and Yu Cheng. 2025. SATORI-R1: In-centivizing Multimodal Reasoning through Explicit Visual Anchoring. arXiv preprint arXiv:2505.19094 (2025). [74] Fatemeh Shiri, Xiao-Yu Guo, Mona Golestan Far, Xin Yu, Reza Haf, and Yuan-Fang Li. 2024. An Empirical Analysis on Spatial Reasoning Capabilities of Large Multimodal Models. In Proceedings of the Conference on Empirical Methods in Natural Language Processing . 21440–21455. [75] Yi Su, Dian Yu, Linfeng Song, Juntao Li, Haitao Mi, Zhaopeng Tu, Min Zhang, and Dong Yu. 2025. Crossing the Reward Bridge: Expanding RL with Verifiable Rewards Across Diverse Domains. arXiv preprint arXiv:2503.23829 (2025). [76] Zhaochen Su, Peng Xia, Hangyu Guo, Zhenhua Liu, Yan Ma, Xiaoye Qu, Jiaqi Liu, Yanshu Li, Kaide Zeng, Zhengyuan Yang, et al . 2025. Thinking with Images for Multimodal Reasoning: Foundations, Methods, and Future Frontiers. arXiv preprint arXiv:2506.23918 (2025). [77] Dídac Surís, Sachit Menon, and Carl Vondrick. 2023. ViperGPT: Visual Inference via Python Execution for Reasoning. In Proceedings of the IEEE/CVF International Conference on Computer Vision . 11888–11898. [78] Richard S Sutton, David McAllester, Satinder Singh, and Yishay Mansour. 1999. Policy Gradient Methods for Reinforcement Learning with Function Approxi-mation. Advances in Neural Information Processing Systems (1999), 1–7. [79] Mukhiddin Toshpulatov, Wookey Lee, Suan Lee, and Arousha Haghighian Roud-sari. 2022. Human Pose, Hand and Mesh Estimation Using Deep Learning: A Survey. The Journal of Supercomputing (2022), 7616–7654. [80] Joshua R Waite, Md Zahid Hasan, Qisai Liu, Zhanhong Jiang, Chinmay Hegde, and Soumik Sarkar. 2025. RLS3: RL-Based Synthetic Sample Selection to Enhance Spatial Reasoning in Vision-Language Models for Indoor Autonomous Percep-tion. In Proceedings of the ACM/IEEE International Conference on Cyber-Physical Systems . 1–10. [81] Jiakang Wang, Runze Liu, Fuzheng Zhang, Xiu Li, and Guorui Zhou. 2025. Stabilizing Knowledge, Promoting Reasoning: Dual-Token Constraints for RLVR. 
+
+arXiv preprint arXiv:2507.15778 (2025). [82] Peng Wang, Shuai Bai, Sinan Tan, Shijie Wang, Zhihao Fan, Jinze Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, et al . 2024. Qwen2-VL: Enhancing Vision-Language Model’s Perception of the World at Any Resolution. arXiv preprint arXiv:2409.12191 (2024). [83] Peng Wang, Shuai Bai, Sinan Tan, Shijie Wang, Zhihao Fan, Jinze Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, et al . 2024. Qwen2-VL: Enhancing Vision-Language Model’s Perception of the World at Any Resolution. arXiv preprint arXiv:2409.12191 (2024). [84] Shaowei Wang, Lingling Zhang, Longji Zhu, Tao Qin, Kim-Hui Yap, Xinyu Zhang, and Jun Liu. 2024. CoG-DQA: Chain-of-Guiding Learning with Large Lan-guage Models for Diagram Question Answering. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 13969–13979. [85] Weiyun Wang, Zhangwei Gao, Lixin Gu, Hengjun Pu, Long Cui, Xingguang Wei, Zhaoyang Liu, Linglin Jing, Shenglong Ye, Jie Shao, et al . 2025. InternVL3.5: Advancing Open-Source Multimodal Models in Versatility, Reasoning, and Effi-ciency. arXiv preprint arXiv:2508.18265 (2025). [86] Yabing Wang, Zhuotao Tian, Qingpei Guo, Zheng Qin, Sanping Zhou, Ming Yang, and Le Wang. 2024. Referencing Where to Focus: Improving Visual Grounding with Referential Query. Advances in Neural Information Processing Systems (2024), 47378–47399. [87] Haoran Wei, Yaofeng Sun, and Yukun Li. 2025. DeepSeek-OCR: Contexts Optical Compression. arXiv preprint arXiv:2510.18234 (2025). [88] Haoran Wei, Yaofeng Sun, and Yukun Li. 2025. DeepSeek-OCR: Contexts Optical Compression. arXiv preprint arXiv:2510.18234 (2025). [89] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al . 2022. Chain-of-Thought Prompting Elicits Reasoning in Large Language Models. Advances in Neural Information Processing Systems (2022), 24824–24837. [90] Xumeng Wen, Zihan Liu, Shun Zheng, Shengyu Ye, Zhirong Wu, Yang Wang, Zhijian Xu, Xiao Liang, Junjie Li, Ziming Miao, et al . 2025. Reinforcement Learning with Verifiable Rewards Implicitly Incentivizes Correct Reasoning in Base LLMs. arXiv preprint arXiv:2506.14245 (2025). [91] Xumeng Wen, Zihan Liu, Shun Zheng, Shengyu Ye, Zhirong Wu, Yang Wang, Zhijian Xu, Xiao Liang, Junjie Li, Ziming Miao, et al . 2025. Reinforcement Learning with Verifiable Rewards Implicitly Incentivizes Correct Reasoning in Base LLMs. arXiv preprint arXiv:2506.14245 (2025). [92] Junfei Wu, Jian Guan, Kaituo Feng, Qiang Liu, Shu Wu, Liang Wang, Wei Wu, and Tieniu Tan. 2025. Reinforcing Spatial Reasoning in Vision-Language Models with Interwoven Thinking and Visual Drawing. arXiv preprint arXiv:2506.09965 
+
+(2025). [93] Wenshan Wu, Shaoguang Mao, Yadong Zhang, Yan Xia, Li Dong, Lei Cui, and Furu Wei. 2024. Mind’s Eye of LLMs: Visualization-of-Thought Elicits Spatial Reasoning in Large Language Models. Advances in Neural Information Processing Systems (2024), 90277–90317. [94] Yanmin Wu, Xinhua Cheng, Renrui Zhang, Zesen Cheng, and Jian Zhang. 2023. EDA: Explicit Text-Decoupling and Dense Alignment for 3D Visual Ground-ing. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 19231–19242. [95] Zhiyu Wu, Xiaokang Chen, Zizheng Pan, Xingchao Liu, Wen Liu, Damai Dai, Huazuo Gao, Yiyang Ma, Chengyue Wu, Bingxuan Wang, et al . 2024. DeepSeek-VL2: Mixture-of-Experts Vision-Language Models for Advanced Multimodal Understanding. arXiv preprint arXiv:2412.10302 (2024). [96] Bin Xiao, Haiping Wu, Weijian Xu, Xiyang Dai, Houdong Hu, Yumao Lu, Michael Zeng, Ce Liu, and Lu Yuan. 2024. Florence-2: Advancing a Unified Representation for a Variety of Vision Tasks. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 4818–4829. [97] Linhui Xiao, Xiaoshan Yang, Xiangyuan Lan, Yaowei Wang, and Changsheng Xu. 2025. Towards Visual Grounding: A Survey. IEEE Transactions on Pattern Analysis and Machine Intelligence (2025), 2749–2771. [98] Linhui Xiao, Xiaoshan Yang, Xiangyuan Lan, Yaowei Wang, and Changsheng Xu. 2025. Towards Visual Grounding: A Survey. IEEE Transactions on Pattern Analysis and Machine Intelligence (2025), 2749–2771. [99] Linhui Xiao, Xiaoshan Yang, Fang Peng, Yaowei Wang, and Changsheng Xu. 2024. OneRef: Unified One-tower Expression Grounding and Segmentation with Mask Referring Modeling. In Proceedings of the Advances in Neural Information Processing Systems . 139854–139885. [100] Guowei Xu, Peng Jin, Ziang Wu, Hao Li, Yibing Song, Lichao Sun, and Li Yuan. 2025. LLaVA-CoT: Let Vision Language Models Reason Step-by-Step. In Proceedings of the IEEE/CVF International Conference on Computer Vision .2087–2098. [101] Menglin Yang, Jialin Chen, Jinkai Tao, Yifei Zhang, Jiahong Liu, Jiasheng Zhang, Qiyao Ma, Harshit Verma, Regina Zhang, Min Zhou, et al . 2024. Low-Rank Adaptation for Foundation Models: A Comprehensive Review. arXiv preprint arXiv:2501.00365 (2024). [102] Ruihan Yang, Qinxi Yu, Yecheng Wu, Rui Yan, Borui Li, An-Chieh Cheng, Xueyan Zou, Yunhao Fang, Xuxin Cheng, Ri-Zhao Qiu, et al . 2025. EgoVLA: Learning Vision-Language-Action Models from Egocentric Human Videos. arXiv preprint arXiv:2507.12440 (2025). [103] Baiqiao Yin, Qineng Wang, Pingyue Zhang, Jianshu Zhang, Kangrui Wang, Zihan Wang, Jieyu Zhang, Keshigeyan Chandrasegaran, Han Liu, Ranjay Krishna, et al . 2025. Spatial Mental Modeling from Limited Views. In Proceedings of the Structural Priors for Vision Workshop .[104] Shukang Yin, Chaoyou Fu, Sirui Zhao, Ke Li, Xing Sun, Tong Xu, and Enhong Chen. 2024. A Survey on Multimodal Large Language Models. National Science Review (2024), 1–20. [105] Haoxuan You, Haotian Zhang, Zhe Gan, Xianzhi Du, Bowen Zhang, Zirui Wang, Liangliang Cao, Shih-Fu Chang, and Yinfei Yang. 2023. Ferret: Refer and Ground Anything Anywhere at Any Granularity. arXiv preprint arXiv:2310.07704 (2023). [106] Licheng Yu, Patrick Poirson, Shan Yang, Alexander C Berg, and Tamara L Berg. 2016. Modeling Context in Referring Expressions. In Proceedings of the European Conference on Computer Vision . 69–85. [107] Xiang Yue, Yuansheng Ni, Kai Zhang, Tianyu Zheng, Ruoqi Liu, Ge Zhang, Samuel Stevens, Dongfu Jiang, Weiming Ren, Yuxuan Sun, et al . 2024. MMMU: A Massive Multi-discipline Multimodal Understanding and Reasoning Benchmark for Expert AGI. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 9556–9567. Conference acronym ’XX, June 03–05, 2018, Woodstock, NY Trovato et al. 
+
+[108] Duzhen Zhang, Yahan Yu, Jiahua Dong, Chenxing Li, Dan Su, Chenhui Chu, and Dong Yu. 2024. MM-LLMs: Recent Advances in Multimodal Large Language Models. Findings of the Association for Computational Linguistics: ACL 2024 
+
+(2024), 12401–12430. [109] Hanwang Zhang, Yulei Niu, and Shih-Fu Chang. 2018. Grounding Referring Ex-pressions in Images by Variational Context. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition . 4158–4166. [110] Kaiyan Zhang, Yuxin Zuo, Bingxiang He, Youbang Sun, Runze Liu, Che Jiang, Yuchen Fan, Kai Tian, Guoli Jia, Pengfei Li, et al . 2025. A Survey of Reinforcement Learning for Large Reasoning Models. arXiv preprint arXiv:2509.08827 (2025). [111] Zhuosheng Zhang, Aston Zhang, Mu Li, Hai Zhao, George Karypis, and Alex Smola. 2023. Multimodal Chain-of-Thought Reasoning in Language Models. 
+
+arXiv preprint arXiv:2302.00923 (2023). [112] Jiaxuan Zhao, Licheng Jiao, Chao Wang, Xu Liu, Fang Liu, Lingling Li, and Shuyuan Yang. 2023. GeoFormer: A Geometric Representation Transformer for Change Detection. IEEE Transactions on Geoscience and Remote Sensing (2023), 1–17. [113] Qingqing Zhao, Yao Lu, Moo Jin Kim, Zipeng Fu, Zhuoyang Zhang, Yecheng Wu, Zhaoshuo Li, Qianli Ma, Song Han, Chelsea Finn, et al . 2025. CoT-VLA: Visual Chain-of-Thought Reasoning for Vision-Language-Action Models. In 
+
+Proceedings of the Computer Vision and Pattern Recognition Conference . 1702– 1713. [114] Hongyi Zhou, Kai Ye, Erhan Xu, Jin Zhu, Shijin Gong, and Chengchun Shi. 2026. Demystifying Group Relative Policy Optimization: Its Policy Gradient is a U-Statistic. arXiv preprint arXiv:2603.01162 (2026). [115] Kang Zhou, Jianping Wang, Weitao Xu, Linqi Song, Zaiqiao Ye, Chi Guo, and Cong Li. 2025. Learning and Grounding Visual Multimodal Adaptive Graph for Visual Navigation. Information Fusion (2025), 103009. [116] Chenchen Zhu, Fanyi Xiao, Andrés Alvarado, Yasmine Babaei, Jiabo Hu, Hichem El-Mohri, Sean Culatana, Roshan Sumbaly, and Zhicheng Yan. 2023. EgoObjects: A Large-Scale Egocentric Dataset for Fine-Grained Object Understanding. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision . 20110– 20120. [117] Fangrui Zhu, Hanhui Wang, Yiming Xie, Jing Gu, Tianye Ding, Jianwei Yang, and Huaizu Jiang. 2025. Struct2D: A Perception-Guided Framework for Spatial Reasoning in MLLMs. arXiv preprint arXiv:2506.04220 (2025). [118] Bohan Zhuang, Qi Wu, Chunhua Shen, Ian Reid, and Anton Van Den Hengel. 2018. Parallel Attention: A Unified Framework for Visual Object Discovery Through Dialogs and Queries. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition . 4252–4261. 
+
+Received 20 February 2007; revised 12 March 2009; accepted 5 June 2009

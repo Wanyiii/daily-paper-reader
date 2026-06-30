@@ -1,0 +1,352 @@
+Title: SemCityLoc: Aerial 6DoF Localization Using Semantic 3D City Models
+
+URL Source: https://arxiv.org/pdf/2606.27444v1
+
+Published Time: Mon, 29 Jun 2026 00:06:38 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# SemCityLoc: Aerial 6DoF Localization Using Semantic 3D City Models 
+
+Jingfeng Mao 1,2 , Xuyang Chen 1 , Qilin Zhang 1,2,4,5 , Oussema Dhaouadi 1,2,4,6 , Guangming Wang 2 , Brian Sheil 2 , Daniel Cremers 1,4 ,Yan Xia 3 , and Olaf Wysocki 2 
+
+> 1
+
+Technical University of Munich, Munich, Germany  
+
+> 2
+
+CV4DT, University of Cambridge, Cambridge, United Kingdom  
+
+> 3
+
+University of Science and Technology of China, Hefei, China  
+
+> 4
+
+Munich Center for Machine Learning, Munich, Germany  
+
+> 5
+
+Karlsruhe Institute of Technology, Karlsruhe, Germany  
+
+> 6
+
+ETH Zurich, Zurich, Switzerland 
+
+jingfeng.mao@tum.de okw24@cam.ac.uk 
+
+Fig. 1: SemCityLoc. We estimate 6DoF UAV poses by aligning foundation-model semantics and depth with lightweight, semantically structured 3D city models—without radiometric scene reconstructions. We further introduce SemCityLockeD , a centimeter-accurate benchmark combining standardized LoD city models with challenging low-altitude UAV imagery. 
+
+Abstract. Aerial 6DoF localization typically relies on precise GNSS signals or radiometrically rich 3D reconstructions, limiting scalability and on-board deployment. We propose SemCityLoc , a semantic–geometric alignment system that reframes aerial pose estimation as structured surface registration between foundation-model-derived visual priors and standardized LoD-compliant 3D city models. Instead of matching sparse contours or dense texture, our method aligns semantic surfaces and monoc-ular depth with lightweight semantic 3D building models, increasing pose discriminability in repetitive and occluded urban environments. To enable accurate evaluation, we introduce SemCityLockeD , the first real-world      
+
+> arXiv:2606.27444v1 [cs.CV] 25 Jun 2026 2J. Mao et al. benchmark combining centimeter-accurate UAV poses with standardized LoD1–LoD3 semantic city models and challenging low-altitude imagery. Experiments demonstrate substantial improvements over existing map-based approaches, improving recall by up to 36% and reducing mean positional error from 9.89 m to 2.62 m in challenging urban canyons. Our results indicate that semantically structured geometry provides sufficient and scalable constraints for high-precision aerial localization without radiometric scene reconstructions. The code and data are available at
+> https://albertchen98.github.io/SemCityLoc .
+> Keywords: 6DoF Aerial Pose Estimation ·Structured 3D City Models ·
+> Map-based Visual Localization System
+
+## 1 Introduction 
+
+Aerial localization for uncrewed aerial vehicles (UAVs) is essential for urban navigation, inspection, mapping, and digital twinning [3,7,10,21,48]. Accurate six degrees-of-freedom (6DoF) pose estimation enables operation in global navigation satellite systems (GNSS)-denied environments and supports downstream tasks such as reconstruction and change detection [32, 42]. Compared to ground-level localization, aerial imagery exhibits larger baselines, reduced structural detail, and dominant vanishing directions, resulting in weaker geometric constraints [4, 10, 28, 33, 43, 45]. Conventional aerial localization approaches combine real-time kinematic (RTK)-supported sensing with dense textured 3D meshes [21, 22]. While ac-curate, such radiometrically rich models are memory-intensive, computationally demanding, and difficult to scale, and may raise privacy concerns in urban environments [45, 47, 50]. Lightweight alternatives are therefore desirable. Recent work has explored reducing reliance on dense radiometry. OrthoLoC [7] aligns UAV imagery with orthophotos or digital surface models (DSMs) but re-mains 2D texture-dependent. LoD-Loc v1 and v2 [49,50] demonstrate localization using abstract building models, yet rely primarily on contour-based alignment and scene-specific training, limiting robustness in close-range urban scenarios [49, 50]. Progress is further constrained by benchmark limitations: Many datasets focus on high-altitude flights, provide inconsistent pose accuracy, partially rely on synthetic imagery, or lack standardized level of detail (LoD) definitions despite established CityGML standards [7,12 –14,19,39,44]. As such, systematic evaluation in realistic low-altitude urban canyon settings remains limited. We argue that semantically structured 3D city models provide sufficient and scalable constraints for high-precision aerial localization when combined with modern vision priors. We present SemCityLoc , a semantic–geometric alignment system for aerial 6DoF pose estimation. Our method leverages foundation-model-based semantic segmentation and monocular depth and aligns these cues with lightweight, standardized semantic 3D city models (Fig. 1). By integrating seman-tic surface classes with geometric structure, SemCityLoc avoids dense radiometric SemCityLoc: Aerial 6DoF Localization Using Semantic 3D City Models 3
+
+reconstructions while maintaining strong pose observability, enabling scalable and privacy-preserving localization in GNSS-denied urban environments. To enable rigorous evaluation in this setting, we introduce SemCityLockeD ,a real-world benchmark pairing centimeter-accurate UAV poses with standardized LoD semantic 3D city models and challenging low-altitude imagery. Unlike prior datasets, it enables accurate evaluation across LoD-compliant definitions and close-range urban canyon scenarios. Our contributions are as follows: 
+
+– Semantic–geometric aerial localization. We propose SemCityLoc, an ap-proach that reformulates aerial localization as structured semantic–geometric surface alignment between foundation-model predictions and lightweight LoD city models. 
+
+– Real-world benchmark. We present SemCityLockeD, a challenging dataset combining centimeter-accurate UAV poses, close-range urban imagery, and standardized LoD1–LoD3 semantic city models for accurate evaluation of map-based aerial localization. 
+
+– Extensive evaluation. We demonstrate consistent improvements over state-of-the-art map-based localization approaches across our and other benchmarks and challenging urban scenarios. 
+
+## 2 Related Works 
+
+Standardized LoD Definitions and Semantic 3D City Models. Level-of-Detail (LoD) definitions in semantic 3D city models follow the international CityGML 3.0 standard [5, 9, 14], illustrated in Figure 2. CityGML encodes hierar-chical geometric and semantic information using surface boundary representations, where surfaces (e.g., roof, wall) are explicitly classified. LoD1–LoD3 progressively refine structural detail while preserving standardized georeferencing in global coordinate systems. Governmental CityGML datasets adhere to strict quality  
+
+> Fig. 2: CityGML Levels of Detail (LoDs). Hierarchical semantic 3D building repre-sentations following the CityGML standard [5,9,14,40]. LoD1 models simplified building volumes, LoD2 adds detailed roof structures, and LoD3 further incorporates facade elements. Surfaces are semantically classified, enabling structured semantic–geometric reasoning.
+
+standards and often provide centimeter-level geometric accuracy [6, 27]. Recent surveys report more than 216 million openly available semantic 3D building 4 J. Mao et al. 
+
+models worldwide [40, 41]. Their standardized semantics, structured geometry, and global georeferencing make them a scalable and privacy-preserving alternative to radiometric scene reconstructions. 
+
+Aerial Localization Benchmarks. Existing UAV localization benchmarks are limited in combining real-world imagery, accurate ground-truth poses, semantic 3D models, and standardized LoD definitions (Tab. 1). Many rely partially or entirely on synthetic data, lack centimeter-accurate poses, or focus on higher-altitude acquisitions (more than 75m). OrthoLoC [7] provides real-world imagery 
+
+Table 1: Comparison of urban UAV benchmark datasets for 6DoF aerial localization. Our SemCityLockeD dataset is the first to combine real-world imagery, accurate RTK-supported poses, close-range challenges, semantic 3D city models, and standardized LoD representations in a single benchmark. ✓= available/supported; ✗=not available; ∼ = partially available. Name Year View Real world? Accurate poses? Close-range challenge? Semantic 3D city models? Standardized LoD? (GCP/RTK-supported) CrossLoc [44] 2022 oblique + nadir mixed ✗ ✗ ✗ ✗                                            
+
+> MatrixCity [19] 2023 oblique synthetic ∼∼✗✗
+> UAVD4L [39] 2024 oblique + nadir mixed ✗✗✗✗
+> Swiss-EPFL [50] 2024 oblique + nadir mixed ✗✗✓✗
+> UAVD4L-LoD [50] 2024 oblique + nadir mixed ✗✗✓✗
+> GTA-UAV [12] 2025 nadir synthetic ∼∼✗✗
+> OrthoLoC [7] 2025 oblique + nadir real ✓∼✗✗
+> SemCityLockeD (ours) 2025 oblique + nadir real ✓✓✓✓
+
+with RTK-supported poses but does not include semantic 3D models. Swiss-EPFL and UAVD4L-LoD [50] introduce image–LoD pairs, yet their LoD representations do not strictly follow established CityGML standards and pose inconsistencies have been reported in prior works [7]. While updated versions have been an-nounced [49], they are not publicly available at the time of writing. Furthermore, most datasets underrepresent close-range urban canyon environments. In con-trast, our SemCityLockeD provides real-only low-altitude urban canyon scenarios with cm-grade standard-compliant 3D LoD models and pose pairings, enabling accurate testing in challenging scenarios. 
+
+Map-Based and Semantic Aerial Localization. Classical visual localiza-tion relies on dense SfM reconstructions [30], followed by feature matching and PnP-based pose estimation [2, 28]. While accurate, these approaches depend on radiometrically rich and memory-intensive scene models that are difficult to scale in urban environments. Reconstruction-free methods leverage publicly available map data. OrienterNet [29] and MapLocNet [38] use navigation maps but are limited to 3-DoF. OrthoLoC [7] achieves 6-DoF via cross-modal matching with orthophotos and DSMs. On the other hand, lightweight LoD models provide a promising alternative. LoD-Loc [50] aligns neural wireframes with projected build-ing edges, and LoD-Loc v2 [49] extends this via silhouette alignment. However, these approaches rely primarily on contour cues without explicitly incorporating surface semantics or depth geometry. In contrast, we jointly leverage foundation models of semantic segmentation and monocular depth within standardized se-mantic 3D city models, enabling robust semantic–geometric alignment beyond SemCityLoc: Aerial 6DoF Localization Using Semantic 3D City Models 5
+
+contour-based matching. Recent foundation models have significantly improved segmentation [31] and monocular depth estimation [36]. In our framework, these components serve as modular perceptual priors for the localization. 
+
+## 3 Method 
+
+As illustrated in Figure 3, SemCityLoc follows a coarse-to-fine semantic–geometric alignment strategy. Given a query image and an initial pose prior, we first perform a 4D semantic cost-volume search to obtain a coarse pose estimate. We then refine this estimate via joint semantic and depth alignment using a particle-filter optimization scheme to recover the final 6DoF camera pose. 
+
+Problem Reformulation. Our goal is to estimate the 6DoF camera pose 
+
+Fig. 3: Overview of SemCityLoc. SemCityLoc estimates the 6DoF camera pose ξ∗ of a UAV query image via coarse-to-fine semantic–geometric alignment against a semantic LoD city model. Inputs are the query image Iq , a prior pose ξp, and the semantic 3D city model. (Top) Semantic Segmentation and Depth Estimation: a DINOv3 backbone with a lightweight DPT decoder predicts the query semantic mask Mq , while MoGe-2 predicts the query depth map Dq . (Bottom-left) Pose Sampling and Rendering: we uniformly sample candidate poses around the prior ξp and render, from the city model, the coarse semantic mask Mc, the fine semantic mask Mr , and the depth map Dr
+
+(coarse masks at resolution (Hc, W c), fine masks at twice the resolution (Hr , W r )). 
+
+(Coarse Matching): comparing each rendered mask Mc with Mq through a per-class IoU semantic cost Cs builds a 4D cost volume over (x, y, z, ψ ), whose maximum yields the coarse pose ξc. (Refinement): starting from ξc, a particle filter generates perturbed pose hypotheses; each is scored by Feature Fusion , which combines a semantic score (Mq vs. Mr , cost Cs) and a depth score ( Dq vs. Dr , cost Cd) into a single weight 
+
+W = λ1Cs + λ2Cd. Particles are updated in a weighted manner, and the process repeats for N iterations, refining ξc → ξf and producing the final pose ξ∗.6 J. Mao et al. 
+
+ξ∗ = ( x, y, z, ϕ, θ, ψ ) where (x, y, z ) denote translation and (ϕ, θ, ψ ) denote roll, pitch, and yaw. Since roll and pitch can be reliably estimated from gravity measurements, we keep (ϕ, θ ) fixed and perform search only over (x, y, z, ψ ). The problem is formulated as follows (Fig. 3): Given a semantic LoD city model M
+
+of a target urban area, a UAV-acquired image I, and an initial coarse camera pose ξpri , the proposed method aims to determine the accurate 6DoF camera pose ξ∗ by jointly leveraging the semantic and geometric features extracted from the image and the 3D semantic city model. Unlike contour-based alignment, which relies on sparse edge correspondences, semantic surface partitions introduce region-level structural constraints that increase pose observability. By aligning semantically labeled roof and facade surfaces rather than isolated edges, the search space is constrained by both geo-metric consistency and class-specific spatial arrangement. This reduces ambiguity in repetitive architectural patterns and improves robustness under occlusion and oblique viewing conditions. In essence, semantic alignment transforms the localization problem from edge matching to structured surface registration. 
+
+3.1 Coarse Pose Selection Semantic Segmentation. DINOv3 represents a recently introduced vision foundation model that learns powerful and generalizable global and local repre-sentations via self-supervised learning [31]. In semantic segmentation, remarkable performance can be achieved by freezing the pretrained backbone and train-ing a lightweight decoder tailored for the task [11, 46]. Specifically, we employ a pretrained DINOv3 Vision Transformer [31] as a backbone together with a lightweight DPT decoder [25] to predict semantic segmentation masks for the query image Iq :
+
+Mq = Dθd
+
+ Fθe (Iq ), (1) 
+
+Mq ∈ RH×W ×Nc , (2) where Fθe denotes the encoder, Dθd the decoder, and Nc the number of semantic classes. The segmentation model is treated as a fixed perceptual prior without task-specific architectural modifications. 
+
+4D Cost Volume-based Pose Search. We sample the candidate pose ξsamp 
+
+around the pose prior ξpri to construct 4D cost volume C. Within this search space, we deploy a 4D search algorithm. Namely, for each sampled camera pose 
+
+ξsamp  
+
+> i
+
+, we render the corresponding semantic mask M ir from LoD city model and compare it with the segmentation mask of the input image Mq . The candidate pose achieving the highest similarity cost is selected as the coarse pose estimate 
+
+ξc. The pose vector ξpri is represented by a combination of translation and Euler angles: 
+
+ξpri = ( xpri , y pri , z pri , ϕ pri , θ pri , ψ pri ), (3) here, (xpri , y pri , z pri ) denotes the camera’s translation in 3D space, while 
+
+(ϕpri , θ pri , ψ pri ) correspond to the roll, pitch, and yaw angles, respectively. Since SemCityLoc: Aerial 6DoF Localization Using Semantic 3D City Models 7
+
+we keep (ϕ, θ ) fixed during search, uniform sampling is performed in the 4D space [x, y, z, ψ ] centered at the initial pose ξpri . The sampling range is defined as ec = [ecx , e cy , e cz , e cψ ], and the number of samples in each dimension are 
+
+nc = [ncx , n cy , n cz , n cψ ], where ec denotes the sampling radius in each dimen-sion, and nc represents the corresponding number of samples. As a result, a 
+
+ncx × ncy × ncz × ncψ discrete 4D pose hypothesis set is generated, which will be used for subsequent cost volume construction and optimal pose selection. The 
+
+ncd sampled poses along direction d ∈ { x, y, z, ψ } is expressed as: 
+
+n
+
+ξpri,d − ecd 
+
+2 , · · · , ξ pri,d + ecd 
+
+2
+
+o
+
+, (4) For each sampled pose ξsamp  
+
+> i
+
+= ( Rsamp  
+
+> i
+
+, tsamp  
+
+> i
+
+), the rendered building mask 
+
+Mr (ξsamp  
+
+> i
+
+) and the semantic building mask Mq , the semantic cost Csi is defined following IoU (Intersection over Union) as: 
+
+Csi = 1
+
+NcNcX
+
+> k=1
+
+M kr (ξsamp  
+
+> i
+
+) ∩ M kq
+
+M kr (ξsamp  
+
+> i
+
+) ∪ M kq
+
+. (5) where Nc denotes the number of semantic classes, ∩ denotes the pixel-wise intersection of the two binary masks, ∪ denotes the pixel-wise union of the two binary masks, and |·| denotes the number of foreground pixels in masks. Based on semantic cost of each sampled pose ξsamp  
+
+> i
+
+, we construct a four-dimensional cost volume and search the coarse pose ξc with maximum value of semantic cost. 
+
+3.2 Pose Refinement Joint Semantic–Depth Alignment. In the fine stage, we employ the model in-troduced in Section 3.1 to generate semantic masks at twice the spatial resolution. The aforementioned segmentation mask (Sec. 3.1) is extracted from the whole image, which struggles to capture local geometric features. To further improve the pose alignment accuracy, we introduce the depth matching leveraging the monocular depth estimator MoGe-2 [36]. Specifically, we utilize MoGe-2 pretrained model to generate per-pixel depth map Dq for the input UAV image Iq . The estimated depth values must be numerically aligned with the rendered depth map to ensure consistency in depth scale and range. For the depth map Dr (ξsamp  
+
+> i
+
+) rendered at the candidate position 
+
+ξsamp  
+
+> i
+
+, and estimated depth map Dq , two global scale and shift parameters are estimated for each match, to calculate a robust depth cost: 
+
+Cdi = X
+
+> p∈M valid
+
+1
+
+Dr (p) ∥s∗Dq (p) + t∗ − Dr (p)∥1 , (6) where Mvalid is the valid mask of rendered depth map, Dr (p) denotes the rendered depth value at pixel p, and s∗ and t∗ are the optimal global scale and shift alignment estimated by least squares estimation for each match. The cost 8 J. Mao et al. 
+
+is inversely weighted by rendered depth to reduce the influence of distant, less reliable depth estimates. The final alignment cost combines semantic and depth terms: 
+
+Cf inal i = λ1Csi + λ2Cdi (7) 
+
+Particle Filter Optimization. Inspired by other visual localization works [18, 20, 35], we design a particle filter based method for camera pose refinement. The core idea is to iteratively refine the initial hypothesis by introducing perturbations to the state, evaluating the resulting cost function, and updating the estimate toward convergence. This stochastic refinement enables local exploration around the coarse hypothesis while avoiding exhaustive high-dimensional grid search, leading to stable and efficient convergence. Specifically, having the coarse pose ξc selected from Sec. 3.1, we introduce small perturbations δ to its translation and rotation parameters, resulting in new candidate poses ξpi ξpi 
+
+> Nf
+> i=1
+
+= ξc + {δξi}Nf 
+
+> i=1
+
+, (8) where δξ i denotes the perturbation applied to the i-th particle in the pose space. Each perturbed pose ξpi is then evaluated by rendering a semantic or geometric observation under that hypothesis and comparing it with the corresponding measurement from the query image using the predefined loss function derived from Eq. (7) . The camera pose is then updated in a weighted manner according to the probability scores obtained from the loss function. After performing Niter 
+
+iterations, we obtain the final optimized pose estimate ξ∗.
+
+## 4 SemCityLockeD Benchmark Dataset 
+
+We introduce SemCityLockeD , a novel real-world dataset to address the limi-tations of existing UAV localization benchmarks that lack accurate ground-truth poses, standardized semantic 3D city models, and realistic close-range urban canyon scenarios (Fig. 4). SemCityLockeD captures a densely built urban envi-ronment characterized by closely spaced buildings, narrow urban canyons, and complex structural layouts spanning diverse architecture (19th-21st century) and building functions (residential, offices, shops, landmarks). Data acquisition was performed using a DJI Matrice 350 RTK equipped with a Zenmuse L2 (4/3 CMOS) camera, flown at approximately 75 m altitude in both nadir and oblique configurations. The dataset comprises 962 images (train/val/test: 586/188/188) with a resolution of 5,280 × 3,956 pixels, resulting in an average ground sampling distance (GSD) of 1.6 cm. For privacy compliance, license plates and identifiable faces were removed from the imagery. Camera poses were obtained via RTK-GNSS, inertial measurement unit (IMU) integration, and surveyed ground control points (GCPs), yielding georeferenced poses in EPSG:32632 with absolute accu-racy of approximately 2 cm. This high-accuracy georeferencing enables reliable pairing between UAV imagery and semantic 3D city models. The corresponding LoD2 semantic 3D building models were acquired from the open data Bavarian state geoportal [16], providing high absolute georeferenced SemCityLoc: Aerial 6DoF Localization Using Semantic 3D City Models 9      
+
+> (a) Swiss-EPFL [44, 50] (b) UAVD4L [39, 50] (c) SemCityLockeD (nadir)
+> (d) SemCityLockeD (oblique)
+
+Fig. 4: Pose quality comparison. Georeferenced keypoints are derived from corner detections on high-precision DOPs, lifted to 3D using DSMs, and then projected onto the UAV image using the ground-truth camera poses and intrinsics. In (c) and (d), corresponding to SemCityLockeD, the projected keypoints align closely with image structures, indicating high pose consistency. Note that (a) and (b) correspond to acquisitions at larger flight altitudes (above 75m) and in less dense urban settings, whereas (c) and (d) depict closer-range imagery in narrow urban canyon environments, representing substantially more challenging geometric conditions. 
+
+footprint accuracy (approximately 2 cm) [1, 3]. In addition to LoD2, we provide automatically generated LoD1 models and manually refined LoD3 models, en-abling systematic evaluation across different LoDs and analysis of localization performance with respect to geometric abstraction, whereby both LoD1 and LoD3 were generated from LoD2 footprints to maintain the high accuracy and consistency. Facade details were modeled based on additional street-level scanning point clouds which are not part of this dataset. Beyond semantic LoD models, we further provide high-resolution textured mesh reconstructions generated from laser scanning and photogrammetric point clouds of the same UAV acquisition. These meshes complement the dataset allowing for rendering additional synthetic images, following the protocols of synthetic Swiss-EPFL [44, 50] and UAVD4L [39, 50]. Leveraging the precise pairing between UAV images and 3D city models, we additionally generate automatic semantic labels for the acquired imagery by projecting model semantics into image space. This enables large-scale, geometry-consistent annotation without manual labeling, facilitates supervised learning experiments, and provides a scalable annotation pipeline that can be readily adopted for future UAV datasets equipped with georeferenced 3D models. In addition to the dataset, we will release a software suite for rendering semantic 3D city models into image and depth maps and pairing them with UAV observations, facilitating reproducibility and standardized evaluation. The full dataset and code will be made publicly available upon acceptance. 
+
+## 5 Experimental Setup 
+
+Baselines. We compare our proposed method with re-implemented visual local-ization baselines using semantic 3D building models with publicly available code: LoD-Loc [50], MC-Loc [35], and CAD-Loc [23] (LoD-Loc v2 implementation 10 J. Mao et al. 
+
+unavailable at the time of writing [49]). All baseline methods, except for LoD-Loc, rely on feature-based extraction and matching approaches, in which the feature extraction algorithms include RoMa [8] or e-LoFTR [37]. 
+
+Data. Besides evaluating on our introduced challenging scenario of the SemCity-LockeD benchmark, we also evaluate on the openly available benchmarks that comprise 3D building models: UAVD4L-LoD and Swiss-EPFL [50] (the LoD-Loc v2 data is unavailable at the time of writing [49]). 
+
+Metrics. The evaluation metrics we follow are from the standard visual local-ization metrics [34] and we set the thresholds at (2 m, 2◦), (3 m, 3◦), (5 m, 5◦),same as the LoD-Loc baseline [50]. In addition, we also compute the average translation and yaw errors. 
+
+## 6 Results and Discussion 
+
+Challenging Scenarios Performance. We evaluate SemCityLoc on the pro-posed SemCityLockeD benchmark, which represents densely built urban canyon environments with strong geometric ambiguities. As shown in Table 2, our method consistently outperforms all baselines across all recall thresholds and error metrics. At the strict 2m– 2◦ threshold, SemCityLoc achieves 69.15% recall compared to 35.11% for LoD-Loc [50], nearly doubling performance. Recall further improves to 84.04% and 89.36% at 3m– 3◦ and 5m– 5◦, respectively. Mean yaw error de-creases from 1.78 ◦ to 0.42 ◦, and translation error from 9.89 m to 2.62 m. These results demonstrate that integrating semantic segmentation and monocular depth provides substantially stronger geometric constraints than wireframe-based align-ment alone, particularly in close-range urban scenes with facade repetitions and limited visibility. Ablation results confirm the importance of both modules (Tab. 2 
+
+Table 2: Camera pose evaluation on the SemCityLockeD dataset. Pose recall is reported in %, rotation error (yaw) in degrees, and positional errors in meters. Our SemCityLoc significantly outperforms all baselines across all metrics. Bold = best result; underlined = second best.                                                
+
+> Method Recall (%) Mean Error Metrics 2m-2 °3m-3 °5m-5 °Yaw ( °) XYZ (m) CAD-Loc
+> LoD model
+> e-LoFTR 000––RoMa 000––
+> MC-Loc
+> LoD model
+> DINOv2 5.32 8.51 18.09 5.90 10.71 RoMa 01.06 3.19 6.67 18.61
+> LoD-Loc
+> LoD model LoD-Loc 35.11 47.87 53.19 1.78 9.89
+> SemCityLoc
+> LoD model No Coarse Selection 41.49 56.38 72.34 1.11 5.94
+> No Refinement 56.38 70.21 81.91 1.04 3.20
+> Full model 69.15 84.04 89.36 0.42 2.62
+
+and Fig. 5). Coarse semantic selection increases recall at 2m– 2◦ from 41.49% to 56.38%, while semantic–depth refinement further improves it to 69.15%. Both stages are therefore complementary and jointly critical for stable pose estimation. SemCityLoc: Aerial 6DoF Localization Using Semantic 3D City Models 11  
+
+> Fig. 5: Qualitative comparison between LoD-Loc [50] and SemCityLoc. Pro-jected LoD geometry using the estimated poses reveals noticeable misalignment for LoD-Loc, especially in oblique views and facade-occluded urban canyon scenes. In contrast, SemCityLoc produces geometrically consistent overlays and accurate depth alignment, demonstrating improved robustness to perspective distortion and structural repetition (especially apparent in view 3).
+
+Qualitative results in Figure 5 further corroborate the improvements. In particular, View 3 highlights a challenging oblique urban canyon configuration with strong perspective distortion and facade self-occlusion, where the baseline fails to produce a consistent geometric alignment. In contrast, SemCityLoc achieves precise overlay between projected LoD geometry and image structures, demonstrating robust semantic–geometric alignment even under severe oblique viewing conditions and repetitive facade patterns. 
+
+Efficiency. SemCityLoc achieves markedly improved training efficiency compared with LoD-Loc [50]. As shown in Figure 6, SemCityLoc converges within the first few epochs and stabilizes after approximately 15 epochs, whereas LoD-Loc exhibits slower convergence and pronounced loss oscillations. This behavior can be attributed to two factors. First, SemCityLoc optimizes only a lightweight segmentation head on top of pretrained foundation models, effectively operating 12 J. Mao et al.  
+
+> Fig. 6: Training convergence on SemCityLockeD. SemCityLoc exhibits faster and more stable optimization compared to LoD-Loc, reflecting the benefit of fine-tuning a lightweight head on pretrained features with IoU-based alignment.
+
+in a well-conditioned representation space. In contrast, LoD-Loc is trained from scratch, requiring simultaneous feature learning and geometric alignment, which increases optimization complexity and susceptibility to local minima. Second, our IoU-based semantic alignment objective induces smoother and more globally structured gradients than reprojection-based losses. Semantic masks provide dense, region-level supervision that is less sensitive to small geometric perturbations, whereas reprojection losses rely on sparse edge correspondences and exhibit higher non-convexity with respect to pose parameters. As a result, IoU-driven optimization yields more stable gradient behavior and faster convergence. 
+
+Generalization to Sub-Urban and High-Altitude Scenarios. We further evaluate SemCityLoc on the UAVD4L-LoD and Swiss-EPFL datasets comprising mixed urban scenarios to assess generalization beyond challenging close-range urban canyons. As reported in [50], LoD-Loc achieves strong performance on these benchmarks and is therefore adopted as our primary reference baseline. As shown in Table 3, SemCityLoc achieves competitive or superior perfor-mance compared to LoD-Loc in both in-Traj and out-of-Traj settings on UAVD4L-LoD. In the in-Traj scenario, our method improves most recall thresholds and reduces translation error, while maintaining comparable rotation accuracy. In the out-of-Traj setting, SemCityLoc outperforms the baseline on nearly all metrics, demonstrating improved robustness to trajectory shifts. Results on the Swiss-EPFL dataset (Tab. 4) further confirm the benefits of integrating semantics and depth cues. In the in-Place scenario, recall values are comparable to LoD-Loc, while translation and heading errors are consistently reduced. In the challenging out-of-Place setting, SemCityLoc significantly improves recall (up to two-fold) and substantially reduces mean positional error from 12.54 m to 3.09 m (Tab. 4). Overall, these results indicate that the proposed semantic–geometric alignment strategy generalizes effectively across heterogeneous environments comprising mixed urban and sub-urban regions, varying structural densities, and diverse ac-quisition altitudes, while consistently outperforming wireframe-based localization methods. SemCityLoc: Aerial 6DoF Localization Using Semantic 3D City Models 13 
+
+We note that UAVD4L-LoD and Swiss-EPFL provide lower-precision ground-truth poses compared to SemCityLockeD, which may introduce additional evalu-ation noise. Nevertheless, consistent improvements across datasets demonstrate the robustness of our approach. Additional details are provided in Suppl. 
+
+Table 3: Camera pose evaluation on the UAVD4L-LoD dataset. Pose recall is reported in %, rotation error (yaw) in degrees, and positional errors in meters. Our SemCityLoc achieves competitive performance, outperforming the baseline in most metrics. Bold = best result; underlined = second best.                                                      
+
+> Method in-Traj out-of-Traj Recall (%) Mean Error Recall (%) Mean Error Metrics 2m-2 °3m-3 °5m-5 °Yaw ( °) XYZ (m) 2m-2 °3m-3 °5m-5 °Yaw ( °) XYZ (m) LoD-Loc
+> LoD model LoD-Loc 83.42 90.65 96.57 0.19 1.73 88.18 98.49 99.54 0.18 1.38
+> SemCityLoc
+> LoD model No Coarse Selection 62.03 89.96 99.05 0.20 1.84 47.63 62.32 78.51 0.34 3.36
+> No Refinement 47.07 74.88 91.21 0.34 2.48 48.49 83.94 99.13 0.68 2.18
+> Full model 70.45 92.96 99.19 0.19 1.68 89.64 98.40 99.95 0.14 1.26
+
+Table 4: Camera pose evaluation on the Swiss-EPFL dataset. Pose recall is reported in %, rotation error (yaw) in degrees, and positional errors in meters. Our SemCityLoc outperforms the baseline in most metrics, with particularly strong performance on out-of-place scenarios. Bold = best result; underlined = second best.                                                      
+
+> Method in-Place out-of-Place Recall (%) Mean Error Recall (%) Mean Error Metrics 2m-2 °3m-3 °5m-5 °Yaw ( °) XYZ (m) 2m-2 °3m-3 °5m-5 °Yaw ( °) XYZ (m) LoD-Loc
+> LoD model LoD-Loc 36.23 50.00 63.62 3.73 9.17 17.41 30.61 48.55 3.40 12.54
+> SemCityLoc
+> LoD model No Coarse Selection 5.34 15.73 31.32 2.15 11.60 6.86 17.15 35.88 1.62 9.05
+> No Refinement 10.11 20.51 35.96 2.04 10.39 8.71 19.79 42.22 1.23 7.86
+> Full model 33.99 50.70 62.36 1.31 7.13 35.36 62.01 89.18 0.93 3.09
+
+Sensitivity Analysis to Segmentation Quality. We evaluate the impact of semantic quality by training a lightweight head on top of a shared DINOv3 back-bone per dataset, achieving 88% mIoU on SemCityLockeD, 85% on UAVD4L-LoD, and 78% on Swiss-EPFL—sufficient for stable semantic–geometric alignment. Fully zero-shot alternatives perform substantially worse: CLIP [24] + Semantic-SAM [17] yields 32% mIoU on SemCityLockeD and reduces recall to 15.93% / 28.57% / 52.74% at 2m–2 ° / 3m–3 ° / 5m–5 °, while Grounded-SAM2 [26] achieves 37% mIoU with unstable masks on the same dataset. We attribute this degradation to domain mismatch between terrestrial pretraining data and UAV viewpoints. These results indicate that moderate dataset-adaptive supervision suffices for reliable localization, whereas fully zero-shot semantics remain insufficient (more details in Suppl.). 
+
+Sensitivity Analysis to Pose Prior Noise. The translation priors are initially perturbed by 5–15 m, on top of which we inject varying independent perturbation 14 J. Mao et al. 
+
+Table 5: Pose prior sensitivity analysis. Localization recall (%) under increasing translational perturbations (up to 200 m per axis).                              
+
+> Metric Perturbation Range per Axis (m) Threshold (∆m) 10–20 20–30 30–40 40–50 50–100 100–150 150–200 Recall (%)
+> 2m–2 ◦68.09 67.02 65.96 62.77 45.74 29.79 18.09 3m–3 ◦80.85 75.53 73.40 70.21 50.00 30.85 18.09 5m–5 ◦87.23 81.91 78.72 76.60 53.19 36.17 19.15
+
+of up to 200 m per axis. Rotations are also perturbed by 0–8 °(Tab. 5). The pose prior sensitivity analysis shows that recall degrades smoothly as translational perturbations increase. Even with perturbations up to 50 m per axis, the method maintains relatively stable performance, with recall remaining at 62.77%, 70.21%, and 76.60% under the 2 m–2 °, 3 m–3 °, and 5 m–5 ° thresholds, respectively. This demonstrates robustness to substantial initialization errors. However, when the pose prior error exceeds 100 m, localization recall drops dramatically across all thresholds. This sharp decrease indicates that very large prior errors significantly affect localization reliability, revealing an operational boundary of the method. 
+
+Sensitivity Analysis Across LoDs. We analyze how structural abstraction in the 3D city model affects pose alignment (Tab. 6). While LoD2 offers a favorable trade-off between availability and fidelity, SemCityLockeD uniquely provides stan-dardized LoD1–LoD3 models [40], enabling systematic evaluation. Performance 
+
+Table 6: Localization performance across different LoDs. Increasing geometric detail strengthens pose constraints, while semantic LoD2 achieves performance compa-rable to LoD3 despite reduced geometric complexity.                      
+
+> LoD Model Recall (%) Mean Error Metrics 2m-2 °3m-3 °5m-5 °Yaw ( °) XYZ (m)
+> LoD1 48.94 54.26 69.15 1.14 6.01
+> LoD3 70.21 75.53 89.36 0.50 2.48
+> LoD2(semantic) 69.15 84.04 89.36 0.42 2.62
+
+improves from LoD1 to LoD3, reflecting increased structural discriminability. Notably, semantic LoD2 achieves accuracy close to or even surpasses that of LoD3 despite reduced geometric resolution. This indicates that semantically partitioned surface structure enhances pose observability and can partially compensate for missing fine-grained geometry. Pose accuracy is therefore governed not only by geometric density, but by the joint availability of discriminative structural cues and semantically coherent surface representations (more details in Suppl.). 
+
+Running time analysis. Using nvdiffrast-based [15] GPU rasterization and frustum culling, SemCityLoc requires only 0.878 s per image, including 0.116 s for model inference, 0.409 s for coarse pose search, and 0.353 s for particle-filter refinement. The resulting sub-second runtime highlights the feasibility of deploying semantic city-model-based localization in practical UAV systems, where accurate relocalization must be performed online under large pose uncertainty. SemCityLoc: Aerial 6DoF Localization Using Semantic 3D City Models 15 
+
+Limitations and Future Work. SemCityLoc relies on the availability and geometric accuracy of semantic 3D city models, and variations in model com-pleteness or semantic richness may affect localization robustness across regions. While the method is generally robust to dynamic objects absent from the LoD models (e.g., vehicles and vegetation), performance may degrade in rare cases with severely limited geometric observability, such as scenes containing only a single visible building or facade. Finally, localization accuracy depends on the quality of semantic segmentation and depth estimation, although continued advances in foundation models are expected to further improve robustness. 
+
+## 7 Conclusion 
+
+We present SemCityLoc, a lightweight semantic–geometric localization system that leverages standardized 3D city models for accurate and scalable aerial 6DoF pose estimation. By jointly aligning semantic segmentation and monoc-ular depth with structured LoD representations, our method enables robust localization without dense radiometric reconstructions. We further introduce SemCityLockeD, a unique real-world benchmark comprising centimeter-accurate UAV poses, close-range urban canyon imagery, and standardized LoD1–LoD3 models. Across challenging scenarios, SemCityLoc improves recall at 2m–2 ° from 35.11% to 69.15%, demonstrating substantially stronger pose discriminability than existing map-based approaches while remaining robust to segmentation noise and prior inaccuracies. Overall, our results indicate that semantically structured 3D city models provide sufficient and scalable constraints for high-precision aerial localization, establishing structured semantic–geometric alignment as a promising direction for next-generation map-based aerial localization systems. 
+
+## Acknowledgements 
+
+This work was supported in part by the Cambridge Centre for Smart Infras-tructure and Construction (CSIC), the Laing O’Rourke Centre for Construction Engineering and Technology at the University of Cambridge; the Anhui Provincial Natural Science Foundation (Grant No. 2508085MF142), and the USTC Global Initiative Fund (MS-A-2026-1-19) at the University of Science and Technology of China. The authors thank the members of the Computer Vision for Digital Twins (CV4DT) group at the University of Cambridge for their support and valuable discussions. The authors also thank Yuhan Jiang for assistance with figure prepa-ration. The authors further acknowledge the contributors to the TUM2TWIN project https://tum2t.win/ , in particular Katharina Anders, Jiapan Wang, Xiaoyu Huang, and Sidi Liu, for their efforts in processing and publishing the data https://zenodo.org/records/14548134 .
+
+## References  
+
+> 1. Anders, K., Wang, J., Chang, M., Letard, M., Schulte, F., Winiwarter, L.: Ter-restrial and UAV laser scanning point clouds of TUM Campus Ottobrunn (Dec
+
+16 J. Mao et al. 2024). https://doi.org/10.5281/zenodo.14443336 , https://doi.org/10.5281/ zenodo.14443336 
+
+2. Barath, D., Matas, J., Noskova, J.: Magsac: marginalizing sample consensus. In: Pro-ceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 10197–10205 (2019) 3. Barbosa, J., Schwab, B., Wysocki, O., Heeramaglore, M., Huang, X.: tum2twin: repository of CityGML LoD3 models of the technical university of munich. https: //github.com/tum-gis/tum2twin/tree/main (2023), Accessed: 2023-09-22 4. Bieringer, A., Wysocki, O., Tuttas, S., Hoegner, L., Holst, C.: Analyzing the impact of semantic lod3 building models on image-based vehicle localization. ISPRS Annals of the Photogrammetry, Remote Sensing and Spatial Information Sciences 10 , 55–62 (2024) 5. Biljecki, F., Ledoux, H., Stoter, J., Zhao, J.: Formalisation of the level of detail in 3D city modelling. Computers, Environment and Urban Systems 48 , 1–15 (2014) 6. Chen, D., Zhu, C., Zhang, Z., Na, J., Shen, Y., Chen, Y., Peethambaran, J., Zhang, L.: Public building geometric models from point clouds: A multidimensional quality evaluation framework. IEEE Geoscience and Remote Sensing Magazine (2025) 7. Dhaouadi, O., Marin, R., Meier, J.M., Kaiser, J., Cremers, D.: Ortholoc: UAV 6-dof localization and calibration using orthographic geodata. In: The Thirty-ninth Annual Conference on Neural Information Processing Systems Datasets and Benchmarks Track (2025) 8. Edstedt, J., Sun, Q., Bökman, G., Wadenbäck, M., Felsberg, M.: Roma: Robust dense feature matching. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 19790–19800 (2024) 9. Froech, T., Schwab, B., Wysocki, O.: CityGML2OBJ 2.0: Command line converter of citygml (.gml) to obj (.obj) files, while maintaining the semantics. https:// github.com/tum-gis/CityGML2OBJv2 (2023), Accessed: 2023-08-23 10. Gaisbauer, S., Gyawali, P., Zhang, Q., Wysocki, O., Jutzi, B.: To glue or not to glue? classical vs learned image matching for mobile mapping cameras to textured semantic 3d building models. arXiv preprint arXiv:2505.17973 (2025) 11. Huang, S., Hou, Y., Liu, L., Yu, X., Shen, X.: Real-time object detection meets dinov3. arXiv preprint arXiv:2509.20787 (2025) 12. Ji, Y., He, B., Tan, Z., Wu, L.: Game4loc: A uav geo-localization benchmark from game data. In: Proceedings of the AAAI Conference on Artificial Intelligence. vol. 39, pp. 3913–3921 (2025) 13. Kolbe, T.H., Gröger, G., Plümer, L.: CityGML–3D city models and their potential for emergency response. Geospatial Information Technology for Emergency Response 
+
+257 , 273–290 (2008) 14. Kolbe, T.H., Kutzner, T., Smyth, C.S., Nagel, C., Roensdorf, C., Heazel, C.: OGC City Geography Markup Language (CityGML) Part 1: Conceptual Model Standard v3.0 (Jun 2021) 15. Laine, S., Hellsten, J., Karras, T., Seol, Y., Lehtinen, J., Aila, T.: Modular primitives for high-performance differentiable rendering. ACM Transactions on Graphics (ToG) 
+
+39 (6), 1–14 (2020) 16. LDBV: Das Landesamt für Digitalisierung, Breitband und Vermessung (LDBV). 
+
+https : / / geodaten . bayern . de / opengeodata / OpenDataDetail . html ? pn = lod2 
+
+(2025), accessed: 2025-06-22 17. Li, F., Zhang, H., Sun, P., Zou, X., Liu, S., Li, C., Yang, J., Zhang, L., Gao, J.: Segment and recognize anything at any granularity. In: European Conference on Computer Vision. pp. 467–484. Springer (2024) SemCityLoc: Aerial 6DoF Localization Using Semantic 3D City Models 17 18. Li, X., Wang, S., Zhao, Y., Verbeek, J., Kannala, J.: Hierarchical scene coordinate classification and regression for visual localization. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 11983–11992 (2020) 19. Li, Y., Jiang, L., Xu, L., Xiangli, Y., Wang, Z., Lin, D., Dai, B.: Matrixcity: A large-scale city dataset for city-scale neural rendering and beyond. In: Proceedings of the IEEE/CVF International Conference on Computer Vision. pp. 3205–3215 (2023) 20. Maggio, D., Abate, M., Shi, J., Mario, C., Carlone, L.: Loc-nerf: Monte carlo localization using neural radiance fields. In: 2023 IEEE International Conference on Robotics and Automation (ICRA). pp. 4018–4025. IEEE (2023) 21. Nex, F., Remondino, F.: Uav for 3d mapping applications: a review. Applied geomatics 6(1), 1–15 (2014) 22. Nex, F., Stathopoulou, E., Remondino, F., Yang, M., Madhuanand, L., Yogender, Y., Alsadik, B., Weinmann, M., Jutzi, B., Qin, R.: Usegeo-a uav-based multi-sensor dataset for geospatial research. ISPRS Open Journal of Photogrammetry and Remote Sensing p. 100070 (2024) 23. Panek, V., Kukelova, Z., Sattler, T.: Visual localization using imperfect 3d models from the internet. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 13175–13186 (2023) 24. Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., et al.: Learning transferable visual models from natural language supervision. In: International conference on machine learning. pp. 8748–8763. PmLR (2021) 25. Ranftl, R., Bochkovskiy, A., Koltun, V.: Vision transformers for dense prediction. In: Proceedings of the IEEE/CVF international conference on computer vision. pp. 12179–12188 (2021) 26. Ren, T., Liu, S., Zeng, A., Lin, J., Li, K., Cao, H., Chen, J., Huang, X., Chen, Y., Yan, F., et al.: Grounded sam: Assembling open-world models for diverse visual tasks. arXiv preprint arXiv:2401.14159 (2024) 27. Roschlaub, R., Batscheider, J.: An INSPIRE-conform 3D building model of Bavaria using cadastre information, LiDAR and image matching. The International Archives of the Photogrammetry, Remote Sensing and Spatial Information Sciences XLI-B4 ,747–754 (2016) 28. Sarlin, P.E., DeTone, D., Malisiewicz, T., Rabinovich, A.: Superglue: Learning feature matching with graph neural networks. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 4938–4947 (2020) 29. Sarlin, P.E., DeTone, D., Yang, T.Y., Avetisyan, A., Straub, J., Malisiewicz, T., Bulo, S.R., Newcombe, R., Kontschieder, P., Balntas, V.: Orienternet: Visual local-ization in 2d public maps with neural matching. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 21632–21642 (2023) 30. Schonberger, J.L., Frahm, J.M.: Structure-from-motion revisited. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 4104–4113 (2016) 31. Siméoni, O., Vo, H.V., Seitzer, M., Baldassarre, F., Oquab, M., Jose, C., Khali-dov, V., Szafraniec, M., Yi, S., Ramamonjisoa, M., et al.: Dinov3. arXiv preprint arXiv:2508.10104 (2025) 32. Stilla, U., Xu, Y.: Change detection of urban objects using 3d point clouds: A review. ISPRS Journal of Photogrammetry and Remote Sensing 197 , 228–255 (2023). https://doi.org/https://doi.org/10.1016/j.isprsjprs.2023.01.010 18 J. Mao et al. 33. Taira, H., Okutomi, M., Sattler, T., Cimpoi, M., Pollefeys, M., Sivic, J., Pajdla, T., Torii, A.: Inloc: Indoor visual localization with dense matching and view synthesis. In: Proceedings of the IEEE conference on computer vision and pattern recognition. pp. 7199–7209 (2018) 34. Toft, C., Maddern, W., Torii, A., Hammarstrand, L., Stenborg, E., Safari, D., Okutomi, M., Pollefeys, M., Sivic, J., Pajdla, T., et al.: Long-term visual localization revisited. IEEE Transactions on Pattern Analysis and Machine Intelligence 44 (4), 2074–2088 (2020) 35. Trivigno, G., Masone, C., Caputo, B., Sattler, T.: The unreasonable effectiveness of pre-trained features for camera pose refinement. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 12786–12798 (2024) 36. Wang, R., Xu, S., Dai, C., Xiang, J., Deng, Y., Tong, X., Yang, J.: Moge: Un-locking accurate monocular geometry estimation for open-domain images with optimal training supervision. In: Proceedings of the Computer Vision and Pattern Recognition Conference. pp. 5261–5271 (2025) 37. Wang, Y., He, X., Peng, S., Tan, D., Zhou, X.: Efficient loftr: Semi-dense local feature matching with sparse-like speed. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 21666–21675 (2024) 38. Wu, H., Zhang, Z., Lin, S., Mu, X., Zhao, Q., Yang, M., Qin, T.: Maplocnet: Coarse-to-fine feature registration for visual re-localization in navigation maps. In: 2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS). pp. 13198–13205. IEEE (2024) 39. Wu, R., Cheng, X., Zhu, J., Liu, Y., Zhang, M., Yan, S.: Uavd4l: A large-scale dataset for uav 6-dof localization. In: 2024 International Conference on 3D Vision (3DV). pp. 1574–1583. IEEE (2024) 40. Wysocki, O., Schwab, B., Beil, C., Holst, C., Kolbe, T.H.: Reviewing open data semantic 3D city models to develop novel 3D reconstruction methods. The Interna-tional Archives of the Photogrammetry, Remote Sensing and Spatial Information Sciences 48 , 493–500 (2024) 41. Wysocki, O., Schwab, B., Willenborg, B., Knezevic, M.: Awesome CityGML. https: //github.com/OloOcki/awesome-citygml (2024), Accessed: 2024-01-30 42. Wysocki, O., Xia, Y., Wysocki, M., Grilli, E., Hoegner, L., Cremers, D., Stilla, U.: Scan2LoD3: Reconstructing semantic 3D building models at LoD3 using ray casting and Bayesian networks. IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW) pp. 6547–6557 (2023) 43. Xia, Y., Lu, Y., Song, R., Dhaouadi, O., Henriques, J.F., Cremers, D.: Trafficloc: localizing traffic surveillance cameras in 3d scenes. In: Proceedings of the IEEE/CVF International Conference on Computer Vision. pp. 28685–28695 (2025) 44. Yan, Q., Zheng, J., Reding, S., Li, S., Doytchinov, I.: Crossloc: Scalable aerial localization assisted by multimodal synthetic data. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 17358–17368 (2022) 45. Yan, S., Cheng, X., Liu, Y., Zhu, J., Wu, R., Liu, Y., Zhang, M.: Render-and-compare: Cross-view 6-dof localization from noisy prior. In: 2023 IEEE International Conference on Multimedia and Expo (ICME). pp. 2171–2176. IEEE (2023) 46. Yang, S., Wang, H., Xing, Z., Chen, S., Zhu, L.: Segdino: An efficient design for med-ical and natural image segmentation with dino-v3. arXiv preprint arXiv:2509.00833 (2025) 47. Ye, Y., Teng, X., Chen, S., Li, Z., Liu, L., Yu, Q., Tan, T.: Exploring the best way for uav visual localization under low-altitude multi-view observation condition: a benchmark. arXiv preprint arXiv:2503.10692 (2025) SemCityLoc: Aerial 6DoF Localization Using Semantic 3D City Models 19 48. Zhang, Q., Wysocki, O., Jutzi, B.: Gs4buildings: Prior-guided gaussian splatting for 3d building reconstruction. ISPRS Annals of the Photogrammetry, Remote Sensing and Spatial Information Sciences 10 , 249–256 (2025) 49. Zhu, J., Peng, S., Wang, L., Tan, H., Liu, Y., Zhang, M., Yan, S.: Lod-loc v2: Aerial visual localization over low level-of-detail city models using explicit silhouette alignment. In: Proceedings of the IEEE/CVF International Conference on Computer Vision. pp. 26610–26621 (2025) 50. Zhu, J., Yan, S., Wang, L., Zhang, S., Liu, Y., Zhang, M.: Lod-loc: Aerial visual localization using lod 3d map with neural wireframe alignment. Advances in Neural Information Processing Systems 37 , 119063–119098 (2024)

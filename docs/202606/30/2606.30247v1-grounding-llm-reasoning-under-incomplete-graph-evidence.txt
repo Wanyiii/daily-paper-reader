@@ -1,0 +1,1229 @@
+Title: Grounding LLM Reasoning under Incomplete Graph Evidence
+
+URL Source: https://arxiv.org/pdf/2606.30247v1
+
+Published Time: Tue, 30 Jun 2026 02:15:12 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+# Grounding LLM Reasoning under Incomplete Graph Evidence 
+
+Jiaqi Li 1, Fanghui Song 2
+
+1. Tianjin Normal University, College of Computer and Information Engineering, Tianjin, China 2. Harbin Institute of Technology, School of Mathematics, Harbin, China jqli@tjnu.edu.cn, fanghuis1997@gmail.com 
+
+# ABSTRACT 
+
+Knowledge graphs can guide large language models (LLMs) reasoning, but the graph seen by a system is usually a retrieved, linked, temporally scoped, and incomplete evidence state rather than a complete account of truth. We develop a theoretical perspective on grounding observable LLM trajectories under such incomplete graph evidence. The evidence state induces entity anchors, typed relation residuals, path energies, and support regions, while the language model supplies a prior over candidate trajectories. We show that, under open-world incompleteness, no hard rule based only on the observed state can both reject every false unsupported trajectory and retain every true-but-unobserved one. We then characterize soft grounding as a KL-regularized deformation of the LLM prior: finite slack preserves support for unsupported but non-contradicted trajectories, whereas hard conditioning appears as an infinite-penalty limit. The framework also yields stability bounds under evidence perturbations and clarifies the constraint regimes appropriate for GraphRAG, KGQA, graph agents, constrained decoding, and faithful generation. The claims are evidence-relative: KG compatibility is treated as declared support, not factual truth. 
+
+Keywords: knowledge graphs; large language models; geometric grounding; incomplete evidence; posterior regularization; faithful generation. 
+
+# 1 Introduction 
+
+Large language models provide a flexible interface for knowledge-intensive reasoning, but final-answer accuracy can hide a fragile evidential route. Consider the Complex WebQuestions question (Talmor & Berant, 2018): “Lou Seal is the mascot for the team that last won the World Series when?” A supported route anchors L OU SEAL , follows the mascot relation to the S AN FRANCISCO GIANTS ,and then follows the team’s most recent championship relation to the 2014 W ORLD SERIES . A model can nevertheless reach 2014 after drifting through the wrong team, reversing a typed relation, or inventing an unsupported bridge. Conversely, a correct route can be removed when retrieval omits the final championship edge. Answer-level evaluation collapses these failures even though they have different causes and remedies. We study the observable or reconstructed trajectory that a system displays, retrieves, scores, revises, or asks a user to trust. This object is an output-facing sequence of claims rather than a window into the model’s hidden causal computation. It is nonetheless the right unit for many KG-enhanced systems, because their evidence is exposed through linked entities, retrieved subgraphs, typed paths, graph actions, or provenance. The central complication is epistemic. The KG available to a system is rarely a complete truth set. It is an evidence state R shaped by retrieval, entity linking, schema matching, temporal snapshots, and provenance filtering. A low-energy path in R is evidence support, not a certificate of truth; failure to find such a path is missing support, not automatically falsity. Grounding is therefore a relation relative to an observed state, not an oracle evaluation against an inaccessible complete graph. This distinction yields an elementary but consequential impossibility. Two latent worlds can produce exactly the same observed state while disagreeing about a missing claim. Any hard rule that uses only 1
+
+> arXiv:2606.30247v1 [cs.CL] 29 Jun 2026
+
+Figure 1: Evidence-relative geometric grounding. The observed state R induces typed relational energies that deform, rather than replace, the LLM trajectory prior. Hard feasibility is an infinite-penalty boundary case. the observed evidence must make the same decision in both worlds. It cannot simultaneously retain every true-but-unobserved trajectory and reject every false unsupported trajectory. The limitation is informational, not computational: stronger search or a better embedding cannot recover a distinction erased by the observation process. We develop a theoretical perspective in which KG-enhanced grounding is modeled as posterior deformation over candidate trajectories. The language model supplies a prior over trajectories, while the observed evidence state induces energy through entity anchors, typed relation residuals, path composition, reliability costs, and support regions. Grounding then reweights the prior toward lower-energy trajectories while preserving a principled role for prior uncertainty and graph incompleteness. Finite slack keeps unsupported but non-contradicted trajectories in consideration; hard feasible-set conditioning appears as an infinite-penalty boundary case. Geometry supplies the structure of the evidence energy. Entities act as anchors, typed relations as transformations or compatibility maps, paths as relational compositions, and energy sublevel sets as evidence-relative support regions. The construction is metric-space based and does not require a particular Euclidean KG embedding. Our main contributions are as follows. • We formalize KG-enhanced LLM reasoning as evidence-relative grounding over observable trajectories, explicitly accounting for incomplete graph evidence. • We present a relational-geometric framework that represents KG evidence through entity anchors, typed relation compatibility, path composition, energy-based support, and evidence-relative support regions. • We prove that hard grounding is information-theoretically limited under incomplete evidence: the observed graph alone cannot, in general, distinguish false unsupported trajectories from true but unobserved ones. • We characterize soft grounding as KL-regularized posterior deformation and derive its Gibbs form, hard-limit behavior, evidence-margin conditions, and stability guarantees under bounded evidence perturbations. We position the paper as a theoretical perspective. Its goal is to clarify the form and limits of evidence-relative grounding, rather than to introduce a new KG encoder, decoding algorithm, or empirical state-of-the-art result. 22 Background and Critical Positioning 
+
+Several strands of KG-enhanced LLM research already expose intermediate objects that can be inspected: chain-of-thought, tree-structured reasoning, graph-of-thought procedures, and reason-and-act prompting make textual states or actions visible (Wei et al., 2022; Yao et al., 2023a;b; Besta et al., 2024). RAG conditions generation on retrieved evidence (Lewis et al., 2020), while GraphRAG and graph neural retrieval preserve graph organization when constructing context (Edge et al., 2024; Mavromatis & Karypis, 2025). KGQA, path-reasoning systems, and graph agents make entities, relations, paths, and graph actions explicit (Yasunaga et al., 2021; Jiang et al., 2023; Kim et al., 2023; Luo et al., 2024; Sun et al., 2024; Jiang et al., 2025). These methods differ substantially in architecture, but they share a basic exposure of evidence-bearing objects. The question for this paper is whether such an object supports a trajectory, not whether it reveals the hidden computation of the model. Existing systems also differ in how they use graph evidence. A retrieved community can be topically relevant while a generated trajectory uses the wrong entity, reverses a relation, or bridges two facts that were never observed in the same evidence state. A valid KG path may serve as context, a reranking feature, or a hard admissibility requirement, and those choices carry different coverage risks. Constrained decoding enforces admissibility during generation (Hokamp & Liu, 2017); KG-grounded and faithful generation ask whether produced content is traceable to evidence (Luo et al., 2024; Sui et al., 2025). What often remains implicit is the status of absence: it may indicate contradiction, mere missingness, or a schema mismatch. The present theory treats those cases as different evidence states rather than as variants of a single failure label. The geometric language has several precedents. KG embeddings provide relation maps such as TransE translations (Bordes et al., 2013), and energy-based learning supplies a general vocabulary for compatibility (LeCun et al., 2006). Graph signal processing and graph neural networks motivate Laplacian smoothness (Shuman et al., 2013; Defferrard et al., 2016), but typed directed KGs require a different invariance: an author transforms into a paper representation under WRITES rather than merely resembling the paper. Posterior regularization and logic-regularized learning already show how soft constraints can deform probabilistic predictions (Ganchev et al., 2010; Hu et al., 2016). Our setting differs in the source and meaning of the constraint: it is induced by an incomplete evidence state, and it acts on observable trajectories. Surveys organize KG-enhanced LLM work by task, pipeline, or KG role (Pan et al., 2024; Procko & Ochoa, 2024; Fan et al., 2024). The perspective here is orthogonal to those taxonomies. It asks what evidence object is constructed, what operation is applied to a candidate trajectory, and how strongly the evidence-induced energy deforms the LLM prior. That lens is intended to expose information assumptions shared across architectures rather than to rank existing systems. 
+
+# 3 Observable Trajectories and Evidence States 
+
+3.1 Textual and semantic trajectories Definition 1 (Observable reasoning trajectory) . For a query q ∈ Z , an observable reasoning trajectory is a finite sequence 
+
+ρ = ( z0, z 1, . . . , z T ) ∈ T(q),
+
+where the zt are utterances, extracted claims, tool observations, or graph actions and zT contains a final answer or decision. The object is observable or reconstructed; it is not assumed to be the model’s hidden causal computation. 
+
+Let Γ( q) ⊂ T(q) be a finite candidate set. The finiteness assumption makes the posterior results ele-mentary and transparent; extensions to countable or continuous spaces require the usual integrability and absolute continuity conditions. The LLM prior is 
+
+pθ (ρ | q), ρ ∈ Γ( q), X
+
+> ρ∈Γ( q)
+
+pθ (ρ | q) = 1 . (1) It may be obtained by sampling, beam normalization, self-consistency, or an explicit candidate generator. A zero prior cannot be repaired by subsequent KL-regularized grounding; candidate generation therefore remains an upstream support condition. 3Let (M, d M) be a semantic metric space and ϕ : Z → M an operational representation map. The semantic trajectory is Xρ = ( x0, . . . , x T ) with xt = ϕ(zt). For trajectories of equal length one may use 
+
+dprod (Xρ, X ρ′ )2 =
+
+> T
+
+X
+
+> t=0
+
+atdM(xt, x ′
+
+> t
+
+)2, at > 0. (2) The paper does not require M to be Euclidean or claim that ϕ exhausts the semantics of a claim. For variable-length trajectories, let A(ρ, ρ ′) be a declared set of admissible alignments and define 
+
+dA(ρ, ρ ′) = inf 
+
+> A∈A (ρ,ρ ′)
+
+X
+
+> (i,j )∈A
+
+c(zi, z ′ 
+
+> j
+
+) + gap( A)
+
+ . (3) This template includes dynamic time warping over claim embeddings, edit costs on extracted claims, discrete Fr ´echet alignments, optimal transport over claim sets, and alignment of entity–relation events. We call Eq. (3) a cost unless the selected construction satisfies symmetry, identity of indiscernibles, and a triangle inequality. The posterior theory requires only a well-defined energy on Γ; projection statements require a genuine metric or adequate topology. 
+
+3.2 Latent knowledge and observed evidence 
+
+Let G⋆ denote a latent complete knowledge world used only to state epistemic properties. It is not available to the grounding algorithm. The system observes 
+
+R ∼ O (G⋆, q ), (4) where the observation process may include KG snapshot selection, retrieval, entity linking, schema matching, temporal filtering, and provenance assessment. When graph structure must be named explicitly, write 
+
+GR = ( VR, RR, ER) ⊆ R
+
+for the retrieved snapshot or subgraph contained in the broader state R. Keeping R distinct from GR
+
+matters: two systems can retrieve the same triples but attach different linking confidences, timestamps, or provenance. 
+
+Definition 2 (Evidence-relative energy) . An evidence-relative energy is a map 
+
+ER : Γ( q) → R ∪ { +∞} 
+
+whose value depends only on (q, R, ρ ) and declared representation and alignment choices. Lower values indicate stronger compatibility with R. They do not indicate truth in G⋆.
+
+The raw path energy may be +∞ when no admissible path exists. Soft grounding under incomplete evidence will instead use a finite slack-extended energy. We reserve ER for the total energy used by a theorem and state explicitly whether it is finite. 
+
+3.3 Four evidence statuses 
+
+For declared tolerances, a trajectory or claim can occupy four operational states: 1. supported : a sufficiently reliable alignment has Esup  
+
+> R
+
+(ρ) ≤ ϵs;2. contradicted : reliable evidence provides an incompatible typed relation, answer, or temporal claim, represented by an explicit counter-support condition; 3. unsupported : neither adequate support nor reliable counter-support is present; 4. out of schema : the relevant claim cannot be expressed by the KG schema or the declared alignment language. These are evidence statuses. In particular, “unsupported” is compatible with both a true missing fact and a false fluent claim. 4Table 1: Core notation. 
+
+Symbol Meaning 
+
+G⋆ latent knowledge world, unavailable to the algorithm 
+
+R, GR observed evidence state and its retrieved KG snapshot 
+
+Γ( q) finite candidate set of observable trajectories 
+
+ρ, Xρ textual trajectory and semantic realization 
+
+pθ (ρ | q) LLM trajectory prior on Γ( q)
+
+ER(ρ) evidence-relative trajectory energy 
+
+CR(q; ϵ) semantic support region induced by RFR(q; ϵ) hard feasible trajectory set 
+
+pRλ (ρ | q) soft grounded posterior 
+
+λ, σR, τ grounding strength, finite slack, path temperature 
+
+3.4 Hard feasible sets and soft posteriors 
+
+For a tolerance ϵ, define the hard feasible set 
+
+FR(q; ϵ) = {ρ ∈ Γ( q) : ER(ρ) ≤ ϵ}. (5) When pθ (FR | q) > 0, hard grounding conditions the prior on this set: 
+
+pRH (ρ | q) = pθ (ρ | q)1{ρ ∈ FR}
+
+pθ (FR | q) . (6) For a finite energy and λ ≥ 0, soft grounding instead defines 
+
+pRλ (ρ | q) = pθ (ρ | q)e−λE R(ρ)
+
+ZR(λ) , ZR(λ) = X
+
+> ρ′∈Γ( q)
+
+pθ (ρ′ | q)e−λE R(ρ′). (7) Sections 6–8 characterize what these two choices can and cannot establish. 
+
+# 4 Axioms for Evidence-Relative Grounding 
+
+Let a grounding operator map (q, R, p θ ) to a posterior πR ∈ ∆(Γ( q)) and, when needed, to an action in {ANSWER , ABSTAIN , RETRIEVE , VERIFY }. The axioms below describe the evidential commitments made by open-world grounding. They are modeling requirements for the present analysis, not a claim that every KG-enhanced system already satisfies them. 
+
+Axiom 1: Evidence relativity. If two latent worlds produce the same (q, R, p θ ), the grounding operator returns the same posterior and decision. Formally, grounding is measurable with respect to the observed information, not G⋆. Grounding claims are therefore indexed by the evidence state relative to which support is assessed. 
+
+Axiom 2: Non-falsity of absence. If ρ is unsupported but not contradicted and pθ (ρ | q) > 0,missing support alone is not a semantic judgment of falsehood. A compatible operator either preserves positive candidacy, πR(ρ) > 0, or routes the case to abstention, renewed retrieval, or verification. 
+
+Axiom 3: Direction sensitivity. Whenever r(u, v ) and r(v, u ) have different meanings, the evi-dence energy distinguishes them. In a relational realization this requires, for some relevant u, v ,
+
+dM(Tr η(u), η (v)) ̸ = dM(Tr η(v), η (u)) .
+
+If an inverse relation is defined, the reversed transition is evaluated using Tr−1 , not by symmetrizing 
+
+Tr .
+
+Axiom 4: Contradiction dominance. Reliable counter-evidence carries a larger penalty than mere absence. A convenient form is the existence of κR > 0 such that, after normalization, 
+
+ρb ∈ BR, ρ u ∈ UR =⇒ ER(ρb) ≥ ER(ρu) + κR,
+
+where BR and UR are the contradicted and unsupported states. 5Table 2: Axiomatic compatibility under incomplete evidence. A triangle denotes compatibility only with an additional typed, coverage-aware, or selective layer.                               
+
+> Axiom Hard set Soft, no slack Soft, finite slack Evidence relativity ✓✓✓
+> Non-falsity of absence ××if +∞✓
+> Direction sensitivity △△△
+> Contradiction dominance ×△✓
+> Minimal intervention ×in general ✓✓
+> Coverage awareness △△✓
+> Perturbation stability ×△✓
+> Abstention consistency △△✓
+
+Axiom 5: Minimal intervention. Grounding changes the LLM prior only through the declared evidence objective. Posterior-level minimal intervention is represented by 
+
+πR ∈ arg min 
+
+> π≪pθ
+
+{KL( π∥pθ ) + λREπ [ER]} .
+
+This is a statement about distributional deformation, not about textual edit distance. 
+
+Axiom 6: Coverage awareness. Constraint strength depends on evidence coverage or trust. If cR
+
+is a declared coverage estimate, one possible calibration is 
+
+λR = λ(cR), σR = σ(cR), λ′(c), σ ′(c) ≥ 0,
+
+where σR is the cost of missing support. Larger σR treats absence as more costly, so such a calibration is appropriate only when the observation process is trusted to have high coverage. Low coverage keeps absence weak evidence. 
+
+Axiom 7: Stability under evidence perturbation. For finite energies, bounded evidence-induced energy changes induce bounded posterior movement. Section 8 proves the representative bound 
+
+osc supp pθ (ER − ER′ ) ≤ ω =⇒ TV( pRλ , p R′ 
+
+> λ
+
+) ≤ tanh 
+
+ λω 
+
+2
+
+
+
+.
+
+Axiom 8: Abstention consistency. If the best candidate is unsupported but not contradicted, or if its support margin is below a declared threshold, the decision space includes abstention, renewed retrieval, or verification. Insufficient evidence is not silently converted into either a positive answer or a hard negative. Taken together, the axioms explain why finite slack is a natural default under incomplete open-world evidence, while leaving room for hard constraints when their completeness assumptions are explicit. Direction sensitivity and abstention also depend on energy and decision constructions beyond exponential reweighting alone. 
+
+# 5 KG-Induced Relational Geometry 
+
+The role of geometry is operational. It provides distances and relation-conditioned compatibility functions with which a trajectory can be compared to the evidence in R. It does not assert that an LLM internally reasons in a particular embedding space. 
+
+5.1 Entity anchors and typed residuals 
+
+Let the observed snapshot be the typed directed graph GR = ( VR, RR, ER). A geometric realization consists of an entity map η : VR → M and relation maps {Tr : M → M} r∈R R . A retrieved triple 
+
+e = ( u, r, v ) has residual 
+
+crel (e; R) = dM(Tr η(u), η (v)) + ξ(− log we), we ∈ (0 , 1] , ξ ≥ 0, (8) 6where we represents declared provenance, extraction confidence, or temporal reliability. The prob-abilistic reading we ≈ Pr( e reliable | provenance( e), R ) is optional and valid only when such a model is calibrated. Otherwise − log we is simply a reliability cost. Let ψi(ρ) ∈ M be a claim- or mention-level representation selected for grounding. An assignment a
+
+maps selected claims to entities or edges in a path 
+
+γ = ( v0, r 1, v 1, . . . , r k, v k), (vi−1, r i, v i) ∈ E R.
+
+Its entity-alignment cost is 
+
+cent (Xρ, a ) = X
+
+> (i,v )∈a
+
+dM(ψi(ρ), η (v)) . (9) The path energy is 
+
+Epath (Xρ, γ, a ; R) = cent (Xρ, a ) + α
+
+> k
+
+X
+
+> i=1
+
+crel (( vi−1, r i, v i); R), α ≥ 0. (10) All coefficients calibrate quantities whose raw units need not agree. They are evidence-state-dependent trust parameters, not universal constants. For a retrieved path family Pq (R) and permissible assignments A(ρ, γ ), the best-path energy is 
+
+Emin  
+
+> R
+
+(ρ) = min   
+
+> γ∈P q(R)
+
+min  
+
+> a∈A(ρ,γ )
+
+Epath (Xρ, γ, a ; R), (11) with value +∞ when no admissible pair exists. This raw convention is useful for defining hard support but must be replaced by finite slack before applying the finite-energy posterior theory. 
+
+Relevance is not support. A GraphRAG retriever can return a baseball community contain-ing Lou Seal and the Giants while a generated step reverses MASCOT OF. Community relevance does not constrain the direction of the transition. A typed residual can assign small energy to LOU SEAL MASCOT OF
+
+−−−−−−→ GIANTS and large energy to its reversal even when both utterances are seman-tically similar. 
+
+5.2 Support regions Definition 3 (Evidence-relative support region) . For tolerance ϵ ≥ 0, define 
+
+CR(q; ϵ) = {Xρ : ρ ∈ Γ( q), E R(ρ) ≤ ϵ}. (12) 
+
+When the energy is computed through the semantic realization Xρ, we write ER(Xρ; q) only as shorthand for ER(ρ).
+
+Proposition 1 (Basic support-region properties) . For fixed (q, R ):1. if ϵ1 ≤ ϵ2, then CR(q; ϵ1) ⊆ CR(q; ϵ2);2. if ER(·; q) is lower semicontinuous on the semantic trajectory space, then CR(q; ϵ) is closed; 3. if CR(q; ϵ) is nonempty and compact, every trajectory X has at least one metric projection onto it. The projection need not be unique without additional convexity or geodesic assumptions. Proof. The first statement is inclusion of sublevel sets. The second is the sublevel-set characterization of lower semicontinuity. For the third, the continuous function Y 7 → dA(X, Y ) attains a minimum on a nonempty compact set. The distance dist( Xρ, C R(q; ϵ)) is an evidence-support signal, not a truth signal. A true trajectory may be distant because its support edge was not retrieved, and a false trajectory may be close because 
+
+R contains a noisy edge. Different evidence states generally induce different regions. 75.3 Entropic aggregation over alternative paths 
+
+Best-path selection is itself brittle when several explanations are plausible. Let 
+
+eγ (Xρ) = min  
+
+> a∈A(ρ,γ )
+
+Epath (Xρ, γ, a ; R)
+
+and let ω ∈ ∆( Pq (R)) be a path reliability or relevance prior. For τ > 0, define 
+
+Epath  
+
+> R
+
+(ρ) = −τ log X 
+
+> γ∈P q(R)
+
+ωγ exp {− eγ (Xρ)/τ }. (13) 
+
+Proposition 2 (Variational path aggregation) . If Pq (R) is finite and nonempty, τ > 0, and eγ (X) is finite on the support of ω, then 
+
+Epath  
+
+> R
+
+(ρ) = min    
+
+> ν∈∆( Pq(R)): ν≪ω
+
+{Eγ∼ν [eγ (Xρ)] + τ KL( ν∥ω)} . (14) 
+
+The unique optimizer satisfies 
+
+ν⋆ρ (γ) = ωγ e−eγ (Xρ)/τ 
+
+P 
+
+> γ′
+
+ωγ′ e−eγ′ (Xρ)/τ .
+
+Proof. For any ν ≪ ω, expand τ KL( ν∥ν⋆ρ ). Substitution of the normalizer gives 
+
+Eν [eγ (Xρ)] + τ KL( ν∥ω) = τ KL( ν∥ν⋆ρ ) − τ log X
+
+> γ
+
+ωγ e−eγ (Xρ)/τ .
+
+Nonnegativity of KL divergence yields Eq. (14) and uniqueness. The temperature τ measures path uncertainty. As τ ↓ 0, the energy approaches the minimum over paths with positive prior; larger τ retains alternative explanations. This avoids treating failure of one path as falsity when alternatives remain. If all admissible paths are absent, Eq. (13) is still infinite and finite slack is needed. 
+
+5.4 Running example 
+
+For the Lou Seal question, an observed path can be written LOU SEAL MASCOT OF
+
+−−−−−−→ SAN FRANCISCO GIANTS MOST RECENT WORLD SERIES WIN 
+
+−−−−−−−−−−−−−−−−−−→ 2014 W ORLD SERIES .
+
+Entity costs penalize drift to another mascot or team; typed residuals penalize relation reversal; path aggregation allows alternative reliable provenance; and the support region contains trajectories whose aligned energy is below a declared tolerance. None of these statements turns the retrieved path into an oracle of truth. They specify what the current evidence supports. 
+
+# 6 The Limits of Hard Grounding under Incomplete Evidence 
+
+Hard grounding conditions the trajectory prior on the evidence-relative set FR. When coverage is complete for the target relation, this can remove inadmissible candidates without harming a correct one. Under open-world incompleteness, however, feasible-set membership cannot identify the truth of an unsupported claim. 
+
+6.1 An open-world impossibility Theorem 1 (Non-identifiability of unsupported trajectories) . Fix a query q, a candidate trajectory ρ,and an observation map Oq from latent knowledge worlds to evidence states. Let T(W, ρ ) ∈ { 0, 1}
+
+denote an external truth predicate for ρ in the latent world W , which is not observed by the grounding rule. Suppose there exist two worlds W1, W 2 such that 
+
+Oq (W1) = Oq (W2) = R, 
+
+8while 
+
+T(W1, ρ ) = 1 , T(W2, ρ ) = 0 ,
+
+and ρ is unsupported but not explicitly contradicted in the common evidence state R.Let h(q, R, ρ ) ∈ { 0, 1} be any deterministic hard-grounding rule that is measurable with respect to the observed information (q, R, ρ ), where 1 means retain and 0 means reject. Then h cannot simultaneously satisfy the following two requirements: 
+
+T(W, ρ ) = 1 and ρ is unobserved =⇒ h(q, Oq (W ), ρ ) = 1 ,
+
+and 
+
+T(W, ρ ) = 0 and ρ is unsupported =⇒ h(q, Oq (W ), ρ ) = 0 .
+
+The same conclusion holds for randomized hard-grounding rules if the two requirements are imposed almost surely. Proof. The two latent worlds induce the same observable input: 
+
+(q, Oq (W1), ρ ) = ( q, Oq (W2), ρ ) = ( q, R, ρ ).
+
+Since h uses no information beyond this observed input, it must return the same decision in both worlds. If this common decision is 1, then the rule retains ρ in W2, where ρ is false and unsupported. Hence it fails to reject every false unsupported trajectory. If the common decision is 0, then the rule rejects ρ in W1, where ρ is true but unobserved. Hence it fails to retain every true-but-unobserved trajectory. Therefore the two requirements cannot both hold. For a randomized rule, let H(q, R, ρ ) be the Bernoulli decision generated from the observed input. Because the conditional distribution of H(q, R, ρ ) is identical in W1 and W2, it cannot satisfy H = 1 
+
+almost surely in W1 and H = 0 almost surely in W2. Thus the almost-sure versions of the two requirements are also incompatible. For the running example, let R contain LOU SEAL MASCOT OF
+
+−−−−−−→ GIANTS but omit the championship edge. In W1, the latent world contains the missing 2014 edge; in W2, it does not or points elsewhere. The observed evidence is identical: both worlds expose the mascot edge and hide the answer-bearing edge. Rejecting the 2014 trajectory is wrong in W1, whereas accepting it as established fact is wrong in W2. The defensible evidence label is therefore “unsupported,” followed by verification, renewed retrieval, or abstention. Finite slack preserves the candidate for such follow-up actions; it does not certify truth. Figure 2 visualizes this two-world indistinguishability. 
+
+Figure 2: Lou Seal non-identifiability: two latent worlds induce the same observed evidence state while disagreeing on the missing championship edge. Finite slack preserves the candidate for renewed retrieval, verification, or abstention without certifying truth. 9The obstruction is informational rather than algorithmic: no stronger search procedure or more expressive embedding can recover a distinction erased by the observation state. This limitation leaves room for hard constraints when their premises are met: the relevant relation may be certified closed-world, the snapshot may be schema-complete for the task, an external oracle may be consulted, or the constraint may enforce syntax or safety rather than epistemic truth. These are applicability conditions, not technical footnotes. 
+
+6.2 Support collapse and coverage Proposition 3 (Hard support collapse) . Let pθ (ρ† | q) > 0 for a trajectory ρ† /∈ FR. Whenever the hard posterior in Eq. (6) is defined, 
+
+pRH (ρ† | q) = 0 .
+
+If a finite energy satisfies ER(ρ†) < ∞, then for every finite λ ≥ 0, the soft posterior in Eq. (7) satisfies pRλ (ρ† | q) > 0.Proof. Hard conditioning multiplies the prior mass by 1{ρ† ∈ FR} = 0 . Under finite energy, the soft numerator pθ (ρ† | q)e−λE R(ρ†) is strictly positive, and the finite candidate set has a positive finite normalizer. Finite soft mass is not endorsement. It merely prevents missing evidence from irreversibly deleting a candidate that may require additional information. Let P†(q) be a declared family of sufficient support paths for a correct trajectory ρ†. Define 
+
+Cov( q) = Pr  
+
+> R
+
+[∃γ ∈ P †(q) : γ ⊆ R]. (15) 
+
+Proposition 4 (Coverage bottleneck) . Suppose a hard path-complete rule can retain ρ† only if R
+
+contains at least one path in P†(q). Then 
+
+Pr  
+
+> R
+
+[ρ† ∈ FR] ≤ Cov( q).
+
+For one required k-edge path whose edges are retrieved independently with probabilities c1, . . . , c k,its coverage is Qki=1 ci.Proof. The retention event is a subset of the event that at least one sufficient path is observed. The product formula follows only under the stated independence assumption. The phrase “at least one” is important: bounding retention by coverage of one named path is invalid when alternative sufficient paths exist. Real failures are also correlated. Missing a seed entity can remove a neighborhood; missing-not-at-random evidence can suppress rare relation types; temporal snapshots can be stale; and schema incompleteness can make a claim inexpressible. Coverage is therefore a theoretical bottleneck of hard epistemic grounding, not merely a retrieval implementation detail. 
+
+Counterexample: a correct answer with a missing edge. If the observed Lou Seal subgraph omits only the Giants–2014 edge, a hard rule removes the correct two-hop trajectory. A finite-slack posterior assigns it a penalty rather than a zero probability and can route it to renewed retrieval. This is precisely the support-collapse mechanism; it does not license answering from every unsupported trajectory. 
+
+# 7 Soft Grounding as Variational Posterior Deformation 
+
+Hard support regions are useful for stating what the observed graph directly licenses, but they are too brittle as a full account of KG-enhanced reasoning. The language model already induces a prior distribution over possible trajectories, and incomplete graph evidence normally changes this distribution rather than replacing it by a zero-one filter. We therefore treat grounding as a posterior 10 deformation problem: trajectories with lower evidence energy become more likely, while finite-energy alternatives remain in the support unless the method explicitly takes a hard-limit regime. Let P0 denote the baseline probability measure induced by the LLM prior pθ ; equivalently, P0(ρ |
+
+q) = pθ (ρ | q) on Γ( q). Let ER(ρ) ∈ [0 , ∞) be an evidence energy. For λ ≥ 0, consider 
+
+P Rλ ∈ arg min  
+
+> P≪P0
+
+{KL( P ∥P0) + λ Eρ∼P [ER(ρ)] } . (16) The absolute-continuity constraint records a modest but important choice: the KG evidence reweights trajectories available to the model prior; it does not invent new trajectories outside the modeled candidate space. 
+
+Theorem 2 (KL-regularized characterization) . Assume Γ( q) is finite or countable, P0(ρ | q) > 0 on its support, ER is finite on that support, and 
+
+ZR(λ) = X
+
+> ρ
+
+P0(ρ | q) exp {− λE R(ρ)} < ∞.
+
+For λ ≥ 0, the optimization problem in Eq. (16) has the unique solution 
+
+P Rλ (ρ | q) = P0(ρ | q) exp {− λE R(ρ)}
+
+ZR(λ) . (17) 
+
+Moreover, for every P ≪ P0,
+
+KL( P ∥P0) + λ EP [ER] = KL( P ∥P Rλ ) − log ZR(λ). (18) 
+
+Proof. For every ρ in the support of P0,
+
+log P (ρ)
+
+P Rλ (ρ) = log P (ρ)
+
+P0(ρ) + λE R(ρ) + log ZR(λ).
+
+Taking expectation under P and rearranging yields Eq. (18). Since KL divergence is nonnegative and vanishes only when P = P Rλ , the minimizer is unique. This gives soft grounding the same minimum-information interpretation as posterior regularization: among all distributions that pay for evidence incompatibility, the selected posterior moves as little as possible from the LLM prior in KL geometry. The parameter λ is a grounding-strength parameter. When λ = 0 , the posterior reduces to the LLM prior; larger λ gives greater influence to the evidence energy. Finite slack is the technical bridge between graph absence and open-world uncertainty. When no retrieved path supports a trajectory, assigning infinite energy forces immediate rejection. A slackened energy instead records the cost of unsupportedness without turning absence into contradiction: 
+
+Eslack  
+
+> R
+
+(ρ) = min {Emin  
+
+> R
+
+(ρ), κ R(ρ)}, 0 < κ R(ρ) < ∞. (19) Here κR may depend on retrieval coverage, entity-linking confidence, schema fit, temporal freshness, or application-level tolerance. It is not a claim that unsupported trajectories are correct; it only prevents the posterior from confusing lack of observed support with logical falsity. 
+
+Proposition 5 (Minimum-energy concentration) . Let Γ( q) be finite and suppose P0(ρ | q) > 0 for all candidates. For fixed finite energy ER, the posterior P Rλ concentrates, as λ → ∞ , on the set 
+
+MR = arg min  
+
+> ρ∈Γ( q)
+
+ER(ρ).
+
+Moreover, for every ρ ∈ MR,
+
+P Rλ (ρ | q) → P0(ρ | q)
+
+P0(MR | q) .
+
+Proof. Let Emin = min ρ ER(ρ) and write ∆ρ = ER(ρ) − Emin ≥ 0. Dividing numerator and denominator in Eq. (17) by e−λE min gives weights proportional to P0(ρ | q)e−λ∆ρ . Non-minimizers have ∆ρ > 0 and hence relative weights e−λ∆ρ → 0, while minimizers retain their prior weights. 11 Proposition 6 (Hard conditioning as an infinite-penalty limit) . Let 
+
+SR = {ρ ∈ Γ( q) : ER(ρ) ≤ ϵ},
+
+and define the truncated energy 
+
+EM (ρ) = 
+
+0, ρ ∈ SR,M, ρ / ∈ SR.
+
+If P0(SR | q) > 0, then the soft posterior induced by EM satisfies 
+
+P Rλ,M (ρ | q) −→ P0(ρ | q)1{ρ ∈ SR}
+
+P0(SR | q)
+
+whenever λM → ∞ .Proof. Under the truncated energy EM , every trajectory in SR retains its prior weight, whereas every trajectory outside SR is multiplied by the factor e−λM . Since P0(SR | q) > 0, the normalizing constant converges to P0(SR | q) as λM → ∞ . Therefore, 
+
+P Rλ,M (ρ | q) −→ P0(ρ | q)1{ρ ∈ SR}
+
+P0(SR | q) ,
+
+which is precisely the prior conditioned on the feasible set SR.Hard grounding is therefore a boundary case obtained when unsupported trajectories receive un-bounded effective penalty. In open-world graphs this boundary is defensible only when completeness assumptions are explicit. 
+
+Proposition 7 (Coverage-and-margin condition for soft MAP selection) . Let ρ† ∈ Γ( q) be a correct answer-bearing trajectory with P0(ρ† | q) > 0, where correctness is defined by an external task criterion rather than by the evidence energy ER. Let R be random. Suppose there exist an evidence event 
+
+M ⊆ R 
+
+and a constant ∆ > 0 such that, on the event M ,
+
+ER(ρ) − ER(ρ†) ≥ ∆
+
+for every competing trajectory ρ̸ = ρ† with P0(ρ | q) > 0. If 
+
+λ∆ > max  
+
+> ρ̸=ρ†:P0(ρ|q)>0
+
+log P0(ρ | q)
+
+P0(ρ† | q) ,
+
+then ρ† is the unique MAP trajectory of P Rλ (· | q). Consequently, 
+
+Pr 
+
+> R
+
+
+
+ρ† = arg max  
+
+> ρ∈Γ( q)
+
+P Rλ (ρ | q)
+
+
+
+≥ Pr  
+
+> R
+
+(M ).
+
+Furthermore, suppose a declared sufficient support path for ρ† contains k required edges, each of which is retrieved independently with probability at least 1 − ϵ. If successful retrieval of all these edges implies the event M , then 
+
+Pr  
+
+> R
+
+(M ) ≥ (1 − ϵ)k.
+
+Proof. If no competing trajectory has positive prior mass, then ρ† is trivially the unique MAP trajectory. Otherwise, on the event M , every competing trajectory ρ with positive prior mass satisfies 
+
+log P Rλ (ρ | q)
+
+P Rλ (ρ† | q) = log P0(ρ | q)
+
+P0(ρ† | q) − λ ER(ρ) − ER(ρ†) < 0,
+
+where the strict inequality follows from the assumed margin condition. Hence every positive-prior competitor has strictly smaller posterior mass than ρ†. Since trajectories with zero prior mass also have zero posterior mass under KL-regularized grounding, ρ† is the unique MAP trajectory. 12 Parameter Mathematical role Practical interpretation           
+
+> λgrounding-strength parameter strength of evidence-induced reweighting relative to the LLM prior
+> αrelation-residual scale trust in typed KG transitions
+> weedge reliability provenance, extraction, or temporal confidence
+> κRunsupportedness slack cost of missing graph support
+> τpath-aggregation temperature uncertainty over alternative paths
+
+Table 3: Calibration parameters in the soft-grounding formulation. They are evidence-state and system dependent; none is a universal semantic constant. Therefore, 
+
+M ⊆
+
+
+
+ρ† = arg max  
+
+> ρ∈Γ( q)
+
+P Rλ (ρ | q)
+
+
+
+,
+
+which immediately yields 
+
+Pr 
+
+> R
+
+
+
+ρ† = arg max  
+
+> ρ∈Γ( q)
+
+P Rλ (ρ | q)
+
+
+
+≥ Pr  
+
+> R
+
+(M ).
+
+Under the stated independent-edge retrieval assumption, all required edges are simultaneously retrieved with probability at least (1 −ϵ)k. Since this event implies M , the final inequality follows. The proposition is intentionally conditional. It does not claim that soft grounding automatically selects a correct answer. It says that selection occurs on evidence states where coverage produces an energy margin large enough to overcome the LLM prior odds. The independent-edge condition is only a diagnostic baseline; correlated retrieval failures should be represented by the corresponding joint path-coverage probability. The posterior odds decompose into a prior-odds term and an evidence-margin term. For any two candidates ρ1, ρ 2 with positive prior probability, 
+
+log P Rλ (ρ1 | q)
+
+P Rλ (ρ2 | q) = log P0(ρ1 | q)
+
+P0(ρ2 | q) − λ{ER(ρ1) − ER(ρ2)}. (20) 
+
+Corollary 1 (Pairwise ranking special case) . For two candidates ρT and ρF with positive priors, P Rλ
+
+ranks ρT above ρF if and only if 
+
+λ{ER(ρF ) − ER(ρT )} > log P0(ρF | q)
+
+P0(ρT | q) .
+
+Equivalently, 
+
+P0(ρT | q)
+
+P0(ρF | q) > exp {− λ(ER(ρF ) − ER(ρT )) }.
+
+Proof. Apply Eq. (20) with ρ1 = ρT and ρ2 = ρF . The posterior ranks ρT above ρF exactly when the resulting log-odds is positive. Whether ρT or ρ† is actually true is external to the energy model. For the Lou Seal example, a correctly oriented path lowers the energy of the trajectory that names the Giants and their 2014 World Series win, while a relation-reversed trajectory pays a larger typed residual. If the model prior strongly favors a generic but unsupported answer, Eq. (20) shows how much evidence margin is needed to overturn it. The calibration view also discourages overinterpretation. Lower energy means greater compatibility with the current evidence representation, not greater truth in an absolute sense. If edge reliabilities are miscalibrated, if entity linking is wrong, or if retrieval misses the relevant neighborhood, the posterior will faithfully reflect those defects. Soft grounding makes the tradeoff visible rather than hiding it behind a binary constraint. The parameters β and μ are used in the projection-style extension in Appendix D rather than in the main posterior-deformation results. 13 8 Stability, Coverage, and Abstention 
+
+If graph grounding is evidence relative, then stability becomes part of the theory rather than an implementation detail. We ask that small changes in alignment, relation residuals, reliability weights, or slack costs induce bounded changes in the grounded posterior. This requirement does not make the evidence correct, but it prevents a system from treating small retrieval or linking perturbations as decisive semantic events. 
+
+Proposition 8 (Component-wise evidence perturbations induce bounded energy perturbations) . For every ρ ∈ supp P0, let a common nonempty finite index set Iρ enumerate the path-assignment or slack alternatives compared under evidence states R and R′. Suppose 
+
+ER(ρ) = min 
+
+> i∈Iρ
+
+ΦR(ρ, i ), ER′ (ρ) = min 
+
+> i∈Iρ
+
+ΦR′ (ρ, i ),
+
+where all indexed alternative costs are finite, and suppose 
+
+sup  
+
+> ρ∈supp P0
+
+sup 
+
+> i∈Iρ
+
+|ΦR(ρ, i ) − ΦR′ (ρ, i )| ≤ δ. 
+
+Then 
+
+sup  
+
+> ρ∈supp P0
+
+|ER(ρ) − ER′ (ρ)| ≤ δ. 
+
+In particular, suppose every indexed alternative contains at most mmax entity-alignment terms, at most kmax typed relation edges, and at most one slack term. If the component changes satisfy 
+
+dM(ψRt (ρ), η R(v)) − dM(ψR′ 
+
+> t
+
+(ρ), η R′
+
+(v)) ≤ ϵent ,
+
+dM(T Rr (ηR(u)) , η R(v)) − dM(T R′ 
+
+> r
+
+(ηR′
+
+(u)) , η R′
+
+(v)) ≤ ϵrel ,
+
+− log wRurv + log wR′ 
+
+> urv
+
+≤ ϵw,
+
+and 
+
+sup  
+
+> ρ∈supp P0
+
+|κR(ρ) − κR′ (ρ)| ≤ ϵslack ,
+
+then the preceding assumption holds with 
+
+δ = mmax ϵent + αk max (ϵrel + ξϵ w) + ϵslack .
+
+Proof. Fix ρ and choose iR ∈ arg min i∈Iρ ΦR(ρ, i ). Then 
+
+ER′ (ρ) ≤ ΦR′ (ρ, i R) ≤ ΦR(ρ, i R) + δ = ER(ρ) + δ. 
+
+Interchanging R and R′ gives ER(ρ) ≤ ER′ (ρ) + δ, proving the uniform energy bound. The displayed component-wise bound follows by applying the triangle inequality to each indexed path or slack alternative and using the maximum numbers of entity-alignment and relation-residual terms. The slack component changes by at most ϵslack uniformly over ρ ∈ supp P0.If two evidence states induce different path-assignment sets, one may compare them on the union of the two sets and assign finite slack to alternatives absent from one state. Finite slack is essential: the proposition does not control jumps from finite cost to +∞. The result is not tied to Euclidean embeddings; it applies to any metric-space realization in which the displayed residuals are measured by dM.By Theorem 3 below, this component-wise bound implies 
+
+TV( P Rλ , P R′ 
+
+> λ
+
+) ≤ tanh( λδ ).
+
+The preceding proposition controls how local perturbations in entity alignment, typed relation residuals, reliability weights, and slack costs affect the trajectory energy. The next result translates this energy-level stability into posterior-level stability. Since adding the same constant to all energies does not change the normalized posterior, the relevant quantity is the oscillation of ER − ER′ , rather than its absolute magnitude. 14 Theorem 3 (Posterior stability under evidence perturbation) . Let Γ( q) be finite, let P0 be the same prior under two evidence states R and R′, and let ER, E R′ : Γ( q) → R be finite energies. Define 
+
+P Rλ and P R′ 
+
+> λ
+
+by 
+
+P Rλ (ρ | q) = P0(ρ | q) exp {− λE R(ρ)}
+
+ZR(λ)
+
+and analogously for R′. On S = supp( P0), let 
+
+ω = osc S (ER − ER′ ) = sup 
+
+> ρ∈S
+
+{ER(ρ) − ER′ (ρ)} − inf 
+
+> ρ∈S
+
+{ER(ρ) − ER′ (ρ)}.
+
+Then, for every ρ ∈ S,
+
+log P Rλ (ρ | q)
+
+P R′ 
+
+> λ
+
+(ρ | q) ≤ λω, 
+
+and 
+
+TV( P Rλ , P R′ 
+
+> λ
+
+) ≤ tanh 
+
+ λω 
+
+2
+
+
+
+. (21) 
+
+In particular, if 
+
+sup 
+
+> ρ∈S
+
+|ER(ρ) − ER′ (ρ)| ≤ δ, 
+
+then 
+
+TV( P Rλ , P R′ 
+
+> λ
+
+) ≤ tanh( λδ ).
+
+Proof. Write 
+
+∆E(ρ) = ER(ρ) − ER′ (ρ),
+
+and let 
+
+m = inf  
+
+> ρ∈S
+
+∆E(ρ), M = sup 
+
+> ρ∈S
+
+∆E(ρ).
+
+Then ω = M − m. Direct substitution gives 
+
+P Rλ (ρ | q)
+
+P R′ 
+
+> λ
+
+(ρ | q) = exp {− λ∆E(ρ)}
+
+EP R′
+
+> λ
+
+[exp {− λ∆E}] .
+
+Both the numerator and the denominator lie between e−λM and e−λm , so the likelihood ratio lies in 
+
+[e−λω , e λω ].
+
+This gives the log-ratio bound. Let 
+
+L(ρ) = P Rλ (ρ | q)
+
+P R′ 
+
+> λ
+
+(ρ | q) .
+
+Under P R′ 
+
+> λ
+
+, L ∈ [a, b ] with 
+
+a = e−λω , b = eλω ,
+
+and EP R′
+
+> λ
+
+[L] = 1 . Therefore 
+
+TV( P Rλ , P R′ 
+
+> λ
+
+) = EP R′
+
+> λ
+
+[( L − 1) +] ≤ (b − 1)(1 − a)
+
+b − a = tanh 
+
+ λω 
+
+2
+
+
+
+.
+
+If sup ρ∈S |ER(ρ) − ER′ (ρ)| ≤ δ, then ω ≤ 2δ, giving 
+
+TV( P Rλ , P R′ 
+
+> λ
+
+) ≤ tanh( λδ ).
+
+Together with Proposition 8, the theorem shows how bounded perturbations in entity alignment, typed relation residuals, reliability weights, and finite slack costs induce bounded posterior movement. The result also exposes a calibration tension: increasing λ strengthens the influence of graph evidence but amplifies sensitivity to energy error. 15 8.1 Random evidence processes 
+
+The observed evidence state can be viewed as the outcome of a random process: retrieval selects documents or graph neighborhoods, entity linking maps mentions to nodes, extraction or KG lookup proposes typed edges, and temporal or provenance filters decide which edges remain active. Let 
+
+R ∼ Q (· | q, G ⋆) denote this process given the query and the latent complete world graph. A trajectory may be unsupported under R because it is false, but also because the process failed to expose the relevant evidence. This factorization clarifies why coverage cannot be summarized by an independent edge-retention rate. Missing a seed entity may remove an entire neighborhood; missingness can depend on popularity, relation type, language, or provenance; temporal snapshots can be stale; and schema mismatch can make a true claim inexpressible even under exhaustive traversal. These are not edge-level noise terms added after the fact. They shape the candidate evidence state before the grounding energy is ever evaluated. Consequently, unsupportedness is best read as a statement about the pair (R, ρ ), not directly about the world. High confidence from absence is therefore justified only when the evidence process is declared complete for the relevant slice of the graph: the entities are covered, the relation types are closed, the temporal scope matches the question, and the extraction or lookup procedure has known recall. Without such a coverage claim, finite slack is not a modeling convenience but the mathematically honest representation of open-world uncertainty. 
+
+8.2 Selective grounding 
+
+Evidence-relative systems also need a way to abstain from strong grounded claims. Let sR(ρ) be a support score derived from the posterior, an energy margin, or a calibrated confidence model. A selective rule emits a grounded answer only when 
+
+max  
+
+> ρ∈Γ( q)
+
+sR(ρ) ≥ θ, bρ ∈ arg max  
+
+> ρ∈Γ( q)
+
+sR(ρ), (22) and otherwise returns an abstention or an answer explicitly marked as not verified by the graph evidence. 
+
+Proposition 9 (Selective risk under calibrated support) . Suppose sR(ρ) is calibrated in the sense that 
+
+Pr( Y = 1 | sR(bρ) = s, emit ) = s, 
+
+where Y = 1 denotes the external event that the emitted trajectory is correct. Then the conditional error rate among emitted answers with sR(bρ) ≥ θ is at most 1 − θ.Proof. By calibration, 
+
+Pr( Y = 0 | sR(bρ) ≥ θ, emit ) = E[1 − sR(bρ) | sR(bρ) ≥ θ, emit ] ≤ 1 − θ. 
+
+The proposition does not say that graph compatibility automatically yields a calibrated truth probabil-ity. Calibration is an empirical or domain-modeling assumption. The value of the formal statement is narrower: if a system chooses to communicate a scalar support score as confidence, then selective abstention has a clear risk meaning only after that score has been calibrated against the external correctness event of interest. 
+
+Faithful-generation implication. For faithful generation, the relevant output is often not only an answer but a claim of support: “the graph verifies this step”, “the retrieved evidence entails this relation”, or “the answer is grounded in the KG.” Under the present perspective, such commitments are stronger than ordinary generation. An unsupported trajectory may still be true, but it is not graph-verified at the communication layer. Faithful generation therefore requires a separation among answer content, graph support, and residual uncertainty in the user-facing response. 16 9 Relation-Aware Regularization 
+
+Trajectory-level energy acts at inference time. Graph structure can also couple representations during learning or adaptation. The relevant regularizer needs to respect relation type and direction rather than assume homogeneous adjacency. 
+
+9.1 Why ordinary Laplacian smoothing is insufficient 
+
+Let H ∈ Rn×d collect node representations. For a homogeneous undirected weighted graph with adjacency A, degree matrix D, and L = D − A, the classical energy is 
+
+Tr( H⊤LH ) = 12
+
+X
+
+> u,v
+
+Auv ∥hv − hu∥22. (23) It encodes homophily: low energy makes adjacent representations close. A KG edge often connects different semantic roles. An author need not resemble a paper, and a country need not resemble its capital. For a typed directed snapshot, define 
+
+ΩR(H) = 12
+
+X
+
+> (u,r,v )∈E R
+
+wurv ∥hv − Tr (hu)∥22. (24) The residual encourages agreement with a relation-conditioned prediction, not identity of adjacent nodes. 
+
+Proposition 10 (Classical Laplacian as a special case) . Suppose an undirected graph is represented in ER by both ordered arcs (u, v ) and (v, u ), with symmetric weights wuv = wvu = Auv , and the sole relation map is Tr = I. Then 
+
+ΩR(H) = Tr( H⊤LH ).
+
+Proof. Under the assumptions, 
+
+ΩR(H) = 12
+
+X
+
+> u,v
+
+Auv ∥hv − hu∥22,
+
+which equals Eq. (23) after expanding the norm and using L = D − A.The ordered-arc convention is essential. If each undirected edge is stored only once, the prefactor changes or the equality holds only up to a constant. Thus ordinary Laplacian smoothing is a homogeneous identity-relation reduction, not the default form for a KG. 
+
+9.2 Oversmoothing counterexample 
+
+Consider the one-edge KG AUTHOR a WRITES 
+
+−−−−→ PAPER p. 
+
+The untyped energy ∥hp − ha∥2 is minimized at hp = ha when unconstrained, erasing the author– paper role distinction. A translation map TWRITES (x) = x + rWRITES instead gives 
+
+∥hp − ha − rWRITES ∥2,
+
+which is zero at hp = ha + rWRITES and permits systematic role separation. Making the untyped penalty soft merely weakens the wrong invariance; it does not make the invariance relationally appropriate. 
+
+9.3 Direction and reversal 
+
+Suppose a valid forward triple satisfies hv = Tr (hu). Its forward residual is zero, whereas reusing the same relation in reverse yields 
+
+∥hu − Tr (hv )∥ = ∥hu − Tr (Tr (hu)) ∥, (25) 17 Regime Formal analogue Appropriate use Relevance retrieval Evidence state R expands the model context but imposes no feasibility constraint Graph neighborhoods, documents, or com-munities are used to expose useful infor-mation; absence of a path carries little neg-ative meaning. Soft grounding Finite energy and KL-regularized posterior deforma-tion Observed evidence changes answer proba-bilities while preserving prior support for plausible but unobserved trajectories. Hard grounding Conditioning on a support region or an infinite-penalty limit Defensible when the evidence state is de-clared complete for the relevant entities, relations, and time interval. Selective grounding Emission only above a cali-brated support threshold Useful when user-facing claims require ex-plicit graph verification or when unsup-ported answers can be marked rather than silently generated. 
+
+Table 4: Constraint regimes induced by different interpretations of the evidence state. The regimes differ not in whether a KG is used, but in what the system is allowed to infer from observed support and observed absence. which is generically nonzero. For Tr (x) = x + r, the reversed residual is 2∥r∥. When an inverse relation is available, reversal is evaluated with Tr−1 , ideally satisfying Tr−1 ◦ Tr ≈ I. We do not claim asymmetry for every map: identity and involutive maps are explicit exceptions. For example, the observed edge FRANCE CAPITAL 
+
+−−−−→ PARIS does not license the sentence “Paris has capital France.” Symmetric semantic similarity can miss this error; the typed directed residual can expose it. 
+
+9.4 Connection to KG embedding objectives 
+
+TransE is the special case Tr (hu) = hu + r, for which the residual is ∥hu + r − hv ∥ (Bordes et al., 2013). Linear and neural relation maps are immediate generalizations. Bilinear models use compatibility scores such as sr (u, v ) = h⊤ 
+
+> u
+
+Wr hv ; an energy can be defined as −sr or through a calibrated margin loss rather than forcing the score into Euclidean-distance notation. This paper does not propose a new KG embedding objective. It promotes typed compatibility from triple representation learning to an evidence-relative diagnostic and regularizer for observable trajectories. 
+
+Scope of representation coupling. A small ΩR(H) indicates agreement with the declared relation maps on the observed snapshot. It does not establish that a generated trajectory used those relations, that R is correct, or that the final answer is factual. Auditable trajectory grounding still requires an explicit link between generated claims and the representations being regularized. 
+
+# 10 A Taxonomy of Constraint Regimes and Design Implications 
+
+The preceding sections separate three questions that are often collapsed in KG-enhanced LLM systems: what evidence was observed, how strongly that evidence constrains the model distribution, and what commitment the system makes when it speaks. This separation yields a taxonomy of grounding regimes rather than a single recipe for “using a KG.” The same graph can support retrieval, posterior reweighting, constrained decoding, verification, or abstention, depending on the coverage assumptions and the communicative goal. 
+
+10.1 Evidence construction and trajectory support 
+
+GraphRAG, KGQA, and graph-agent systems often begin from the same operational move: construct a query-dependent evidence state by retrieval, linking, extraction, graph traversal, or tool calls. The theory treats this state as an object to be declared rather than an invisible preprocessing artifact. Its 18 entity coverage, relation vocabulary, temporal scope, provenance weights, and path-construction rules determine the meaning of every downstream support claim. This view is especially important for multi-hop reasoning. A retrieved community or neighborhood may be topically relevant while still failing to support a particular directed transition. Conversely, a path can be missing because the graph snapshot is incomplete, not because the corresponding fact is false. The formal distinction between relevance, typed residual compatibility, path energy, and support region gives system designers a vocabulary for these cases. It also explains why simply adding graph context to a prompt is not the same as grounding a reasoning trajectory in that graph. 
+
+10.2 Constraint strength and communicative commitment 
+
+Different applications require different levels of constraint. In exploratory search or brainstorming, relevance retrieval may be sufficient: the graph helps the model attend to useful material, while the answer remains a language-model generation conditioned on context. In factual QA, decision support, or scientific summarization, soft grounding is often more appropriate because it exposes a graded evidence signal and allows uncertainty from graph incompleteness to remain visible. In database-like settings with closed-world relations, hard grounding may be justified; there the absence of an edge can carry real negative evidence. The communicative layer must match this constraint strength. A system that only uses graph retrieval can say that an answer was generated with graph context, but it cannot honestly say that every reasoning step is graph verified. A soft grounding system can report evidence scores, margins, or posterior shifts. A hard grounding system can make stronger support claims only after declaring the coverage assumptions under which hard rejection is valid. Selective grounding adds a further option: the system may answer, abstain, or explicitly label a claim as plausible but not verified by the current evidence state. 
+
+10.3 Implications for system design 
+
+The first implication concerns reporting. A KG-enhanced system benefits from making the evidence state visible: which graph snapshot was used, which entities were linked, which relations were traversed, which paths supported the emitted trajectory, and which parts of the answer remained unsupported. Such reporting does not need to be verbose in every user interface, but the information needs to exist at the system level if the output is presented as grounded. A second implication is diagnostic. Many failures attributed to “LLM hallucination” are better described as mismatches among retrieval relevance, trajectory support, and communication. The model may have retrieved a relevant neighborhood but reversed a relation; it may have followed a low-confidence edge; or it may have produced a true answer whose support was absent from the retrieved snapshot. These cases require different fixes: typed relation energies, reliability calibration, coverage expansion, abstention, or a more careful output label. A third implication concerns calibration. The parameters in the geometric and variational formulation are not ornamental. Relation residual scales determine how strongly the system trusts typed graph structure; reliability weights encode provenance and freshness; slack costs express the penalty for missing support; and the grounding-strength parameter λ controls how far evidence may move the model prior. Treating these quantities as tunable calibration objects is more faithful than choosing a single universal notion of “KG grounding.” It also makes empirical evaluation more interpretable, because improvements can be traced to coverage, alignment, relation modeling, posterior deformation, or abstention behavior. This taxonomy is not intended to rank all regimes from weak to strong in a single order. Hard constraints are stronger only when their closure assumptions are warranted; otherwise they can be less faithful than a softer method that admits uncertainty. The central design question is therefore not whether a system uses a KG, but what kind of evidential commitment the system is entitled to make from the KG it actually observed. 19 11 Limitations and Scope 
+
+The analysis in this paper is deliberately evidence-relative. It evaluates compatibility with a declared observation state R, not truth in the latent world. A supported claim may be false when the retrieved graph is noisy, and an unsupported claim may be true when the relevant edge is missing, stale, outside the schema, or not retrieved. The latent object G⋆ is introduced only to state identifiability questions; it is not assumed to be available to the grounding algorithm or uniquely representable. The same caution applies to observable trajectories. The paper studies text, claims, paths, and actions that can be inspected or reconstructed; it does not claim that a written chain of thought reveals the model’s hidden causal computation. The formal results also depend on modeling choices that are not settled by the theory itself. Candidate generation remains an upstream bottleneck because KL-regularized deformation cannot assign mass to trajectories that the prior omits. The semantic map, entity linker, relation maps, alignment family, reliability weights, path prior, and slack costs are all part of the declared energy model. Poor calibration can make paraphrases appear distant or contradictions appear close. Likewise, the finite-candidate setting makes the posterior, limiting, and stability statements transparent; extensions to continuous trajectory spaces require reference measures, integrability of e−λE R , and suitable compactness or tightness assumptions. The concentration result in Appendix B further assumes independent evidence states, bounded energies, and a positive expected score margin; strongly correlated retrieval failures would require different tools. Finally, the paper does not make an empirical dominance claim. Soft grounding is not asserted to always improve answer accuracy, and hard grounding is not asserted to be intrinsically harmful. Hard constraints can be well founded for closed-world databases, schema-complete subtasks, type systems, grammar constraints, and safety policies. The critique is narrower: absence from incomplete open-world KG evidence is not a complete negative fact. Within that scope, the contribution is to identify the non-identifiability of unsupported trajectories, characterize finite-energy posterior deformation, and state the stability and calibration conditions under which KG evidence can be used without overclaiming what it establishes. 
+
+# 12 Conclusion 
+
+We have developed a theoretical perspective on KG-enhanced LLM grounding under incomplete evidence. The unit of analysis is an observable or reconstructed trajectory; the epistemic state is the retrieved, linked, temporally scoped evidence R rather than an inaccessible complete graph. KG-induced geometry constructs entity anchors, typed residuals, path energies, alternative-path distributions, and support regions that measure compatibility with that state. The central results clarify the hard–soft distinction. A two-world argument shows that no rule using only an incomplete observed state can distinguish every false unsupported trajectory from every true-but-unobserved one. Soft grounding is the unique KL-regularized deformation of the LLM trajectory prior; finite slack preserves candidacy, while hard conditioning arises as an infinite-penalty limit that changes posterior support. Bounded posterior movement can be traced to bounded perturbations in entity alignment, typed relation residuals, reliability weights, and finite slack costs. Selective risk requires calibrated confidence rather than energy thresholds alone. Typed relation regularization further shows why ordinary homogeneous graph smoothing is insufficient for directed KG semantics. The position is therefore more limited than a universal recipe for grounding. Under incomplete open-world evidence, finite, typed, coverage-aware posterior deformation is the coherent default. Hard epistemic grounding remains appropriate when its closed-world, coverage, schema, or safety assumptions are explicit. In both cases, KG support manages the relation between an LLM prior and the evidence actually available to the system; it does not by itself become factual truth. 
+
+# References 
+
+Maciej Besta, Nils Blach, Ales Kubicek, Robert Gerstenberger, Michal Podstawski, Lukas Gianinazzi, Joanna Gajda, Tomasz Lehmann, Hubert Niewiadomski, Piotr Nyczyk, and Torsten Hoefler. Graph of thoughts: Solving elaborate problems with large language models. In Proceedings 
+
+20 of the AAAI Conference on Artificial Intelligence , volume 38, pp. 17682–17690, 2024. doi: 10.1609/aaai.v38i16.29720. Antoine Bordes, Nicolas Usunier, Alberto Garcia-Duran, Jason Weston, and Oksana Yakhnenko. Translating embeddings for modeling multi-relational data. In Advances in Neural Information Processing Systems , volume 26, pp. 2787–2795, 2013. Micha ¨el Defferrard, Xavier Bresson, and Pierre Vandergheynst. Convolutional neural networks on graphs with fast localized spectral filtering. In Advances in Neural Information Processing Systems ,volume 29, pp. 3844–3852, 2016. Darren Edge, Ha Trinh, Newman Cheng, Joshua Bradley, Alex Chao, Apurva Mody, Steven Truitt, Dasha Metropolitansky, Robert Osazuwa Ness, and Jonathan Larson. From local to global: A GraphRAG approach to query-focused summarization. arXiv preprint arXiv:2404.16130 , 2024. doi: 10.48550/arXiv.2404.16130. Wenqi Fan, Yujuan Ding, Liangbo Ning, Shijie Wang, Hengyun Li, Dawei Yin, Tat-Seng Chua, and Qing Li. A survey on RAG meeting LLMs: Towards retrieval-augmented large language models. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining ,pp. 6491–6501. Association for Computing Machinery, 2024. doi: 10.1145/3637528.3671470. Kuzman Ganchev, Jo ˜ao Gra c¸ a, Jennifer Gillenwater, and Ben Taskar. Posterior regularization for structured latent variable models. Journal of Machine Learning Research , 11:2001–2049, 2010. Chris Hokamp and Qun Liu. Lexically constrained decoding for sequence generation using grid beam search. In Proceedings of the 55th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 1535–1546, Vancouver, Canada, 2017. Association for Computational Linguistics. doi: 10.18653/v1/P17-1141. Zhiting Hu, Xuezhe Ma, Zhengzhong Liu, Eduard Hovy, and Eric P. Xing. Harnessing deep neural networks with logic rules. In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 2410–2420, Berlin, Germany, 2016. Association for Computational Linguistics. doi: 10.18653/v1/P16-1228. Jinhao Jiang, Kun Zhou, Zican Dong, Keming Ye, Wayne Xin Zhao, and Ji-Rong Wen. Structgpt: A general framework for large language model to reason over structured data. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , pp. 9237–9251, Singapore, 2023. Association for Computational Linguistics. doi: 10.18653/v1/2023.emnlp-main. 574. Jinhao Jiang, Kun Zhou, Wayne Xin Zhao, Yang Song, Chen Zhu, Hengshu Zhu, and Ji-Rong Wen. KG-agent: An efficient autonomous agent framework for complex reasoning over knowledge graph. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 9505–9523, Vienna, Austria, 2025. Association for Computational Linguistics. doi: 10.18653/v1/2025.acl-long.468. Jiho Kim, Yeonsu Kwon, Yohan Jo, and Edward Choi. Kg-gpt: A general framework for reasoning on knowledge graphs using large language models. In Findings of the Association for Computational Linguistics: EMNLP 2023 , pp. 9410–9421, Singapore, 2023. Association for Computational Linguistics. doi: 10.18653/v1/2023.findings-emnlp.631. Yann LeCun, Sumit Chopra, Raia Hadsell, Marc’Aurelio Ranzato, and Fu Jie Huang. A tutorial on energy-based learning. In G ¨okhan Bakir, Thomas Hofmann, Bernhard Sch ¨olkopf, Alexander J. Smola, Ben Taskar, and S. V. N. Vishwanathan (eds.), Predicting Structured Data . MIT Press, 2006. Patrick Lewis, Ethan Perez, Aleksandra Piktus, Fabio Petroni, Vladimir Karpukhin, Naman Goyal, Heinrich K ¨uttler, Mike Lewis, Wen-tau Yih, Tim Rockt ¨aschel, Sebastian Riedel, and Douwe Kiela. Retrieval-augmented generation for knowledge-intensive NLP tasks. Advances in Neural Information Processing Systems , 33:9459–9474, 2020. Linhao Luo, Yuan-Fang Li, Gholamreza Haffari, and Shirui Pan. Reasoning on graphs: Faithful and interpretable large language model reasoning. In International Conference on Learning Representations , 2024. 21 Costas Mavromatis and George Karypis. GNN-RAG: Graph neural retrieval for efficient large language model reasoning on knowledge graphs. In Findings of the Association for Computational Linguistics: ACL 2025 , pp. 16682–16699, Vienna, Austria, 2025. Association for Computational Linguistics. doi: 10.18653/v1/2025.findings-acl.856. Shirui Pan, Linhao Luo, Yufei Wang, Chen Chen, Jiapu Wang, and Xindong Wu. Unifying large language models and knowledge graphs: A roadmap. IEEE Transactions on Knowledge and Data Engineering , 36(7):3580–3599, 2024. doi: 10.1109/TKDE.2024.3352100. Tyler Thomas Procko and Omar Ochoa. Graph retrieval-augmented generation for large language models: A survey. In 2024 Conference on AI, Science, Engineering, and Technology (AIxSET) , pp. 166–169. IEEE, 2024. doi: 10.1109/AIxSET62544.2024.00030. David I. Shuman, Sunil K. Narang, Pascal Frossard, Antonio Ortega, and Pierre Vandergheynst. The emerging field of signal processing on graphs: Extending high-dimensional data analysis to networks and other irregular domains. IEEE Signal Processing Magazine , 30(3):83–98, 2013. doi: 10.1109/MSP.2012.2235192. Yuan Sui, Yufei He, Zifeng Ding, and Bryan Hooi. Can knowledge graphs make large language models more trustworthy? an empirical study over open-ended question answering. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 12685–12701, Vienna, Austria, 2025. Association for Computational Linguistics. doi: 10.18653/v1/2025.acl-long.622. Jiashuo Sun, Chengjin Xu, Lumingyuan Tang, Saizhuo Wang, Chen Lin, Yeyun Gong, Lionel Ni, Heung-Yeung Shum, and Jian Guo. Think-on-graph: Deep and responsible reasoning of large language model on knowledge graph. In International Conference on Learning Representations ,volume 2024, pp. 3868–3898, 2024. Alon Talmor and Jonathan Berant. The web as a knowledge-base for answering complex questions. In Proceedings of the 2018 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long Papers) , pp. 641–651, New Orleans, Louisiana, 2018. Association for Computational Linguistics. doi: 10.18653/v1/ N18-1059. Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed Chi, Quoc V Le, and Denny Zhou. Chain-of-thought prompting elicits reasoning in large language models. 
+
+Advances in Neural Information Processing Systems , 35:24824–24837, 2022. Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Thomas L. Griffiths, Yuan Cao, and Karthik Narasimhan. Tree of thoughts: Deliberate problem solving with large language models. Advances in Neural Information Processing Systems , 36, 2023a. Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik R Narasimhan, and Yuan Cao. ReAct: Synergizing reasoning and acting in language models. In International Conference on Learning Representations , 2023b. Michihiro Yasunaga, Hongyu Ren, Antoine Bosselut, Percy Liang, and Jure Leskovec. Qa-gnn: Reasoning with language models and knowledge graphs for question answering. In Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguis-tics: Human Language Technologies , pp. 535–546, Online, 2021. Association for Computational Linguistics. doi: 10.18653/v1/2021.naacl-main.45. 
+
+# A Coverage-Limited Hard Support and Finite-Slack Preservation 
+
+This and the following appendices provide technical supplements to the main perspective. They do not replace the KL-regularized posterior account in Section 7. They do not change the main thesis: evidence-relative grounding is analyzed through incomplete observation states, hard-grounding non-identifiability, KL-regularized posterior deformation, and finite-energy stability. 22 Proposition 11 (Coverage-limited hard support and finite-slack preservation) . Let ρ† be a candidate trajectory with p0 = pθ (ρ† | q) > 0. Let CR denote the event that the observed evidence state contains sufficient support for ρ†, and let c = Pr R(CR).Suppose a hard path-complete rule can retain ρ† only when CR occurs. Then 
+
+Pr  
+
+> R
+
+[ρ† ∈ FR(q; ϵ)] ≤ c. 
+
+Equivalently, hard retention is coverage-limited. Now suppose the soft energy is finite on ρ† and satisfies 
+
+ER(ρ†) ≤ B < ∞.
+
+If ER(ρ) ≥ 0 for all candidates, then for every finite λ ≥ 0,
+
+pRλ (ρ† | q) ≥ p0e−λB .
+
+Proof. The hard retention event is a subset of CR, giving the coverage bound. For the soft bound, nonnegativity of ER implies e−λE R(ρ) ≤ 1, so the normalizer is at most one. The numerator for ρ†
+
+is at least p0e−λB , proving the lower bound. 
+
+Expected hard-mass variant. The same coverage limitation can be stated at the posterior-mass level. Let ZH (R) = pθ (FR(q; ϵ) | q), and suppose the hard posterior is evaluated only when 
+
+ZH (R) > 0. If retaining ρ† implies the coverage event CR, then 
+
+ER
+
+pRH (ρ† | q)1{ZH (R) > 0} ≤ Pr  
+
+> R
+
+(CR) = c. 
+
+This bound is deliberately one-sided. It says that hard posterior mass for a correct but coverage-dependent trajectory cannot appear on evidence states in which the required support is absent. It does not assert a positive lower bound without additional assumptions on ZH (R) and the prior mass of feasible competitors. 
+
+Interpretation. The hard part isolates coverage as a first-order bottleneck. The soft part shows that finite slack prevents positive-prior trajectories with bounded missing-support cost from being deleted from posterior support. The lower bound is not a correctness guarantee and weakens as λ or B grows. 
+
+# B A Hoeffding-Style Bound for Averaged Evidence States 
+
+Proposition 12 (Averaged-evidence soft selection) . Let Γ be finite, with nonempty Γ+ ⊆ Γ containing correct answer-bearing trajectories and Γ− = Γ \ Γ+ nonempty. The partition (Γ +, Γ−) is defined by an external correctness criterion and is not induced by KG compatibility. Let R1, . . . , R m be independent evidence states and assume ERi (ρ) ∈ [0 , B ] almost surely for every i and ρ. Define 
+
+bEm(ρ) = 1
+
+m
+
+> m
+
+X
+
+> i=1
+
+ERi (ρ), bSm(ρ) = Lθ (ρ; q) + λ bEm(ρ),
+
+where Lθ is a deterministic prior cost and λ > 0. Let ¯S(ρ) = E[ bSm(ρ)] and suppose 
+
+γ = min 
+
+> ρ−∈Γ−
+
+¯S(ρ−) − min 
+
+> ρ+∈Γ+
+
+¯S(ρ+) > 0. (26) 
+
+Then every empirical minimizer bρm ∈ arg min ρ∈Γ bSm(ρ) belongs to Γ+ with probability at least 
+
+Pr( bρm ∈ Γ+) ≥ 1 − 2|Γ| exp 
+
+
+
+− mγ 2
+
+2λ2B2
+
+
+
+. (27) 
+
+Consequently, it is sufficient that 
+
+m ≥ 2λ2B2
+
+γ2 log 2|Γ|
+
+δ
+
+to obtain probability at least 1 − δ.
+
+23 Proof. For a fixed ρ, Hoeffding’s inequality gives 
+
+Pr 
+
+
+
+| bSm(ρ) − ¯S(ρ)| ≥ γ
+
+2
+
+
+
+≤ 2 exp 
+
+
+
+− mγ 2
+
+2λ2B2
+
+
+
+,
+
+because only λ bEm(ρ) is random. A union bound over Γ shows that, outside an event with probability at most the error term in Eq. (27), every score deviation is strictly less than γ/ 2. On this event, the empirically best trajectory in Γ+ has strictly smaller score than every trajectory in Γ− by Eq. (26). Hence every empirical minimizer lies in Γ+. Solving the tail bound for m yields the stated sufficient condition. 
+
+Interpretation. The result is relevant to repeated retrieval, multiple KG snapshots, or graph agents that aggregate several evidence-acquisition rounds. It is not a general answer-accuracy theorem: it assumes independent evidence states, bounded energies, and a positive expected score margin relative to a correctness partition defined outside the KG energy. Dependence across trajectories within one evidence state is allowed, but correlated evidence states require martingale, mixing, or other appropriate concentration tools. 
+
+# C Constraint-Strength Tradeoff 
+
+Proposition 13 (Constraint-strength tradeoff) . Let 
+
+Xλ ∈ arg min  
+
+> X
+
+{F (X) + λG (X)},
+
+where G(X) ≥ 0. Let 0 ≤ λ1 < λ 2 and assume minimizers Xλ1 , X λ2 exist and all displayed objective values are finite. Then 
+
+G(Xλ2 ) ≤ G(Xλ1 ), F (Xλ2 ) ≥ F (Xλ1 ).
+
+Proof. Optimality at λ1 and λ2 gives 
+
+F (Xλ1 ) + λ1G(Xλ1 ) ≤ F (Xλ2 ) + λ1G(Xλ2 ),F (Xλ2 ) + λ2G(Xλ2 ) ≤ F (Xλ1 ) + λ2G(Xλ1 ).
+
+Adding the inequalities gives (λ2 − λ1)[ G(Xλ2 ) − G(Xλ1 )] ≤ 0, proving the first claim. Substitution into the first optimality inequality proves the second. 
+
+Interpretation. When F is an LLM-prior or minimal-intervention cost and G is KG violation, larger 
+
+λ reduces measured graph violation but increases the cost of departing from the prior preference. Larger grounding strength is therefore not monotonically better. Coverage-aware calibration is necessary because a large λ can produce over-grounding when R is incomplete, stale, or noisy. 
+
+# D Unified Objective and Projection-Style Grounding 
+
+The main paper treats grounding as posterior deformation over a finite candidate set. The following complementary template is useful when the system revises a trajectory or semantic state directly. It is not an alternative main theory and does not assert that existing systems optimize all terms. Let Lθ (ρ; q) be an LLM prior cost, let ΩR(Xρ) be a relation-aware representation penalty, and suppose the displayed quantities and minimizers are well defined. A unified trajectory objective is 
+
+ρ⋆ ∈ arg min 
+
+> ρ∈T(q)
+
+Lθ (ρ; q) + λE R(Xρ; q) + β dist 2(Xρ, C R(q; ϵ)) + μΩR(Xρ) . (28) The four terms represent, respectively, LLM plausibility, graded evidence-relative support, displace-ment toward an evidence support region, and typed representation-level regularization. The support region remains relative to R and is not a truth set. Given an initial semantic trajectory X0, a projection-style revision operator can be written 
+
+P Rλ,μ (X0) ∈ arg min 
+
+> X
+
+ 12 dA(X, X 0)2 + λE R(X; q) + μΩR(X)
+
+
+
+. (29) 24 When one deliberately imposes a hard support set, the corresponding metric projection is 
+
+Proj CR(q;ϵ)(X0) ∈ arg min  
+
+> X∈CR(q;ϵ)
+
+dA(X, X 0)2. (30) Existence follows under the compactness conditions of Proposition 1; uniqueness requires additional geometry, such as a nonempty closed convex surrogate in a Hilbert space. 
+
+Interpretation. Projection is appropriate when a system revises one generated trajectory rather than reweights a finite candidate distribution. Equations (28)–(30) provide an interpretation of entity correction, relation-aware revision, and movement toward a declared support region. Hard projection inherits the coverage and completeness requirements analyzed in Section 6. No algorithmic or empirical claim is made here. 
+
+# E Set-Level Energy-Gap Suppression 
+
+Proposition 14 (Set-level energy-gap suppression) . Fix R and let nonempty B, S ⊆ Γ( q) have positive prior mass. Suppose there is ∆ > 0 such that 
+
+ER(ρb) ≥ ER(ρs) + ∆ for every ρb ∈ B, ρ s ∈ S. 
+
+Then 
+
+pRλ (B | q)
+
+pRλ (S | q) ≤ pθ (B | q)
+
+pθ (S | q) e−λ∆.
+
+Proof. Let mB = min ρb∈B ER(ρb) and MS = max ρs∈S ER(ρs). Finiteness of Γ and the assumed gap give mB ≥ MS + ∆ . Hence 
+
+pRλ (B | q) ≤ e−λm B pθ (B | q)
+
+ZR
+
+, pRλ (S | q) ≥ e−λM S pθ (S | q)
+
+ZR
+
+.
+
+Dividing and using the gap proves the result. 
+
+Interpretation. When reliable counter-support creates a uniform energy gap, a set of contradicted trajectories is exponentially suppressed relative to a supported set. The claim does not apply to merely unsupported trajectories. Contradiction dominance requires explicit counter-support or a calibrated contradiction energy; absence from R alone does not provide the premise. 
+
+# F Hard Conditioning under Complete Observed Support 
+
+Proposition 15 (Coverage-conditional amplification) . Let FR ⊆ Γ( q) be a hard feasible set with 
+
+ZHR = pθ (FR | q) > 0, and suppose the set of correct trajectories Γ+ satisfies Γ+ ⊆ FR. Define 
+
+pRH (ρ | q) = pθ (ρ | q)1{ρ ∈ FR}
+
+ZHR
+
+.
+
+Then 
+
+pRH (Γ + | q) = pθ (Γ + | q)
+
+ZHR
+
+≥ pθ (Γ + | q).
+
+The inequality is strict if positive prior mass is removed outside FR and pθ (Γ + | q) > 0.Proof. Because 0 < Z HR ≤ 1 and Γ+ ⊆ FR, conditioning divides the total prior mass of Γ+ by a quantity no greater than one. Strictness follows when ZHR < 1 and the numerator is positive. 
+
+Interpretation. Hard conditioning can amplify correct feasible trajectories when observed coverage is complete for them. This baseline does not contradict Theorem 1: the theorem concerns worlds in which a correct trajectory may be true but unobserved. The risk begins when the premise Γ+ ⊆ FR
+
+cannot be guaranteed. 25 G Spectral View of Classical Laplacian Smoothing 
+
+Proposition 16 (Spectral decomposition of Laplacian energy) . For a homogeneous undirected graph, let L = U ΛU ⊤ with eigenvalues 0 = λ1 ≤ · · · ≤ λn, and let bH = U ⊤H. Then 
+
+Tr( H⊤LH ) = 
+
+> n
+
+X
+
+> ℓ=1
+
+λℓ∥bhℓ∥22,
+
+where bhℓ is the ℓth row of bH.Proof. Substitute L = U ΛU ⊤ and use cyclic invariance of the trace: 
+
+Tr( H⊤LH ) = Tr( bH⊤Λ bH) = 
+
+> n
+
+X
+
+> ℓ=1
+
+λℓ∥bhℓ∥22.
+
+Interpretation. Classical Laplacian regularization suppresses high-frequency variation on a homo-geneous undirected graph, which is appropriate under a homophily assumption. Typed directed KGs generally require the relation-aware residual in Eq. (24) instead. This spectral observation supports the special-case comparison in Section 9; it is not central to the posterior theory. 26

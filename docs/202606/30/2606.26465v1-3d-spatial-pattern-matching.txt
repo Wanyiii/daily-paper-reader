@@ -1,0 +1,353 @@
+Title: 3D Spatial Pattern Matching
+
+URL Source: https://arxiv.org/pdf/2606.26465v1
+
+Published Time: Fri, 26 Jun 2026 00:19:20 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# 3D Spatial Pattern Matching 
+
+## Nicole R. Schneider 
+
+nsch@umd.edu University of Maryland College Park, USA 
+
+## Avik Das 
+
+adas1236@terpmail.umd.edu University of Maryland College Park, USA 
+
+## Lukas Arzoumanidis 
+
+lukas.arzumanidis@hcu-hamburg.de HafenCity University Hamburg, Germany 
+
+## Abhijeet Ghodgaonkar 
+
+aghodgao@terpmail.umd.edu University of Maryland College Park, USA 
+
+## Hanan Samet 
+
+hjs@cs.umd.edu University of Maryland College Park, USA 
+
+## Youness Dehbi 
+
+youness.dehbi@hcu-hamburg.de HafenCity University Hamburg, Germany 
+
+## Abstract 
+
+Spatial pattern matching is the process of matching query entities and constraints with database entities and relations. It has many ap-plications, including similar region search, housing market search, landmark search, and road network matching. To our knowledge, all existing spatial pattern matching approaches frame the problem in a 2 dimensional space, where entities lie in a cartesian plane and relationships defined between them are contained in 2 dimensions. However, this problem framing has significant limitations when searching for real world entities that have height in addition to posi-tion. To address this limitation, we extend spatial pattern matching to 3 dimensions and provide a generalized definition of the problem. We describe a subgraph matching algorithm capable of resolving 3D spatial patterns over distance relations and release two 3D spatial pattern matching datasets, one synthetic and one containing real 3D building data from the city of Hamburg, Germany. We test our subgraph matching algorithm on both datasets and present results as a baseline for future methods to build upon. 
+
+## 1 Introduction 
+
+Spatial pattern matching is the process of matching query entities and constraints with database entities and relations. It has many ap-plications, including similar region search, housing market search, landmark search, and road network matching [ 17 ]. To our knowl-edge, all existing spatial pattern matching approaches frame the problem in a 2 dimensional space, where entities lie in a cartesian plane and relationships defined between them are similarly con-tained in 2 dimensions. Semantically enriched building features such as doors and windows provide useful spatial context that cannot be captured using 2D spatial pattern matching. However, the 2-dimensional framing of the problem has signifi-cant limitations when searching for real world entities that have height in addition to position, because they exist in 3-dimensional space. To illustrate the limitation of 2 dimensional spatial pattern matching, consider the landmark search use case for the prob-lem [ 13 , 14 ], where a user may recall spatial features at different heights, especially in a dense urban area with tall buildings. For example, in Figure 1, a bird-watcher looking out a window might see about 15 meters away a bench, tree, and birdhouse which hangs from the tree. With 2D spatial pattern matching, the query for such a scene would be limited to 2 dimensional distances between the d  
+
+> D
+> window
+> bird
+> house tree
+> bench
+> Scene
+> 3D Pattern
+> Observation
+> D: bench <-> person = 15
+> meters in 3D space
+> d: bench <-> person = 5
+> meters in 2D space
+> D >> d
+
+Figure 1: A person looking out window or from ground level may appear co-located in 2D, yet have substantially different distances to other objects in a 3D scene. Since vertical distance influences spatial relationships, we generalize spatial pattern matching into 3 dimensions to support richer search. 
+
+building (ground level) to the objects in the scene, incorrectly cap-turing the user’s distance estimate, and failing to capture the role of height in the spatial scene. 
+
+2D Query Constraints       
+
+> 1(bench, building, ? )
+> 2(birdhouse, building, ? )
+> 3(tree, building, ? )
+> 4(bench, birdhouse, 1 to 3 meters)
+> 5(birdhouse, tree, 1 to 3 meters)
+> 6(bench, tree, 1 to 3 meters)
+
+Here, the first relations involving the user’s viewpoint from the building’s window, cannot be defined in 2 dimensional space, so they get compressed to ground level. However, the user does not know the approximate distance between the bench and the building at ground level, since their perspective is from a tall window. Even if the user could estimate the distance in the 2D projection of the scene, the scene itself forms a non-planar graph that is not satisfiable using 2D dimensional spatial pattern search. The 3D spatial pattern version of the same query matches the scene accurately, capturing 
+
+> arXiv:2606.26465v1 [cs.DB] 25 Jun 2026 Nicole R. Schneider, Avik Das, Lukas Arzoumanidis, Abhijeet Ghodgaonkar, Hanan Samet, and Youness Dehbi
+
+the height of the building implicitly as part of the window distance constraints in the query. 
+
+3D Query Constraints       
+
+> 1(bench, window, 14 to 16 meters)
+> 2(birdhouse, window, 14 to 16 meters)
+> 3(tree, window, 14 to 16 meters)
+> 4(bench, birdhouse, 1 to 3 meters)
+> 5(birdhouse, tree, 1 to 3 meters)
+> 6(bench, tree, 1 to 3 meters)
+
+To address the present 2D limitation of spatial pattern matching, we extend the problem to 3 dimensions and provide a subgraph matching algorithm 1 capable of resolving 3D spatial patterns over distance relations. To aid in further research, we also release two 3D spatial pattern matching datasets, one synthetic and one containing real 3D building data from the city of Hamburg in Germany. We test our subgraph matching algorithm on both datasets and present results as a baseline for future methods to build upon. 
+
+## 2 Problem Definition 
+
+Metric spatial pattern matching is a search over metric relations that characterize how far apart entities are in space [ 16 ]. We define metric relations between entities as ranges of distances between entities, each defined by a distance interval and a sign {exclusion in, exclusion out, mutual exclusion and multiple inclusion} [8]. 
+
+Definition 1 (Spatial Query Pattern). A spatial query pattern is a graph 𝑃 = 𝑃 (𝑉 , 𝐸 ) of spatial objects 𝑉 and edges 𝐸 . For each 𝑣 𝑖 ∈
+
+𝑉 , there is an associated keyword 𝑤 𝑖 and for each edge 𝑒 𝑖,𝑗 = (𝑣 𝑖 , 𝑣 𝑗 ) ∈ 
+
+𝐸 , there is an interval [ℓ𝑖,𝑗 , 𝑢 𝑖,𝑗 ] and a sign 𝜎 ∈ {← , →, ↔, −} .Let 𝑜 𝑠 and 𝑜 𝑡 be any two objects matched with (𝑣 𝑖 , 𝑣 𝑗 ), i.e., they have keywords 𝑤 𝑖 and 𝑤 𝑗 respectively and satisfy the spatial constraints. Then, following the convention in Fang et al. [8], the signs mean: 
+
+• 𝑣 𝑖 → 𝑣 𝑗 [𝑣 𝑖 excludes 𝑣 𝑗 ]: No object with keyword 𝑤 𝑗 in 𝐷 
+
+should have a distance less than ℓ𝑖,𝑗 from 𝑜 𝑠 .
+
+• 𝑣 𝑖 ← 𝑣 𝑗 [𝑣 𝑗 excludes 𝑣 𝑖 ]: No object with keyword 𝑤 𝑖 in 𝐷 
+
+should have a distance less than ℓ𝑖,𝑗 from 𝑜 𝑡 .
+
+• 𝑣 𝑖 ↔ 𝑣 𝑗 [mutual exclusion ]: No object with keyword 𝑤 𝑗 in 𝐷 
+
+should have a distance less than ℓ𝑖,𝑗 from 𝑜 𝑠 , and the distance of any object with keyword 𝑤 𝑖 in 𝐷 should be at least ℓ𝑖,𝑗 
+
+from 𝑜 𝑡 .
+
+• 𝑣 𝑖 − 𝑣 𝑗 [mutual inclusion ]: The occurrence of any object pairs (other than 𝑜 𝑠 and 𝑜 𝑡 ) with keywords 𝑤 𝑖 and 𝑤 𝑗 in 𝐷 with distance shorter than ℓ𝑖,𝑗 is allowed. 
+
+Definition 2 (Spatial Database). For our purposes, a spatial database is a weighted graph 𝐷 = 𝐷 (𝑉 , 𝐸 ) of spatial objects 𝑉 and edges 𝐸 such that for each object 𝑣 𝑖 ∈ 𝑉 , there is an associated set of keywords 𝑊 𝑖 .
+
+Definition 3 ( 𝑘 -Dimensional Metric Spatial Database). To say a spatial database 𝐷 is 𝑘 -dimensional is to assert there is an isometric embedding 𝐷 ↩→ R𝑘 .
+
+> 1https://github.com/adas1236/SpatialPatternMatching3d
+
+## 3 Related Work 3.1 2D Metric Spatial Pattern Matching 
+
+Spacekey [6– 8] proposes Multi-Pair Join and Multi-Star Join which use subgraph matching for spatial pattern search over metric rela-tions. Their Multi-Pair-Join algorithm has a worst-case complexity 
+
+O(| 𝑃 |𝜁 |𝐷 |2 + 𝜉 ) where 𝜁 is a sampling threshold in range [0, 1] and 
+
+𝜉 is the maximal number of partial matches. Their Multi-Star-Join algorithm has a worst-case complexity of O(| 𝐷 |4 + | 𝑃 || 𝐷 |2 + 𝜉 )
+
+time, but in practice is faster than the Multi-Pair-Join because it uses additional pruning criteria to eliminate partial matches during the join process [8]. 
+
+ESPM: Efficient Spatial Pattern Matching [ 3] also performs spatial pattern matching over metric relations, but extends the work of Fang et al . [ 8 ] by adding a step that uses a set of Inverted Linear Quadtrees, one per entity keyword, to prune unpromising edges before running Multi-Star-Join. By eliminating unpromising nodes early and carefully constructing the join order, ESPM scales better than Multi-Star-Join, despite having a similar theoretical worst-case complexity that is still exponential in the number of query entities. Other metric spatial pattern matching approaches use example pattern queries that require the user identify existing patterns from the database to use for search [ 4 , 10 , 20 ]. This form of the problem is well suited for similar region search, but is ill-suited to other use cases, like location recall and landmark search, where the user vaguely recalls a place and hopes to find it again. These methods are also 2-dimensional in nature, since the examples are selected from a 2D map. Mapping the example-based spatial pattern matching paradigm into 3 dimensions using our problem definition is an interesting area of future work. 
+
+## 3.2 3D Spatial Data Structures 
+
+Many spatial data structures have been designed for 3D data in metric space, as described by Samet [ 15 ]. Examples include the Octree [ 11 ], the Vantage-Point Tree [ 19 ], and the M-Tree [ 5 ] which are designed to support proximity queries for nearest neighbor search in generalized metric spaces. We leverage the Octree in our implementation of the 3D spatial pattern matching algorithm. 
+
+## 3.3 3D City Modeling 
+
+CityGML is an Open Geospatial Consortium (OGC) standard 2 for the representation, storage, and exchange of semantic 3D city mod-els and constitutes one of the fundamental data models for urban digital twins. In contrast to conventional 3D city models, which pri-marily focus on geometric or graphical representations, CityGML integrates semantic, topological, geometric, and appearance-related properties of urban objects within a unified data model. Enrichment and reconstruction of semantic 3D city models from sparse and dense observations is an active research area. Exam-ples include the estimation of building storeys from single street-view images [ 2 ] and street-level facade openings from dense point clouds [ 18 ]. Other works, such as Nguyen et al. [ 12 ] detect spatio-semantic changes between large CityGML models by representing each model as a graph and comparing the properties and geom-etry of corresponding nodes. This addresses matching in 3D city 
+
+> 2https://www.ogc.org/standards/citygml/ 3D Spatial Pattern Matching
+
+models represented as semantic graphs rather than as purely geo-metric objects and explicitly incorporates spatial proximity through Euclidean distance when matching points. 
+
+## 4 Method 4.1 Insight 
+
+In the simplest case, using a naive brute force subgraph matching al-gorithm, the 𝑘 -D spatial pattern matching problem can be solved by trivially extending the distance formula 𝑑 =√︁ (𝑥 2 − 𝑥 1)2 + ( 𝑦 2 − 𝑦 1)2
+
+to 𝑘 dimensions: 
+
+𝑑 =
+
+ Í𝑘 𝑖 =1 (𝑥 (𝑖 ) 
+
+> 2
+
+− 𝑥 (𝑖 ) 
+
+> 1
+
+)2
+
+1/2
+
+(1) However, this is impractical, since the problem is NP-hard [ 8], and all recent approaches in the 2D case use spatial indexes and careful join order to efficiently solve the problem. We introduce 2 key insights that allow us to adapt the existing 2D metric spa-tial pattern matching algorithms [ 3] to work in arbitrarily many dimensions. (1) Extending the minimum bounding rectangle to a minimum bounding rectangular prism. (2) Replacing the Inverted Linear Quadtree with an Inverted Hyperoctree. With these adjustments, spatial indexing can be used to effi-ciently prune candidates and determine matches in 𝑘 -dimensions. 
+
+Algorithm 1 𝑘 -dimensional SPM 
+
+Require: 𝐼𝐻𝑂 , 𝑃 ⊲ Inverted Hyperoctree 𝐼𝐻𝑂 , Pattern 𝑃  
+
+> 1:
+
+for 𝑙 ← 1 to 𝐿 do  
+
+> 2:
+
+Derive the order 𝑂 𝑙 of computing 𝑛 -matches;  
+
+> 3:
+
+for each edge 𝑒 in 𝑂 𝑙 do  
+
+> 4:
+
+Prune unpromising nodes;  
+
+> 5:
+
+Compute the 𝑛 -matches for 𝑒 ; 
+
+> 6:
+
+end for  
+
+> 7:
+
+end for  
+
+> 8:
+
+Derive the order 𝑂 of computing 𝑒 -matches;  
+
+> 9:
+
+Identify skip-edges by using 𝑂 ; 
+
+> 10:
+
+for each edge 𝑒 in 𝑂 do  
+
+> 11:
+
+if 𝑒 is not a skip edge then  
+
+> 12:
+
+Prune unpromising objects;  
+
+> 13:
+
+Compute the 𝑒 -matches for 𝑒 ; 
+
+> 14:
+
+end if  
+
+> 15:
+
+end for  
+
+> 16:
+
+Derive the order Γ of joining 𝑒 -matches;  
+
+> 17:
+
+Ψ ← join 𝑒 -matches following the order Γ; 
+
+> 18:
+
+return Ψ ⊲ all the matches of 𝑃 
+
+## 4.2 𝑘 -D Spatial Pattern Matching Algorithm 
+
+Following ESPM [ 3], we first compute n-matches for edges level by level, then compute e-matches for edges, and finally join e-matches to compute all the matches of the spatial pattern. Our 𝑘 -dimensional Spatial Pattern Matching method (Algorithm 1) takes as input a spatial pattern P and the Inverted Hyperoctree 𝐼𝐻𝑂 = {𝐼𝐻𝑂 𝑖 },where 𝐼𝐻𝑂 𝑖 is the Octree of keyword 𝑤 𝑖 for all objects in a set 𝐷 .
+
+Definition 4 ( 𝑛 -match). Let 𝑛 𝑖 and 𝑛 𝑗 be two nodes in 𝐼𝐻𝑂 𝑖 
+
+and 𝐼𝐻𝑂 𝑗 respectively, and 𝑏 𝑖 and 𝑏 𝑗 be their Minimum Bounding Rectangular Prisms (MBRPs). The node pair (𝑛 𝑖 , 𝑛 𝑗 ) is an 𝑛 -match for the edge (𝑣 𝑖 , 𝑣 𝑗 ) if 
+
+• Case 𝑣 𝑖 − 𝑣 𝑗 : 𝑑 min (𝑏 𝑖 , 𝑏 𝑗 ) ≤ 𝑢 𝑖 𝑗 and 𝑑 max (𝑏 𝑖 , 𝑏 𝑗 ) ≥ 𝑙 𝑖 𝑗 , where 
+
+𝑑 min (·) and 𝑑 max (·) are the minimum and maximum dis-tances using equation 1 between two MBRPs respectively. 
+
+• Case 𝑣 𝑖 → 𝑣 𝑗 : There is no node 𝑛 ′ 
+
+> 𝑗
+
+∈ 𝐼𝑂 𝑗 (≠ 𝑛 𝑗 ) such that 
+
+𝑑 max (𝑏 𝑖 , 𝑏 ′ 
+
+> 𝑗
+
+) < 𝑙 𝑖 𝑗 .
+
+Definition 5 ( 𝑒 -match). A pair of objects 𝑜 𝑠 , 𝑜 𝑡 ∈ 𝐷 is an 𝑒 -match for the edge 𝑒 = (𝑣 𝑖 , 𝑣 𝑗 ) ∈ 𝐸 , if 𝑜 𝑠 and 𝑜 𝑡 have keywords 𝑤 𝑖 
+
+and 𝑤 𝑗 respectively, and they satisfy the spatial constraints of 𝑒 .
+
+Lemma 4.1. Let 𝐷 be a set of spatial objects and let 𝑃 = 𝑃 (𝑉 , 𝐸 )
+
+be a spatial pattern. For each keyword 𝑤 𝑖 , let 𝐷 𝑖 be the set of all objects with keyword 𝑤 𝑖 . Let |𝐷 𝑤 | = max {| 𝐷 𝑖 | : 𝑤 𝑖 is a keyword }.Then 𝑘 -dimensional SPM takes 𝑂  𝑘 4𝑘 |𝐷 𝑤 |2 + 𝑘 |𝐷 𝑤 |𝑛  time, where 
+
+𝑛 = |𝑉 | and 𝑚 = |𝐸 |.
+
+Proof. In 𝑘 -dimensional space, the inverted quadtree of ESPM [ 3]is generalized to an inverted hyperoctree, where each node has 
+
+2𝑘 children. Thus, each surviving node pair generates at most 
+
+2𝑘 · 2𝑘 = 4𝑘 child-node pairs. This means the 𝑛 -match computation takes time 𝑂 
+
+
+
+𝑘𝑚 4𝑘   |𝐷 𝑤 |
+
+> 𝑠
+
+2 
+
+, the 𝑒 -match computation takes time 
+
+𝑂 (𝑘𝑚 |𝐷 𝑤 |2), and the joining of 𝑒 -matches takes time 𝑂 (𝑘 |𝐷 𝑤 |𝑛 ),where the estimates are obtained from Chen et al . [3] , and the lin-ear factor of 𝑘 is due to the linear time to compute distance or check geometric constraints in 𝑘 -dimensional space. As in Chen et al . [3] , we typically have 𝑛, 𝑚 ≪ | 𝐷 𝑤 | and 𝑛 ≥ 2. Thus, the total computation time is 𝑂  𝑘 4𝑘 |𝐷 𝑤 |2 + 𝑘 |𝐷 𝑤 |𝑛 . □
+
+## 5 Experiments 5.1 Datasets 
+
+We perform experiments on both synthetic and real-world 3D data. 
+
+Synthetic Dataset. We devise 4 synthetic datasets consisting of 10,000, 100,000, 1 Million, and 10 Million objects, respectively, with each object being a point in a cubic domain with one to three key-word class labels. For each dataset we vary sparsity by adjusting the domain size and the keyword frequency, giving 12 configurations in total. We devise 20 unique query pattern structures and aggregate results over them, measuring total time and peak RAM. 
+
+Hamburg Dataset. To evaluate our algorithm in a real urban environment, the underlying city model must provide a semanti-cally rich representation of buildings, streets, and urban furniture. Representations derived solely from the extrusion of 2D footprints, such as those in OpenStreetMap, are inadequate because they lack detailed semantic and geometric information, like facade structures, roof characteristics, openings, materials, and other object-level at-tributes that distinguish between otherwise similar geometries. Our Hamburg dataset is based on the Level of Detail 2 (LOD2) semantic 3D city model of Hamburg, Germany 3, provided in the CityGML format [ 9 ]. The original CityGML data were translated into a prop-erty knowledge graph and subsequently loaded into a Neo4j graph 
+
+> 3https://geoportal-hamburg.de/?map=3D
+
+Nicole R. Schneider, Avik Das, Lukas Arzoumanidis, Abhijeet Ghodgaonkar, Hanan Samet, and Youness Dehbi 
+
+database, enabling knowledge extraction and graph manipulation using the 3DCityKG framework 4. The city model was provided by the State Office for Geoinformation and Surveying of Hamburg. It includes information on roof type, roof height, building height, building use, the number of storeys, and the 3D location of all modeled building parts. We enrich the knowledge graph with ad-ditional building attributes, including roof material information following the methodology proposed by Arzoumanidis et al . [1] 5.3D data on trees was also provided by the Geoinformation and Surveying of Hamburg 6. We also add approximately 20 individual street-level facade openings, including windows and doors. We devise 5 unique query pattern structures and aggregate results over them, measuring total time and peak RAM. 
+
+## 5.2 Algorithm and Hardware Settings 
+
+For the Octree, we set the minimum depth to 1, the maximum depth to 12, and the splitting threshold to 64. The algorithm is implemented in Python, without using libraries. We compute the first 1000 matches for each query. All experiments are run using 32 CPUs and 249GB RAM. 
+
+## 5.3 Results 
+
+We present results on both the real and synthetic datasets in Table 1. Scalability tests on synthetic data up to 10 million objects show good performance for sparse and medium sparsity datasets (total 20 to an hour minutes to evaluate all queries for each setting). On dense datasets, we run into memory issues. This is because the dense settings leads to less selective pruning, resulting in far more node pairs to analyze for 𝑒 -matches. On the real Hamburg data, we complete all queries in about 4 minutes with reasonable memory utilization. Since we propose the first 3D spatial pattern matching method, our results focus on scalability testing rather than com-parison to any known baseline. We find that the algorithms we adapt are efficient for sparse and medium density graphs, but have memory limitations on dense graphs. We suggest memory efficient 3D spatial pattern matching as a useful line of future research. 
+
+## 6 Conclusion 
+
+This paper extends the spatial pattern matching problem to 𝑘 -dimensions and proposes a subgraph matching algorithm for arbi-trary dimensions capable of resolving spatial patterns over distance relations. We demonstrate the scalability of our algorithm on two datasets that we construct and open source, including both syn-thetic data and real building height data from the city of Hamburg, Germany. 
+
+## References 
+
+[1] Lukas Arzoumanidis, Son H. Nguyen, Lara Johannsen, Filip Rothaut, Weilian Li, and Youness Dehbi. 2025. Object Detection for the Enrichment of Semantic 3D City Models with Roofing Materials. ISPRS Annals of the Photogrammetry, Remote Sensing and Spatial Information Sciences X-4/W6-2025 (2025), 9–16. doi:10.5194/ isprs-annals-X-4-W6-2025-9-2025 [2] Lukas Arzoumanidis, Al Maimun As Samee, Elmehdi Kanna, Son Nguyen, and Youness Dehbi. 2026. Domain-Adaptive Object Detection for Enriching Semantic 
+
+> 4
+
+https://github.com/tum-gis/3dcitykg 
+
+> 5
+
+https://zenodo.org/records/18896614 
+
+> 6
+
+https://metaver.de/trefferanzeige?docuuid=24513F73-D928-450C-A334-E30037945729&q=Baeume%20Hamburg                                       
+
+> Synthetic Sparse Medium Dense
+> |𝐷 |Time (s) Peak RAM (GB) Time (s) Peak RAM (GB) Time (s) Peak RAM (GB)
+> 10K 0.72 0.0 0.39 0.0 0.31 0.0 100K 18.45 0.1 10.24 0.1 23.38 0.3 1M 115.96 0.6 106.42 0.6 OOM OOM 10M 1232.15 5.7 3786.64 217.8 OOM OOM
+> Hamburg
+> |𝐷 |Time (s) Peak RAM (GB)
+> 628,477 246.83 6.6
+
+Table 1: Scalability results. Out of memory marked OOM. 
+
+3D City Models with Building Storeys from Street-View Images. https://repos. hcu-hamburg.de/handle/hcu/1248 [3] Hongmei Chen, Yixiang Fang, Ying Zhang, Wenjie Zhang, and Lizhen Wang. 2019. ESPM: Efficient spatial pattern matching. IEEE Transactions on Knowledge and Data Engineering 32, 6 (2019), 1227–1233. [4] Yue Chen, Kaiyu Feng, Gao Cong, and Han Mao Kiah. 2022. Example-based spatial pattern matching. Proceedings of the VLDB Endowment 15, 11 (2022), 2572–2584. [5] Paolo Ciaccia, Marco Patella, and Pavel Zezula. 1997. M-tree: An E cient access method for similarity search in metric spaces. In Proceedings of the 23rd VLDB conference, Athens, Greece . 426–435. [6] Yixiang Fang, Reynold Cheng, Gao Cong, Nikos Mamoulis, and Yun Li. 2018. On spatial pattern matching. In 2018 IEEE 34th International Conference on Data Engineering (ICDE) . IEEE, 293–304. [7] Yixiang Fang, Reynold Cheng, Jikun Wang, Lukito Budiman, Gao Cong, and Nikos Mamoulis. 2018. SpaceKey: exploring patterns in spatial databases. In 2018 IEEE 34th International Conference on Data Engineering (ICDE) . IEEE, 1577–1580. [8] Yixiang Fang, Yun Li, Reynold Cheng, Nikos Mamoulis, and Gao Cong. 2019. Evaluating pattern matching queries for spatial databases. The VLDB Journal 28 (2019), 649–673. [9] Gerhard Gröger, Thomas H. Kolbe, Claus Nagel, and Karl-Heinz Häfele. 2012. 
+
+OGC City Geography Markup Language (CityGML) Encoding Standard . Open Geospatial Consortium (OGC). OGC 12-019, Version 2.0.0, International Standard. [10] Siqiang Luo, Jiafeng Hu, Reynold Cheng, Jing Yan, and Ben Kao. 2017. Seq: Example-based query for spatial objects. In Proceedings of the 2017 ACM on Conference on Information and Knowledge Management . 2179–2182. [11] Donald Meagher. 1982. Geometric modeling using octree encoding. Computer graphics and image processing 19, 2 (1982), 129–147. [12] Huynh Duc An Son Nguyen. 2024. Automatic Detection and Interpretation of Changes in Massive Semantic 3D City Models . Ph. D. Dissertation. Technical University of Munich. https://mediatum.ub.tum.de/1748695 [13] Kent O’Sullivan, Nicole R. Schneider, Aleeza Rasheed, and Hanan Samet. 2023. GESTALT: Geospatially Enhanced Search with Terrain Augmented Location Targeting. In Proceedings of the 2nd ACM SIGSPATIAL International Workshop on Searching and Mining Large Collections of Geospatial Data (Hamburg, Germany) 
+
+(GeoSearch’23) . Association for Computing Machinery. [14] Kent O’Sullivan, Nicole R. Schneider, and Hanan Samet. 2023. COMPASS: Cardi-nal Orientation Manipulation and Pattern-Aware Spatial Search. In Proceedings of the 2nd ACM SIGSPATIAL International Workshop on Searching and Mining Large Collections of Geospatial Data (Hamburg, Germany) (GeoSearch’23) . Association for Computing Machinery. [15] Hanan Samet. 2006. Foundations of multidimensional and metric data structures .Morgan Kaufmann. [16] Nicole R. Schneider, Kent O’Sullivan, and Hanan Samet. 2024. Graph-based Spatial Pattern Matching: A Theoretical Comparison. In Proceedings of the 32nd ACM International Conference on Advances in Geographic Information Systems 
+
+(Atlanta, GA, USA) (SIGSPATIAL ’24) . Association for Computing Machinery, New York, NY, USA, 505–508. doi:10.1145/3678717.3691227 [17] Nicole R. Schneider, Kent O’Sullivan, and Hanan Samet. 2024. The Future of Graph-based Spatial Pattern Matching (Vision Paper). In 40th IEEE International Conference on Data Engineering, ICDE 2024 – SEAGraph Workshop . IEEE, IEEE, Utrecht, Netherlands, 360–364. [18] Wenzhao Tang, Weihang Li, Xiucheng Liang, Olaf Wysocki, Filip Biljecki, Christoph Holst, and Boris Jutzi. 2025. Texture2LoD3: Enabling LoD3 Building Re-construction With Panoramic Images. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops . 2041–2051. [19] Peter N. Yianilos. 1993. Data structures and algorithms for nearest neighbor search in general metric spaces. In Proceedings of the Fourth Annual ACM-SIAM Symposium on Discrete Algorithms (Austin, Texas, USA) (SODA ’93) . Society for Industrial and Applied Mathematics, USA, 311–321. [20] Hanyuan Zhang, Siqiang Luo, Jieming Shi, Jing Nathan Yan, and Weiwei Sun. 2022. Example-based Spatial Search at Scale. In 2022 IEEE 38th International 3D Spatial Pattern Matching 
+
+Conference on Data Engineering (ICDE) . 539–551. doi:10.1109/ICDE53745.2022. 00045

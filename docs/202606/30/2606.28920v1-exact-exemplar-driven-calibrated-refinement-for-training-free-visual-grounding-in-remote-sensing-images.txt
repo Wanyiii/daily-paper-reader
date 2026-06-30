@@ -1,0 +1,600 @@
+Title: ExACT: Exemplar-Driven Calibrated Refinement for Training-Free Visual Grounding in Remote Sensing Images
+
+URL Source: https://arxiv.org/pdf/2606.28920v1
+
+Published Time: Tue, 30 Jun 2026 00:44:17 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+## ExACT: Exemplar-Driven Calibrated Refinement for Training-Free Visual Grounding in Remote Sensing Images 
+
+Zixiao Zhang 
+
+Xidian University zhangzx1999@stu.xidian.edu.cn 
+
+Lingling Li 
+
+Xidian University llli@xidian.edu.cn 
+
+Pei He 
+
+Xidian University hepei@stu.xidian.edu.cn 
+
+Xu Liu 
+
+Xidian University xuliu361@163.com 
+
+Licheng Jiao 
+
+Xidian University lchjiao@mail.xidian.edu.cn 
+
+Abstract 
+
+Remote sensing visual grounding (RSVG) aims to locate specific objects in high-resolution RS imagery using free-form natural lan-guage descriptions. While recent advances in multimodal large language models (MLLMs) show great potential for such open-vocabulary RSVG, their training-free adaptation is hindered by the modality gap between abstract linguistic semantics and fine-grained visual cues. In cluttered RS scenes, this gap inevitably causes severe localization drift. To bridge this gap, we propose Ex empl ar-driven 
+
+Calibrated Refinemen t (ExACT ), a novel training-free framework driven by a one-shot visual prompting mechanism to explicitly provide discriminative structural guidance for precise pixel-level localization. Specifically, we propose a Vision Exemplar-based Cali-brator (VEC) that extracts fine-grained visual correspondences from the given exemplar to rectify the rough cross-modal priors from frozen MLLMs, effectively suppressing background artifacts and accurately outlining target boundaries. Subsequently, a Structure-Aware Refiner (SAR) employs an iterative merge-and-select cluster-ing strategy to consolidate the calibrated priors into high-quality positive and negative geometric prompts. These prompts then guide the Segment Anything Model (SAM) to achieve precise pixel-level predictions. Extensive experiments confirm the superiority of Ex-ACT over existing training-free and weakly-supervised methods. All the source codes will be made publicly available. 
+
+CCS Concepts 
+
+• Computing methodologies → Scene understanding ;
+
+Keywords 
+
+Remote Sensing Visual Grounding, Training-free, Multi-Modal Large Language Models, Visual Prompting 
+
+1 Introduction 
+
+Remote sensing visual grounding (RSVG) aims to locate queried objects in high-resolution RS imagery based on natural language descriptions [ 32 ]. This advanced task allows users to interactively explore geographic structures and spatial relationships in RS scenes, playing a vital role in applications such as ecological protection[ 30 ], disaster surveillance[ 4], and urban planning[ 38 ]. Early studies[ 2,15 , 18 , 27 , 33 ] employed fully supervised methods to learn visual-linguistic alignment and produce box- or pixel-level predictions. However, these methods heavily depend on labor-intensive an-notated datasets. Furthermore, their closed-set nature limits their Calibrated Prior 
+
+MLLM   
+
+> Visual Exemplar
+> （a）Existing training-free RSVG methods
+> （b）ExACT (ours)
+> A gray overpass
+> in the middle
+> Structure-Aware
+> Vanilla Attention Map Vanilla Attention Map
+> Localization Drift
+> Precise Grounding
+> A gray overpass
+> in the middle
+> Vision Exemplar-Based
+> Calibrator Refiner
+> Prediction Ground Truth
+> Exemplar Mask
+
+MLLM 
+
+Figure 1: The motivation of our ExACT. (a) Relying solely on linguistic queries, current training-free methods lack ex-plicit visual constraints, leading to severe localization drift. (b) ExACT introduces a visual exemplar for discriminative structural guidance. The VEC rectifies noisy attention maps into calibrated priors, which the SAR then consolidates to achieve precise pixel-level grounding. 
+
+ability to generalize to out-of-distribution objects. To move be-yond fixed categories and enable open-vocabulary perception, re-cent research has employed multimodal large language models (MLLMs)[29] to visually ground language queries [7, 11, 31]. Leveraging extensive world knowledge and strong instruction-following abilities of MLLMs, recent RSVG models[ 10 – 12 , 22 , 26 ,37 ] have become a leading paradigm, generally divided into two streams: supervised training-based and training-free inference. The first stream focuses on RS-specific grounding MLLMs, which typ-ically treat visual grounding as a next-token-prediction task, ei-ther representing bounding box coordinates as discrete text to-kens or predicting special tokens to encode segmentation masks [ 10 , 11 , 22 , 23 , 37 ]. However, to perform well, they rely heavily  
+
+> arXiv:2606.28920v1 [cs.CV] 27 Jun 2026 Conference’17, July 2017, Washington, DC, USA Zhang et al.
+
+on extensive supervised fine-tuning or multitask instruction tun-ing to adapt generalist models to the RS domain. Conversely, to avoid training overhead, the second stream explores training-free inference methods pioneered by RSVG-ZeroOV [ 12 ]. This approach uses cross-attention maps from frozen MLLMs and incorporates self-attention maps from off-the-shelf diffusion models (DMs) [ 24 ]to enhance the structural details required for pixel-level localization without modifying any parameters. Despite the elegance of existing training-free methods, they still face a critical bottleneck: relying on the textual query as the only signal. Linguistic cues naturally encode sparse information, often failing to convey the fine-grained visual details necessary to de-lineate precise object boundaries or distinguish subtle appearance differences. For example, “a gray overpass in the middle” cannot help the model understand the physical boundary of “overpass” or clarify the implicit differences between “overpass” and “roads”. In cluttered RS scenes, this modality gap inevitably triggers spatio-semantic misalignment , ultimately leading to severe localization drift. As shown in Figure. 1(a), this misalignment manifests in the language-guided localization priors (i.e., vanilla attention maps from MLLMs) through two notable issues: coordinate-driven bias 
+
+and high-activation artifacts . Driven by coordinate-based regres-sion objectives, the textual attention tends to overfit to bounding-box edges rather than to the object’s actual physical extent. Fur-thermore, due to unconstrained global-context reasoning, high activations are frequently misallocated to irrelevant backgrounds. While recent training-free methods employ structural priors from off-the-shelf DMs to recover object shapes, they fail to resolve this fundamental flaw. As DMs are inherently generative and prioritize low-level spatial continuity, their unconstrained priors lack discrim-inative semantic awareness. Without explicit visual constraints, the model struggles to disentangle the target from visually similar sur-roundings. For instance, querying a “gray overpass” often causes activations to incorrectly extend into connected roads, leading to severe boundary leakage . Ultimately, relying solely on language prompts leads to semantic ambiguity and geometric uncertainty, especially in complex geospatial scenes. Motivated by the insight that “a picture is worth a thousand words” [ 6 ], we investigate how visual exemplars can provide the discriminative structural priors that purely text-guided models lack. Specifically, leveraging the powerful feature representations of vi-sion foundation models (VFMs) such as DINOv3[ 1], we can establish dense visual correspondences by matching all patch-level features of the target image against the prompted foreground features of a given exemplar image. Compared with the coarse text-driven attention, these fine-grained visual similarities capture rich seman-tic details crucial for delineating object boundaries. Despite this advantage, pure visual matching lacks language-guided referring capability. In scenes with multiple instances of the same category (e.g., two cars), it activates all candidates equally, making it diffi-cult to identify the exact target described in the query. Therefore, it is evident that language-guided localization cues from MLLMs and cross-image visual correspondences from VFMs are naturally complementary. The former provides the essential semantic instruc-tion for isolating the specific target, while the latter supplies the fine-grained visual matching required for boundary certainty. Accordingly, we propose ExACT (Ex empl ar-driven Calibrated Refinemen t), a novel training-free framework that explicitly lever-ages a one-shot visual exemplar to supplement coarse MLLM priors with fine-grained structural guidance. By employing this exemplar as a cross-modal visual prompt, our approach effectively bridges the visual-semantic gap inherent in purely text-prompted paradigms. As illustrated in Figure 1(b), ExACT achieves this through two core modules: a Vision Exemplar-based Calibrator (VEC) and a 
+
+Structure-Aware Refiner (SAR) . First, VEC extracts dense feature-level correlations from the visual prompt using VFMs to rectify the noisy textual localization priors from frozen MLLMs, effectively suppressing high-activation background artifacts and boundary leakage. Subsequently, the SAR addresses geometric uncertainty and reduces noisy proposals. Operating as a coarse-to-fine merge-and-select pipeline, it further filters spurious activations to extract high-quality geometric prompts for the foundation segmentation model SAM, thereby ensuring precise pixel-level localization. The contributions of our work are summarized as follows: 
+
+• A Novel Exemplar-Driven Framework: We propose Ex-ACT, a training-free RSVG framework driven by a one-shot visual prompting mechanism. By coupling MLLM semantic reasoning with the fine-grained visual correspondences of VFM, it effectively bridges the visual-semantic gap inherent to purely text-prompted paradigms. 
+
+• Explicit Calibration and Refinement: To address spatio-semantic misalignment, we introduce a Vision Exemplar-Based Calibrator (VEC) that leverages dense feature-level correlations to explicitly rectify noisy MLLM priors, and a Structure-Aware Refiner (SAR) that distills these calibrated priors into robust pixel-level masks. 
+
+• SOTA Training-Free Performance: Extensive experiments on two RSVG benchmarks demonstrate that ExACT signifi-cantly outperforms existing MLLM grounding models with-out any parameter updates, confirming the superiority of our exemplar-driven paradigm. 
+
+2 Related Works 
+
+Remote Sensing Visual Grounding. RSVG encompasses two typ-ical tasks: Remote sensing Referring Expression Comprehension (RSREC) and Segmentation (RSRES) [ 21 ]. Although fully supervised methods [ 13 , 15 , 18 , 27 , 33 ] deliver high accuracy, they rely heavily on labor-intensive annotations and struggle to generalize to out-of-distribution attributes. To achieve open-vocabulary perception, re-cent MLLM-based approaches [ 10 –12 , 22 , 23 ] generally fall into two streams: supervised training-based and training-free inference. The first stream develops RS-specific grounding MLLMs [ 10 , 11 , 22 , 23 ]via supervised fine-tuning [ 35 ] or multitask instruction tuning [ 17 ]to bridge the domain gap. However, these methods require costly retraining, and their next-token-prediction paradigms inherently limit the continuous spatial precision. Training-free inference has emerged as the second stream that seeks to alleviate these high training costs. For instance, RSVG-ZeroOV and its extension [ 12 , 14 ] to RS images and videos extract localization cues from frozen MLLMs and combine structural priors from DMs to recover spatial details. Nevertheless, lacking explicit visual guidance, their purely text-driven inference inevitably suffers ExACT: Exemplar-Driven Calibrated Refinement for Training-Free Visual Grounding in Remote Sensing Images Conference’17, July 2017, Washington, DC, USA Target Image Vanilla Attention Rectified Attention Text-Guided Prior Text-Guided Prior 
+
+ExACT (Ours) Baseline 
+
+Target query: “A stadium is on the left of the bridge in the middle” 
+
+Target query: “The bridge in the middle” 
+
+> <latexit sha1_base64="EkwhonRF25R5+jGNBLD0mPRDab4=">AAAB/HicbVDLSsNAFJ34rPUV7dLNYBFclUSkuqy6cVnBPqANYTKZtEMnM2FmooQQf8WNC0Xc+iHu/BunbRbaeuDC4Zx7ufeeIGFUacf5tlZW19Y3Nitb1e2d3b19++Cwq0QqMelgwYTsB0gRRjnpaKoZ6SeSoDhgpBdMbqZ+74FIRQW/11lCvBiNOI0oRtpIvl0bPtKQjJHOrwo/x1IoVfh23Wk4M8Bl4pakDkq0fftrGAqcxoRrzJBSA9dJtJcjqSlmpKgOU0UShCdoRAaGchQT5eWz4wt4YpQQRkKa4hrO1N8TOYqVyuLAdMZIj9WiNxX/8wapji69nPIk1YTj+aIoZVALOE0ChlQSrFlmCMKSmlshHiOJsDZ5VU0I7uLLy6R71nCbjebdeb11XcZRAUfgGJwCF1yAFrgFbdABGGTgGbyCN+vJerHerY9564pVztTAH1ifP6YflXA=</latexit>
+
+bAcross  
+
+> <latexit sha1_base64="caKENY7XDZByaw2yKCzAOwt9Vks=">AAAB+3icbVDJSgNBEO2JW4xbjEcvg0HwFGZEosegF48RzQLJMPT01CRNeha6azRhmF/x4kERr/6IN//GznLQxAcFj/eqqKrnJYIrtKxvo7C2vrG5Vdwu7ezu7R+UDyttFaeSQYvFIpZdjyoQPIIWchTQTSTQ0BPQ8UY3U7/zCFLxOHrASQJOSAcRDzijqCW3XOk/cR+GFLP73M0Qxpi75apVs2YwV4m9IFWyQNMtf/X9mKUhRMgEVapnWwk6GZXImYC81E8VJJSN6AB6mkY0BOVks9tz81QrvhnEUleE5kz9PZHRUKlJ6OnOkOJQLXtT8T+vl2Jw5WQ8SlKEiM0XBakwMTanQZg+l8BQTDShTHJ9q8mGVFKGOq6SDsFefnmVtM9rdr1Wv7uoNq4XcRTJMTkhZ8Qml6RBbkmTtAgjY/JMXsmbkRsvxrvxMW8tGIuZI/IHxucP/GCVEw==</latexit>
+
+bStext 
+
+> <latexit sha1_base64="jDQlp/kXoTEn3aGmcZ/b8Pvvkso=">AAAB73icbVDLTgJBEOzFF+IL9ehlIjHxRHaNQY9ELx4xyiOBDZkdBpgwO7vO9BrJhp/w4kFjvPo73vwbB9iDgpV0UqnqTndXEEth0HW/ndzK6tr6Rn6zsLW9s7tX3D9omCjRjNdZJCPdCqjhUiheR4GSt2LNaRhI3gxG11O/+ci1EZG6x3HM/ZAOlOgLRtFKrbtuivwJJ91iyS27M5Bl4mWkBBlq3eJXpxexJOQKmaTGtD03Rj+lGgWTfFLoJIbHlI3ogLctVTTkxk9n907IiVV6pB9pWwrJTP09kdLQmHEY2M6Q4tAselPxP6+dYP/ST4WKE+SKzRf1E0kwItPnSU9ozlCOLaFMC3srYUOqKUMbUcGG4C2+vEwaZ2WvUq7cnpeqV1kceTiCYzgFDy6gCjdQgzowkPAMr/DmPDgvzrvzMW/NOdnMIfyB8/kDdjCQRA==</latexit>
+
+Stext 
+
+> <latexit sha1_base64="Mcputf/17iVrBHAj+k5WVB6KOCw=">AAAB8HicbVDLSgNBEOyNrxhfUY9eBoPgKeyKRI9RLx4jmIckS5idzCZD5rHMzAphyVd48aCIVz/Hm3/jJNmDRgsaiqpuuruihDNjff/LK6ysrq1vFDdLW9s7u3vl/YOWUakmtEkUV7oTYUM5k7RpmeW0k2iKRcRpOxrfzPz2I9WGKXlvJwkNBR5KFjOCrZMervoZ0cqYab9c8av+HOgvCXJSgRyNfvmzN1AkFVRawrEx3cBPbJhhbRnhdFrqpYYmmIzxkHYdlVhQE2bzg6foxCkDFCvtSlo0V39OZFgYMxGR6xTYjsyyNxP/87qpjS/DjMkktVSSxaI45cgqNPseDZimxPKJI5ho5m5FZIQ1JtZlVHIhBMsv/yWts2pQq9buziv16zyOIhzBMZxCABdQh1toQBMICHiCF3j1tPfsvXnvi9aCl88cwi94H98blJCh</latexit>
+
+Across 
+
+Figure 2: Effectiveness of our exemplar-driven calibration. The text-driven baseline suffers from spatial deviation (𝐴 𝑐𝑟𝑜𝑠𝑠 ), which causes boundary leakage ( 𝑆 𝑡𝑒𝑥𝑡 ) after uncon-strained diffusion. Our ExACT rectifies this misaligned prior, confining activations within the target region ( b𝐴 𝑐𝑟𝑜𝑠𝑠 , b𝑆 𝑡𝑒𝑥𝑡 ). 
+
+from severe localization shifts in cluttered RS scenes. By introducing a one-shot visual exemplar, ExACT supplies the discriminative structural guidance missing in purely text-prompted paradigms, effectively resolving spatio-semantic misalignment without any parameter updates. 
+
+Visual Reference Prompting. Visual reference prompting is widely applied in image-prompted segmentation [ 19 , 20 , 28 , 34 , 36 ], where visual exemplars explicitly specify the content that users intend to segment. These methods usually generate geometric prompts for foundation segmentation models by pixel-level feature matching. For instance, IPSeg [ 28 ] selects representative points from dense correlation maps for training-free open-world segmentation. To address ambiguity in a single modality, hybrid frameworks such as VLP-SAM [25] combine visual references and textual labels. However, adapting these paradigms to the RS domain remains challenging. Pure visual matching relies heavily on low-level corre-lations and struggles with high-level semantic reasoning. Although hybrid prompting models incorporate text labels to mitigate this, they are tailored for natural images and still demand parameter optimization to align unified prompt embeddings. To overcome this, ExACT offers a completely training-free framework for complex RS scenes. Instead of tuning embeddings, ExACT uniquely intro-duces a one-shot visual exemplar to supply discriminative struc-tural guidance. This plug-and-play approach effectively bridges the visual-semantic gap, ensuring precise pixel-level localization with zero parameter overhead. 
+
+3 ExACT Framework 3.1 Training-Free RSVG 
+
+Given an RS image I and a textual query Q, standard training-free RSVG aims to localize the target without parameter updates, generating a pixel-level segmentation mask M𝑝𝑟𝑒𝑑 ∈ { 0, 1}𝐻 ×𝑊 .This paradigm, which extracts coarse localization priors from frozen MLLMs and recovers structural details via off-the-shelf DMs, serves as the foundation of our work. 
+
+(1) Language-Guided Coarse Localization. To extract spatial cues, frozen MLLMs are prompted to formulate localization as a coordinate sequence generation task. During the autoregressive generation, the sentence-level cross-modal prior 𝐴 𝑐𝑟𝑜𝑠𝑠 ∈ Rℎ×𝑤 
+
+is extracted by averaging the visual attention weights across all attention heads, generation steps, and localization layers. Although 
+
+𝐴 𝑐𝑟𝑜𝑠𝑠 highlights the approximate target location, it inherently ex-hibits coordinate-driven bias and high-activation artifacts, as shown in the 𝐴 𝑐𝑟𝑜𝑠𝑠 column of Figure. 2. 
+
+(2) Diffusion-Based Structural Recovery. To refine this coarse prior, the baseline leverages dense pixel affinities encoded in the self-attention maps from a frozen UNet-based DM. A unified structural prior b𝐴 𝑠𝑒𝑙 𝑓 ∈ Rℎ𝑤 ×ℎ𝑤 is obtained by averaging self-attention maps across all layers. The final text-guided prior 𝑆 𝑡𝑒𝑥𝑡 is then computed by diffusing the coarse cues 𝐴 𝑐𝑟𝑜𝑠𝑠 across the entire structure: 
+
+𝑆 𝑡𝑒𝑥𝑡 = Norm 
+
+ b𝐴 𝑠𝑒𝑙 𝑓 · vec (𝐴 𝑐𝑟𝑜𝑠𝑠 )
+
+
+
+∈ Rℎ×𝑤 , (1) where vec (·) denotes vectorization, Norm (·) applies Min-Max nor-malization, and the output is reshaped to ℎ × 𝑤 .As observed in Figure 2, applying such unconstrained structural completion directly to the noisy vanilla attention 𝐴 𝑐𝑟𝑜𝑠𝑠 inevitably amplifies background artifacts, triggering severe boundary leak-age in 𝑆 𝑡𝑒𝑥𝑡 . Conversely, our proposed ExACT rectifies this mis-aligned prior using a one-shot visual exemplar. This rectification ( b𝐴 𝑐𝑟𝑜𝑠𝑠 ) confines structural propagation strictly within the target region, yielding highly precise activations without spatial spillover, as shown by b𝑆 𝑡𝑒𝑥𝑡 .
+
+3.2 Framework Overview 
+
+To address the spatio-semantic misalignment inherent in purely text-driven paradigms, our proposed ExACT framework introduces a one-shot visual exemplar, comprising an exemplar image and its corresponding mask, to provide explicit structural guidance. Figure 3 illustrates the overall workflow of ExACT. Following [ 12 ], we first extract a coarse cross-modal prior 𝐴 𝑐𝑟𝑜𝑠𝑠 from an off-the-shelf MLLM and a diffusion structural prior b𝐴 𝑠𝑒𝑙 𝑓 from a frozen DM. Im-portantly, we adopt a two-fold pipeline to achieve precise pixel-level grounding, focusing on localization calibration and mask refine-ment. To calibrate spatial localization, the Vision Exemplar-Based Calibrator (Sec. 3.3) operates through three synergistic mechanisms. First, Global-Local Visual Correspondence (GLVC) leverages the frozen DINOv3 encoder to extract dense feature-level correlations between the visual exemplar and the target image. This produces a precise exemplar-guided prior 𝑆 𝑣𝑖𝑠 that explicitly highlights the structural extent of the target category. Second, through Visual Rectification (VR), 𝑆 𝑣𝑖𝑠 acts as an explicit structural gate to filter the noisy 𝐴 𝑐𝑟𝑜𝑠𝑠 into a clean b𝐴 𝑐𝑟𝑜𝑠𝑠 . This rectified attention then guides structural diffusion alongside b𝐴 𝑠𝑒𝑙 𝑓 to recover local details, yielding a refined text-guided prior b𝑆 𝑡𝑒𝑥𝑡 . Finally, a Visual-Semantic Fusion (VSF) mechanism combines these two complementary modalities (b𝑆 𝑡𝑒𝑥𝑡 and 𝑆 𝑣𝑖𝑠 ) into a boundary-constrained localization map 𝑆 𝑐𝑎𝑙 .For mask refinement, the Structure-Aware Refiner (Sec. 3.4) con-solidates fragmented regions and suppresses spurious activations, Conference’17, July 2017, Washington, DC, USA Zhang et al. DINOv3 
+
+MLLM 
+
+Global-Local Visual Correspondence 
+
+Text-Guided Prior 
+
+Structure-Aware Refiner (SAR) 
+
+DM Structural Diffusion 
+
+Vision Exemplar-Based Calibrator (VEC) 
+
+> Initial Mask Confident Mask
+
+!!"#$ → ! %&' 
+
+Merge-and-Select 
+
+Prompt 
+
+Positive 
+
+Negative 
+
+Retained Clusters Discarded Clusters TopK Peaks Points Points 
+
+Final Prediction !#$%&% 
+
+"&
+
+“A gray overpass 
+
+in the middle.” 
+
+Exemplar-Guided Prior Attention Map Calibrated Prior 
+
+Visual-Semantic Fusion Visual Exemplar 
+
+Exemplar Mask 
+
+Visual Rectification 
+
+"'
+
+SAM 
+
+<latexit sha1_base64="caKENY7XDZByaw2yKCzAOwt9Vks=">AAAB+3icbVDJSgNBEO2JW4xbjEcvg0HwFGZEosegF48RzQLJMPT01CRNeha6azRhmF/x4kERr/6IN//GznLQxAcFj/eqqKrnJYIrtKxvo7C2vrG5Vdwu7ezu7R+UDyttFaeSQYvFIpZdjyoQPIIWchTQTSTQ0BPQ8UY3U7/zCFLxOHrASQJOSAcRDzijqCW3XOk/cR+GFLP73M0Qxpi75apVs2YwV4m9IFWyQNMtf/X9mKUhRMgEVapnWwk6GZXImYC81E8VJJSN6AB6mkY0BOVks9tz81QrvhnEUleE5kz9PZHRUKlJ6OnOkOJQLXtT8T+vl2Jw5WQ8SlKEiM0XBakwMTanQZg+l8BQTDShTHJ9q8mGVFKGOq6SDsFefnmVtM9rdr1Wv7uoNq4XcRTJMTkhZ8Qml6RBbkmTtAgjY/JMXsmbkRsvxrvxMW8tGIuZI/IHxucP/GCVEw==</latexit> bStext 
+
+<latexit sha1_base64="M0U0wnQ0ce8YZmZZrTVkHZZAS1g=">AAACH3icbVC7TsMwFHXKq5RXgJHFokJiIUoQFMYCC2OR6ENqo8hx3daqY0e2g1RF+RMWfoWFAYQQW/8Gt80AKUeydO459+r6njBmVGnXnVqlldW19Y3yZmVre2d3z94/aCmRSEyaWDAhOyFShFFOmppqRjqxJCgKGWmH47uZ334iUlHBH/UkJn6EhpwOKEbaSIFduwlSLHsjFSNM0jPXuYx1Jgq1KtZZYFddx50DLhMvJ1WQoxHY372+wElEuMYMKdX13Fj7KZKaYkaySi9RxKwYoyHpGspRRJSfzu/L4IlR+nAgpHlcw7n6eyJFkVKTKDSdEdIjVfRm4n9eN9GDaz+lPE404XixaJAwqAWchQX7VBKs2cQQhCU1f4V4hCTC2kRaMSF4xZOXSevc8WpO7eGiWr/N4yiDI3AMToEHrkAd3IMGaAIMnsEreAcf1ov1Zn1aX4vWkpXPHII/sKY/zD2i2A==</latexit> Across 
+
+<latexit sha1_base64="zo8s23aimLR08MVtJfhK996N9Ag=">AAACKXicbVDLSsNAFJ34rPUVdekmWAQ3lkS0uqy6cVnBPqAtYTK9bYdOHszcKCXkd9z4K24UFHXrjzhts9DUAwPnnnMvd+7xIsEV2vansbC4tLyyWlgrrm9sbm2bO7sNFcaSQZ2FIpQtjyoQPIA6chTQiiRQ3xPQ9EbXE795D1LxMLjDcQRdnw4C3ueMopZcs9p54D0YUkwuUzdhsjNUEWWQHNvlswjTMFerfJ26Zsku21NY88TJSIlkqLnma6cXstiHAJmgSrUdO8JuQiVyJiAtdmIFesWIDqCtaUB9UN1kemlqHWqlZ/VDqV+A1lT9PZFQX6mx7+lOn+JQ5b2J+J/XjrF/0U14EMUIAZst6sfCwtCaxGb1uASGYqwJZZLrv1psSCVlqMMt6hCc/MnzpHFSdirlyu1pqXqVxVEg++SAHBGHnJMquSE1UieMPJJn8kbejSfjxfgwvmatC0Y2s0f+wPj+AaGSp3Y=</latexit> bAcross 
+
+<latexit sha1_base64="FlCW83/puFEhrDhiEeygKDDm4NI=">AAACOnicbVA9SwNBEN3zM8avqKXNYhBsDHci0UYQbSwTNCokIextJsni3u2xOyeG436Xjb/CzsLGQhFbf4B7yRWaOLDw5r15zM7zIykMuu6LMzM7N7+wWFgqLq+srq2XNjavjYo1hwZXUulbnxmQIoQGCpRwG2lggS/hxr87z/Sbe9BGqPAKhxG0A9YPRU9whpbqlOqXneRemJSe0Ay1EB4w2U/7UvlMprQ1MBHjkHgR2kZ1Ff6lfnuk4tZS7JTKbsUdFZ0GXg7KJK9ap/Tc6ioeBxAil8yYpudG2E6YRsElpMVWbMBuvGN9aFoYsgBMOxmdntJdy3RpT2n7QqQj9rcjYYExw8C3kwHDgZnUMvI/rRlj77idiDCKEUI+XtSLJUVFsxxpV2jgKIcWMK6F/SvlA6YZR5t2FoI3efI0uD6oeNVKtX5YPj3L4yiQbbJD9ohHjsgpuSA10iCcPJJX8k4+nCfnzfl0vsajM07u2SJ/yvn+AU9arvc=</latexit> Svis = Sv-global   Sv-local 
+
+<latexit sha1_base64="w3jB/L0FaZIQUUlBw0Cmfb6Tnts=">AAAB73icbVDLSgNBEOyNrxhfUY9eBoPgKeyKRI9BLx4jmgckS5id9CZDZmfXmdlAWPITXjwo4tXf8ebfOHkcNLGgoajqprsrSATXxnW/ndza+sbmVn67sLO7t39QPDxq6DhVDOssFrFqBVSj4BLrhhuBrUQhjQKBzWB4O/WbI1Sax/LRjBP0I9qXPOSMGiu1HrrZiOsJ6RZLbtmdgawSb0FKsECtW/zq9GKWRigNE1Trtucmxs+oMpwJnBQ6qcaEsiHtY9tSSSPUfja7d0LOrNIjYaxsSUNm6u+JjEZaj6PAdkbUDPSyNxX/89qpCa/9jMskNSjZfFGYCmJiMn2e9LhCZsTYEsoUt7cSNqCKMmMjKtgQvOWXV0njouxVypX7y1L1ZhFHHk7gFM7Bgyuowh3UoA4MBDzDK7w5T86L8+58zFtzzmLmGP7A+fwB+GiP8Q==</latexit> Svis 
+
+<latexit sha1_base64="FdMTkqOf46PFs7XPcc/YANOYTTk=">AAAB/HicbVDLSsNAFJ34rPUV7dLNYBFclUSkuqy6cVnBPqANYTK5aYdOHsxMlBDir7hxoYhbP8Sdf+O0zUJbD1w4nHPvzL3HSziTyrK+jZXVtfWNzcpWdXtnd2/fPDjsyjgVFDo05rHoe0QCZxF0FFMc+okAEnocet7kZur3HkBIFkf3KkvACckoYgGjRGnJNWvDR+bDmKj8qnBz/U5QYNesWw1rBrxM7JLUUYm2a34N/ZimIUSKciLlwLYS5eREKEY5FNVhKiEhdEJGMNA0IiFIJ58tX+ATrfg4iIWuSOGZ+nsiJ6GUWejpzpCosVz0puJ/3iBVwaWTsyhJFUR0/lGQcqxiPE0C+0wAVTzThFDB9K6YjokgVOm8qjoEe/HkZdI9a9jNRvPuvN66LuOooCN0jE6RjS5QC92iNuogijL0jF7Rm/FkvBjvxse8dcUoZ2roD4zPHxSilRA=</latexit> bAself 
+
+<latexit sha1_base64="0Yz8rxY0f2cskT/rYx9o0WKAGmw=">AAACa3icbVHJTsMwEHXCXrYCBxBwsKiQ4ECVILYjy4UjSBSQ2qpynElr4cSRPQGqKBc+kRt/wIV/wC0VgsBIlt68eTNjPwepFAY9781xx8YnJqemZyqzc/MLi9Wl5VujMs2hwZVU+j5gBqRIoIECJdynGlgcSLgLHi4G9btH0Eao5Ab7KbRj1k1EJDhDS3WqL60nEUKPYX5WdHI7Jypoq2dSxiHf81O0GQ8VljmEZ8wfgRc7v/q5/tZ59UOrVKXclPOC7naqNa/uDYP+Bf4I1MgorjrV11aoeBZDglwyY5q+l2I7ZxoFl1BUWpkBu+SBdaFpYcJiMO186FVBty0T0khpexKkQ/ZnR85iY/pxYJUxw54p1wbkf7VmhtFJOxdJmiEk/GtRlEmKig6Mp6HQwFH2LWBcC3tXyntMM472eyrWBL/85L/gdr/uH9WPrg9qp+cjO6bJBtkiO8Qnx+SUXJIr0iCcvDsLzqqz5ny4K+66u/kldZ1Rzwr5Fe72J71ou+8=</latexit> bAself · vec( bAcross )
+
+<latexit sha1_base64="MEnkjGmen82A7zR0jh97lRX/HBE=">AAAB7nicbVBNS8NAEJ3Ur1q/qh69LBbBU0lEqseiF48V7Qe0oWy2k3bpZhN2N0IJ/RFePCji1d/jzX/jts1BWx8MPN6bYWZekAiujet+O4W19Y3NreJ2aWd3b/+gfHjU0nGqGDZZLGLVCahGwSU2DTcCO4lCGgUC28H4dua3n1BpHstHM0nQj+hQ8pAzaqzUfuhnjIppv1xxq+4cZJV4OalAjka//NUbxCyNUBomqNZdz02Mn1FlOBM4LfVSjQllYzrErqWSRqj9bH7ulJxZZUDCWNmShszV3xMZjbSeRIHtjKgZ6WVvJv7ndVMTXvsZl0lqULLFojAVxMRk9jsZcIXMiIkllClubyVsRBVlxiZUsiF4yy+vktZF1atVa/eXlfpNHkcRTuAUzsGDK6jDHTSgCQzG8Ayv8OYkzovz7nwsWgtOPnMMf+B8/gBsJI+l</latexit> Scal 
+
+<latexit sha1_base64="ImLxGBFHOlXRTM8Y6MysROU+OTE=">AAADwHicnVFNT9wwEJ2QAstnFzhyibpCggOrZEWBC4jSC0eqdgGJoJXj9bIWSRxsZ4FGe+YKv67qPyi/oZeOTSjsIgTCUZI3b+Y9z9hRFnOlff+3M+J+GB0br0xMTk3PzH6szs0fKJFLyppUxEIeRUSxmKesqbmO2VEmGUmimB1GZ19N/rDHpOIi/aGvMnaSkNOUdzglGqlW9W94wdusS3Txpd8qqAy7KiOUFat+/XOm+2IoVsNx3/vPNDDeGoi895oOuoSiLfTjPoEtCjW71FGnCJ50cC9f/t4qeny4s+3BMEzylVa15td9u7znIChBDcq1L6q/IIQ2CKCQQwIMUtCIYyCg8DmGAHzIkDuBAjmJiNs8gz5MojbHKoYVBNkz/J5idFyyKcbGU1k1xV1ifCUqPVhCjcA6idjs5tl8bp0N+5J3YT1Nb1f4j0qvBFkNXWRf0z1UvlVnZtHQgU07A8eZMsuY6WjpkttTMZ17T6bS6JAhZ3Ab8xIxtcqHc/asRtnZzdkSm/9jKw1rYlrW5nBnusQLDoav8zk4aNSD9fr6t7Xazm551RVYhE+wjPe5ATuwB/vQBOoQ59q5cW7dXbfrCvf8vnTEKTULMLDcn/8AP0PtZg==</latexit> bAcross =Across  1(Svis >μ )
+
+Figure 3: ExACT comprises two core modules: (1) The Vision Exemplar-Based Calibrator extracts dense feature-level correlations from a one-shot visual exemplar to rectify the noisy cross-modal priors 𝐴 𝑐𝑟𝑜𝑠𝑠 , yielding a calibrated boundary-constrained localization map 𝑆 𝑐𝑎𝑙 . (2) The Structure-Aware Refiner distills 𝑆 𝑐𝑎𝑙 via a merge-and-select pipeline into high-quality geometric prompts that guide SAM for precise pixel-level grounding. 
+
+extracting high-quality geometric prompts for precise SAM-driven pixel-level localization. 
+
+3.3 Vision Exemplar-Based Calibrator 
+
+Linguistic cues inherently struggle to convey fine-grained visual details necessary to delineate precise object boundaries and distin-guish subtle appearance differences in cluttered RS scenes. To bridge this modality gap, accurate localization requires explicit visual fea-tures to serve as definitive references. Accordingly, our Vision Exemplar-Based Calibrator (VEC) is designed to supply discrimi-native structural guidance, effectively resolving spatial ambiguity and geometric uncertainty. As detailed below, this module oper-ates through three core mechanisms: Global-Local Visual Corre-spondence (GLVC), Visual Rectification (VR), and Visual-Semantic Fusion (VSF). 
+
+Global-Local Visual Correspondence. Recognizing that global-average matching overlooks intra-class variations while local match-ing is vulnerable to background clutter, GLVC effectively combines global structural consistency with local detail verification. Given a readily accessible one-shot visual exemplar (𝐼 𝑒 , 𝑀 𝑒 ) for each category, we employ the pre-trained DINOv3 image encoder to extract dense patch-level features 𝐹 𝑡 , 𝐹 𝑒 ∈ Rℎ×𝑤 ×𝐶 from the target and exemplar images. To prevent losing small objects during stan-dard downsampling, we introduce a foreground-preserving masking 
+
+strategy to construct an exemplar foreground feature set F𝑒 .To capture the global structural consensus of the target category, we compute a global visual prototype 𝑣 𝑝𝑟𝑜𝑡𝑜 by average-pooling the features in F𝑒 . The global correlation map 𝑆 𝑣 -𝑔𝑙𝑜𝑏𝑎𝑙 ∈ Rℎ×𝑤 is then obtained via cosine similarity between this prototype vector 
+
+𝑣 𝑝𝑟𝑜𝑡𝑜 and each target feature 𝑓 (𝑖,𝑗 )
+
+𝑡 ∈ 𝐹 𝑡 :
+
+𝑆 (𝑖,𝑗 )
+
+𝑣 -𝑔𝑙𝑜𝑏𝑎𝑙 = 𝑓 (𝑖,𝑗 )
+
+𝑡 · 𝑣 𝑝𝑟𝑜𝑡𝑜 
+
+∥𝑓 (𝑖,𝑗 )
+
+𝑡 ∥2 ∥𝑣 𝑝𝑟𝑜𝑡𝑜 ∥2
+
+. (2) To verify fine-grained details (e.g., edges and parts), we also perform dense patch-level retrieval. By assigning each target feature its maximum similarity within the exemplar foreground feature set 
+
+F𝑒 , we produce the local correlation map 𝑆 𝑣 -𝑙𝑜𝑐𝑎𝑙 ∈ Rℎ×𝑤 :
+
+𝑆 (𝑖,𝑗 )
+
+𝑣 -𝑙𝑜𝑐𝑎𝑙 = max 
+
+𝑓 ∈ F 𝑒 
+
+𝑓 (𝑖,𝑗 )
+
+𝑡 · 𝑓 
+
+∥𝑓 (𝑖,𝑗 )
+
+𝑡 ∥2 ∥𝑓 ∥2
+
+!
+
+. (3) Finally, to harness their complementarity, we obtain a compre-hensive exemplar-guided prior 𝑆 𝑣𝑖𝑠 ∈ Rℎ×𝑤 through element-wise multiplication: 
+
+𝑆 𝑣𝑖𝑠 = Norm (𝑆 𝑣 -𝑔𝑙𝑜𝑏𝑎𝑙 ⊙ 𝑆 𝑣 -𝑙𝑜𝑐𝑎𝑙 ), (4) where ⊙ denotes the Hadamard product and Norm (·) performs Min-Max normalization. This geometric intersection suppresses background clutter while reinforcing the consistency of structural boundaries, serving as a highly discriminative visual constraint. 
+
+Visual Rectification. The vanilla MLLM prior 𝐴 𝑐𝑟𝑜𝑠𝑠 often suffers from coordinate-driven bias and background artifacts. To correct this, VR employs the exemplar-guided prior 𝑆 𝑣𝑖𝑠 as a deterministic structural gate to prune noisy text-driven activations. Formally, the rectified attention map b𝐴 𝑐𝑟𝑜𝑠𝑠 ∈ Rℎ×𝑤 is computed via adaptive hard-gating: 
+
+b𝐴 𝑐𝑟𝑜𝑠𝑠 = 𝐴 𝑐𝑟𝑜𝑠𝑠 ⊙ 1(𝑆 𝑣𝑖𝑠 > 𝜇 ), (5) ExACT: Exemplar-Driven Calibrated Refinement for Training-Free Visual Grounding in Remote Sensing Images Conference’17, July 2017, Washington, DC, USA “A green golf field” 
+
+Input 
+
+“A chimney on the right” 
+
+Stray Noise Fragments Merging 
+
+Calibrated Prior 
+
+Stray Noise 
+
+Fragments Merging 
+
+Confident Mask SAM Prediction Initial Prediction Mask 
+
+Purely text-driven methods 
+
+SAM Prediction 
+
+Retained Clusters Discarded Clusters TopK Peaks Final Prediction Noisy proposals mislead SAM 
+
+(a) (b) 
+
+(Ours)  
+
+> <latexit sha1_base64="B3N+PZTv5TTVT6sn/oA9eHqTd7c=">AAAB+nicbVDLSsNAFL3xWesr1aWbYBFclUSkuiy6cSNUsA9oQ5hMJu3QySTMTJQS8yluXCji1i9x5984abPQ1gMDh3Pv4Z45fsKoVLb9baysrq1vbFa2qts7u3v7Zu2gK+NUYNLBMYtF30eSMMpJR1HFSD8RBEU+Iz1/cl3Mew9ESBrzezVNiBuhEachxUhpyTNrwwipsR9mt7mXaWeQe2bdbtgzWMvEKUkdSrQ982sYxDiNCFeYISkHjp0oN0NCUcxIXh2mkiQIT9CIDDTlKCLSzWbRc+tEK4EVxkI/rqyZ+tuRoUjKaeTrzSKoXJwV4n+zQarCSzejPEkV4Xh+KEyZpWKr6MEKqCBYsakmCAuqs1p4jATCSrdV1SU4i19eJt2zhtNsNO/O662rso4KHMExnIIDF9CCG2hDBzA8wjO8wpvxZLwY78bHfHXFKD2H8AfG5w/vF5R1</latexit>
+
+Mpred  
+
+> <latexit sha1_base64="65X19X7ckI+NfHCIpaXmAd/BaTA=">AAAB+XicbVBNS8NAFHypX7V+RT16WSyCp5KIVI9FL16ECtYW2hA22027dLMJu5tCCfknXjwo4tV/4s1/46bNQVsHFoaZ93izEyScKe0431ZlbX1jc6u6XdvZ3ds/sA+PnlScSkI7JOax7AVYUc4E7WimOe0lkuIo4LQbTG4LvzulUrFYPOpZQr0IjwQLGcHaSL5tDyKsx0GY3ed+RmKR+3bdaThzoFXilqQOJdq+/TUYxiSNqNCEY6X6rpNoL8NSM8JpXhukiiaYTPCI9g0VOKLKy+bJc3RmlCEKY2me0Giu/t7IcKTULArMZJFTLXuF+J/XT3V47WVMJKmmgiwOhSlHOkZFDWjIJCWazwzBRDKTFZExlphoU1bNlOAuf3mVPF003Gaj+XBZb92UdVThBE7hHFy4ghbcQRs6QGAKz/AKb1ZmvVjv1sditGKVO8fwB9bnDyEOlAA=</latexit>
+
+Mcon → <latexit sha1_base64="65X19X7ckI+NfHCIpaXmAd/BaTA=">AAAB+XicbVBNS8NAFHypX7V+RT16WSyCp5KIVI9FL16ECtYW2hA22027dLMJu5tCCfknXjwo4tV/4s1/46bNQVsHFoaZ93izEyScKe0431ZlbX1jc6u6XdvZ3ds/sA+PnlScSkI7JOax7AVYUc4E7WimOe0lkuIo4LQbTG4LvzulUrFYPOpZQr0IjwQLGcHaSL5tDyKsx0GY3ed+RmKR+3bdaThzoFXilqQOJdq+/TUYxiSNqNCEY6X6rpNoL8NSM8JpXhukiiaYTPCI9g0VOKLKy+bJc3RmlCEKY2me0Giu/t7IcKTULArMZJFTLXuF+J/XT3V47WVMJKmmgiwOhSlHOkZFDWjIJCWazwzBRDKTFZExlphoU1bNlOAuf3mVPF003Gaj+XBZb92UdVThBE7hHFy4ghbcQRs6QGAKz/AKb1ZmvVjv1sditGKVO8fwB9bnDyEOlAA=</latexit> 
+
+Mcon  
+
+> <latexit sha1_base64="QiWmVliSjKK8Phu+cRAkiyfdm+o=">AAAB+3icbVDLSsNAFL2pr1pfsS7dDBbBVUlEqsuiGzdCBfuANpTJdNIOnUzCzEQsIb/ixoUibv0Rd/6NkzYLbT0wcDjnXu6Z48ecKe0431ZpbX1jc6u8XdnZ3ds/sA+rHRUlktA2iXgkez5WlDNB25ppTnuxpDj0Oe3605vc7z5SqVgkHvQspl6Ix4IFjGBtpKFdHYRYT/wgvcuGacAE5tnQrjl1Zw60StyC1KBAa2h/DUYRSUIqNOFYqb7rxNpLsdSMcJpVBomiMSZTPKZ9QwUOqfLSefYMnRplhIJImic0mqu/N1IcKjULfTOZJ1XLXi7+5/UTHVx5KRNxoqkgi0NBwpGOUF4EGjFJieYzQzCRzGRFZIIlJtrUVTEluMtfXiWd87rbqDfuL2rN66KOMhzDCZyBC5fQhFtoQRsIPMEzvMKblVkv1rv1sRgtWcXOEfyB9fkDqwiU3g==</latexit>
+
+Mf inal  
+
+> <latexit sha1_base64="myffX3bXNUaoCvwwQh28nvHNuGU=">AAAC8HicjVFBT9swGH0EGF03tsKOu1hUkyZNqlKEOi5I1Xbh2AkKSLSqHNdQizSOHKdQRfkRu+027cof2BV+xbR/MP7FPntBgqGJOUry/L73nv3ZURqrzIbhz4VgcWn5yUrtaf3Z89UXLxtr6weZzo2QfaFjbY4inslYJbJvlY3lUWokn0axPIzOPrr64UyaTOlk385TOZzy00SdKMEtUaPGu71RIXhcsh02OFdjOeG22CtHhZUXtmQDPdaWkWSmsrI+ajTDVugHewjaFWiiGj3d+IEBxtAQyDGFRAJLOAZHRs8x2giREjdEQZwhpHxdokSdvDmpJCk4sWf0PaXZccUmNHeZmXcLWiWm15CT4Q15NOkMYbca8/XcJzv2X9mFz3R7m9M/qrKmxFpMiH3Md6v8X5/rxeIE274HRT2lnnHdiSol96fids7udGUpISXO4THVDWHhnbfnzLwn8727s+W+/ssrHevmotLmuHG7pAtu/32dD8HBZqvdaXU+bTW7H6qrruE1NvCW7vM9uthFD33K/ozvuMJ1YIIvwdfg2x9psFB5XuHeCC5/A0l7oT0=</latexit>
+
+Scal = bStext   Svis 
+
+Figure 4: Illustration of Structure-Aware Refiner. (a) Text-driven baselines yield noisy proposals that mislead SAM. (b) SAR resolves this via a merge-and-select mechanism: adaptive-scale geometric aggregation first reconnects physical target fragments into cohesive clusters (distinct colors). Semantic selection then retains valid clusters with Top-K semantic anchors (stars, linked by white arrows) while discarding isolated noise (scissors), yielding a confident mask ( M𝑐𝑜𝑛 ) for precise SAM grounding. 
+
+where 1(·) denotes the indicator function, and 𝜇 represents the spatial mean of 𝑆 𝑣𝑖𝑠 .This gating mechanism suppresses dominant anomalies, yielding a clean b𝐴 𝑐𝑟𝑜𝑠𝑠 that redirects attention from sparse extremities to the true structural range of the queried objects. To further compensate for incomplete activations, we apply structural diffusion on b𝐴 𝑐𝑟𝑜𝑠𝑠 .This produces an improved text-guided prior b𝑆 𝑡𝑒𝑥𝑡 with coherent boundaries, preparing for the final visual-semantic fusion. 
+
+Visual-Semantic Fusion Although the text-guided prior b𝑆 𝑡𝑒𝑥𝑡 
+
+successfully recovers structural details, DMs inherently prioritize low-level spatial continuity. This often leads to boundary leakage, where generative activations erroneously diffuse into surrounding contexts (e.g., leaking from the “overpass” onto connecting roads, as seen in Fig. 3). To mitigate this, VSF leverages the discriminative exemplar-guided prior 𝑆 𝑣𝑖𝑠 to verify and constrain these genera-tive activations. Formally, the final calibrated prior 𝑆 𝑐𝑎𝑙 ∈ Rℎ×𝑤 is computed through cross-modal structural verification: 
+
+𝑆 𝑐𝑎𝑙 = b𝑆 𝑡𝑒𝑥𝑡 ⊙ 𝑆 𝑣𝑖𝑠 . (6) This Hadamard product acts as a strict spatial pruner, removing anomalous regions that lack clear visual support. The resulting 𝑆 𝑐𝑎𝑙 
+
+is a semantically consistent, boundary-constrained localization map, providing a high-confidence geometric foundation for subsequent mask refinement. 
+
+3.4 Structure-Aware Refiner 
+
+Binarizing the calibrated prior 𝑆 𝑐𝑎𝑙 with a threshold 𝛼 yields an initial mask M𝑝𝑟𝑒𝑑 . However, driven by scattered attention patterns, 
+
+M𝑝𝑟𝑒𝑑 often suffers from physical fragmentation and outlier noise. Thus, utilizing this raw mask directly to prompt SAM is subop-timal, resulting in noisy proposals that could mislead SAM into segmenting outliers, as illustrated in Figure. 4(a). To extract high-quality geometric prompts for SAM, our SAR module employs a coarse-to-fine merge-and-select pipeline. 
+
+Iterative Geometric Aggregation Since fixed-distance merging fails across varying RS scales, we perform adaptive-scale cluster-ing to reconnect physical fragments. We first decompose M𝑝𝑟𝑒𝑑 
+
+into disjoint connected components through morphological op-erations. Starting with the largest component ˆ𝑐 , we compute a dynamic spatial radius 𝛿 𝑑𝑦𝑛 = 1
+
+| ˆ𝑐 |
+
+Í𝑝 ∈ ˆ𝑐 ∥𝑝 − ¯𝑝 ∥2, where ¯𝑝 is its centroid. The cluster iteratively absorbs neighboring fragments within 𝛿 𝑑𝑦𝑛 , grouping all fragments into cohesive candidate clus-ters G = {𝐺 1, . . . , 𝐺 𝑚 }. As shown in Figure. 4 ( M𝑝𝑟𝑒𝑑 → M𝑐𝑜𝑛 ), distinct colors denote individual clusters, effectively consolidating fragmented regions within the geometric range of the instance. 
+
+TopK-Guided Semantic Selection To filter out ambiguous distrac-tors from multiple independent geometric clusters G, we extract high-confidence semantic anchors P𝑡𝑜𝑝𝑘 = TopK (𝑆 𝑐𝑎𝑙 , 𝐾 ) from the calibrated prior. We retain only the clusters containing at least one Top-𝐾 peak, while strictly discarding those without semantic sup-port. The final confident mask M𝑐𝑜𝑛 is formed by the union of these selected clusters: 
+
+M𝑐𝑜𝑛 =
+
+Ø
+
+𝐺 𝑖 ∈ G 
+
+{𝐺 𝑖 | 𝐺 𝑖 ∩ P 𝑡𝑜𝑝𝑘 ≠ ∅} . (7) This selection mechanism ensures that M𝑐𝑜𝑛 preserves the complete semantic body while eliminating stray outlier noise. Finally, the consolidated mask M𝑐𝑜𝑛 is utilized to extract a bound-ing box along with representative positive and negative point prompts. These geometric prompts robustly guide SAM to yield the precise pixel-level prediction. Conference’17, July 2017, Washington, DC, USA Zhang et al. 
+
+Table 1: Comparison with the latest SOTA methods on the RRSIS-D dataset. “-” indicates not using MLLMs. 
+
+Method Pretrained MLLMs Training-Free RSREC RSRES PR@0.3 PR@0.5 PR@0.7 mIoU oIoU PR@0.3 PR@0.5 PR@0.7 mIoU oIoU 
+
+Weakly-supervised text-driven models 
+
+TRIS[16] ICCV’23 - ✗ 14.62 3.79 0.37 13.20 13.14 15.02 4.91 1.26 13.11 15.40 SAG[8] ICCV’23 - ✗ 9.39 2.10 0.29 9.22 9.21 11.63 4.02 0.60 11.10 11.13 QueryMatch[3] ACMMM’24 - ✗ 22.04 16.22 12.10 17.21 15.26 20.97 15.54 10.62 15.73 10.73 
+
+Zero-shot text-driven models 
+
+LISA[11] CVPR’24 LLaVA2-13B ✗ 36.23 22.52 12.47 26.72 30.01 41.05 27.41 16.03 29.98 35.18 GroundVLP[26] AAAI’24 - ✗ 21.26 16.20 11.32 16.51 16.88 18.07 13.33 7.24 13.14 11.23 GeoChat[10] CVPR’24 + SAM Vicuna1.5-7B ✗ 39.51 26.94 12.05 30.46 28.58 34.25 18.84 10.61 24.07 19.32 Qwen2.5-VL[29] arXiv’24 + SAM Qwen2.5-VL-7B ✗ 40.30 30.54 15.67 32.15 29.14 35.88 24.52 12.57 26.22 20.51 RSVG-ZeroOV[12] AAAI’26 Qwen2.5-VL-7B ✓ 45.70 31.39 17.63 34.49 31.28 40.01 27.39 13.38 28.35 22.83 
+
+One-shot exemplar-driven models 
+
+RSVG-ZeroOV ( w/ VSF ) Qwen2.5-VL-7B ✓ 50.04 38.44 28.58 39.06 34.87 49.55 38.29 26.20 37.24 29.66 Ours Qwen2.5-VL-7B ✓ 52.31 39.82 28.58 40.19 40.79 52.71 39.82 26.98 39.29 38.52 
+
+Table 2: Comparison with the latest SOTA methods on the RISBench dataset. “-” indicates not using MLLMs. 
+
+Method Pretrained MLLMs Training-Free RSREC RSRES PR@0.3 PR@0.5 PR@0.7 mIoU oIoU PR@0.3 PR@0.5 PR@0.7 mIoU oIoU 
+
+Weakly-supervised text-driven models 
+
+TRIS[16] ICCV’23 - ✗ 19.27 8.89 2.86 14.63 15.74 14.23 4.40 0.92 11.46 16.06 SAG[8] ICCV’23 - ✗ 5.83 1.78 0.33 7.12 7.10 8.79 2.55 0.35 9.31 9.36 QueryMatch[3] ACMMM’24 - ✗ 31.79 27.74 23.32 26.72 15.86 31.06 26.68 20.27 24.59 10.77 
+
+Zero-shot text-driven models 
+
+LISA[11] CVPR’24 LLaVA2-13B ✗ 34.84 24.03 16.54 28.38 31.12 39.88 27.55 17.43 30.05 31.64 GroundVLP[26] AAAI’24 - ✗ 23.13 19.91 16.37 19.19 16.17 20.78 15.82 10.95 15.58 10.08 GeoChat[10] CVPR’24 + SAM Vicuna1.5-7B ✗ 45.88 34.85 16.89 36.57 29.55 37.25 25.94 14.17 28.22 21.49 Qwen2.5-VL[29] arXiv’24 + SAM Qwen2.5-VL-7B ✗ 47.28 37.95 22.36 37.82 30.84 40.68 30.38 15.33 30.67 20.98 RSVG-ZeroOV[12] AAAI’26 Qwen2.5-VL-7B ✓ 50.77 38.90 24.93 38.87 34.30 44.30 31.03 18.61 31.84 26.35 
+
+One-shot exemplar-driven models 
+
+RSVG-ZeroOV ( w/ VSF ) Qwen2.5-VL-7B ✓ 53.94 40.73 30.48 41.28 38.26 52.34 39.72 27.58 40.21 31.86 Ours Qwen2.5-VL-7B ✓ 56.41 45.34 33.10 44.17 43.54 55.69 45.68 31.41 42.43 41.58 
+
+4 Experiments 4.1 Experimental Settings 
+
+Datasets. We evaluate the performance of ExACT on RRSIS-D [ 18 ] and RISBench [ 5] benchmarks, which provide comprehensive annotations to support both RSREC and RSRES tasks.Further details are provided in the Appendix. 
+
+Implementation Details. Our proposed ExACT functions as a training-free, one-shot visual prompting solution that requires only forward inference, without parameter optimization. For patch-level feature extraction, we utilize the frozen DINOv3 [ 1 ] with a ViT-B/16 backbone. Consistent with the baseline [ 12 ], we employ the pre-trained Qwen2.5-VL [ 29 ] to generate the coarse cross-modal prior, and Stable Diffusion V1.4 [ 24 ] to extract structural priors. SAM [ 9] with a ViT-H backbone serves as our off-the-shelf segmenter. Additionally, we set the binarization threshold to 𝛼 = 0.4 and the number of semantic anchors to 𝐾 = 15 . Detailed configurations for geometric prompt generation are provided in the Appendix. All experiments are conducted on a single NVIDIA RTX 3090 GPU. 
+
+4.2 Comparison with State-of-the-Arts 
+
+Tables 1 and 2 present the quantitative comparison between our ExACT and state-of-the-art methods on the RRSIS-D and RISBench benchmarks. We categorize the compared methods into three dis-tinct paradigms: (1) weakly-supervised text-driven methods (e.g., QueryMatch [ 3 ]), (2) zero-shot text-driven models (e.g., LISA [ 11 ], RSVG-ZeroOV [ 12 ]), and (3) one-shot exemplar-driven approaches (e.g., RSVG-ZeroOV w/ VSF , an exemplar-augmented baseline con-structed for a fair comparison). 
+
+Comparison on RRSIS-D. As shown in Table 1, ExACT achieves SOTA performance on both RSREC and RSRES tasks. Compared to the strongest text-driven baseline RSVG-ZeroOV, our approach delivers substantial IoU improvements of +9.51% and +15.69% on RSREC and RSRES, respectively. This highlights the inherent spa-tial ambiguity of purely text-guided grounding and validates our ExACT: Exemplar-Driven Calibrated Refinement for Training-Free Visual Grounding in Remote Sensing Images Conference’17, July 2017, Washington, DC, USA 
+
+exemplar-driven calibration. Furthermore, while equipping this baseline with explicit visual guidance (RSVG-ZeroOV w/ VSF ) yields notable mIoU gains (+4.57% and +10.94%), ExACT consistently out-performs it. Notably, ExACT achieves 39.29% mIoU and 38.52% oIoU on RSRES, narrowing the gap between them to 0.77%. This also con-firms the effectiveness of our method in suppressing false positives and achieving precise pixel-level grounding. 
+
+Comparison on RISBench. As presented in Table 2, ExACT continues to outperform all others across all metrics on the more challenging RISBench dataset. Traditional models like QueryMatch and GroundVLP fall behind significantly, with 17.84% and 26.85% drops in RSRES mIoU, respectively, due to their inability to cap-ture detailed object structures. Against the training-free text-driven RSVG-ZeroOV, ExACT achieves a massive +12.80% margin on the strict PR@0.7 metric for RSRES (31.41% vs. 18.61%). This contrast exposes the limitations of purely text-guided priors for precise boundary delineation. While adding visual guidance to the base-line (RSVG-ZeroOV w/ VSF ) improves mIoU by +2.41% and +8.37% on RSREC and RSRES, respectively, our full framework increases the overall RSRES IoU to 41.58% (an additional +9.72% gain over the augmented baseline). This underscores the critical role of our structure-aware geometric prompts in facilitating coarse-to-fine mask refinement. 
+
+Table 3: Ablation study on core components. 
+
+Variant RSREC RSRES Pr@0.5 mIoU Pr@0.5 mIoU w/o VR 37.66 38.28 38.12 37.56 w/o VSF 33.75 35.79 34.56 35.24 w/o SAR 33.32 34.98 33.98 33.96 Full Model 39.82 40.19 39.82 39.29 Table 4: Ablation study on visual exemplar quantity ( 𝑛 -shot). 
+
+𝑛 -shot RSREC RSRES Pr@0.5 mIoU Pr@0.5 mIoU 1-shot 39.82 40.19 39.82 39.29 3-shot 39.27 39.94 39.41 39.46 5-shot 39.44 40.34 39.90 39.64 
+
+4.3 Ablation Studies 
+
+Ablation of Core Components. Table 3 confirms the effectiveness of the core modules in ExACT on the RRSIS-D dataset by evaluating three separate variants: (i) w/o VR, which depends directly on noisy cross-attention; (ii) w/o VSF, which bypasses visual-semantic fusion; and (iii) w/o SAR, which replaces the merge-and-select refinement with standard thresholding. Removing VR reduces the RSREC mIoU from 40.19% to 38.28%, revealing that uncalibrated MLLM priors are affected by coordinate-driven bias and high-activation artifacts. Disabling VSF results in a steeper decrease, degrading Pr@0.5 by 5%-6%. This demonstrates that heavy reliance on text-guided generative structural cues can lead to boundary leakage, underscoring the importance of explicit visual verification. Notably, the w/o SAR variant performs the worst, dropping to 34.98% and 33.96% mIoU for RSREC and RSRES, respectively. This severe decline highlights that transitioning from continuous maps to discrete prompts is a major structural bottleneck. Ultimately, our complete ExACT model addresses this via structure-aware refinement, effectively filtering out stray noise to achieve precise grounding. 
+
+Ablation of Visual Exemplar Quantity. Table 4 evaluates how the number of visual exemplars ( 𝑛 -shot) affects performance on the RRSIS-D dataset. While 5-shot inference provides slight mIoU improvements (+0.15% and +0.35% on RSREC and RSRES), the 1-shot setup remains highly competitive, reaching a peak Pr@0.5 of 39.82% Pr@0.5 on RSREC. To prevent redundant feature matching and unnecessary computational costs, ExACT adopts the 1-shot strategy as its default setting, ensuring an optimal trade-off between accuracy and efficiency. Target Image GT RSVG-ZeroOV                                      
+
+> w/ VSF ()Ours
+> !"# != %. %' !"# "= %. %% !"# != %. () !"# "= %. ') !"# != %. *+ !"# "= %. +)
+> Target query: “A gray rectangular basketball court on the upper right”
+> Target query: “The vehicle is a little smaller than the vehicle in the middle”
+> !"# != %. ,- !"# "= %. (+ !"# != %. *. !"# "= %. *. !"# != %. *. !"# "= %. *.
+> Target query: “The ground track field is in the huge stadium”
+> !"# != %. +, !"# "= %. +( !"# != %. /* !"# "= %. *. !"# != %. '. !"# "= %. /(
+> Target query: “The basketball court at the bottom”
+> !"# != %. +' !"# "= %. +. !"# != %. -+ !"# "= %. -+ !"# != %. (- !"# "= %. (.
+> RSVG-ZeroOV
+
+Figure 5: Qualitative results on the RRSIS-D dataset. The prediction bounding box IoU b and mask IoU m scores are indicated in yellow. Ablation of MLLM Backbones. Table 5 assesses the generaliz-ability of ExACT across different MLLM architectures. Notably, switching the backbone from LLaVA1.5-13B to Qwen2.5-VL-7B re-sults in significant improvements in mIoU of +4.08% for RSREC and +4.50% for RSRES. By performing well with a smaller model (7B vs. 13B), we demonstrate that our architecture-agnostic pipeline depends on intrinsic spatial alignment rather than raw parameter scale, enabling lightweight MLLMs to attain top performance. 
+
+Ablation of Global-Local Matching Table 6 examines the contri-butions of different visual matching granularities on the RRSIS-D dataset. Employing either global ( 𝑆 𝑣 -𝑔𝑙𝑜𝑏𝑎𝑙 ) or local ( 𝑆 𝑣 -𝑙𝑜𝑏𝑎𝑙 ) cor-respondence independently yields suboptimal results, achieving RSREC mIoU scores of 38.24% and 38.07%, respectively. Fusing both Conference’17, July 2017, Washington, DC, USA Zhang et al. Support Image Target Image Vanilla Attention 
+
+“The tennis court is on the right of the large bridge in the middle” 
+
+Text-Guided Prior Exemplar-Guided Prior (Ours) (Baseline) Rectified Attention 
+
+“The dam in the middle” 
+
+“The overpass is below the orange baseball field” 
+
+“The large expressway toll station ”
+
+(a) (b) (c) (d) (e) (f) Target Query 
+
+> <latexit sha1_base64="zo8s23aimLR08MVtJfhK996N9Ag=">AAACKXicbVDLSsNAFJ34rPUVdekmWAQ3lkS0uqy6cVnBPqAtYTK9bYdOHszcKCXkd9z4K24UFHXrjzhts9DUAwPnnnMvd+7xIsEV2vansbC4tLyyWlgrrm9sbm2bO7sNFcaSQZ2FIpQtjyoQPIA6chTQiiRQ3xPQ9EbXE795D1LxMLjDcQRdnw4C3ueMopZcs9p54D0YUkwuUzdhsjNUEWWQHNvlswjTMFerfJ26Zsku21NY88TJSIlkqLnma6cXstiHAJmgSrUdO8JuQiVyJiAtdmIFesWIDqCtaUB9UN1kemlqHWqlZ/VDqV+A1lT9PZFQX6mx7+lOn+JQ5b2J+J/XjrF/0U14EMUIAZst6sfCwtCaxGb1uASGYqwJZZLrv1psSCVlqMMt6hCc/MnzpHFSdirlyu1pqXqVxVEg++SAHBGHnJMquSE1UieMPJJn8kbejSfjxfgwvmatC0Y2s0f+wPj+AaGSp3Y=</latexit>
+
+bAcross  
+
+> <latexit sha1_base64="M0U0wnQ0ce8YZmZZrTVkHZZAS1g=">AAACH3icbVC7TsMwFHXKq5RXgJHFokJiIUoQFMYCC2OR6ENqo8hx3daqY0e2g1RF+RMWfoWFAYQQW/8Gt80AKUeydO459+r6njBmVGnXnVqlldW19Y3yZmVre2d3z94/aCmRSEyaWDAhOyFShFFOmppqRjqxJCgKGWmH47uZ334iUlHBH/UkJn6EhpwOKEbaSIFduwlSLHsjFSNM0jPXuYx1Jgq1KtZZYFddx50DLhMvJ1WQoxHY372+wElEuMYMKdX13Fj7KZKaYkaySi9RxKwYoyHpGspRRJSfzu/L4IlR+nAgpHlcw7n6eyJFkVKTKDSdEdIjVfRm4n9eN9GDaz+lPE404XixaJAwqAWchQX7VBKs2cQQhCU1f4V4hCTC2kRaMSF4xZOXSevc8WpO7eGiWr/N4yiDI3AMToEHrkAd3IMGaAIMnsEreAcf1ov1Zn1aX4vWkpXPHII/sKY/zD2i2A==</latexit>
+
+Across  
+
+> <latexit sha1_base64="caKENY7XDZByaw2yKCzAOwt9Vks=">AAAB+3icbVDJSgNBEO2JW4xbjEcvg0HwFGZEosegF48RzQLJMPT01CRNeha6azRhmF/x4kERr/6IN//GznLQxAcFj/eqqKrnJYIrtKxvo7C2vrG5Vdwu7ezu7R+UDyttFaeSQYvFIpZdjyoQPIIWchTQTSTQ0BPQ8UY3U7/zCFLxOHrASQJOSAcRDzijqCW3XOk/cR+GFLP73M0Qxpi75apVs2YwV4m9IFWyQNMtf/X9mKUhRMgEVapnWwk6GZXImYC81E8VJJSN6AB6mkY0BOVks9tz81QrvhnEUleE5kz9PZHRUKlJ6OnOkOJQLXtT8T+vl2Jw5WQ8SlKEiM0XBakwMTanQZg+l8BQTDShTHJ9q8mGVFKGOq6SDsFefnmVtM9rdr1Wv7uoNq4XcRTJMTkhZ8Qml6RBbkmTtAgjY/JMXsmbkRsvxrvxMW8tGIuZI/IHxucP/GCVEw==</latexit>
+
+bStext  
+
+> <latexit sha1_base64="w3jB/L0FaZIQUUlBw0Cmfb6Tnts=">AAAB73icbVDLSgNBEOyNrxhfUY9eBoPgKeyKRI9BLx4jmgckS5id9CZDZmfXmdlAWPITXjwo4tXf8ebfOHkcNLGgoajqprsrSATXxnW/ndza+sbmVn67sLO7t39QPDxq6DhVDOssFrFqBVSj4BLrhhuBrUQhjQKBzWB4O/WbI1Sax/LRjBP0I9qXPOSMGiu1HrrZiOsJ6RZLbtmdgawSb0FKsECtW/zq9GKWRigNE1Trtucmxs+oMpwJnBQ6qcaEsiHtY9tSSSPUfja7d0LOrNIjYaxsSUNm6u+JjEZaj6PAdkbUDPSyNxX/89qpCa/9jMskNSjZfFGYCmJiMn2e9LhCZsTYEsoUt7cSNqCKMmMjKtgQvOWXV0njouxVypX7y1L1ZhFHHk7gFM7Bgyuowh3UoA4MBDzDK7w5T86L8+58zFtzzmLmGP7A+fwB+GiP8Q==</latexit>
+
+Svis  
+
+> <latexit sha1_base64="eY2ENr5GThM77j8odm9ImUv8j9w=">AAAB73icdVDJSgNBEO1xjXGLevTSGARPw0zMJM4t6MVjRLNAMoSeTk/SpGexu0YMQ37CiwdFvPo73vwbO4ugog8KHu9VUVXPTwRXYFkfxtLyyuraem4jv7m1vbNb2NtvqjiVlDVoLGLZ9oligkesARwEayeSkdAXrOWPLqZ+645JxePoBsYJ80IyiHjAKQEtta97GbB7mPQKRcu0S85p1cGaOGXHdTVxXbti2dg2rRmKaIF6r/De7cc0DVkEVBClOraVgJcRCZwKNsl3U8USQkdkwDqaRiRkystm907wsVb6OIilrgjwTP0+kZFQqXHo686QwFD99qbiX14nheDMy3iUpMAiOl8UpAJDjKfP4z6XjIIYa0Ko5PpWTIdEEgo6orwO4etT/D9plky7YlauysXa+SKOHDpER+gE2aiKaugS1VEDUSTQA3pCz8at8Wi8GK/z1iVjMXOAfsB4+wTstpCW</latexit>
+
+Stext 
+
+> <latexit sha1_base64="P594jiwcrfmv33EqAsY2ph4T6WA=">AAAB7nicdVBNS8NAEJ3Ur1q/qh69LBbBU0g0tPVW9OKxov2ANpTNdtsu3WzC7kYooT/CiwdFvPp7vPlv3LQRVPTBwOO9GWbmBTFnSjvOh1VYWV1b3yhulra2d3b3yvsHbRUlktAWiXgkuwFWlDNBW5ppTruxpDgMOO0E06vM79xTqVgk7vQspn6Ix4KNGMHaSJ3bQUownw/KFceu1usX5w5ybGeBjLg1z/OQmysVyNEclN/7w4gkIRWacKxUz3Vi7adYakY4nZf6iaIxJlM8pj1DBQ6p8tPFuXN0YpQhGkXSlNBooX6fSHGo1CwMTGeI9UT99jLxL6+X6FHdT5mIE00FWS4aJRzpCGW/oyGTlGg+MwQTycytiEywxESbhEomhK9P0f+kfWa7Vbt641Ual3kcRTiCYzgFF2rQgGtoQgsITOEBnuDZiq1H68V6XbYWrHzmEH7AevsEutKP2w==</latexit>
+
+Scal 
+
+Figure 6: Step-by-step visualization of the internal localization priors. ExACT progressively rectifies noisy attention (a-b) and fuses visual-semantic cues (c-d) to generate a highly focused calibrated prior (f), outperforming the diffuse baseline (e). Table 5: Ablation study on MLLM backbones. 
+
+MLLM RSREC RSRES Pr@0.5 mIoU Pr@0.5 mIoU LLaVA1.5-13B 35.02 36.11 34.85 34.79 Qwen2.5-VL-7B 39.82 40.19 39.82 39.29 Table 6: Ablation study on global-local matching. 
+
+Global Local RSREC RSRES Pr@0.5 mIoU Pr@0.5 mIoU 
+
+✓ 37.14 38.24 37.46 37.63 
+
+✓ 36.71 38.07 36.94 37.13 
+
+✓ ✓ 39.82 40.19 39.82 39.29 
+
+granularities into 𝑆 𝑣𝑖𝑠 drives a significant performance boost, reach-ing 40.19% mIoU with gains of +1.95% and +2.12%. This improve-ment demonstrates that multi-scale correspondences are crucial for effective visual-semantic calibration in complex RS scenes. 
+
+4.4 Qualitative Analysis 
+
+Qualitative Comparison. Figure 5 presents representative visual comparisons on the RRSIS-D dataset. Our approach consistently delivers the most accurate localization performance, while the VSF-augmented baseline remains competitive yet suboptimal. In scenes with multiple similar structures (e.g., rows 1 and 4), the baselines fail to distinguish the target from adjacent distractors, leading to severe false positives (e.g., misidentifying the wrong neighboring court). With the Vision Exemplar-Based Calibrator, ExACT filters out ir-relevant regions lacking definitive visual support, refocusing the model’s attention on the true target and boosting the mask IoU from 0.62 to 0.92 (row 1) and from 0.49 to 0.95 (row 4). Furthermore, for complex multi-object queries (rows 2 and 3), text-guided priors of-ten yield coarse, over-segmented boundaries. Enabled by structure-aware refinement, ExACT effectively prevents instance adhesion and firmly encapsulates the target structures, reaching exceptional mask IoUs (e.g., 0.93 for the ground track field). Ultimately, these results confirm that by combining early-stage exemplar-driven cal-ibration with structure-aware refinement, ExACT preserves the structural integrity and boundary accuracy of diverse RS targets in a training-free manner. 
+
+Interpretability of Exemplar-Based Calibration. To clarify the internal workings of ExACT, Figure. 6 illustrates the step-by-step development of internal response maps. Initially, the raw MLLM cross-attention 𝐴 𝑐𝑟𝑜𝑠𝑠 (a) suffers from coordinate-driven bias and irrelevant background artifacts. Our VR mechanism explicitly recti-fies this in b𝐴 𝑐𝑟𝑜𝑠𝑠 (b), shifting activations from corner extremities to the true structural footprint of the target. After structural diffu-sion, the text-guided prior b𝑆 𝑡𝑒𝑥𝑡 (c) captures a rough object extent while effectively reducing background noise. Meanwhile, the vision-guided prior 𝑆 𝑣𝑖𝑠 (d) provides high-resolution details with sharper boundaries but lacks text-referring ability, which can sometimes cause multi-instance confusion (e.g., highlighting both overpasses in row 3). The Visual-Semantic Fusion elegantly resolves this con-flict by using (c) as a semantic pruner to eliminate false positives in (d). As shown in the “dam” and “toll station” cases, our final fused map 𝑆 𝑐𝑎𝑙 (f) maintains a highly focused and physically ac-curate response, avoiding the diffuse and misaligned distribution seen in the baseline 𝑆 𝑡𝑒𝑥𝑡 (e). This internal trajectory validates that ExACT: Exemplar-Driven Calibrated Refinement for Training-Free Visual Grounding in Remote Sensing Images Conference’17, July 2017, Washington, DC, USA 
+
+the “rectification-then-fusion” pipeline in the Vision Exemplar-Based Calibrator effectively bridges text-guided localization and fine-grained visual perception. 
+
+5 Conclusion 
+
+This study proposes ExACT, a novel training-free framework that bridges the visual-semantic gap in purely text-driven RSVG by in-troducing a one-shot visual exemplar for discriminative structural guidance. ExACT utilizes a VEC module to explicitly rectify noisy MLLM priors and a SAR module to distill them into precise geo-metric structures. By synergizing MLLM semantic reasoning with VFM structural recovery, our method provides a robust, annotation-efficient pathway for open-vocabulary geospatial intelligence. 
+
+References 
+
+[1] Mathilde Caron, Hugo Touvron, Ishan Misra, Hervé Jégou, Julien Mairal, Piotr Bojanowski, and Armand Joulin. 2021. Emerging properties in self-supervised vision transformers. In Proceedings of the IEEE/CVF international conference on computer vision . 9650–9660. [2] Jinming Chai, Licheng Jiao, Xiaoqiang Lu, Lingling Li, Fang Liu, Long Sun, Xu Liu, Wenping Ma, and Weibin Li. 2026. Like Human Rethinking: Contour Transformer AutoRegression for Referring Remote Sensing Interpretation. IEEE Transactions on Pattern Analysis and Machine Intelligence (2026). [3] Shengxin Chen, Gen Luo, Yiyi Zhou, Xiaoshuai Sun, Guannan Jiang, and Ron-grong Ji. 2024. Querymatch: A query-based contrastive learning framework for weakly supervised visual grounding. In Proceedings of the 32nd ACM International Conference on Multimedia . 4177–4186. [4] Fabio Dell’Acqua and Paolo Gamba. 2012. Remote sensing and earthquake damage assessment: Experiences, limits, and perspectives. Proc. IEEE 100, 10 (2012), 2876–2890. [5] Zhe Dong, Yuzhe Sun, Tianzhu Liu, Wangmeng Zuo, and Yanfeng Gu. 2024. Cross-modal bidirectional interaction model for referring remote sensing image segmentation. arXiv preprint arXiv:2410.08613 (2024). [6] Xin Gu, Heng Fan, Yan Huang, Tiejian Luo, and Libo Zhang. 2024. Context-guided spatio-temporal video grounding. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 18330–18339. [7] Seil Kang, Jinyeong Kim, Junhyeok Kim, and Seong Jae Hwang. 2025. Your large vision-language model only needs a few attention heads for visual grounding. In 
+
+Proceedings of the Computer Vision and Pattern Recognition Conference . 9339–9350. [8] Dongwon Kim, Namyup Kim, Cuiling Lan, and Suha Kwak. 2023. Shatter and gather: Learning referring image segmentation with text supervision. In Proceed-ings of the IEEE/CVF International Conference on Computer Vision . 15547–15557. [9] Alexander Kirillov, Eric Mintun, Nikhila Ravi, Hanzi Mao, Chloe Rolland, Laura Gustafson, Tete Xiao, Spencer Whitehead, Alexander C Berg, Wan-Yen Lo, et al .2023. Segment anything. In Proceedings of the IEEE/CVF international conference on computer vision . 4015–4026. [10] Kartik Kuckreja, Muhammad Sohail Danish, Muzammal Naseer, Abhijit Das, Salman Khan, and Fahad Shahbaz Khan. 2024. Geochat: Grounded large vision-language model for remote sensing. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 27831–27840. [11] Xin Lai, Zhuotao Tian, Yukang Chen, Yanwei Li, Yuhui Yuan, Shu Liu, and Jiaya Jia. 2024. Lisa: Reasoning segmentation via large language model. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 9579–9589. [12] Ke Li, Di Wang, Ting Wang, Fuyu Dong, Yiming Zhang, Luyao Zhang, Xiangyu Wang, Shaofeng Li, and Quan Wang. 2025. RSVG-ZeroOV: Exploring a Training-Free Framework for Zero-Shot Open-Vocabulary Visual Grounding in Remote Sensing Images. arXiv preprint arXiv:2509.18711 (2025). [13] Ke Li, Di Wang, Haojie Xu, Haodi Zhong, and Cong Wang. 2024. Language-guided progressive attention for visual grounding in remote sensing images. IEEE Transactions on Geoscience and Remote Sensing (2024). [14] Ke Li, Di Wang, Yongshan Zhu, Ting Wang, Weiping Ni, Tao Lei, Quan Wang, and Xinbo Gao. 2026. Training-Free Open-Vocabulary Visual Grounding for Remote Sensing Images and Videos. arXiv preprint arXiv:2606.16124 (2026). [15] Biao Liu, Xu Liu, Lingling Li, Licheng Jiao, Fang Liu, Xinyu Sun, and Youlin Huang. 2025. Language-guided hybrid representation learning for visual grounding on remote sensing images. In Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence . 1557–1566. [16] Fang Liu, Yuhao Liu, Yuqiu Kong, Ke Xu, Lihe Zhang, Baocai Yin, Gerhard Hancke, and Rynson Lau. 2023. Referring image segmentation using text supervision. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision . 22124– 22134. [17] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. 2023. Visual in-struction tuning. Advances in neural information processing systems 36 (2023), 34892–34916. [18] Sihan Liu, Yiwei Ma, Xiaoqing Zhang, Haowei Wang, Jiayi Ji, Xiaoshuai Sun, and Rongrong Ji. 2024. Rotated multi-scale interaction network for referring remote sensing image segmentation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 26658–26668. [19] Yufei Liu, Haoke Xiao, Jiaxing Chai, Yongcun Zhang, Rong Wang, Zijie Meng, and Zhiming Luo. 2025. SynPo: Boosting Training-Free Few-Shot Medical Seg-mentation via High-Quality Negative Prompts. In International Conference on Medical Image Computing and Computer-Assisted Intervention . Springer, 594–603. [20] Yang Liu, Muzhi Zhu, Hengtao Li, Hao Chen, Xinlong Wang, and Chunhua Shen. 2023. Matcher: Segment anything with one shot using all-purpose feature matching. arXiv preprint arXiv:2305.13310 (2023). [21] Xiaoqiang Lu, Long Sun, Lingling Li, Licheng Jiao, Yuting Yang, Zhongjian Huang, Jinming Chai, Xu Liu, Fang Liu, Wenping Ma, et al . 2025. RRSECS: Referring remote sensing expression comprehension and segmentation. IEEE Geoscience and Remote Sensing Magazine (2025). [22] Dilxat Muhtar, Zhenshi Li, Feng Gu, Xueliang Zhang, and Pengfeng Xiao. 2024. Lhrs-bot: Empowering remote sensing with vgi-enhanced large multimodal language model. In European Conference on Computer Vision . Springer, 440–457. [23] Chao Pang, Xingxing Weng, Jiang Wu, Jiayu Li, Yi Liu, Jiaxing Sun, Weijia Li, Shuai Wang, Litong Feng, Gui-Song Xia, et al . 2025. Vhm: Versatile and honest vision language model for remote sensing image analysis. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 39. 6381–6388. [24] Robin Rombach, Andreas Blattmann, Dominik Lorenz, Patrick Esser, and Björn Ommer. 2022. High-resolution image synthesis with latent diffusion models. In 
+
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition .10684–10695. [25] Kosuke Sakurai, Ryotaro Shimizu, and Masayuki Goto. 2025. Vision and Lan-guage Reference Prompt into SAM for Few-shot Segmentation. arXiv preprint arXiv:2502.00719 (2025). [26] Haozhan Shen, Tiancheng Zhao, Mingwei Zhu, and Jianwei Yin. 2024. Groundvlp: Harnessing zero-shot visual grounding from vision-language pre-training and open-vocabulary object detection. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 38. 4766–4775. [27] Yuxi Sun, Shanshan Feng, Xutao Li, Yunming Ye, Jian Kang, and Xu Huang. 2022. Visual grounding in remote sensing images. In Proceedings of the 30th ACM International Conference on Multimedia . 404–412. [28] Lv Tang, Peng-Tao Jiang, Haoke Xiao, and Bo Li. 2025. Towards training-free open-world segmentation via image prompt foundation models. International Journal of Computer Vision 133, 1 (2025), 1–15. [29] Peng Wang, Shuai Bai, Sinan Tan, Shijie Wang, Zhihao Fan, Jinze Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, et al . 2024. Qwen2-vl: Enhancing vision-language model’s perception of the world at any resolution. arXiv preprint arXiv:2409.12191 (2024). [30] Marie Weiss, Frédéric Jacob, and Grgory Duveiller. 2020. Remote sensing for agricultural applications: A meta-review. Remote sensing of environment 236 (2020), 111402. [31] Size Wu, Sheng Jin, Wenwei Zhang, Lumin Xu, Wentao Liu, Wei Li, and Chen Change Loy. 2025. F-lmm: Grounding frozen large multimodal models. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recogni-tion . 24710–24721. [32] Linhui Xiao, Xiaoshan Yang, Xiangyuan Lan, Yaowei Wang, and Changsheng Xu. 2025. Towards visual grounding: A survey. IEEE Transactions on Pattern Analysis and Machine Intelligence (2025). [33] Yang Zhan, Zhitong Xiong, and Yuan Yuan. 2023. Rsvg: Exploring data and models for visual grounding on remote sensing data. IEEE Transactions on Geoscience and Remote Sensing 61 (2023), 1–13. [34] Anqi Zhang, Guangyu Gao, Jianbo Jiao, Chi Liu, and Yunchao Wei. 2024. Bridge the points: Graph-based few-shot segment anything semantically. Advances in Neural Information Processing Systems 37 (2024), 33232–33261. [35] Jingyi Zhang, Jiaxing Huang, Sheng Jin, and Shijian Lu. 2024. Vision-language models for vision tasks: A survey. IEEE Transactions on Pattern Analysis and Machine Intelligence (2024). [36] Renrui Zhang, Zhengkai Jiang, Ziyu Guo, Shilin Yan, Junting Pan, Xianzheng Ma, Hao Dong, Peng Gao, and Hongsheng Li. 2023. Personalize segment anything model with one shot. arXiv preprint arXiv:2305.03048 (2023). [37] Yue Zhou, Mengcheng Lan, Xiang Li, Litong Feng, Yiping Ke, Xue Jiang, Qingyun Li, Xue Yang, and Wayne Zhang. 2024. Geoground: A unified large vision-language model for remote sensing visual grounding. arXiv preprint arXiv:2411.11904 (2024). [38] Zhe Zhu, Yuyu Zhou, Karen C Seto, Eleanor C Stokes, Chengbin Deng, Steward TA Pickett, and Hannes Taubenböck. 2019. Understanding an urbanizing planet: Strategic directions for remote sensing. Remote Sensing of Environment 228 (2019), 164–182. Conference’17, July 2017, Washington, DC, USA Zhang et al. 
+
+ExACT: Exemplar-Driven Calibrated Refinement for Training-Free Visual Grounding in Remote Sensing Images 
+
+Supplementary Materials 
+
+A Geometric Prompt Generation 
+
+The geometric prompt generation is mentioned in Sec. 3.4 of the main manuscript. Here, we detail how high-quality box and point prompts are extracted from the consolidated mask M𝑐𝑜𝑛 to guide SAM toward the final accurate prediction M𝑓 𝑖𝑛𝑎𝑙 . Let 𝑁 and 𝛾 de-note the target number of point prompts per instance and the oversampling factor, respectively. 
+
+• Box Prompt: The bounding box 𝐵 𝑏𝑜𝑥 is defined as the mini-mal axis-aligned rectangle enclosing the foreground region of M𝑐𝑜𝑛 .
+
+• Positive Points Prompt: We first sample the 𝛾𝑁 pixels with the highest confidence from M𝑐𝑜𝑛 and then perform K-Means clustering on these candidates to obtain 𝑁 spatial centroids. These centroids act as strong positive prompts. 
+
+• Negative Points Prompt: To prioritize hard negatives, we identify unique background pixels within 𝐵 𝑏𝑜𝑥 \ M𝑐𝑜𝑛 with scores below a threshold 𝜏 𝑛𝑒𝑔 . From this candidate pool, the 
+
+𝛾𝑁 points spatially nearest to M𝑐𝑜𝑛 are selected, and the 𝑁 
+
+samples with the lowest activation scores are finally retained as negative prompts. In summary, this strategy distills M𝑐𝑜𝑛 into robust geometric guid-ance for SAM. The combination of global box bounds, positive pixel anchors, and hard-negative constraints effectively bridges the gap from coarse localization to precise pixel-level grounding. 
+
+B More Experimental Details B.1 Datasets 
+
+To evaluate our approach, we conduct experiments on two promi-nent RSVG benchmarks supporting comprehensive evaluation for both RSREC and RSRES tasks: 
+
+• RRSIS-D [18 ] contains 17,402 triplets comprising RS im-ages, referring expressions, and pixel-level masks. It covers diverse geospatial scenes across 20 semantic categories and 7 linguistic attributes. All images are standardized to 800 × 800 
+
+pixels with spatial resolutions spanning from 0.5m to 30m. 
+
+• RISBench [ 5] is a large-scale benchmark containing 52,472 image-text-mask triplets. It features a wide spectrum of ob-jects across 26 semantic labels and 8 linguistic attributes. All images are resized to 512 ×512 pixels with spatial resolutions ranging from 0.1m to 30m. 
+
+B.2 Evaluation Metrics 
+
+Following prior works [ 12 , 18 ], we adopt three quantitative met-rics to assess performance: overall Intersection-over-Union ( 𝑜𝐼𝑜𝑈 ), mean Intersection-over-Union ( 𝑚𝐼𝑜𝑈 ), and Precision at different thresholds ( 𝑃𝑟 @𝑋 ). Specifically, 𝑃𝑟 @𝑋 evaluates the percentage of samples where the IoU exceeds a specific threshold 𝑋 , where 
+
+𝑋 ∈ { 0.3, 0.5, 0.7}.
+
+B.3 Hyperparameters and Hardware 
+
+For representative point selection, the hyperparameters are set to 
+
+𝜏 = 0.1, 𝛾 = 4, and 𝑁 = 2. All experiments are conducted on a single NVIDIA RTX3090 GPU with 24GB memory. 
+
+Table 1: Ablation study on geometric prompts. 
+
+BBox Pos Points Neg Points RSREC RSRES Pr@0.5 mIoU Pr@0.5 mIoU 
+
+✓ 38.78 39.31 38.49 37.61 
+
+✓ 34.21 34.62 34.88 33.12 
+
+✓ ✓ 39.30 39.65 39.07 38.40 
+
+✓ ✓ ✓ 39.82 40.19 39.82 39.29 Table 2: Ablation study on point prompt quantity. 
+
+𝛾𝑁 , 𝑁 RSREC RSRES Pr@0.5 mIoU Pr@0.5 mIoU 
+
+𝛾𝑁 = 8, 𝑁 = 1 38.29 39.46 38.18 38.68 
+
+𝛾𝑁 = 8, 𝑁 = 4 36.08 37.89 36.37 37.60 
+
+𝛾𝑁 = 2, 𝑁 = 2 39.16 39.85 39.13 39.05 
+
+𝛾𝑁 = 4, 𝑁 = 2 39.19 39.88 38.98 39.09 
+
+𝛾𝑁 = 16 , 𝑁 = 2 38.38 39.36 38.44 38.82 
+
+𝛾𝑁 = 8, 𝑁 = 2 39.82 40.19 39.82 39.29 7 9 12 15 17 20       
+
+> (a) Semantic Peak Number K
+> 35
+> 36
+> 37
+> 38
+> 39
+> 40
+> 41
+> mIoU (%)
+> RSREC
+> RSRES
+> 0.25 0.30 0.35 0.40 0.45 0.50
+> (b) Binarization Threshold
+> 35
+> 36
+> 37
+> 38
+> 39
+> 40
+> 41
+> RSREC
+> RSRES
+
+Figure 1: (a) Ablation on semantic peak number 𝐾 . (b) Abla-tion on binarization threshold 𝛼 .
+
+C More Ablation Studies on RRSIS-D 
+
+Ablation of Various Geometric Prompts. Table 1 illustrates the combined effect of our geometric prompts. While sparse positive points alone produce the lowest performance (34.62% mIoU on RSREC) due to a lack of global context, bounding boxes offer strong spatial constraints that significantly increase the mIoU to 39.31%. The performance reaches its highest at 40.19% with the full prompt combination. This shows that while boxes and positive points help locate the target’s main structure, negative points are still essential for reducing background distractors and clarifying boundaries in cluttered scenes. ExACT: Exemplar-Driven Calibrated Refinement for Training-Free Visual Grounding in Remote Sensing Images Conference’17, July 2017, Washington, DC, USA 
+
+Ablation of Point Prompt Sampling ( 𝑁 and 𝛾 ). Table 2 ablates the point prompt quantity 𝑁 and oversampling pool 𝛾𝑁 , establish-ing 𝑁 = 2 and 𝛾𝑁 = 8 as the optimal configuration. While a single prompt ( 𝑁 = 1) cannot fully capture target structures, excessive prompts ( 𝑁 = 4) induce noisy signals. Similarly, an adequate can-didate pool ( 𝛾𝑁 = 8) ensures robust K-Means centroids, whereas an oversized pool ( 𝛾𝑁 = 16 ) degrades accuracy by incorporating low-confidence outliers. These results highlight that a concise yet representative prompt set is ideal for training-free RSVG. 
+
+Ablation of Semantic Peak Number ( 𝐾 ). As shown in Figure 1(a), we evaluate the model’s performance across different values of the semantic peak number 𝐾 . The mIoU steadily improves and peaks at 𝐾 = 15 for both tasks. This trend highlights a critical trade-off: while sufficient semantic anchors ( 𝐾 ≤ 15 ) are vital for recovering the complete physical structure of fragmented or large-scale tar-gets, an excessively large 𝐾 inadvertently incorporates background distractors, leading to a slight performance degradation. 
+
+Ablation of Binarization Threshold ( 𝛼 ). Figure 1(b) examines the binarization threshold 𝛼 for generating the initial mask M𝑝𝑟𝑒𝑑 , with performance reaching its peak at 𝛼 = 0.35 for both tasks. Setting 
+
+𝛼 > 0.40 significantly damages the foreground mask and cuts off genuine activations, resulting in a sharp performance decline. Conversely, a more permissive threshold ( 𝛼 < 0.35 ) causes a milder degradation due to semantic leakage. The stable mIoU around this peak demonstrates ExACT’s robustness to threshold changes across diverse RS scenes. Image GT Ours RSVG-ZeroOV    
+
+> “The oval ground track field ”
+> “The tennis court on the far left ”
+> MLLM Attention
+
+Figure 2: Failure cases of our approach on RRSIS-D dataset. 
+
+D Limitations 
+
+Although our approach attains competitive performance in training-free RSVG, its capacity to handle complex spatial relational logic remains limited by the core reasoning constraints of foundational MLLMs. Specifically, while using visual exemplars helps calibrate the MLLM’s deviations in category-level visual semantics, it still falls short in resolving spatial positional bias (e.g., “far left” in the first row of Figure 2). Additionally, our cascaded pipeline is in-evitably limited by the inherent biases of vanilla MLLM attention maps. In hierarchical scenarios such as the “track field” case in the second row of Figure 2, attention activations are disproportionately directed towards high-contrast edges due to the very strong visual texture of the track border. As a result, this misleads the subse-quent geometric extraction to focus on exterior boundaries instead of capturing the true semantic interior. These limitations high-light ongoing challenges for training-free paradigms, particularly in interpreting abstract spatial logic and bridging the hierarchical semantic-geometric gap. To overcome these issues, future work will explore training-free attention calibration methods to address spatial-semantic positional biases and develop causal intervention mechanisms to reduce over-concentration on discriminative lo-cal features, thereby broadening focus to encompass the genuine geometric structure of the queried target.
