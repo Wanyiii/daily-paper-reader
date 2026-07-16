@@ -1,0 +1,975 @@
+Title: VTaMo: Video-Text Alignment Model for Sign Language Translation
+
+URL Source: https://arxiv.org/pdf/2607.09126v1
+
+Published Time: Mon, 13 Jul 2026 00:51:43 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# VTaMo: Video-Text Alignment Model for Sign Language Translation 
+
+Junyi Hu 1, Zhewen He 1, Haomian Huang 1, Aoxiang Yang 1, and Yi Fang 1,2⋆ 
+
+> 1
+
+New York University Abu Dhabi, UAE  
+
+> 2
+
+ChatSign Technology 
+
+jh10472@nyu.edu , yf23@nyu.edu 
+
+Abstract. Sign language translation (SLT) converts continuous sign videos into spoken language text. Gloss-free approaches leverage pre-trained visual encoders and language models but rely on implicit cross-modal alignment from translation supervision alone. We present VTaMo, a framework that introduces explicit multi-granularity alignment at three levels: (1) local alignment via entropy-regularized optimal transport with a learnable null token for fine-grained frame-to-token correspondences; (2) global alignment via a learnable orthogonal transformation that cali-brates embedding space geometry through Earth Mover’s Distance; and (3) position-aligned contrastive learning for discriminative token-level representations. Experiments on Phoenix-2014T, CSL-Daily, How2Sign, and OpenASL demonstrate consistent state-of-the-art performance, with ablations confirming the complementary contributions of each compo-nent. Code is available at https://github.com/junyi2005/vtamo .
+
+Keywords: Sign language translation · Cross-modal alignment · Opti-mal transport 
+
+## 1 Introduction 
+
+Sign language translation (SLT) aims to convert continuous sign language videos into spoken language sentences, enabling more accessible communication be-tween Deaf and hard-of-hearing signers and hearing communities [1, 48]. Re-cent gloss-free systems decode text directly from visual features using large pre-trained sequence-to-sequence language models [7,13,40], avoiding the costly gloss annotation required by gloss-based pipelines. However, most gloss-free bench-marks provide only natural language sentences as supervision, without gloss annotations or temporal segmentation [11, 36]. The core difficulty is therefore twofold: the semantic gap between vision and text, and the unknown correspon-dence between the temporal order of visual signs and the token order of the target text. Sign languages often do not follow the word order of the corresponding spo-ken language: a signer may express key content words first and add grammatical  
+
+> ⋆
+
+Corresponding author. arXiv:2607.09126v1 [cs.CV] 10 Jul 2026 2 J. Hu et al.          
+
+> Fig. 1: Motivation and performance of VTaMo. (a) Prior gloss-free sign language translation methods typically rely on implicit cross-modal alignment learned inside the decoder attention, which can yield diffuse or mismatched cross-attention and transla-tion errors. (b) VTaMo introduces explicit multi-granularity vision–text alignment— including local OT-based token-to-frame matching, global distribution alignment, and position-aligned contrastive learning—to sharpen correspondences and improve decod-ing. (c) VTaMo achieves state-of-the-art sign language translation quality across four benchmarks (Phoenix-2014T, CSL-Daily, How2Sign, and OpenASL), compared against SpaMo [16], Uni-Sign [21], SHuBERT [14], and SSVP-SLT [33]. Video frames in (a) and (b) are from the How2Sign dataset [11].
+
+relations later, so the temporal progression of gestures can differ from the target word order. As a result, visual features extracted along the video timeline are often misaligned with the text tokens that an autoregressive decoder is trained to predict. Left unresolved, the decoder must simultaneously learn translation and implicitly discover a latent cross-modal permutation, which increases opti-mization difficulty and degrades accuracy, especially on large-scale benchmarks such as How2Sign and OpenASL. Fig. 1 illustrates this gap: when alignment is left implicit, the cross-attention map can be noisy and the decoder may produce incorrect word ordering, whereas our approach makes alignment explicit. Existing methods largely treat the visual stream as an ordered sequence and rely on decoder attention to bridge the modality gap. ShuBERT [14] and Uni-Sign [21] strengthen representations through large-scale pretraining but do not explicitly model frame-to-token correspondence within a sentence, while SpaMo [16] uses batch-level contrastive learning yet leaves fine-grained, sentence-internal alignment unresolved. These limitations motivate a model that learns correspondence between visual segments and text tokens and uses it to present the decoder with a semantically ordered visual sequence. We propose VTaMo , a vision–text alignment model for gloss-free SLT that explicitly aligns and reorders visual features before text generation. Because VTaMo 3
+
+many spoken words such as articles and prepositions have no sign-level coun-terpart, we align against and decode a content-word pseudo-gloss of the target rather than the raw sentence. Given a sign video, we build token-level pseudo-gloss embeddings from a frozen language model embedding layer and temporal visual embeddings from a video encoder, then estimate a soft alignment between visual positions and pseudo-gloss tokens by solving an entropy-regularized opti-mal transport problem [10] with a learnable null token. The null token absorbs transitional gestures and co-articulation that correspond to no explicit word, stabilizing alignment on continuous signing. Using the resulting transport plan, we reorder the visual features into a sequence that follows the target token order and feed it to the language model decoder. At inference the target token or-der is unknown, so the visual features are not reordered; the decoder generates pseudo-gloss directly from the signing-order features, and a lightweight text-only recovery model restores spoken word order and the omitted function words. VTaMo is trained end to end with three complementary alignment objec-tives beyond the standard translation loss. First, a local optimal transport loss encourages fine-grained correspondence between temporal visual segments and text tokens while allowing unaligned frames to map to the null token. Second, a global loss calibrates the sentence-level geometry of the visual and textual embedding spaces through a learnable orthogonal transformation, supported by a memory queue that diversifies the sentence pairs used for alignment. Third, a position-aligned contrastive loss [29] sharpens token-level discriminability be-tween reordered visual features and their text token embeddings without altering the language model embedding space. Together, these losses make the reordered visual features semantically coherent, simplifying decoder learning and improv-ing robustness across datasets. We evaluate on four widely used benchmarks spanning three languages and diverse data regimes: Phoenix-2014T (German), CSL-Daily (Chinese), How2Sign and OpenASL (English). Across all benchmarks, VTaMo achieves state-of-the-art performance under the gloss-free setting and yields consistent gains over strong baselines that decode without explicit alignment. Ablation studies verify that each alignment component contributes complementary improvements, and qualitative analysis of the learned transport plans reveals interpretable corre-spondences between signing segments and target tokens. 
+
+## 2 Related Work 
+
+2.1 Gloss-free SLT, Alignment, and Large-Scale Pretraining 
+
+Gloss-free sign language translation (SLT) translates continuous sign videos into spoken-language sentences without gloss supervision, but it typically underper-forms gloss-based pipelines due to the absence of explicit intermediate structure [2,4,5,18,42,44,48,49]. Prior work improves gloss-free SLT by strengthening tem-poral modeling [20], introducing cross-modal alignment objectives [12,17,23,46], incorporating large language models [7,13,40], scaling training data [33,39], and large-scale sign pretraining such as ShuBERT [14] and Uni-Sign [21]; SpaMo [16] 4 J. Hu et al. 
+
+further emphasizes the non-trivial sign–text correspondence via contrastive ob-jectives. These approaches—including VAP [17], which applies text-derived con-straints only as visual pre-training—keep sentence-internal correspondence im-plicit and rely on coarse decoder attention to resolve word order. Our method instead estimates token-level alignment and reorders visual features before de-coding via Sinkhorn OT with a learnable null assignment and complementary local and global objectives. 
+
+2.2 Cross-Modal and Video–Text Alignment 
+
+Our objectives build on general cross-modal alignment tools but adapt them to the structure of sign language. Entropy-regularized optimal transport with the Sinkhorn algorithm [10] is a standard device for matching features across modalities, e.g., aligning visual features with text prompts in vision–language models [3]; learnable orthogonal transformations relate two embedding spaces without distorting their geometry, as in cross-lingual word-embedding align-ment [19]; and contrastive video–text frameworks such as CLIP4Clip [25], Video-CLIP [41], and X-CLIP [26] learn joint embeddings for retrieval. Closer in spirit, procedure-learning and step-grounding methods align video frames with an or-dered sequence of procedure steps, e.g., grounding instructional-article steps via narrations [27] and optimal-transport-guided procedure learning [8]. These meth-ods, however, target global or clip-level correspondence, or assume a largely fixed, monotonic step order. Sign language translation differs: the mapping is non-monotonic at the lexical level and partial , since many frames are transitional and words have no manual counterpart. VTaMo addresses both by coupling OT with a null assignment, sentence-level orthogonal calibration, and position-aligned contrastive learning to yield a reordered visual sequence. 
+
+## 3 Method 
+
+We present VTaMo , a framework for gloss-free sign language translation that explicitly aligns and reorders visual features before text generation. As illus-trated in Fig. 2, VTaMo introduces three complementary alignment objectives: (1) local alignment via entropy-regularized optimal transport for fine-grained frame-to-token correspondences; (2) global alignment via a learnable orthogo-nal transformation to calibrate the embedding spaces at the sentence level; and (3) position-aligned contrastive learning for discriminative representations. 
+
+3.1 Problem Formulation 
+
+Given a sign language video, we extract frame-level features V = {v1, . . . , vL}
+
+using a pre-trained CLIP-ViT encoder, where vi ∈ Rdv . The goal is to produce the spoken language sentence corresponding to the video. Spoken sentences contain many function words that have no direct sign-level realization, which makes a strict frame-to-word alignment ill-posed. We therefore VTaMo 5         
+
+> Fig. 2: VTaMo pipeline. A sign-language video is encoded into visual tokens using a frozen CLIP-ViT backbone followed by a lightweight temporal encoder and fusion pro-jection ( A,B ). Given the ground-truth text embeddings ( D), VTaMo performs local alignment with an entropy-regularized OT solver (Sinkhorn) to obtain soft token– frame matches, and global alignment by mapping sign features into the text space with an orthogonal transform and a memory queue ( C1,C2 ). The resulting corre-spondence is used for window reordering (C3 ) and position-aligned contrastive learning (C4 ). A LoRA-adapted Flan-T5 decoder generates the translation ( E). Video frames are from the Phoenix-2014T dataset [1].
+
+align against, and decode, a pseudo-gloss sequence Y = {y1, . . . , y U } of U tokens derived from the target sentence by a fixed offline filter. Concretely, we apply a frozen spaCy part-of-speech tagger that retains sign-relevant content tokens (NOUN , VERB , ADJ , ADV , NUM , PRON , PROPN ) and removes tokens that usually lack a direct sign counterpart ( DET , ADP , AUX , PART , PUNCT , CCONJ ); the same filtering rule is applied across all datasets using language-specific spaCy models. Both the text tokens used for alignment and the decoder targets are pseudo-gloss, and a lightweight text-only recovery model restores fluent sentences at inference. The visual features are projected to Rdh via a linear layer, temporally down-sampled by an attention-based encoder to produce H = {h1, . . . , hM } with 
+
+M ≪ L, and mapped to the language model dimension dt by a fusion projector. A LoRA-adapted Flan-T5 model then autoregressively generates the pseudo-gloss sequence. The central challenge is that sign language does not follow the word order of spoken language, and the temporal granularity of visual frames far exceeds that of linguistic tokens. 
+
+3.2 Attention-Based Temporal Encoding 
+
+We use an attention-based temporal convolution module with Nℓ cascaded layers, each performing 2× downsampling via learnable attention-weighted aggregation 6 J. Hu et al. 
+
+over local windows of size W . For each output position i, a local window Wi
+
+centered at position 2i is extracted, and a query is formed from the mean-pooled local context plus a learnable positional embedding p:
+
+qi = 1
+
+|W i|
+
+X
+
+> j∈W i
+
+xj + p. (1) Multi-head attention with relative position bias then aggregates the local con-text: 
+
+αi,j = softmax q⊤ 
+
+> i
+
+kj
+
+pdh/N head 
+
++ rj−ci
+
+!
+
+, oi = X
+
+> j∈W i
+
+αi,j vj , (2) where ci is the window center, rj−ci is a learnable relative position bias, and 
+
+Nhead is the number of attention heads. This ensures gradient flow to all frames, yielding more expressive temporal representations than max-pooling. 
+
+3.3 Local Alignment via Optimal Transport 
+
+Local alignment is the core component of VTaMo, establishing fine-grained corre-spondences between temporal visual segments and text tokens, formulated as an entropy-regularized optimal transport problem. Let S = {s1, . . . , sM } ∈ RM ×dt
+
+denote the visual features after fusion projection, and E = {e1, . . . , eU } ∈ RU ×dt
+
+the pseudo-gloss token embeddings from the frozen encoder embedding layer. Since S is optimized against the fixed text embeddings E under the alignment and translation losses, their cosine similarity reflects sign-level semantic corre-spondence, making it a meaningful transport cost. We introduce a single learn-able null token e∅ ∈ Rdt , prepended at position 0 of the text sequence, forming an augmented sequence ˜E ∈ RK×dt with K = U + 1 . The assignment is delib-erately not one-to-one: frames that carry no explicit sign-language semantics— such as background, transition, or reset frames—are all allowed to align to this same null token, so the model is never forced to map every frame onto a content token. The pairwise cost matrix uses cosine distance, with a learnable bias b∅
+
+controlling null affinity: 
+
+Cm,k =
+
+(
+
+1 − ¯s⊤
+
+> m
+
+¯ek − b∅, if k = 0 (null) ,
+
+1 − ¯s⊤
+
+> m
+
+¯ek, otherwise , (3) where ¯sm and ¯ek are ℓ2-normalized vectors. We solve the entropy-regularized OT problem via the Sinkhorn algorithm in log-domain: 
+
+A∗ = arg min  
+
+> A∈Π(a,b)
+
+⟨A, C⟩ − ε H (A), (4) where Π(a, b) is the set of transport plans with uniform marginals over valid frame and token positions, H(A) = − P 
+
+> m,k
+
+Am,k log Am,k is the entropy term, VTaMo 7
+
+and ε controls the sharpness of assignments. For numerical stability we iterate the dual potentials in the log domain for Niter steps, 
+
+log um ← log am − log P 
+
+> k
+
+exp( −Cm,k /ε + log vk) ,
+
+log vk ← log bk − log P 
+
+> m
+
+exp( −Cm,k /ε + log um) , (5) and recover the plan as Am,k = exp(log um − Cm,k /ε + log vk). We adopt a multi-phase annealing schedule that progressively decreases ε from a high initial value to encourage exploration before converging to sharp, discrete assignments. The local alignment loss combines three terms. The first is the transport cost Ltrans = 1
+
+> B
+
+P
+
+> i
+
+P 
+
+> m,k
+
+A(i)
+
+> m,k
+
+C(i)
+
+> m,k
+
+. The second is a temporal variation reg-ularization that penalizes adjacent frames switching tokens, computed on the row-normalized plan ˆA restricted to real text tokens: 
+
+Ltv = 1(M − 1)( K − 1)  
+
+> M−1
+
+X
+
+> m=1
+> K−1
+
+X
+
+> k=1
+
+ˆAm+1 ,k − ˆAm,k . (6) The third is a null cost regularization that keeps the mean cost-based null affinity 
+
+¯p∅—computed via a row-wise softmax on the cost matrix independently of the transport plan—below a target ratio ρtarget , preventing the learnable bias b∅
+
+from making the null column uniformly cheaper than all real tokens: 
+
+Lnull = ¯p∅ − ρtarget 
+
+2+, ¯p∅ = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+exp( −Cm, 0/τ )
+
+PK−1 
+
+> k=0
+
+exp( −Cm,k /τ ) . (7) The complete local objective is their weighted sum: 
+
+Llocal = βlocal Ltrans + βtv Ltv + βnull Lnull . (8) 
+
+3.4 Global Alignment via Orthogonal Transformation 
+
+Because the visual and textual encoders are pre-trained on different modalities, paired sign and text sentence embeddings can suffer a coordinate (orientation) mismatch even when they are semantically equivalent. We therefore apply a learnable orthogonal transformation —a rotation of the feature space that pre-serves vector lengths and angular relationships—to the visual sentence embed-dings before comparing the two modalities at the sentence level. We constrain the transformation to be orthogonal precisely because the goal is to correct orienta-tion without reshaping the space: this preserves norms and angular structure for the cosine-based transport cost and avoids the spurious low-cost matches that an unconstrained projection could introduce. We aggregate frame-level features into one sentence-level vector per video and per sentence via attention pooling, using a mean query q over valid positions and the normalized weighted sum 
+
+z =
+
+P 
+
+> l
+
+αlxl
+
+P 
+
+> l
+
+αlxl 2
+
+, αl = softmax l
+
+ x⊤ 
+
+> l
+
+q/pdt
+
+, (9) 8 J. Hu et al. 
+
+yielding normalized sentence-level vectors zsign , ztext ∈ Rdt . A FIFO memory queue stores recent sentence-level vector pairs so that the sentence-level trans-port is computed over a sufficiently diverse batch rather than a few in-batch pairs. A learnable matrix T ∈ Rdt×dt , initialized near identity, transforms the visual sentence vectors: 
+
+˜zsign  
+
+> n
+
+= zsign  
+
+> n
+
+T
+
+∥zsign  
+
+> n
+
+T∥2
+
+. (10) We then form the pairwise cosine cost Cgn,n ′ = 1 − (˜ zsign  
+
+> n
+
+)⊤ztext  
+
+> n′
+
+between the transformed visual vectors and the textual vectors and solve a Sinkhorn OT problem with uniform marginals to obtain a sentence-level transport plan P;the resulting Earth Mover’s Distance loss is 
+
+LEMD = X
+
+> n,n ′
+
+Pn,n ′ (1 − (˜ zsign  
+
+> n
+
+)⊤ztext  
+
+> n′
+
+). (11) An orthogonality constraint Lorth = ∥T⊤T−I∥2 
+
+> F
+
+keeps T close to a pure rotation and preserves pairwise distances. The global loss is activated only after local alignment stabilizes, using a scheduled ramp-up: 
+
+Lglobal = λg (t) · L EMD + βorth Lorth . (12) 
+
+3.5 Window-Based Feature Reordering 
+
+Once local alignment has produced a reliable transport plan A, we reorder the visual features to match the target token order. This is necessary because the decoder’s autoregressive cross-entropy loss expects the input to follow the target text order; otherwise the visual features stay in temporal order and the cross-entropy gradient counteracts the alignment objectives. Concretely, we partition the M visual frames into Nw = U + 2 overlapping temporal windows, where the two extra windows absorb boundary effects; the 
+
+w-th window spans [sw, e w) with sw = ⌊w (M − 1) /N w + 0 .5⌋ and ew = ⌊(w +1)( M − 1) /N w + 0 .5⌋ + 1 . For each window we accumulate the alignment mass 
+
+πw = Pew −1 
+
+> m=sw
+
+Am, : ∈ RK and assign it to the real text token with the largest aggregated mass, ϕ(w) = arg max u∈{ 1,...,U } πw,u ; windows dominated by the null token are excluded. Collecting the windows assigned to each token u into 
+
+Ωu = {w | ϕ(w) = u} and traversing the token order left to right yields the reordered sequence 
+
+R = Concat  {Ssw :ew −1 | w ∈ Ω↑ 
+
+> 1
+
+}, . . . , {Ssw :ew −1 | w ∈ Ω↑ 
+
+> U
+
+} ∈ RU ′×dt , (13) where Ω↑ 
+
+> u
+
+orders the windows in Ωu by their original temporal index. This pre-serves local temporal continuity, and the reordered sequence is fed to the decoder. For the contrastive objective, frames assigned to each token u are mean-pooled to produce a single token-level representation ru, yielding R = {r1, . . . , rU } aligned one-to-one with E.VTaMo 9
+
+3.6 Position-Aligned Contrastive Learning 
+
+Because reordering is used only during training, the model must also function at inference when the target order is unknown. We therefore impose a token-level contrastive objective that binds each reordered visual feature to its text token embedding, so that even when tokens arrive out of order each is paired with its correct counterpart and the decoder can recover its lexical item; restoring fluent word order is then left to the recovery model. We apply learnable projection heads to both modalities: 
+
+ˆru = LN  Wv 
+
+> 2
+
+σ(Wv 
+
+> 1
+
+ru), ˆeu = LN  Wt 
+
+> 2
+
+σ(Wt 
+
+> 1
+
+eu), (14) where σ is GELU activation and LN is layer normalization. After ℓ2-normalization, the InfoNCE loss is: 
+
+Lcontra = − 1
+
+|V| 
+
+X
+
+> i∈V
+
+log exp  sim (ˆ ri, ˆei)/τ c
+
+X
+
+> j∈V
+
+exp  sim (ˆ ri, ˆej )/τ c
+
+ , (15) where V denotes valid token positions and τc is a temperature hyperparameter. Gradients flow through the visual branch but are blocked from the text branch to preserve the pre-trained language model representations. 
+
+Inference and pseudo-gloss recovery. At test time the target order is unknown, so no reordering is applied: the decoder reads the visual tokens in their original temporal order and emits a pseudo-gloss sequence in visual (signing) order rather than spoken-language order. The token-level grounding above makes this feasi-ble, since each visual token is decoded into its correct lexical item even when the tokens arrive out of order. To recover a fluent translation, we pass this video-order pseudo-gloss through a lightweight recovery model that restores spoken word order and re-inserts the function words dropped by the pseudo-gloss filter (Sec. 3.1). Crucially, this recovery model is trained purely on text and never sees sign videos: we take plain sentences, apply the same pseudo-gloss extractor, per-mute the content words, and train the model to reconstruct the original sentence from this shuffled input. The overall training objective combines the translation loss with the three alignment losses: 
+
+L = LT5 + λlocal Llocal + λg (t) LEMD + βorth Lorth + βcontra Lcontra , (16) where LT5 is the cross-entropy loss for autoregressive generation. Training pro-ceeds in two phases: in the first phase, only alignment losses are active while the language model is frozen, allowing the visual encoder to establish meaningful correspondences; in the second phase, the full objective is optimized jointly with the LoRA-adapted language model. 10 J. Hu et al. 
+
+## 4 Experiments 
+
+4.1 Datasets and Metrics 
+
+We evaluate our method on four publicly available sign language translation benchmarks that span different languages, vocabulary sizes, and recording con-ditions: Phoenix-2014T [1] (German), CSL-Daily [48] (Chinese), How2Sign [11] and OpenASL [36] (English). We report BLEU-n scores [30] for n ∈ { 1, 2, 3, 4}
+
+and ROUGE-L F1 [22] as the primary evaluation metrics. For English SLT datasets (How2Sign and OpenASL), we additionally report BLEURT [34] scores following established protocol. For every benchmark, each model trains only on its official split without additional sign-language data or task-specific pre-training. 
+
+4.2 Implementation Details 
+
+Visual features. We extract frame-level spatial features using a pre-trained CLIP-ViT-Large model [31] with S 2-Wrapper [35] for multi-scale feature extraction at scales 1 and 2, yielding 2048-dimensional feature vectors per frame. 
+
+Language model. We employ Flan-T5-XL [9] as the language model backbone and adapt it using LoRA [15] with rank r = 16 , scaling factor α = 32 , and dropout rate 0.1. The LoRA adapters are applied to the query and value pro-jection matrices across all transformer layers. 
+
+Architecture. The visual features are projected from dv = 2048 to an interme-diate dimension dh = 768 through a linear layer. The attention-based temporal encoder consists of Nℓ = 2 cascaded layers with 4 attention heads and a window size of 8, yielding a 4× temporal downsampling. The fusion projector maps the features from dh to the T5 embedding dimension dt. The contrastive projec-tion heads are two-layer MLPs with GELU activation and layer normalization, projecting to 768 dimensions. 
+
+Training. We train all models using AdamW [24] with a peak learning rate of 
+
+6 × 10 −4, cosine learning rate schedule, and linear warm-up over the first 2,000 steps. The batch size is 6 with gradient accumulation over 2 steps, and gradient clipping is applied with a maximum norm of 1.0. All experiments were conducted on a single NVIDIA A100 GPU with mixed-precision (bf16) training. 
+
+Alignment hyperparameters. For the local alignment, the Sinkhorn algorithm runs for Niter = 10 iterations. The epsilon annealing schedule proceeds from 
+
+εhigh = 0 .12 to εmid = 0 .10 over the first 10 epochs and further to εlow = 0 .03 
+
+over the following 80 epochs. The null ratio target is ρtarget = 0 .2, and the loss weights are βlocal = 2 .0, βtv = 0 .1, βnull = 0 .1, with the overall local-alignment weight λlocal = 1 .0. For the global alignment, the EMD solver uses εg = 0 .05 with 20 Sinkhorn iterations, the memory queue capacity is 256, and the weight ramps VTaMo 11 
+
+Table 1: Performance comparison on the Phoenix-2014T [1] and CSL-Daily datasets [48]; all numbers are reported on the official test sets. “Vis.Ft.” denotes visual fine-tuning on sign language datasets. Bold marks the best result. Setting Methods Modality Vis.Ft. Phoenix-2014T CSL-Daily B1 B2 B3 B4 RG B1 B2 B3 B4 RG Gloss-based SLRT [2] RGB ✓ 46.61 33.73 26.19 21.32 49.54 37.38 24.36 16.55 11.79 36.74 MMTLB [4] RGB ✗ 53.97 41.75 33.84 28.39 52.65 53.31 40.41 30.87 23.92 53.25 TS-SLT [5] RGB ✓ 54.90 42.43 34.46 28.95 53.48 55.44 42.59 32.87 25.79 55.72 SLTUNET [44] RGB ✓ 52.92 41.76 33.99 28.47 52.11 54.98 41.44 31.84 25.01 54.08 Weakly Gloss-free TSPNet [20] RGB ✓ 36.10 23.12 16.88 13.41 34.96 17.09 8.98 5.07 2.97 18.38 GASLT [43] RGB ✓ 39.07 26.74 21.86 15.74 39.86 19.90 9.94 5.98 4.07 20.35 CSGCR [46] RGB ✗ 36.71 25.40 18.86 15.18 38.85 — — — — —GFSLT-VLP [47] RGB ✓ 43.71 33.18 26.11 21.44 42.49 39.37 24.93 16.26 11.00 36.44 FLa-LLM [7] RGB ✗ 46.29 35.33 28.03 23.09 45.27 37.15 25.12 18.38 14.20 37.25 Gloss-free Sign2GPT [40] RGB ✓ 49.54 35.96 28.83 22.52 48.90 41.75 28.73 20.60 15.40 42.36 SignLLM [13] RGB ✓ 45.21 34.78 28.05 23.40 44.49 39.55 28.13 20.07 15.75 39.91 C2RL [6] RGB ✓ 52.81 40.20 32.20 26.75 50.96 49.32 36.28 27.54 21.61 48.21 Uni-Sign [21] Pose+RGB ✓ — — — — — 55.08 42.14 32.98 26.36 56.51 SpaMo [16] RGB ✗ 49.80 37.32 29.50 24.32 46.57 48.90 36.90 26.78 20.55 47.46 VTaMo (Ours) RGB ✗ 61.32 46.27 35.15 28.86 60.24 57.64 44.12 33.78 27.16 57.28 
+
+from 0 to λmax 
+
+g = 0 .1 over 4,000 steps after warm-up. The orthogonality penalty coefficient is βorth = 0 .05 . The contrastive learning temperature is τc = 0 .1, and the contrastive loss weight is βcontra = 1 .0.
+
+Training cost. On a single A100, end-to-end training takes 14 h on Phoenix-2014T, 32 h on CSL-Daily, and 50 h on How2Sign. The optimal transport solvers add negligible overhead: the local Sinkhorn step takes 54 ms ( <3.2% of the per-step time), and the global OT over the 256 × 256 memory queue takes <38 ms. 
+
+4.3 Comparison with State-of-the-Art Results on Phoenix-2014T and CSL-Daily. As shown in Table 1, most prior methods rely on visual-encoder fine-tuning or gloss supervision, yet VTaMo reaches state-of-the-art on both benchmarks without either. On Phoenix-2014T it attains 28.86 BLEU-4, surpassing the strongest gloss-free method SpaMo [16] by 4.54 points and coming within 0.09 of the best gloss-based result (TS-SLT [5], 28.95). On CSL-Daily it reaches 27.16 BLEU-4, a 6.61-point gain over SpaMo and 0.80 over Uni-Sign, showing that explicit multi-granularity alignment especially helps on topically diverse data. 
+
+Results on How2Sign. How2Sign is more challenging, with open-domain topics and a much larger vocabulary. As shown in Table 2, VTaMo achieves the best BLEU-1, BLEU-4, and BLEURT on the official test set (BLEU-4 18.47, BLEURT 50.26) using only RGB and no large-scale pre-training—an 8.36 BLEU-4 gain over SpaMo [16]—and ranks second on ROUGE-L behind SSVP-SLT [33] (38.40 vs. 37.14). It also surpasses SHuBERT [14] (16.2 / 49.9) and Uni-Sign [21] (14.9 / 49.4), both using pose+RGB and large-scale pre-training. 
+
+Results on OpenASL. OpenASL is the hardest setting, with a vocabulary exceeding 10,000 words. As shown in Table 3, VTaMo attains 25.94 BLEU-4 and 12 J. Hu et al. 
+
+Table 2: Results on How2Sign [11]. Bold marks the best result. Methods Mod. B1 B4 RG BLEURT GloFE-VN [23] Lmk 14.9 2.2 12.6 31.7 YT-ASL [39] Lmk 14.96 1.22 25.70 29.98 SSVP-SLT [33] RGB 43.20 15.50 38.40 49.60 FLa-LLM [7] RGB 29.81 9.66 27.81 —Uni-Sign [21] P+R 40.2 14.9 36.0 49.4 SHuBERT [14] P+R — 16.2 — 49.9 SpaMo [16] RGB 33.41 10.11 30.56 42.23 VTaMo (Ours) RGB 46.67 18.47 37.14 50.26 
+
+Table 3: Results on OpenASL [36]. Bold marks the best result. Methods Mod. B1 B4 RG BLEURT GloFE-VN [23] Pose 21.56 7.06 21.75 36.35 Conv-GRU [1] RGB 16.11 4.58 16.10 25.65 OpenASL [36] RGB 20.92 6.72 21.02 31.09 C2RL [6] RGB 31.46 13.21 31.36 —Uni-Sign [21] P+R 49.35 23.14 43.22 60.40 SHuBERT [14] P+R — 23.2 — 60.60 SpaMo [16] RGB 46.28 21.25 41.04 57.82 VTaMo (Ours) RGB 53.58 25.94 46.85 62.48 
+
+62.48 BLEURT on the official test set, outperforming Uni-Sign [21] and SHu-BERT [14] by 2.80 and 2.74 BLEU-4 despite their pose+RGB inputs and large-scale pre-training. Gains over SpaMo grow on the larger-vocabulary How2Sign and OpenASL, consistent with alignment helping more as complexity increases. 
+
+4.4 Ablation Study 
+
+All ablations are conducted on the Phoenix-2014T test set. 
+
+Alignment components. Removing each alignment loss in turn (Table 4) shows that all three are necessary and non-substitutable. The position-aligned con-trastive loss Lcontra matters most ( −6.30 BLEU-4), providing token-level dis-criminative grounding; the local OT loss Llocal is second ( −5.09), as it underpins the window-based reordering that feeds ordered inputs to the decoder; and the global loss LEMD (−2.65) adds complementary embedding-space calibration. 
+
+Language-model backbone. To test whether the gains stem from a favorable lan-guage model rather than our alignment design, we vary the backbone following SpaMo’s protocol (Table 5). The ranking matches SpaMo—Flan-T5-XL is best, mT0-XL is close behind, and Llama-2 underperforms despite its larger size— confirming that scaling the LM alone does not help under the limited-data SLT regime. Critically, under every fixed backbone our method beats SpaMo by +2 .49 
+
+to +4 .54 BLEU-4, so the improvement comes from the alignment block. 
+
+Local alignment quality. Three transport-plan metrics (Table 6)—peak assign-ment probability, normalized entropy, and segment change rate—characterize alignment sharpness. The full model is the sharpest and most confident; remov-ing epsilon annealing yields diffuse assignments, removing the TV loss fragments them, and removing the null token forces transitional frames onto real tokens. 
+
+Global alignment components. Table 7 isolates the global module and reports the epoch of peak development BLEU-4 as an efficiency proxy. The orthogonality constraint prevents distance distortion, scheduled activation avoids premature gradients before local plans stabilize, and the memory queue is the largest con-tributor to faster convergence (36 vs. 68 epochs without it). VTaMo 13 
+
+Table 4: Alignment-component abla-tion on the Phoenix-2014T [1] test set. Each row removes one loss from the full model. Configuration B1 B4 RG Full model 61.32 28.86 60.24 
+
+w/o Llocal 52.62 23.77 51.29 w/o LEMD 57.46 26.21 57.92 w/o Lcontra 51.23 22.56 50.14 
+
+Table 5: Language-model backbone abla-tion on Phoenix-2014T [1] (BLEU-4), fol-lowing SpaMo [16]’s protocol. ∆: our gain over SpaMo at the same backbone. Backbone #Param SpaMo Ours ∆                    
+
+> Flan-T5-large [9] 0.78B 19.25 22.07 +2 .82
+> mBART-50 [37] 0.61B 10.94 13.43 +2 .49
+> mT0-XL [28] 3.5B 24.23 27.90 +3 .67
+> Llama-2 [38] 7B 13.86 16.82 +2 .96
+> Flan-T5-XL [9] 3.0B 24.32 28.86 +4 .54
+
+Table 6: Alignment quality metrics on the Phoenix-2014T [1] development set. Configuration Peak ↑ Entropy ↓ Change ↓
+
+w/o annealing 0.48 0.55 0.32 w/o TV loss 0.72 0.67 0.54 w/o null token 0.61 0.46 0.33 Full model 0.76 0.18 0.12 Table 7: Ablation of global alignment components on Phoenix-2014T [1]. Ep. ↓: best epoch. Configuration B4 Ep. ↓
+
+Full model 28.86 36 w/o orthogonality 28.13 52 w/o mem. queue 27.35 68 w/o sched. act. 26.42 43 
+
+4.5 Noise Sensitivity Analysis 
+
+Since VTaMo operates on RGB input without visual-encoder fine-tuning, we assess its robustness to appearance shifts. Using Stable Diffusion [32] with Con-trolNet [45] for pose-conditioned synthesis, we build four controlled conditions on the entire How2Sign test set while preserving each signer’s hand and body kinematics (Fig. 3): two replace the background (BG-1, outdoor park; BG-2, indoor kitchen) and two alter signer appearance (AP-1, full body shape and identity transfer to a synthetic signer; AP-2, clothing). All appearance modifi-cations are entirely synthetic—the transferred identity in AP-1 does not repre-sent any real individual—and are used solely for robustness evaluation. Table 8 reports single-run performance across all conditions: background replacement causes only marginal degradation ( ≤0.42 BLEU-4) and appearance edits even smaller drops ( ≤0.33), showing that VTaMo attends to gesture semantics rather than scene context or signer identity. Additional examples are in the supplemen-tary material. 
+
+4.6 Qualitative Analysis 
+
+Fig. 4(a) visualizes the learned transport plans on How2Sign: they exhibit clear block-diagonal structure—contiguous frame groups aligning to individual tokens— with the null token absorbing transitional frames, and the ordering is largely monotonic with local reorderings where signing order diverges from the target. 14 J. Hu et al. 
+
+Fig. 3: Representative augmented samples used in the robustness analysis on How2Sign [11]. (a) and (c) are background-replacement conditions generated via text-prompt editing; (b) is a full body shape and identity transfer to a synthetic signer generated via text prompt. Hand and body kinematics are preserved via ControlNet pose conditioning. The synthetic signer in (b) does not represent any real individual. All modifications are used solely for research evaluation. 
+
+Table 8: Noise sensitivity analysis on the entire How2Sign [11] test set. BG: back-ground replacement, AP: appearance modification. All modifications generated with Stable Diffusion and ControlNet pose conditioning. Condition B1 B2 B3 B4 RG Original 46.67 32.47 24.11 18.47 37.14 BG-1 (outdoor) 46.24 32.12 23.98 18.26 37.02 BG-2 (kitchen) 45.89 31.48 23.62 18.05 36.67 AP-1 (identity) 46.15 32.07 23.91 18.14 36.92 AP-2 (clothing) 46.52 32.44 23.86 18.42 37.08 
+
+Fig. 4(c) marks the video segment assigned to each predicted content token along the timeline, and Fig. 4(b) shows a t-SNE with distinct semantic clusters, indicating alignment that is both temporally coherent at the frame level and semantically organized at the sentence level. 
+
+## 5 Conclusion 
+
+VTaMo achieves state-of-the-art gloss-free SLT through explicit multi-granularity cross-modal alignment: local OT with a null token, global orthogonal calibration, and position-aligned contrastive learning. Experiments on four benchmarks con-firm consistent gains, and ablations verify each component’s contribution, show-ing that explicit alignment is an effective, transferable direction for gloss-free SLT with modest overhead. VTaMo 15 
+
+Fig. 4: Qualitative analysis on How2Sign [11] test samples. (a) OT transport plans from VTaMo’s Sinkhorn solver: rows are visual frames and columns are pseudo-gloss tokens, with darker cells indicating higher transport mass; the block-diagonal struc-ture reflects temporally coherent frame-to-token correspondences while the null token absorbs transitional frames. (b) t-SNE of visual features, colored by semantic category, forming distinct clusters. (c) Explicit frame-to-pseudo-gloss alignment on a test sen-tence: each colored interval marks the contiguous video segment assigned to a predicted content token, with representative frames shown above the timeline. 
+
+## 6 Limitations 
+
+Our evaluation targets offline accuracy rather than systems-level concerns such as real-time or on-device deployment; the spoken-language order is also recovered by a text-only model rather than observed directly. 
+
+## Acknowledgements 
+
+This work was partially supported by ChatSign Technology, Ltd.; and the NYUAD Center for AI and Robotics (CAIR), funded by Tamkeen under the NYUAD Re-search Institute Award CG010. The generous computational support was pro-vided by the HPC resources at NYU Abu Dhabi and NYU New York. 16 J. Hu et al. 
+
+## References 
+
+1. Camgöz, N.C., Hadfield, S., Koller, O., Ney, H., Bowden, R.: Neural sign language translation. In: CVPR (2018) 2. Camgöz, N.C., Koller, O., Hadfield, S., Bowden, R.: Sign language transformers: Joint end-to-end sign language recognition and translation. In: CVPR (2020) 3. Chen, G., Yao, W., Song, X., Li, X., Rao, Y., Zhang, K.: PLOT: Prompt learning with optimal transport for vision-language models. In: ICLR (2023) 4. Chen, Y., Wei, F., Sun, X., Wu, Z., Lin, S.: A simple multi-modality transfer learning baseline for sign language translation. In: CVPR. pp. 5120–5130 (2022) 5. Chen, Y., Zuo, R., Wei, F., Wu, Y., Liu, S., Mak, B.: Two-stream network for sign language recognition and translation. In: NeurIPS. vol. 35, pp. 17043–17056 (2022) 6. Chen, Z., Zhou, B., Huang, Y., Wan, J., Hu, Y., Shi, H., Liang, Y., Lei, Z., Zhang, D.: C2RL: Content and context representation learning for gloss-free sign language translation and retrieval. IEEE Transactions on Circuits and Systems for Video Technology (2025) 7. Chen, Z., Zhou, B., Li, J., Wan, J., Lei, Z., Jiang, N., Lu, Q., Zhao, G.: Fac-torized learning assisted with large language model for gloss-free sign language translation. In: Proceedings of the 2024 Joint International Conference on Compu-tational Linguistics, Language Resources and Evaluation (LREC-COLING 2024). pp. 7071–7081. ELRA and ICCL (2024) 8. Chowdhury, S.S., Chandra, S., Roy, K.: OPEL: Optimal transport guided proce-dure learning. In: NeurIPS (2024) 9. Chung, H.W., Hou, L., Longpre, S., Zoph, B., Tay, Y., Fedus, W., Li, Y., Wang, X., Dehghani, M., Brahma, S., et al.: Scaling instruction-finetuned language models. JMLR 25 (70), 1–53 (2024) 10. Cuturi, M.: Sinkhorn distances: Lightspeed computation of optimal transport. In: NeurIPS (2013) 11. Duarte, A., Palaskar, S., Ventura, L., Ghadiyaram, D., DeHaan, K., Metze, F., Tor-res, J., Giro-i Nieto, X.: How2sign: A large-scale multimodal dataset for continuous american sign language. In: CVPR (2021) 12. Fu, B., Ye, P., Zhang, L., Yu, P., Hu, C., Shi, X., Chen, Y.: A token-level contrastive framework for sign language translation. In: ICASSP. pp. 1–5 (2023) 13. Gong, J., Foo, L.G., He, Y., Rahmani, H., Liu, J.: Llms are good sign language translators. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 18362–18372 (2024) 14. Gueuwou, S., Du, X., Shakhnarovich, G., Livescu, K., Liu, A.H.: SHuBERT: Self-supervised sign language representation learning via multi-stream cluster predic-tion. In: ACL. pp. 28792–28810 (2025) 15. Hu, E.J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., Chen, W.: Lora: Low-rank adaptation of large language models. In: ICLR (2022) 16. Hwang, E.J., Cho, S., Lee, J., Park, J.C.: An efficient gloss-free sign language trans-lation using spatial configurations and motion dynamics with llms. In: NAACL (2025) 17. Jiao, P., Min, Y., Chen, X.: Visual alignment pre-training for sign language trans-lation. In: ECCV (2024) 18. Jing, L., Song, X., Zu, X., Zheng, N., Zhao, Z., Nie, L.: Vk-g2t: Vision and context knowledge enhanced gloss2text. In: ICASSP. pp. 7860–7864 (2024) 19. Lample, G., Conneau, A., Ranzato, M., Denoyer, L., Jégou, H.: Word translation without parallel data. In: ICLR (2018) VTaMo 17 20. Li, D., Xu, C., Yu, X., Zhang, K., Swift, B., Suominen, H., Li, H.: Tspnet: Hierarchi-cal feature learning via temporal semantic pyramid for sign language translation. In: NeurIPS. vol. 33, pp. 12034–12045 (2020) 21. Li, Z., Zhou, W., Zhao, W., Wu, K., Hu, H., Li, H.: Uni-sign: Toward unified sign language understanding at scale. In: ICLR (2025) 22. Lin, C.Y.: Rouge: A package for automatic evaluation of summaries. In: Text Sum-marization Branches Out (2004) 23. Lin, K., Wang, X., Zhu, L., Sun, K., Zhang, B., Yang, Y.: Gloss-free end-to-end sign language translation. In: ACL. pp. 12904–12916 (2023) 24. Loshchilov, I., Hutter, F.: Decoupled weight decay regularization. In: ICLR (2019) 25. Luo, H., Ji, L., Zhong, M., Chen, Y., Lei, W., Duan, N., Li, T.: CLIP4Clip: An empirical study of CLIP for end to end video clip retrieval and captioning. Neuro-computing 508 , 293–304 (2022) 26. Ma, Y., Xu, G., Sun, X., Yan, M., Zhang, J., Ji, R.: X-CLIP: End-to-end multi-grained contrastive learning for video-text retrieval. In: ACM MM. pp. 638–647 (2022) 27. Mavroudi, E., Afouras, T., Torresani, L.: Learning to ground instructional articles in videos through narrations. In: ICCV. pp. 15201–15213 (2023) 28. Muennighoff, N., Wang, T., Sutawika, L., Roberts, A., Biderman, S., Le Scao, T., Bari, M.S., Shen, S., Yong, Z.X., Schoelkopf, H., Tang, X., Radev, D., Aji, A.F., Almubarak, K., Albanie, S., Alyafeai, Z., Webson, A., Raff, E., Raffel, C.: Crosslin-gual generalization through multitask finetuning. In: ACL. pp. 15991–16111 (2023) 29. van den Oord, A., Li, Y., Vinyals, O.: Representation learning with contrastive predictive coding. arXiv preprint arXiv:1807.03748 (2018) 30. Papineni, K., Roukos, S., Ward, T., Zhu, W.J.: Bleu: A method for automatic evaluation of machine translation. In: ACL (2002) 31. Radford, A., Kim, J.W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., et al.: Learning transferable visual models from natural language supervision. In: ICML (2021) 32. Rombach, R., Blattmann, A., Lorenz, D., Esser, P., Ommer, B.: High-resolution image synthesis with latent diffusion models. In: CVPR (2022) 33. Rust, P., Shi, B., Wang, S., Camgöz, N.C., Maillard, J.: Towards privacy-aware sign language translation at scale. In: Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) (2024) 34. Sellam, T., Das, D., Parikh, A.: BLEURT: Learning robust metrics for text gener-ation. In: ACL (2020) 35. Shi, B., Wu, Z., Mao, M., Wang, X., Darrell, T.: When do we not need larger vision models? In: ECCV (2024) 36. Shi, B., Brentari, D., Shakhnarovich, G., Livescu, K.: Open-domain sign language translation learned from online video. In: EMNLP (2022) 37. Tang, Y., Tran, C., Li, X., Chen, P.J., Goyal, N., Chaudhary, V., Gu, J., Fan, A.: Multilingual translation with extensible multilingual pretraining and finetuning. arXiv preprint arXiv:2008.00401 (2020) 38. Touvron, H., Martin, L., Stone, K., Albert, P., Almahairi, A., Babaei, Y., Bash-lykov, N., Batra, S., Bhargava, P., Bhosale, S., et al.: Llama 2: Open foundation and fine-tuned chat models. arXiv preprint arXiv:2307.09288 (2023) 39. Uthus, D., Tanzer, G., Georg, M.: Youtube-asl: A large-scale, open-domain amer-ican sign language-english parallel corpus. In: NeurIPS. vol. 36 (2023) 40. Wong, R., Camgoz, N.C., Bowden, R.: Sign2gpt: Leveraging large language models for gloss-free sign language translation. In: ICLR (2024) 18 J. Hu et al. 41. Xu, H., Ghosh, G., Huang, P.Y., Okhonko, D., Aghajanyan, A., Metze, F., Zettle-moyer, L., Feichtenhofer, C.: VideoCLIP: Contrastive pre-training for zero-shot video-text understanding. In: EMNLP. pp. 6787–6800 (2021) 42. Yin, A., Zhao, Z., Liu, J., Jin, W., Zhang, M., Zeng, X., He, X.: Simul-slt: End-to-end simultaneous sign language translation. In: ACM MM. pp. 4118–4127 (2021) 43. Yin, A., Zhong, T., Tang, L., Jin, W., Jin, T., Zhao, Z.: Gloss attention for gloss-free sign language translation. In: CVPR. pp. 2551–2562 (2023) 44. Zhang, B., Müller, M., Sennrich, R.: Sltunet: A simple unified model for sign lan-guage translation. In: ICLR (2023) 45. Zhang, L., Rao, A., Agrawala, M.: Adding conditional control to text-to-image diffusion models. In: ICCV (2023) 46. Zhao, J., Qi, W., Zhou, W., Duan, N., Zhou, M., Li, H.: Conditional sentence generation and cross-modal reranking for sign language translation. IEEE TMM 
+
+24 , 2662–2672 (2021) 47. Zhou, B., Chen, Z., Clapés, A., Wan, J., Liang, Y., Escalera, S., Lei, Z., Zhang, D.: Gloss-free sign language translation: Improving from visual-language pretraining. In: ICCV. pp. 20871–20881 (2023) 48. Zhou, H., Zhou, W., Qi, W., Pu, J., Li, H.: Improving sign language translation with monolingual data by sign back-translation. In: CVPR. pp. 1316–1325 (2021) 49. Zhou, H., Zhou, W., Zhou, Y., Li, H.: Spatial-temporal multi-cue network for sign language recognition and translation. IEEE TMM 24 , 768–779 (2022) VTaMo 19 
+
+## Appendix 
+
+This appendix provides expanded details and additional results complementing the main paper. Section S.1 presents the full formulations for each component of VTaMo, including the attention-based temporal encoder, the complete local alignment derivation (null-token augmentation, cost matrix, Sinkhorn iterations, epsilon annealing, and loss terms), the global alignment module (attention pool-ing, memory queue, orthogonal mapping, and EMD loss), the window-based reordering procedure, and the position-aligned contrastive objective. Section S.2 contains supplementary experimental results: a comparison of temporal-pooling strategies (attention pooling vs. max-pooling), a comparison against generic video–text alignment objectives (CLIP4Clip, VideoCLIP, X-CLIP), qualitative visualizations of the learned transport plans and t-SNE feature geometry, and representative translation examples on How2Sign comparing VTaMo against SpaMo. 
+
+## S.1 Additional Method Details 
+
+S.1.1 Attention-Based Temporal Encoding 
+
+The main paper briefly introduces the attention-based temporal encoder. Here we provide the full formulation. Prior work commonly uses fixed temporal convo-lution with max-pooling for downsampling sign language features. Such pooling discards gradient information from non-selected frames and limits the expressive-ness of the learned temporal representation. We instead use an attention-based temporal convolution module that performs learnable weighted aggregation in-side each local temporal region. The module contains Nℓ cascaded attention-pooling layers. Each layer performs 2× temporal downsampling, yielding an overall downsampling factor of 2Nℓ . Given an input sequence X ∈ RT ×dh , we first apply a one-dimensional convolution with kernel size 5 and batch normaliza-tion. For each output position i, a local window Wi centered around position 2i
+
+is extracted. A learnable query is then constructed from the mean-pooled local context and a positional embedding: 
+
+qi = 1
+
+|W i|
+
+X
+
+> j∈W i
+
+xj + p, (17) where p ∈ Rdh denotes the positional embedding. Multi-head attention with relative position bias is then applied within the window: 
+
+αi,j = softmax q⊤ 
+
+> i
+
+kj
+
+pdh/N head 
+
++ rj−ci
+
+!
+
+, oi = X
+
+> j∈W i
+
+αi,j vj , (18) where ci denotes the center of the local window and Nhead is the number of attention heads. The output is passed through a linear projection, layer nor-malization, and dropout. This design allows gradients to flow to all frames in 20 J. Hu et al. 
+
+the local region and produces more informative temporal representations than max-pooling. 
+
+S.1.2 Expanded Local Alignment Formulation 
+
+The main paper presents the core optimal transport formulation. This subsec-tion gives the complete construction of the local alignment module. Let S =
+
+{s1, . . . , sM } ∈ RM ×dt denote the visual features after fusion projection, and let 
+
+E = {e1, . . . , eU } ∈ RU ×dt denote the text token embeddings from the frozen encoder embedding layer of the language model. 
+
+Null token augmentation Not every visual frame corresponds to a valid lexical unit. Many frames represent transitional gestures, co-articulation, or short pauses. To model this explicitly, we introduce a learnable null token e∅ ∈ Rdt
+
+and prepend it to the text sequence: 
+
+˜E = {e∅, e1, . . . , eU } ∈ RK×dt , K = U + 1 . (19) A learnable scalar bias b∅ controls the affinity of visual frames to the null token. 
+
+Cost matrix construction We compute the pairwise transport cost using cosine distance. Both modalities are first ℓ2 normalized: 
+
+¯sm = sm
+
+∥sm∥2
+
+, ¯ek = ˜ek
+
+∥˜ek∥2
+
+. (20) The local cost matrix C ∈ RM ×K is defined as 
+
+Cm,k =
+
+(
+
+1 − ¯s⊤
+
+> m
+
+¯ek − b∅, if k = 0 ,
+
+1 − ¯s⊤
+
+> m
+
+¯ek, otherwise . (21) Columns corresponding to padding tokens are assigned a very large cost to avoid spurious assignments. 
+
+Sinkhorn optimal transport We solve the entropy-regularized transport prob-lem 
+
+A∗ = arg min 
+
+> A∈Π(a,b)
+
+⟨A, C⟩ − εH (A), (22) where Π(a, b) denotes the set of transport plans with prescribed marginals, and 
+
+H(A) = − P 
+
+> m,k
+
+Am,k log Am,k is the entropy term. The marginals are initialized as uniform distributions over valid visual positions and valid token positions. For numerical stability, we use the Sinkhorn algorithm in the log domain. Let K = exp( −C/ε ) denote the Gibbs kernel. The dual variables are updated as 
+
+log um ← log am − log X
+
+> k
+
+exp ( −Cm,k /ε + log vk) , (23) 
+
+log vk ← log bk − log X
+
+> m
+
+exp ( −Cm,k /ε + log um) . (24) VTaMo 21 
+
+After Niter iterations, the transport plan is recovered as 
+
+Am,k = exp (log um − Cm,k /ε + log vk) . (25) 
+
+Epsilon annealing To balance exploration and assignment sharpness, we use a multi-stage annealing schedule for ε:
+
+ε(t) = 
+
+
+
+εhigh , t ≤ twarm ,εhigh − εhigh −εmid  
+
+> t2−twarm
+
+(t − twarm ) , twarm < t ≤ t2,εmid − εmid −εlow  
+
+> t3−t2
+
+(t − t2) , t2 < t ≤ t3,εlow , t > t 3.
+
+(26) This schedule keeps the transport plan soft during early training and gradually sharpens the assignments after the alignment becomes stable. 
+
+Local alignment loss terms The local alignment objective contains three terms. The transport cost term is 
+
+Ltrans = 1
+
+B
+
+> B
+
+X
+
+> i=1
+
+X
+
+> m,k
+
+A(i)
+
+> m,k
+
+C(i)
+
+> m,k
+
+. (27) To encourage temporal smoothness, we compute a total variation penalty on the row-normalized transport plan restricted to real text tokens. Let 
+
+ˆAm,k = Am,k 
+
+PK−1 
+
+> k′=1
+
+Am,k ′
+
+, k = 1 , . . . , K − 1. (28) The temporal variation term is 
+
+Ltv = 1(M − 1)( K − 1)  
+
+> M−1
+
+X
+
+> m=1
+> K−1
+
+X
+
+> k=1
+
+ˆAm+1 ,k − ˆAm,k . (29) To prevent the learnable null bias b∅ from making the null token uniformly cheaper than real tokens, we regulate the cost-based null affinity (computed via row-wise softmax on the cost matrix, independently of the transport plan): 
+
+p(m) 
+
+> ∅
+
+= exp( −Cm, 0/τ )
+
+PK−1 
+
+> k=0
+
+exp( −Cm,k /τ ) , (30) 
+
+Lnull = [¯ p∅ − ρtarget ]2+ , ¯p∅ = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+p(m) 
+
+> ∅
+
+. (31) The complete local objective is 
+
+Llocal = βlocal Ltrans + βtv Ltv + βnull Lnull . (32) 22 J. Hu et al. 
+
+S.1.3 Expanded Global Alignment Formulation 
+
+The main paper introduces the sentence-level global alignment mechanism. This subsection provides the full formulation. 
+
+Sentence-level attention pooling We compute sentence-level visual and tex-tual representations using parameter-free attention pooling. Given a sequence 
+
+X = {x1, . . . , xL} ∈ RL×dt with validity mask m ∈ { 0, 1}L, we first define a global query 
+
+q =
+
+P 
+
+> l
+
+mlxl
+
+P 
+
+> l
+
+ml
+
+. (33) The attention weights are then 
+
+αl = exp  x⊤ 
+
+> l
+
+q/√dt
+
+P 
+
+> l′
+
+exp  x⊤ 
+
+> l′
+
+q/√dt
+
+ . (34) The pooled representation is 
+
+z =
+
+P 
+
+> l
+
+αlxl
+
+∥P 
+
+> l
+
+αlxl∥2
+
+. (35) This yields normalized sentence-level vectors zsign and ztext for the visual and textual modalities. 
+
+Memory queue The global Earth Mover’s Distance objective is most effec-tive when computed over a sufficiently diverse set of sentence pairs. Since mini-batches are small, we maintain a first-in first-out memory queue that stores recent sentence-level vector pairs. At each iteration, the current detached sen-tence vectors are appended to the queue. The accumulated vectors {zsign  
+
+> n
+
+}Nn=1 
+
+and {ztext  
+
+> n
+
+}Nn=1 are then used to compute the global alignment loss. 
+
+Learnable orthogonal mapping We introduce a learnable transformation matrix T ∈ Rdt×dt , initialized near the identity matrix, to map the visual sen-tence vectors into the textual embedding space: 
+
+˜zsign  
+
+> n
+
+= zsign  
+
+> n
+
+T
+
+∥zsign  
+
+> n
+
+T∥2
+
+. (36) 
+
+Global Earth Mover’s Distance loss Using the transformed visual vectors and the original textual vectors, we define the sentence-level cost matrix 
+
+Cgn,n ′ = 1 −  ˜zsign 
+
+> n
+
+⊤ ztext  
+
+> n′
+
+. (37) A sentence-level transport plan P is then computed with uniform marginals, and the global alignment loss is 
+
+LEMD = X
+
+> n,n ′
+
+Pn,n ′ Cgn,n ′ . (38) VTaMo 23 
+
+Orthogonality constraint and scheduled activation To preserve pairwise geometry, we regularize the mapping matrix with 
+
+Lorth = ∥T⊤T − I∥2 
+
+> F
+
+. (39) The global loss is activated only after local alignment becomes reliable. We use the schedule 
+
+λg (t) = 
+
+
+
+0, t ≤ twarm ,λmax  
+
+> g
+
+· t−twarm  
+
+> tramp
+
+, twarm < t ≤ twarm + tramp ,λmax  
+
+> g
+
+, t > t warm + tramp .
+
+(40) The total global objective is 
+
+Lglobal = λg (t)LEMD + βorth Lorth . (41) 
+
+S.1.4 Window-Based Reordering Guided by Vision–Text Alignment 
+
+This section details the window-based reordering module introduced in Sec. 3.5. The motivation for reordering is to resolve a fundamental mismatch between the alignment objective and the sequence generation objective. Specifically, the cross-entropy loss supervises the decoder to generate text in the ground-truth word order, whereas the temporal order of visual features does not necessarily follow that same order. This mismatch is particularly pronounced in sign language, where the semantic order expressed in visual signing may differ from the order of the target spoken-language sentence. As a result, if the visual sequence is kept in its original temporal order, the optimization target imposed by cross-entropy can become inconsistent with the correspondence learned by the vision–text alignment module. To reduce this inconsistency, we reorder the visual feature sequence according to the alignment result before passing it to the decoder. In this way, the reordered visual sequence is made more compatible with the target text order, so that the alignment-induced correspondence and the autoregressive generation objective become mutually consistent during training. Let S = {s1, . . . , sM } denote the frame-level visual feature sequence after temporal encoding, and let A ∈ RM ×K denote the local transport plan, where 
+
+K = U + 1 includes the null token and U is the number of text tokens. Rather than performing reordering at the individual-frame level, we operate on short temporal windows. The reason is that, during inference, the target text order is unknown, and a practically useful alignment pattern should therefore associate a continuous local visual segment with the same text token. If isolated frames were reordered independently, the resulting correspondence could become temporally fragmented, making it difficult for the decoder to recover stable lex-ical units from the visual stream. Window-based reordering instead encourages locally coherent visual evidence to move together, which better matches the requirement of translation at test time. 24 J. Hu et al. 
+
+We partition the M frame positions into Nw = U + 2 overlapping temporal windows. The additional two windows absorb boundary effects. The boundaries of the w-th window are defined as 
+
+sw =
+
+
+
+w · M − 1
+
+Nw
+
++ 0 .5
+
+
+
+, ew =
+
+
+
+(w + 1) · M − 1
+
+Nw
+
++ 0 .5
+
+
+
++ 1 . (42) For each window w, we accumulate the alignment mass over the correspond-ing temporal region: 
+
+πw = 
+
+> ew−1
+
+X
+
+> m=sw
+
+Am, : ∈ RK . (43) The window is then assigned to the real text token with the largest aggregated alignment mass: 
+
+ϕ(w) = arg max   
+
+> u∈{ 1,...,U }
+
+πw,u . (44) If the dominant mass of a window lies on the null token, that window is excluded from reordering. For each text token u, we collect the set of windows assigned to that token: 
+
+Ωu = { w | ϕ(w) = u }. (45) The reordered visual sequence is then constructed by traversing the text to-ken order from left to right and appending the corresponding windowed visual segments: 
+
+R = Concat 
+
+
+
+{Ssw :ew −1 | w ∈ Ω↑ 
+
+> 1
+
+}, {Ssw :ew −1 | w ∈ Ω↑ 
+
+> 2
+
+}, . . . , {Ssw :ew −1 | w ∈ Ω↑ 
+
+> U
+
+}
+
+
+
+,
+
+(46) where Ω↑ 
+
+> u
+
+denotes the windows in Ωu sorted by their original temporal order, and Ssw :ew −1 denotes the original feature subsequence within window w.This design preserves local temporal continuity while rearranging visual seg-ments into an order that is more compatible with the aligned text sequence. Consequently, the reordered representation serves as an intermediate form that better reconciles alignment learning with sequence generation. 
+
+S.1.5 Expanded Position-Aligned Contrastive Learning 
+
+After reordering, the visual sequence R = {r1, . . . , rU } is positionally aligned with the text token sequence E = {e1, . . . , eU }. We use this structure to impose a token-level contrastive objective. Learnable projection heads are applied to both modalities: 
+
+ˆru = LN  Wv 
+
+> 2
+
+σ(Wv 
+
+> 1
+
+ru), ˆeu = LN  Wt
+
+> 2
+
+σ(Wt
+
+> 1
+
+eu), (47) where σ denotes GELU and LN denotes layer normalization. After flattening over the batch and valid positions, the InfoNCE loss is 
+
+Lcontra = − 1
+
+|V| 
+
+X
+
+> i∈V
+
+log exp (sim(ˆ ri, ˆei)/τ c)
+
+P 
+
+> j∈V
+
+exp (sim(ˆ ri, ˆej )/τ c) , (48) VTaMo 25       
+
+> Table S1: Comparison of temporal downsampling strategies on the Phoenix-2014T [1] test set. Temporal Encoder BLEU-4 ROUGE-L Conv + Max-Pool 26.57 55.23 Conv + Attention Pool (Ours) 28.86 60.24
+
+where V denotes the set of valid token positions. Padding positions are masked out of the denominator. Gradients from this loss are applied only to the visual branch, while the text branch is detached, so that the pre-trained language model embedding space remains stable. 
+
+## S.2 Additional Qualitative Experiments and Results 
+
+S.2.1 Attention Pooling versus Max-Pooling 
+
+We compare the proposed attention-based temporal convolution module (Sec. S.1.1) with conventional max-pooling on the Phoenix-2014T [1] test set (Table S1). Max-pooling keeps only the maximum activation at each position and discards gradient information from all other frames in the pooling window, whereas the attention variant computes a weighted aggregation over all frames, letting gra-dients reach every frame and yielding more expressive temporal representations. The attention module improves BLEU-4 from 26.57 to 28.86 and ROUGE-L from 55.23 to 60.24. 
+
+S.2.2 Comparison with Generic Video–Text Alignment 
+
+To test whether the structured correspondence learned by VTaMo could be ob-tained with off-the-shelf objectives, we replace our three alignment losses with established generic video–text alignment recipes inside the same pipeline (Ta-ble S2). A CLIP-ViT-only variant with no alignment reaches only 10.45 BLEU-4 on the Phoenix-2014T [1] test set, and CLIP4Clip [25], VideoCLIP [41], and X-CLIP [26] stay at 9.47–11.13, all far below our 28.86. These recipes align a whole clip to a caption and assume a near-monotonic relation, so they do not re-solve the non-monotonic, partial, token-level correspondence that sign language requires. 
+
+S.2.3 Qualitative Analysis of Alignment and Feature Geometry 
+
+We further provide qualitative analysis to examine the behavior of the proposed alignment framework beyond the robustness study. Fig. S1 visualizes the learned transport plans and the resulting feature organization. 26 J. Hu et al.         
+
+> Table S2: Plugging generic video–text alignment objectives into our pipeline (Phoenix-2014T [1] test set, BLEU-4). Each variant replaces our three alignment losses while keeping all other components fixed. Alignment objective BLEU-4 CLIP-ViT only (no alignment) [31] 10.45 CLIP4Clip [25] 9.47 VideoCLIP [41] 10.92 X-CLIP [26] 11.13 VTaMo (Ours) 28.86
+> Fig. S1: Qualitative analysis of the learned alignment and feature geometry. The left panel shows representative transport plans between visual positions and text tokens. The right panel shows a t-SNE visualization of visual features on OpenASL [36].
+
+The left panel shows representative transport plans between temporal visual positions and text tokens. The alignment maps exhibit clear structured corre-spondences, indicating that contiguous temporal regions are consistently asso-ciated with semantically relevant target tokens. The right panel shows a t-SNE visualization of the resulting visual features. Semantically related samples form compact groups, which suggests that the alignment objectives induce a more organized cross-modal representation space. 
+
+S.2.4 Representative Translation Examples 
+
+Table S3 presents representative translation examples on the How2Sign [11] test set. Compared with SpaMo [16], our method more faithfully preserves key con-tent words and overall sentence meaning. The advantage is especially clear in examples that require precise lexical grounding, attribute preservation, and pro-cedural understanding. VTaMo 27 
+
+Table S3: Representative translation examples on the How2Sign [11] test set, com-paring SpaMo [16] and Ours on five examples. Source Text Reference And everyone knows a quick bat is what makes you effective. SpaMo You know that this motion is fast. Ours Everyone knows a fast bat can be effective. Reference In this way, we know that we’re taking something that is legal and properly prescribed for us as an individual. SpaMo Now we know this thing is good for a person but we should not share it. Ours We know that we drink something that is right and prescribed for us as a single one. Reference And we all ultimately want to be the big guy that trains a lot of other people so it’s kind of a historical tradition to mentor and be mentored. SpaMo We want to became bigger and walk with many people and this will be happened in the office with your teacher. Ours We all finally want to be the big man that trains many other people, so it’s a historical tradition to mentor and be educated. Reference So before you begin to work on your horse there are a number of things that you need to keep in mind SpaMo You should go to look for your hat when you riding the horse. Ours When you work on the horse there are some things that you should remember. Reference We’ll talk about the theory and what that means later but it allow you to play an open chord without putting any hands on the guitar. SpaMo We find that this class has a lot of things to talk but I plan to play with my friend rather than involving it. Ours We talk about the theory and what it means, but it makes you to play the guitar without putting your hands.
