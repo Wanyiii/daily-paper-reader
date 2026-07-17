@@ -1,0 +1,508 @@
+Title: Latency-Aware Digital Twin-Assisted Cooperative Perception for Autonomous Vehicles
+
+URL Source: https://arxiv.org/pdf/2607.09070v1
+
+Published Time: Mon, 13 Jul 2026 00:42:48 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# Latency-Aware Digital Twin-Assisted Cooperative Perception for Autonomous Vehicles 
+
+Boniface Uwizeyimana ∗, Manobendu Sarker †, and Abraham O. Fapojuwo ∗∗Department of Electrical and Software Engineering, University of Calgary, Canada 
+
+> †
+
+Poly-Grames Research Center, Department of Electrical Engineering, Polytechnique Montr´ eal, Canada 
+
+> ∗
+
+{boniface.uwizeyimana, fapojuwo }@ucalgary.ca, †manobendu.sarker@polymtl.ca 
+
+Abstract —This paper introduces a digital-twin (DT)-assisted cooperative perception framework designed to improve percep-tion accuracy under end-to-end (E2E) latency constraints and to balance perception accuracy and E2E latency under communica-tion resource constraints in autonomous vehicles. We formulate an optimization problem that maximizes perception accuracy subject to latency and communication limitations, and solve it using a newly proposed coarse-to-fine search (CTFS) algorithm. Simulation results show that the proposed CTFS algorithm achieves 96.6% perception accuracy, close to exhaustive search, under latency constraints while reducing computational complex-ity by approximately 85.78%. The DT-assisted framework further achieves a 50% reduction in the non-DT communication cost through estimated, time-synchronized state updates. 
+
+Index Terms —Cooperative perception, autonomous vehicles, perception accuracy, latency, digital twin. 
+
+I. I NTRODUCTION 
+
+Recent advancements in autonomous vehicles have brought cooperative perception to the forefront, as it enhances sensing capabilities by mitigating occlusions, improving robustness under adverse conditions, and extending the perception range [1]. Autonomous vehicles rely on onboard sensors such as light detection and ranging (LiDAR) and cameras to perceive their surroundings and support safe navigation. However, individual vehicles face inherent limitations due to restricted sensing ranges and environmental obstructions. Cooperative perception addresses these limitations by enabling vehicles to share sensory information, which is then fused by an aggregating agent to improve detection performance. Edge-assisted cooperative perception [2] further strengthens this capability by combining local observations with information shared by neighbouring vehicles, thereby enabling a more comprehensive environmental understanding. Achieving high perception accuracy is essential, but it must also satisfy strict real-time constraints to support safe and reliable operation. In this context, latency plays a critical role in determining the practical effectiveness of cooperative perception systems. Existing approaches to cooperative perception generally operate at three levels of fusion: early, intermediate, and late fusion [3], [4]. Early fusion involves transmitting raw sensor data to an aggregating agent, achieving high detection accuracy [4], but facing significant communication overhead and sensitivity to latency and noise, which limits its practical deployment [1]. Intermediate fusion allows vehicles to extract local features and send only feature maps, balancing accuracy and communication costs while offering improved robustness to latency. Late fusion shares detection results instead of raw data, reducing communication needs but typically resulting in lower accuracy due to limited use of sensory information [4]. Despite these developments, the problem of maximiz-ing perception accuracy under strict latency constraints re-mains insufficiently explored. Prior work in [5] introduced a communication-aware strategy that selects the spatial area of interest for transmission using a communication confidence threshold, thereby reducing communication overhead. This approach is further evaluated in [4] using the UrbanIng dataset. Nevertheless, determining the optimal transmission strategy in real time remains challenging when latency constraints and resource limitations must be jointly satisfied. The key challenge lies in selecting the communication confidence threshold and allocating transmission and computational re-sources to enhance perception accuracy while ensuring timely decision-making. However, such decisions are often driven by instantaneous system observations, which limits their ability to anticipate latency violations caused by time-varying channels, vehicle mobility, and computing loads. A digital twin (DT) can provide a synchronized virtual representation of the phys-ical vehicular network and update it using real-time system information [6]. This enables DT assistance to track system states, predict resource availability, and support proactive optimization before perception performance degrades. Building on this observation, this paper studies the trade-off between perception accuracy and latency in edge-assisted cooperative perception for autonomous vehicles and devel-ops a DT-assisted optimization framework. To the best of our knowledge, prior work has not jointly considered DT-assisted perception accuracy maximization and end-to-end (E2E) latency control under practical communication and resource constraints yet. Different from [5], [4], which study communication-aware feature sharing and perception perfor-mance, this work jointly optimizes the communication confi-dence threshold and transmit power under explicit E2E latency constraints. In the proposed framework, DT-assisted state estimation enables latency-aware adaptation of cooperative perception decisions at roadside unit (RSU) edge servers. Specifically, the DT layer is leveraged to (i) maintain time-synchronized virtual replicas of vehicles and RSUs, (ii) exploit historical and real-time data to anticipate short-term physical-network states that feed the optimization, and (iii) execute arXiv:2607.09070v1 [eess.SY] 10 Jul 2026 Data collection Control / Decision-making   
+
+> Digital Twin Layer
+> Resource Management Module Basic and Functional Module Data Management Module
+> Physical Network Layer
+> Monitoring Physical environment state estimator DT-mapping & Twin updates
+> Resource allocation control decision maker
+> Optimization Data preprocessing
+> Data security
+> Veh.
+> Veh.
+> RSU sensors
+> Pedestrian Bus
+> Global visualization, planning, safety check and alerting
+> Maintenance & scheduling
+> Application layer
+> RSU + server
+> Wireless channel
+
+Fig. 1: DT framework for cooperative perception in autonomous vehicles. the proposed latency-aware algorithm at the RSU edge server while reducing synchronization-induced communication over-head. The main contributions of this paper are summarized as follows: 
+
+• We develop a DT-assisted cooperative perception framework in which the DT layer maintains time-synchronized virtual replicas of vehicles and RSUs, anticipates short-term physical-network states, and enables adaptive control of communication confidence thresholds and transmit power under coupled com-munication, computation, and perception constraints. 
+
+• We propose a coarse-to-fine search (CTFS) algorithm to solve the formulated non-convex optimization problem of maximizing perception accuracy under latency and resource constraints. 
+
+• We evaluate the proposed approach and demonstrate the impact of communication resource limitations on perception accuracy under latency constraints. II. S YSTEM MODEL 
+
+A. Physical Network and Feature Extraction Models 
+
+The physical network layer, depicted in Fig. 1, com-prises M autonomous vehicles, represented by the set M =
+
+{1, 2, . . . , M }, and N RSUs, denoted as N = {1, 2, . . . , N }.Each vehicle is equipped with heterogeneous perception sen-sors, including cameras and LiDAR sensors, along with on-board computing resources to preprocess raw sensory data and extract relevant features. We focus on autonomous vehicles supported by the vehicle-to-everything (V2X) communication system. These vehicles use sub-6 GHz radio interfaces to transmit their extracted feature data to their associated RSUs via V2X communication. The uplink (UL) transmission from the vehicles to the RSUs is influenced by channel conditions, allocated bandwidth, and transmission power. Each RSU is equipped with an edge server capable of hosting the DT platform and executing latency-sensitive DT functions, in-cluding feature aggregation, multi-source data fusion, state synchronization, prediction, and decision support. 
+
+1) Feature Extraction and Fusion Models: Following [4], we consider the trained models and datasets used for co-operative perception. The considered framework adopts amulti-modal PointPillars-based feature extraction model im-plemented through OpenCOOD [7], where LiDAR point clouds are converted into pseudo-images. It supports early, intermediate, and late fusion strategies using models such as Where2comm [5] and V2X-ViT [8]. In this work, we focus on intermediate fusion based on the Where2comm model and the PointPillars architecture [4], [5], [9]. 
+
+B. DT Layer 
+
+The proposed DT-assisted cooperative perception frame-work is shown in Fig. 1. The DT layer consists of the following three main modules: 
+
+1) Data Management Module: This module collects and processes real-time data from the physical network, including vehicle locations, RSU locations, resource availability, and perception task information. It supports data quality man-agement and secure information exchange, thereby enabling reliable DT updates and real-time network monitoring. 
+
+2) Basic and Functional Module: This module constructs and maintains the virtual representation of the physical net-work. It supports network monitoring, anomaly detection, and DT calibration to improve the consistency between the physical and virtual networks. It also estimates the future states of the physical environment and executes optimization algo-rithms for determining communication confidence thresholds, transmit power levels, and resource allocation decisions. 
+
+3) Resource Management Module: This module uses the outputs of the basic and functional module to determine con-trol decisions and communicate them to the physical network. These decisions include resource allocation and transmission parameter updates that improve system responsiveness under latency constraints. The above three DT layer modules are deployed within the DT platform hosted at the edge server of RSU n. Through the basic and functional modules of the DT layer, each physical network element has a corresponding DT model: The DT model of vehicle m at time slot t is defined as 
+
+DT m(t) = {pos m(t), DC m(t), F m, p Max  
+
+> m
+
+}, where pos m(t) = 
+
+{dm(t), υ m(t), a m(t), ξ m(t)} includes the vehicle position 
+
+dm(t), velocity υm(t), acceleration am(t), and heading ξm(t).The term DC m(t) = {Dm(t), T Max  
+
+> m
+
+(t)} represents the per-ception task information, where Dm(t) is the task size and 
+
+T Max  
+
+> m
+
+(t) is the maximum tolerable processing time. The pa-rameters Fm and pMax  
+
+> m
+
+denote the computing capability and maximum transmit power of vehicle m, respectively. The DT model of the edge server at RSU n is given by 
+
+DT n = {pos n, F Max  
+
+> n
+
+}, where pos n denotes the fixed location of RSU n, and F Max  
+
+> n
+
+denotes its computational capacity. The application layer in Fig. 1 serves as an intermediary between the DT layer and the physical network layer, manag-ing tasks like global network visualization, safety checks, and maintenance scheduling or alerts. Initially, each physical network element transmits its real-time operational data to the edge server of its associated RSU, where the corresponding DT model is instantiated, as described above. For newly observed vehicles, the DT model is created at the serving RSU using the latest physical-network data. However, if a vehicle already has an existing DT model and transitions from one RSU to another, we assume that its DT model is smoothly migrated to the newly associated RSU through high-speed wired connections between RSUs, thereby ensuring seamless operation and service continuity during handover, and reducing the cost of building a new DT model from scratch. The DT layer continuously interacts with the physical network to maintain an updated virtual representation of the physical entities. This interaction is regulated by the syn-chronization parameter π, which controls the frequency of data updates between the physical network and the DT layer. Specifically, every π time slots, the DT layer requests the most recent real-time data from the physical network and updates the corresponding DT models accordingly, conse-quently reducing the overhead communication cost. Through this periodic synchronization process, the DT layer maintains live, persistent, and time-synchronized virtual replicas of the physical network. It is worth noting that maintaining the DT layer introduces additional overhead, including periodic synchronization traf-fic, computational load at the RSU edge server for running the estimator and the CTFS algorithm, and storage cost for persistent DT states. A detailed quantitative characterization of this overhead is beyond the scope of this work and is left for future investigation. 
+
+C. Deployment and Computing Model 1) Vehicle Feature Extraction Delay Model: The feature extraction delay of vehicle m at time slot t is modeled based on the feature extraction architectures in [5], [4] as 
+
+τ Feat  
+
+> m
+
+(t) = Cm, comp  
+
+> Fm
+
+, where Cm, comp denotes the total number of floating-point operations (FLOPs) required by the feature extraction model described in [4]. Cm, comp is determined by the number of layers across all stages of the bird’s-eye-view (BEV) network, as well as the input feature grid’s height, width, number of filters, and kernel size. Fm is the computing capability of vehicle m.
+
+2) Uplink Channel and Delay Model: The wireless channel between vehicle m and RSU n is modeled as gm,n (t) = 
+
+χm,n (t)d−γm,n (t), where γ is the path loss exponent, and 
+
+dm,n (t) is the distance between vehicle m and RSU n. The term χm,n (t) ∼ exp(1) denotes the small-scale fading power gain, assumed to be exponentially distributed with a mean of 1, i.e., Rayleigh fading channel and it remains constant within a slot and varies independently across different time slots. The basic and functional module of the DT layer estimates the channel gain and the corresponding achievable data rate over the sub-6 GHz link. The estimated UL data rate from vehicle m to RSU n is given by 
+
+Rm,n (t) = Bm log 2
+
+
+
+1 + pm(t)gm,n (t)
+
+> N0
+
+
+
+, (1) where Bm and pm(t) denote the bandwidth and transmit power allocated to vehicle m, respectively, and N0 is the noise power. The UL transmission delay is calculated as [10] 
+
+τ Up  
+
+> m
+
+(t) = (1 −θm(t)) Dm(t) 
+
+> Rm,n (t)
+
+, (2) where θm(t) ∈ [0 , 1] is the communication confidence thresh-old defined in [5]. This threshold controls the portion of the feature map selected for transmission to the RSU. Dm(t), is the feature map size, which is determined by the original input dimensions, and the bit depth of each feature value [4]. 
+
+3) Waiting Delay Model at the RSU: Before performing synchronization and fusion, the RSU must receive the BEV feature maps from all participating vehicles. We assume that all vehicles in M participate in the fusion process at RSU 
+
+n. Let τ Start  
+
+> n
+
+(t) denote the time at which synchronization and fusion can start at RSU n. Since the RSU must wait for the slowest participating agent, this time is expressed as 
+
+τ Start  
+
+> n
+
+(t) = max 
+
+n
+
+τ Syn  
+
+> 1
+
+(t), τ Syn  
+
+> 2
+
+(t), · · · , τ Syn  
+
+> M
+
+(t), τ Feat  
+
+> n
+
+(t)
+
+o
+
+, (3) where τ Syn  
+
+> m
+
+(t) = τ Feat  
+
+> m
+
+(t)+ τ Up  
+
+> m
+
+(t) for all m ∈ M represents the total feature extraction and UL transmission time of vehicle 
+
+m. τ Feat  
+
+> n
+
+(t) denotes the feature extraction time at RSU n.
+
+4) Computing and Fusion Delay at the RSU: After receiv-ing the feature maps from all participating vehicles, RSU n
+
+performs feature fusion. The fusion delay is modeled as 
+
+τ Fuse  
+
+> n
+
+(t) = Cn, comp  
+
+> Fn
+
+, (4) where Cn, comp is the total number of FLOPs required by the fusion model of the RSU n detailed in [4], and it is determined by backbone processing over the feature maps received from all participating agents, attention fusion and deblocking/upsampling computations. Fn is the computing capability of the edge server. 
+
+5) Downlink Delay: After fusion at RSU n, the detection results are transmitted back to the vehicles for implementation. Although prior studies such as [11] often treat this delay as negligible due to the small size of detection outputs, we explicitly account for it by setting τ Down  
+
+> m
+
+(t) = 0 .01 seconds as a conservative air-interface/scheduling overhead to avoid assuming instantaneous feedback. III. P ROBLEM FORMULATION 
+
+The total end-to-end (E2E) latency experienced by vehicle 
+
+m accounts for all computation and communication delays involved in cooperative perception and is given by 
+
+τ E2E  
+
+> m
+
+(t) = τ Start  
+
+> n
+
+(t) + τ Fuse  
+
+> n
+
+(t) + τ Down  
+
+> m
+
+(t). (5) Let fθ : X(θm, t ) −→ mAP (θm, t ) denote the trained cooperative perception model used during deployment un-der a given communication confidence threshold. The input 
+
+X(θm, t ) consists of the feature maps transmitted by all agents at time slot t, while the output is the detection performance measured by the per-slot mean average precision (mAP), mAP (θm, t ). The function fθ is obtained through offline train-ing and is treated as a data-driven mapping during optimization with θ = {1, 2, . . . , θ M }.The objective is to maximize the perception accuracy, mAP (θ, t ) = fθ (x), where x ∈ X(θm, t ), while penalizing transmission power consumption, and it is captured by the following objective function 
+
+obj (θ, t ) = mAP (θm, t ) − ρ PMm=1 
+
+> pm(t)
+> pMax
+> m
+
+. (6) Here, (6) reflects the trade-off between the detection perfor-mance achieved at the RSU through feature fusion and the power expenditure of the vehicles. ρ is the weighting factor, accounting for the cost associated with transmission power. The resulting optimization problem is formulated as 
+
+P1 : max 
+
+> θm, p m
+
+obj (θ, t ) (7a) s.t. τ E2E  
+
+> m
+
+(t) ≤ T Max  
+
+> m
+
+(t), ∀m ∈ M , (7b) 
+
+0 < θ m(t) ≤ 1, ∀m ∈ M , (7c) 
+
+0 ≤ pm(t) ≤ pMax  
+
+> m
+
+, ∀m ∈ M . (7d) Problem P1 is subject to several constraints. Constraint (7b) ensures that the E2E latency for each vehicle does not exceed its maximum tolerable latency. Constraint (7c) restricts the communication confidence threshold to a valid range, while constraint (7d) enforces the transmit power limitations imposed by vehicle hardware. Due to the nonlinear depen-dence of the E2E latency and objective function on θm(t) and 
+
+pm(t), P1 constitutes a nonlinear and non-convex optimization problem. IV. P ROPOSED SOLUTION 
+
+In problem P1, the metric mAP (θ, t ) is obtained from a trained cooperative perception model. Since this model does not provide an explicit analytical form with respect to the communication confidence threshold, the first- and second-order derivatives of the objective function are not directly available. Therefore, derivative-based optimization methods, such as gradient descent, are not suitable for solving P1. To address this challenge, we propose a CTFS algorithm that exploits the structure of the problem to identify promising regions of the search space while avoiding unnecessary evalu-ations. The proposed algorithm consists of the following two stages: 
+
+Algorithm 1: Proposed CTFS Algorithm                                                                      
+
+> Input :Number of vehicles Mand RSUs N.
+> Output: Optimal communication confidence threshold θ∗and transmit power p∗.
+> 1Stage 1: Coarse search
+> 2Initialize the set Qby discretizing θm∈[0 ,1] into qequally spaced values for each m∈ M , resulting in qMcandidate vectors in Q.
+> 3for each candidate vector Q(j)in Qdo
+> 4Compute the minimum required power p∗
+> mthat satisfies the latency constraint in (7b) for the threshold vector Q(j), as given in (8).
+> 5# Check the transmit power constraint in (7d)
+> 6if p∗
+> mis not feasible then
+> 7Remove Q(j)from Q.
+> 8else
+> 9Obtain mAP (Q(j)) .
+> 10 Evaluate and store the objective value obj (θ, t )in (6).
+> 11 Select the Kcandidate vectors with the largest objective values.
+> 12 Stage 2: Fine-tuning
+> 13 Reinitialize Qby discretizing θmwithin the refined search range determined by the selected Kcandidate vectors.
+> 14 Repeat the feasibility check and objective evaluation steps used in Stage 1.
+> 15 Find the candidate vector in Qthat achieves the maximum objective value.
+> 16 Return θ∗and p∗.
+
+Stage 1: Coarse Search : The coarse search stage con-structs an initial search space for the communication confi-dence threshold. Specifically, for each vehicle m ∈ M , the threshold θm ∈ [0 , 1] is discretized into q equally spaced values. The resulting candidate set Q therefore contains qM
+
+threshold vectors. For example, when q = 6 and M = 2 ,the candidate set contains 36 threshold vectors and can be represented as Q={[0 .0,0.0] ,[··· ],[0 .4,0.6] ,[··· ],[1 .0,1.0] }. Each vector contains the threshold values of the participating vehicles. As q
+
+or M increases, the number of candidates grows rapidly, which increases the computational burden of exhaustive evaluation. For each candidate vector in Q, the minimum transmit power required to satisfy the latency constraint in (7b) is computed. By substituting the UL delay expression into the latency constraint, the required power of vehicle m becomes 
+
+p∗
+
+> m
+
+(t) = N0
+
+> gm,n (t)
+
+
+
+2  
+
+> (1 −θm (t)) Dm (t)
+> Bmτ Up
+> m, Budget (t)
+
+− 1
+
+
+
+, (8) where τ Up 
+
+> m, Budget
+
+(t) is the maximum allowable UL transmission time for vehicle m, defined as τ Up 
+
+> m, Budget
+
+(t) = T Max  
+
+> m
+
+(t) −
+
+τ Feat  
+
+> m
+
+(t) − τ Fuse  
+
+> n
+
+(t) − τ Down  
+
+> m
+
+(t). This per-vehicle budget pro-vides a tractable feasibility condition for satisfying the E2E latency constraint (7b). The derivation of (8) is provided in the Appendix A. If the computed p∗ 
+
+> m
+
+violates the transmit power constraint in (7d), the corresponding threshold vector is discarded. Otherwise, the perception accuracy mAP (θ, t )
+
+is obtained, and the objective value in (6) is evaluated and stored. This feasibility check avoids unnecessary perception model evaluations for infeasible candidates and reduces the computational cost of the search. At the end of Stage 1, the K threshold vectors with the largest objective values are selected. Retaining multiple can-didates improves robustness to small variations in the learned perception model and prevents the fine-tuning stage from being restricted to a single potentially suboptimal region. 
+
+Stage 2: Fine-Tuning : The fine-tuning stage follows the same feasibility checking and objective evaluation procedure as the coarse search stage, but it operates over a refined search region. This region is determined by the K candidate vectors selected in Stage 1. The threshold values are then discretized again within this smaller interval, and the discretization res-olution can be increased by using a larger value of q. This refinement improves the precision of the search while keeping the number of objective evaluations manageable. The output of this stage is the threshold and power pair, denoted by θ∗ 
+
+> m
+
+and p∗
+
+> m
+
+, that maximizes the objective function in (6) while satisfying all constraints. A summary of the CTFS procedure is provided in Algorithm 1. The search complexity is dominated by the number of evaluated threshold vectors and scales as O(qM ) per stage. Since the proposed method evaluates the perception objective only for feasible candidates and refines the search around the best coarse solutions, it reduces unnecessary computations compared with exhaustive search over a uniformly fine grid. The CTFS algorithm is executed by the basic and functional module of the DT layer. The resulting optimal parameters are then delivered to the physical network through the resource management module, allowing the vehicles and RSU to im-plement the selected communication confidence thresholds and transmit power levels. The DT technology assists the cooperative perception for autonomous vehicles by running the CTFS algorithm and maintaining and tracking object identities, trajectories, un-certainty estimates, map context, infrastructure states, and estimation. The DT, specifically the physical environment estimator inside the basic and functional module, exploits its built-in memory and ability to reuse historical and real-time data to estimate the future state of the physical environment, including vehicle positions, velocities, and trajectories. This historical state sequence can support short-term forecasting through trajectory extrapolation, motion-pattern matching, or predictive analytics. These estimated quantities, together with the small-scale fading statistics, allow the DT layer to estimate the future channel gain gm,n (t) and UL data rate defined in Section II-C2, which are then used as inputs to the CTFS algorithm for proactive communication confidence threshold and power decisions. We note that the future states of the physical environment can be predicted using a learning-based prediction model, instead of the estimation approach used in the paper. The design of learning-based predictors is left for future work. V. P ERFORMANCE EVALUATION 
+
+A. Simulation Setup 
+
+We consider a cooperative perception system with two collaborating vehicles, i.e., M = 2 , and one RSU equipped with an edge server, i.e., N = 1 [4]. Each vehicle has a computing capability of Fm = 2 TFLOPs/s, while the RSU edge server has a computing capability of Fn = 25 TFLOPs/s [12]. The communication bandwidth allocated to each vehicle is set to Bm = 15 MHz. The maximum transmit power is 
+
+pMax  
+
+> m
+
+= 23 dBm, and the noise power is N0 = −100 dBm. The path loss exponent is set to γ = 2 .0, to assume the free-space path-loss, yielding a best-case link benchmark. The maximum allowable E2E latency for each collaborating vehicle is set to 0.1 s and 0.3 s to evaluate the effect of different latency requirements. The transmission cost weight is set to ρ = 1 /M , to assign equal importance to the power cost of each vehicle. Each time slot lasts ∆t = 0 .1 s, corresponding to the frame length/time step in the UrbanIng dataset [4]. Details regarding the feature extraction and fusion model parameters can be found in [4]. 
+
+B. Datasets 
+
+We consider the cooperative perception dataset and trained models presented in [4]. In particular, we focus on the LiDAR 3D point cloud data, following the analysis in [4], where the LiDAR detection range is set from 0 to 100 meters. The cooperative perception model builds on the framework in [5], [4], where the perception model is trained offline before de-ployment. During deployment, the size of the transmitted BEV feature map is controlled by optimizing the communication confidence threshold θm for each vehicle m ∈ M . Unlike [5], [4], which consider bidirectional feature map exchange be-tween vehicles and infrastructure, this work focuses on edge-assisted cooperative perception. In the considered framework, vehicles transmit their extracted features to RSUs equipped with edge servers. The DT layer at the RSU then performs feature fusion and return the detection results to the vehicles. 
+
+C. Results and Discussion 
+
+The evaluation reproduces the perception model in [5] and applies the proposed optimization framework. Detection performance is measured using mAP computed over the first 50 time slots, and the standard deviation, which quantifies the variation in accuracy from the mean at each time slot. All results are evaluated at an intersection-over-union (IoU) threshold of 0.3, consistent with [4]. Fig. 2 compares the mAP achieved by the proposed CTFS algorithm under different latency requirements with exhaustive search and random selection. As the latency constraint be-comes more stringent, the achieved mAP decreases across all methods. This behavior arises because tighter latency budgets require the CTFS algorithm to select a larger communication threshold θm, which increases feature compression and re-duces the quality of BEV information transmitted to the RSU. When T Max  
+
+> m
+
+= 0 .3 s, CTFS achieves a mAP of 96.6 % closer to that of exhaustive search, as sufficient time is available to transmit higher-quality feature maps. In contrast, random search yields noticeably lower mAP due to its indiscriminate exploration of feasible θ∗ 
+
+> m
+
+and p∗ 
+
+> m
+
+values. When T Max  
+
+> m
+
+= 0 .1
+
+s, the mAP drops significantly, and the performance of all algorithms converges, since the stringent latency constraint prevents the transmission of rich feature representations. These results confirm the inherent trade-off between perception ac-curacy and latency under limited communication resources. Fig. 3 illustrates the impact of bandwidth allocation on CTFS performance for T Max  
+
+> m
+
+= 0.3 s. Limited bandwidth restricts the volume of BEV feature information that can be transmitted within the latency budget, necessitating stronger 0.1 0.3   
+
+> Maximum latency, TMax
+> m(s)
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Mean Average Precision  Random
+> Proposed CTFS
+> Exhaustive search
+
+Fig. 2: Mean average precision performance under different latency requirements with Bm = 15 MHz. compression and leading to reduced mAP after fusion. Con-versely, increasing the available bandwidth enables the trans-mission of richer feature representations and improves the achievable mAP, highlighting the critical role of communica-tion resources in latency-constrained cooperative perception. The proposed CTFS algorithm also achieves asubstantial reduction in computational cost compared with exhaustive search. Its complexity is given by 
+
+O  qM + 2 qM [M C m, comp + Cn, comp ], where the factor 
+
+2 accounts for the coarse search and fine-tuning stages. Exhaustive search operates on a uniformly fine grid with complexity O  qM + qM [M C m, comp + Cn, comp ], and requires a large q to approximate the continuous optimum. In the considered setup, using q = 30 for exhaustive search and q = 8 for CTFS results in 94 .95 × 10 12 and 
+
+13 .50 × 10 12 computations, respectively, corresponding to a reduction of approximately 85 .78% while maintaining near-exhaustive search performance. Although random search has lower nominal complexity, it consistently exhibits inferior detection performance. Overall, these results highlight the performance–complexity trade-off among the considered schemes, with CTFS offering the most favorable balance by achieving near-exhaustive search performance at asubstantially reduced computational cost. In non-DT cooperative perception, vehicles transmit ex-tracted feature maps and the metadata of the network ele-ments at every time slot, resulting in a communication load of RnonDT = Dm 
+
+> ∆t
+
+. In contrast, the proposed DT-assisted framework performs estimated, time-synchronized state up-dates every π slots, which reduces the communication load to RDT = Dm 
+
+> π∆t
+
+. This corresponds to a communication load saving of 1 − 1 
+
+> π
+
+. For instance, with π = 2 time slots, the DT-assisted framework achieves a 50% reduction in the trans-mitted data and communication overhead. The optimization of π under mobility- and channel-coherence-aware criteria is left for future work. By leveraging persistent state information instead of repeatedly transmitting potentially noisy feature maps and metadata, the DT reduces redundant data exchange and mitigates asynchrony-induced reprocessing. VI. C ONCLUSION 
+
+This study investigated the trade-off between cooperative perception accuracy and E2E latency in latency-sensitive au-tonomous driving applications. The results show that coopera-10 15     
+
+> Bandwidth (MHz)
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> Mean Average Precision  Proposed CTFS at Bm= 10 MHz
+> Proposed CTFS at Bm= 15 MHz
+
+Fig. 3: Mean average precision under different bandwidth values with T Max  
+
+> m
+
+= 0 .3 s. tive perception performance strongly depends on the availabil-ity of communication and computing resources, since accurate perception requires the timely transmission and fusion of high-quality feature information. However, limited resources and stringent latency requirements restrict the amount of perceptual information that can be exchanged, thereby limiting the achievable perception accuracy. APPENDIX APROOF OF (8) From (7b) and (5), define the UL delay budget of vehicle m
+
+as τ Up 
+
+> m, Budget
+
+(t) = T Max  
+
+> m
+
+(t) − τ Feat  
+
+> m
+
+(t) − τ Fuse  
+
+> n
+
+(t) − τ Down  
+
+> m
+
+(t). For 
+
+τ Up 
+
+> m, Budget
+
+(t) > 0, the UL delay model in Section II-C2 must satisfy (1 −θm(t)) Dm(t)   
+
+> Bmlog 2
+> 
+> 1+ pm (t)gm,n (t)
+> N0
+> 
+
+≤ τ Up 
+
+> m, Budget
+
+(t). (9) Solving (9) for pm(t) yields (8), which completes the proof. REFERENCES [1] H. Ngo et al. , “Cooperative perception with V2V communication for autonomous vehicles,” IEEE Trans. Veh. Technol. , vol. 72, no. 9, pp. 11 122–11 131, Apr. 2023. [2] Z. Bai et al. , “A survey and framework of cooperative perception: From heterogeneous singleton to hierarchical cooperation,” IEEE Trans. Intell. Transp. Syst. , vol. 25, no. 11, pp. 15 191–15 209, Sep. 2024. [3] C. Wei et al. , “Cooperative perception for automated driving: A survey of algorithms, applications, and future directions,” Proc. IEEE , Oct. 2025. [4] K. C. Sekaran et al. , “UrbanIng-V2X: A Large-Scale Multi-Vehicle, Multi-Infrastructure Dataset Across Multiple Intersections for Coopera-tive Perception,” arXiv [2510.23478] , Oct. 2025. [5] Y. Hu et al. , “Where2comm: Communication-efficient collaborative perception via spatial confidence maps,” arXiv [2209.12836] , Dec. 2022. [6] X. Gu et al. , “Digital twin technology for intelligent vehicles and transportation systems: A survey on applications, challenges and future directions,” IEEE Commun. Surv. Tutor. , June 2025. [7] OpenCOOD, “Welcome to OpenCOOD’s documentation!, Readthe-docs.io. [Online]. Available:,” https://opencood.readthedocs.io/en/latest/, [Accessed: 29-Apr-2026]. [8] R. Xu et al. , “V2X-ViT: Vehicle-to-everything cooperative perception with vision transformer,” in arXiv [2203.10638] , Oct. 2022. [9] A. H. Lang et al. , “Pointpillars: Fast encoders for object detection from point clouds,” in IEEE Conf. Comput. Vis. Pattern Recognit. , 2019, pp. 12 697–12 705. [10] Z. Li et al. , “6G THz-semantic access for federated learning enabled internet of unmanned vehicle agents,” in 2025 IEEE 101st Veh. Technol. Conf. (VTC2025-Spring) . IEEE, Jun. 2025, pp. 1–5. [11] T. Shi et al. , “Joint task offloading and channel allocation in spatial-temporal dynamic for MEC networks,” IEEE Trans. Industr. Inform. ,vol. 21, p. 6240–6250, May 2025. [12] B. Lu et al. , “Joint optimization of compression, transmission and com-putation for cooperative perception aided intelligent vehicular networks,” 
+
+IEEE Trans. Veh. Technol. , vol. 74, no. 5, pp. 8201–8214, Jan. 2025.
