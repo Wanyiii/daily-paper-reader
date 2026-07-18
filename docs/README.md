@@ -6,92 +6,77 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-17
-- 运行时间：2026-07-17 21:13:38 UTC
+- 最新运行日期：2026-07-18
+- 运行时间：2026-07-18 21:33:44 UTC
 - 运行状态：成功
-- 本次总论文数：24
-- 精读区：12
+- 本次总论文数：19
+- 精读区：7
 - 速读区：12
 
 ### 今日简报（AI）
-今日收录24篇论文，精读12篇，其中自动驾驶协同感知与音乐对齐研究获最高分9分。最值得关注《Latency-Aware Digital Twin-Assisted Cooperative Perception for Autonomous Vehicles》和《Local Multimodal Music Alignment from Global Supervision》。建议优先精读自动驾驶和VR场景探索方向，例如8分的《AnythingReality》可用于开放词汇VR场景。
-- 详情：[/202607/17/README](/202607/17/README)
+今日推荐19篇论文，精读7篇，重点聚焦3D场景重建与几何感知。精读《SalientGS》提出重要性引导的MCMC高斯分配，《FoundationGeo》实现单目度量几何的像素级场学习。建议关注3D高斯泼溅与单目深度估计的融合趋势。
+- 详情：[/202607/18/README](/202607/18/README)
 
 ### 精读区论文标签
-1. [Latency-Aware Digital Twin-Assisted Cooperative Perception for Autonomous Vehicles](/202607/17/2607.09070v1-latency-aware-digital-twin-assisted-cooperative-perception-for-autonomous-vehicles)  
+1. [SalientGS: Unified SfM-to-3DGS with Importance-Guided MCMC Gaussian Allocation](/202607/18/2607.11285v2-salientgs-unified-sfm-to-3dgs-with-importance-guided-mcmc-gaussian-allocation)  
    标签：评分：9.0/10、query:d-vision
-   evidence：延迟感知的数字孪生辅助协同感知
-2. [Local Multimodal Music Alignment from Global Supervision](/202607/17/2607.10023v1-local-multimodal-music-alignment-from-global-supervision)  
-   标签：评分：9.0/10、query:multimodal
-   evidence：基于Sinkhorn软对齐的局部多模态音乐对齐
-3. [TextGaze: Prompting Gaze Target Estimation with Textual Scene Cues](/202607/17/2607.10130v1-textgaze-prompting-gaze-target-estimation-with-textual-scene-cues)  
-   标签：评分：9.0/10、query:multimodal
-   evidence：利用大型视觉语言模型的统一跨模态架构用于注视估计
-4. [Generalize LMMs to Versatile Visual Modalities via Fabricated Modality Synthesis](/202607/17/2607.10308v1-generalize-lmms-to-versatile-visual-modalities-via-fabricated-modality-synthesis)  
-   标签：评分：9.0/10、query:multimodal
-   evidence：通过模态合成泛化大多模态模型到未见模态的训练框架
-5. [Incremental Online Scene Reconstruction by 3D Gaussian Triangulation](/202607/17/2607.10690v1-incremental-online-scene-reconstruction-by-3d-gaussian-triangulation)  
+   evidence：统一SfM到3DGS流水线，从图像进行三维重建
+2. [FoundationGeo: Learning Spatial Pixel-Wise Fields for Monocular Metric Geometry](/202607/18/2607.11588v2-foundationgeo-learning-spatial-pixel-wise-fields-for-monocular-metric-geometry)  
    标签：评分：9.0/10、query:d-vision
-   evidence：通过高斯三角化的增量在线三维场景重建
-6. [ABot-3DWorld 0: A Universal World Model to Explore Any 3D Space](/202607/17/2607.11673v2-abot-3dworld-0-a-universal-world-model-to-explore-any-3d-space)  
+   evidence：通过像素级校准场实现单目度量三维重建
+3. [MetaView: Monocular Novel View Synthesis with Scale-Aware Implicit Geometry Priors](/202607/18/2607.12000v1-metaview-monocular-novel-view-synthesis-with-scale-aware-implicit-geometry-priors)  
    标签：评分：9.0/10、query:d-vision
-   evidence：通用多模态世界模型，从文本、图像、视频输入生成高保真可探索3D世界
-7. [Segregate, Refine, Integrate: Decomposing Multimodal Fusion for Sentiment Analysis](/202607/17/2607.12686v1-segregate-refine-integrate-decomposing-multimodal-fusion-for-sentiment-analysis)  
+   evidence：基于扩散的单目新视角合成，结合隐式几何先验
+4. [Beyond Parallel Tracking: Interactive Multi-Feature Fusion Drives Semantic Reconstruction from Non-invasive Brain Recordings](/202607/18/2607.12071v1-beyond-parallel-tracking-interactive-multi-feature-fusion-drives-semantic-reconstruction-from-non-invasive-brain-recordings)  
    标签：评分：9.0/10、query:multimodal
-   evidence：分解式多模态融合，分离细化与集成
-8. [COLMAR: Cooperative View Policy Learning for Multi-Agent Active 3D Reconstruction](/202607/17/2607.13524v1-colmar-cooperative-view-policy-learning-for-multi-agent-active-3d-reconstruction)  
+   evidence：多特征融合实现神经信号与语义的跨模态对齐
+5. [HIVE-3D: Hierarchical Voxel Enhancement for High-Quality 3D Scene Generation](/202607/18/2607.13468v1-hive-3d-hierarchical-voxel-enhancement-for-high-quality-3d-scene-generation)  
    标签：评分：9.0/10、query:d-vision
-   evidence：多智能体主动三维重建
-9. [Multimodality as Supervision: Self-Supervised Specialization to the Test Environment via Multimodality](/202607/17/2607.14721v1-multimodality-as-supervision-self-supervised-specialization-to-the-test-environment-via-multimodality)  
+   evidence：用于单图像3D场景生成的层级体素增强
+6. [U-shaped Multi-granularity Learning for Vision-Language Models](/202607/18/2607.14966v1-u-shaped-multi-granularity-learning-for-vision-language-models)  
    标签：评分：9.0/10、query:multimodal
-   evidence：利用多模态进行自监督跨模态学习
-10. [AlphaWiSE: Adaptive Weight Interpolation for Continual Multimodal Representation Learning](/202607/17/2607.15094v1-alphawise-adaptive-weight-interpolation-for-continual-multimodal-representation-learning)  
+   evidence：U形多粒度提示学习用于视觉语言模型，跨模态集成全局和局部表示
+7. [Multimodal Semantic-Aware Contrastive Learning For False Negative Mitigation in 3D Medical Imaging](/202607/18/2607.14995v1-multimodal-semantic-aware-contrastive-learning-for-false-negative-mitigation-in-3d-medical-imaging)  
    标签：评分：9.0/10、query:multimodal
-   evidence：持续多模态表示学习的后验权重插值方法
-11. [MAGiSt3R: Multi-Agent Feed-forward 3D Reconstruction from Monocular RGB Videos](/202607/17/2607.15211v1-magist3r-multi-agent-feed-forward-3d-reconstruction-from-monocular-rgb-videos)  
-   标签：评分：9.0/10、query:d-vision
-   evidence：单目RGB视频三维重建
-12. [SceneBind: Binding What and Where Across Vision, Audio and Language](/202607/17/2607.15265v1-scenebind-binding-what-and-where-across-vision-audio-and-language)  
-   标签：评分：9.0/10、query:multimodal
-   evidence：全模态表示学习，联合语义与3D空间理解
+   evidence：针对不完美数据的多模态对比学习假负例缓解
 
 ### 速读区论文标签
-1. [DeltaV: Thinking with Visual State Updates in Unified Large Multimodal Models](/202607/17/2607.08434v1-deltav-thinking-with-visual-state-updates-in-unified-large-multimodal-models)  
-   标签：评分：8.0/10、query:multimodal
-   evidence：统一多模态模型的高效视觉状态更新
-2. [Glob3R: Global Structure-from-Motion with 3D Foundation Models](/202607/17/2607.09225v1-glob3r-global-structure-from-motion-with-3d-foundation-models)  
+1. [Hydra++: Real-Time Hierarchical 3D Scene Graph Construction With Object-Level Shape Estimation](/202607/18/2607.09455v1-hydra-real-time-hierarchical-3d-scene-graph-construction-with-object-level-shape-estimation)  
    标签：评分：8.0/10、query:d-vision
-   evidence：基于3D基础模型的全局运动恢复结构
-3. [AnythingReality: Robust Online Gaussian Splatting SLAM for Open-Vocabulary VR Scene Exploration](/202607/17/2607.09260v1-anythingreality-robust-online-gaussian-splatting-slam-for-open-vocabulary-vr-scene-exploration)  
+   evidence：带有对象级形状估计的分层三维场景图构建
+2. [A Conceptual Architecture for Educational Digital Twins Supporting AI Literacy Across Educational and Professional Settings](/202607/18/2607.10013v1-a-conceptual-architecture-for-educational-digital-twins-supporting-ai-literacy-across-educational-and-professional-settings)  
    标签：评分：8.0/10、query:d-vision
-   evidence：在线3D高斯泼溅SLAM实现场景重建与VR探索
-4. [Simon-SR: Spatially Adaptive Modulation and Visual Prompt Adaptation for Text-Reinforced Super-Resolution](/202607/17/2607.09351v1-simon-sr-spatially-adaptive-modulation-and-visual-prompt-adaptation-for-text-reinforced-super-resolution)  
+   evidence：用于AI素养教育的数字孪生
+3. [Empowering Long-form Omni-modal Understanding with Robust Audio Perception](/202607/18/2607.10299v1-empowering-long-form-omni-modal-understanding-with-robust-audio-perception)  
    标签：评分：8.0/10、query:multimodal
-   evidence：文本与图像跨模态融合的多模态超分辨率
-5. [Beyond Time Shifts: Adapting Omni-LLM as a Reference-Free Evaluator for Generative Audio-Visual Models](/202607/17/2607.09091v1-beyond-time-shifts-adapting-omni-llm-as-a-reference-free-evaluator-for-generative-audio-visual-models)  
+   evidence：音频-视觉解耦字幕用于全模态理解
+4. [Annotation-Free Furniture Codes: What They Encode, and How Far They Transfer](/202607/18/2607.10461v1-annotation-free-furniture-codes-what-they-encode-and-how-far-they-transfer)  
+   标签：评分：8.0/10、query:d-vision
+   evidence：自监督点云自编码器用于3D物体表示
+5. [SigLIP-HD by Fine-to-Coarse Supervision](/202607/18/2607.09488v1-siglip-hd-by-fine-to-coarse-supervision)  
    标签：评分：7.0/10、query:multimodal
-   evidence：面向生成模型的跨模态同步评估
-6. [SVF-CR: Synchronized Visual-Facial Cross-Refinement for Multimodal Ambivalence and Hesitancy Recognition](/202607/17/2607.09417v1-svf-cr-synchronized-visual-facial-cross-refinement-for-multimodal-ambivalence-and-hesitancy-recognition)  
-   标签：评分：7.0/10、query:multimodal
-   evidence：同步视觉-面部交叉细化用于多模态融合
-7. [Decoupling Language Guidance from Backbones for Text-Guided Medical Segmentation](/202607/17/2607.09481v1-decoupling-language-guidance-from-backbones-for-text-guided-medical-segmentation)  
-   标签：评分：7.0/10、query:multimodal
-   evidence：可迁移骨干网络的层次适配器，用于文本引导医学分割中的跨模态融合
-8. [CoSAG: Compact Semantic Anchor Gaussians via Training-Free Rate-Distortion Coding](/202607/17/2607.10237v1-cosag-compact-semantic-anchor-gaussians-via-training-free-rate-distortion-coding)  
+   evidence：通过由细到粗的监督改进多模态大语言模型的视觉表示
+6. [What VGGT Knows About Overlap: Probing Geometric Foundation Models for Co-Visibility](/202607/18/2607.09503v1-what-vggt-knows-about-overlap-probing-geometric-foundation-models-for-co-visibility)  
    标签：评分：7.0/10、query:d-vision
-   evidence：开放词汇3D场景理解的紧凑语义表示
-9. [Mixture of Enhanced-View Experts for Multi-Query Vehicle ReID and A Large-Scale Benchmark](/202607/17/2607.08085v1-mixture-of-enhanced-view-experts-for-multi-query-vehicle-reid-and-a-large-scale-benchmark)  
+   evidence：三维重建场景表示与共视性推理
+7. [UNIBROWSE: A Data-to-Agent Framework for Multimodal BrowseComp](/202607/18/2607.10557v1-unibrowse-a-data-to-agent-framework-for-multimodal-browsecomp)  
+   标签：评分：7.0/10、query:multimodal
+   evidence：覆盖所有信息流模式的多模态浏览任务统一数据管道
+8. [3D Scene Graph Prediction: Generating Hierarchical Models from Partially Observed Environments](/202607/18/2607.10879v1-3d-scene-graph-prediction-generating-hierarchical-models-from-partially-observed-environments)  
+   标签：评分：7.0/10、query:d-vision
+   evidence：从部分观测生成层次化3D场景图
+9. [Spectral Consistent Flow for One-step 3D Medical Image Translation](/202607/18/2607.10627v1-spectral-consistent-flow-for-one-step-3d-medical-image-translation)  
    标签：评分：6.0/10、query:multimodal
-   evidence：多视图特征融合的专家混合用于车辆重识别
-10. [LEEVLA: Seeing What Matters in Latent Environment Evolution for Vision-Language-Action](/202607/17/2607.08182v1-leevla-seeing-what-matters-in-latent-environment-evolution-for-vision-language-action)  
+   evidence：通过频谱一致性流实现单步三维医学图像翻译
+10. [The Ebb and Flow of Multimodal Focus: Scheduling Visual Relay Windows for Grounded VLM Reasoning](/202607/18/2607.11436v1-the-ebb-and-flow-of-multimodal-focus-scheduling-visual-relay-windows-for-grounded-vlm-reasoning)  
    标签：评分：6.0/10、query:multimodal
-   evidence：视觉-语言-动作多模态机器人控制模型
-11. [Enhancing In-context Panoramic Generation via Geometric-aware Pretraining](/202607/17/2607.08765v2-enhancing-in-context-panoramic-generation-via-geometric-aware-pretraining)  
+   evidence：跨模态注意力动态
+11. [Just-In-Time Scene Graph Growth: Combating Perceptual Saturation in Long-Horizon Robotics](/202607/18/2607.13245v1-just-in-time-scene-graph-growth-combating-perceptual-saturation-in-long-horizon-robotics)  
    标签：评分：6.0/10、query:d-vision
-   evidence：几何感知预训练用于全景生成，辅助场景理解
-12. [Robustifying Vision-Language Models via Test-Time Prompt Adaptation](/202607/17/2607.09450v1-robustifying-vision-language-models-via-test-time-prompt-adaptation)  
+   evidence：即时3D场景图用于实时场景理解
+12. [LATTICE: Graph Self-Supervised Learning for Multimodal Spatial Omics Integration](/202607/18/2607.14410v1-lattice-graph-self-supervised-learning-for-multimodal-spatial-omics-integration)  
    标签：评分：6.0/10、query:multimodal
-   evidence：视觉语言模型的测试时提示自适应鲁棒性方法
+   evidence：图自监督学习用于多模态表示学习与对齐
 
 
 <div class="dpr-home-promo-card">
