@@ -1,0 +1,1369 @@
+Title: Multi-Agent Collaborative Reasoning with Tool-Augmented Evidence for Urban Region Profiling
+
+URL Source: https://arxiv.org/pdf/2607.13558v1
+
+Published Time: Thu, 16 Jul 2026 00:43:07 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Multi-Agent Collaborative Reasoning with Tool-Augmented Evidence for Urban Region Profiling 
+
+## Xixuan Hao 
+
+The Hong Kong University of Science and Technology (Guangzhou) Guangzhou, China xhao390@connect.hkust-gz.edu.cn 
+
+## Yutian Jiang 
+
+The Hong Kong University of Science and Technology (Guangzhou) Guangzhou, China yjiang194@connect.hkust-gz.edu.cn 
+
+## Jiabo Liu 
+
+The Hong Kong University of Science and Technology (Guangzhou) Guangzhou, China jliu933@connect.hkust-gz.edu.cn 
+
+## Yihang Yang 
+
+University of Washington Seattle, USA yheason6@uw.edu 
+
+## Guangyin Jin 
+
+Chang’an University Xi’an, China jinguangyin96@foxmail.com 
+
+## Song Gao 
+
+University of Wisconsin - Madison Madison, USA song.gao@wisc.edu 
+
+## Yuxuan Liang ∗
+
+The Hong Kong University of Science and Technology (Guangzhou) Guangzhou, China yuxliang@outlook.com 
+
+Abstract 
+
+Urban region profiling constitutes a core problem in urban com-puting, supporting applications such as population estimation, economic assessment, and environmental monitoring. Existing methods typically formulate this task as multimodal representation learning, fusing heterogeneous urban data—e.g., satellite imagery, points of interest, textual descriptions, and 3D building informa-tion—into latent embeddings for prediction. However, these ap-proaches are largely correlation-driven, assume cross-modal consis-tency, and rely on static pipelines, which limit their robustness in heterogeneous or unseen urban regions. We propose UrbanAgent ,an agentic framework that reframes urban region profiling as a reasoning-driven inference problem. UrbanAgent instantiates an independent agent for each data modality and performs structured multi-agent collaborative reasoning to explicitly address cross-modal inconsistencies rather than absorbing them into a single representation. In addition, UrbanAgent extends indicator predic-tion as a closed-loop process of active evidence acquisition and iterative reasoning, enabling agents to verify uncertain inferences through tool-augmented retrieval of external knowledge optimized via reinforcement learning. Extensive experiments on global urban datasets for Carbon emissions, GDP, and Population estimation show that UrbanAgent consistently outperforms existing baselines, achieving an average improvement of 8.1% in 𝑅 2 , and exhibiting strong generalization performance in unseen-city settings.  
+
+> ∗Corresponding author. Email: yuxliang@outlook.com
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> KDD ’26, Jeju Island, Republic of Korea
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2259-2/2026/08 https://doi.org/10.1145/3770855.3818068
+
+ACM Reference Format: 
+
+Xixuan Hao, Yutian Jiang, Jiabo Liu, Yihang Yang, Guangyin Jin, Song Gao, and Yuxuan Liang. 2026. Multi-Agent Collaborative Reasoning with Tool-Augmented Evidence for Urban Region Profiling. In Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining V.2 (KDD ’26), August 09–13, 2026, Jeju Island, Republic of Korea. ACM, New York, NY, USA, 15 pages. https://doi.org/10.1145/3770855.3818068 
+
+1 Introduction 
+
+Understanding urban regions from data poses a fundamental chal-lenge in urban computing [ 67 ], with broad applications in popula-tion estimation, economic assessment, and environmental moni-toring. With the growing availability of heterogeneous urban data, recent studies have explored urban region profiling [15 ], aiming to infer region-level attributes by jointly leveraging multimodal data including satellite imagery, points of interest (POIs), textual descriptions and 3D building information. In recent years, most existing approaches formulate this task as a representation learning problem [ 15 ], where multimodal inputs are encoded into latent representations and mapped to target attributes through Deep Learning (DL) techniques [4, 13, 14, 22, 23, 49, 51, 52, 66]. While effective in specific settings, this paradigm exhibits in-herent limitations when applied to complex urban systems [ 24 ]. In particular, prior DL–based profiling methods rely on latent fusion spaces, assume strong modality schema, and operate within static alignment pipelines. As a result, these models are primarily 
+
+correlation-driven : they learn statistical associations from the training data, but lack the ability to reason about conflicting evi-dence, adapt to new contexts, or verify uncertain inferences . These limitations become especially pronounced in heterogeneous or previously unseen urban regions [64, 66]. In this work, we argue that the challenges of urban region profil-ing are not merely technical issues of representation learning, but reflect a deeper mismatch between the learning paradigm and the complex nature of urban data. As shown in Figure 1, we identify two arXiv:2607.13558v1 [cs.AI] 15 Jul 2026 KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xixuan Hao et al. DL -based Profiling (static, correlation -driven )                        
+
+> Challenge 1: Inconsistency
+> across Urban Modalities
+> Challenge 2: Correlation -Driven
+> Urban Inference
+> From POI: Clusters
+> of business function
+> unit
+> From Satellite: Low -
+> rise, buildings with
+> green space
+> Visual Signal
+> (Tall Buildings) Hallucinated
+> Conclusion
+> (High GDP)
+> ❌
+> Missing Causal Factors
+> (e.g. Economic Policy…)
+> Reliable, Evidence -driven
+> Urban Profile
+> External Tools &Evidence Retrieval
+
+…                
+
+> Satellite Imagery
+> Street -View Imagery Text
+> Demographics
+> Indicators
+> Environment
+> Indicators
+> Traffic
+> Indicators
+> Climate
+> Indicators
+> Economics
+> Indicators
+> POI
+> Alignment
+> Foundation Model
+> UrbanAgent (agentic, reasoning -driven)
+> Challenges
+> üConflict? Let’s debate
+> üConsensus ?Let’s enhance
+> üConfident? Teach me
+> Incorrect correlation -
+> driven inference
+
+Figure 1: The concepts and challenges of urban region profiling. Our UrbanAgent is a pioneering research on using multi-agent collaborative reasoning for this task. 
+
+fundamental challenges that motivate a shift from static, correlation-driven modeling toward agentic, reasoning-driven urban inference: 
+
+✦ Inconsistency across Urban Modalities . Urban regions are observed through multiple heterogeneous data modalities, such as satellite imagery, POI records, 3D buildings and texts. These modalities capture different facets of urban reality, including physi-cal form, functional usage, and semantic perception, thereby often providing inconsistent signals for the same region. For instance, satellite imagery may depict a low-density residential area, while POI data indicate dense commercial activities; 3D building models may show only a few high-rise structures, and textual descriptions may label the same area as an “emerging business district.” Such discrepancies are common in real-world cities and reflect their mixed-use nature rather than noise. However, most existing multi-modal profiling methods assume that heterogeneous signals can be aligned and fused into a unified representation. When modal-ities are inconsistent, misleading signals are combined without being explicitly identified, causing cross-modal inconsistencies to be absorbed into the fused representation, ultimately leading to inaccurate and unreliable urban assessments. 
+
+✦ Correlation-Driven Urban Inference . Urban region profil-ing models largely rely on correlations learned from data to infer complex attributes. In practice, easily observable cues, including building height, night-light intensity, POI density, are often associ-ated with high-level attributes like gross domestic product (GDP), population, or urban function. While such correlations may hold on average, they are not universally reliable across diverse urban contexts. Tourism districts, for example, may exhibit strong night-time activity without high resident population, whereas building height and skyline density may serve as unreliable proxies for GDP across heterogeneous urban contexts. Nevertheless, correlation-driven models tend to apply learned associations uniformly across regions, even when local contexts differ from those seen during training. This can lead to confident yet weakly supported predic-tions, particularly in heterogeneous or previously unseen regions. Overall, these challenges suggest that urban region profiling cannot be adequately framed as a static feature fusion task. Instead, it necessitates a reasoning-centric paradigm that can operate over 
+
+Table 1: Paradigm-level comparison between conventional DL-based urban region profiling methods and UrbanAgent .
+
+Aspect DL-based Profiling UrbanAgent (Ours) 
+
+Fusion Space Latent Embedding Semantic Reasoning 
+
+Schema Dependency Strong Weak / None 
+
+Processing Pipeline Static Agentic 
+
+Adaptability Limited General-purpose 
+
+Modeling Paradigm Correlation-driven Reasoning-driven 
+
+heterogeneous urban evidence, relaxing strong schema assump-tions, and adapting inference behavior to diverse urban contexts, rather than relying solely on correlations learned from training data. Table 1 distills these challenges and motivates the need for a reasoning-centric paradigm. In this paper, we propose UrbanAgent , an agentic framework for multimodal urban region profiling. UrbanAgent addresses modality inconsistency by explicit multi-agent collaborative reasoning with structured inter-agent relations, rather than jointly embedding all inputs into a unified latent representation. This design allows inconsistencies across urban modalities to be addressed explicitly instead of implicitly absorbed. In addition, UrbanAgent mitigates correlation-driven inference by extending the urban indicator pre-diction as a closed-loop process of active evidence acquisition and iterative reasoning. Rather than uniformly applying correlations learned from training data, UrbanAgent enables inference behavior to adaptively incorporate external, grounded knowledge as comple-mentary evidence, thereby reducing reliance on brittle surface-level cues in heterogeneous or previously unseen urban regions. Our contributions are summarized as follows: 
+
+• Multi-Agent Collaborative Reasoning Framework . We propose 
+
+UrbanAgent , an agentic AI framework that reframes multimodal urban profiling as a semantic reasoning problem rather than a latent embedding task. By modeling each modality as an indepen-dent agent, UrbanAgent enables flexible cross-modal interaction without requiring strong schema assumptions. 
+
+• Tool-Augmented Agentic Learning . UrbanAgent introduces a tool-augmented agentic learning paradigm that empowers agents to actively acquire and verify external evidence through tool use. By extending urban indicator prediction process into a closed-loop reasoning process and optimizing tool-use via reinforcement learning, our approach effectively mitigates correlation-driven inference and over-reliance on LLM internal priors. 
+
+• Extensive Empirical Studies . We conduct comprehensive exper-iments on global urban datasets covering Carbon emissions, GDP, and Population, under both in-domain and unseen-city settings. The results show that UrbanAgent consistently outper-forms existing DL and multi-agent baselines by 8.1% on the 𝑅 2
+
+metric, validating the effectiveness of collaborative reasoning and evidence-driven inference for urban region profiling. 
+
+2 Preliminary 2.1 Problem Formulation 
+
+Formally, for a dataset of 𝑁 urban regions {𝑢 𝑖 }𝑁 𝑖 =1, we are given a set of multimodal inputs X𝑢 𝑖 = {𝑥 sat 
+
+𝑢 𝑖 , 𝑥 text 
+
+𝑢 𝑖 , 𝑥 poi 
+
+𝑢 𝑖 , 𝑥 3d 
+
+𝑢 𝑖 }, where 𝑥 sat 
+
+𝑢 𝑖 ∈UrbanAgent KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Modality -Specific Agents 
+
+SFT with Synthetic Reasoning Trajectories for Cold Start                    
+
+> Annotation
+> MLLM
+> (1) Learning multi -step reasoning
+> patterns
+> (2) Learning when to invoke tools
+> (3) Learning how to format tool calls
+> (4) Producing structured reasoning
+> outputs
+> Thought
+> Tool Call
+> Observation
+> Updated Thought
+> Policy  Model
+
+RL with Hierarchical Reward for Enhancement 
+
+O1
+
+O2
+
+…
+
+OG
+
+R1
+
+R2
+
+…
+
+RG
+
+Reward Calculation    
+
+> Accuracy Format Tool -Use
+
+GRPO 
+
+(a) Tool -Augmented Agentic Learning (b) Multi -Agent Collaborative Reasoning 
+
+Initial Predictions          
+
+> Responses Rewards
+> Profile
+> Macro Space
+> Perception
+> Satellite Agent Text Agent POI Agent 3D Agent
+> Profile
+> Semantic
+> Abstraction
+> Profile
+> Functional
+> Distribution
+> Profile
+> Urban
+> Morphology
+> Synthetic
+> Tool -Use Trajectories
+
+Tool -Use Augment 
+
+> Policy  Model
+
+Query                  
+
+> You are ahelpful assistant specialized in urban
+> socio -economic analysis .You analyze various
+> data sources to assess urban indicators .
+> # Tools
+> You may call functions to
+> assist with your analysis .
+> <Confidence >
+> {"name": ” Confidence ”}
+> </ Confidence >
+> # Response Format
+> <reasoning>
+> [Your detailed analysis
+> of the input...]
+> </reasoning>
+> <Answer >
+> {"name": ” Answer ”}
+> </ Answer >
+
+Corroboration Edge 
+
+> High -density
+> high -rise
+> buildings
+> Financial
+> institutions
+> and business
+> facilities
+
+Rectification Edge  
+
+> Low -rise, dispersed buildings
+> with abundant green space
+> Dense clusters of catering, logistics,
+> and manufacturing facilities
+
+Supervisory Edge    
+
+> Low -density
+> residential area,
+> limited population
+> Dense life -service ,
+> facilities, high
+> population activity
+> I’m confident,
+> trust me!
+
+Final Judge 
+
+Answer & Reasoning        
+
+> My answer is
+> Carbon Emission :4.3
+> GDP :2.7Population :3.4
+
+Confidence Score:0.8                       
+
+> <reasoning>
+> It features high building density, acomplex and
+> highly connected road network, and multiple
+> large building clusters alongside contiguous
+> residential areas, jointly reflecting amature urban
+> form …
+> </reasoning>
+
+Figure 2: The overall Framework of UrbanAgent .
+
+R𝐻 ×𝑊 ×𝐶 denotes a satellite image patch with spatial resolution 𝐻 ×
+
+𝑊 and 𝐶 channels; 𝑥 text 
+
+𝑢 𝑖 represents textual information describing the region; 𝑥 poi 
+
+𝑢 𝑖 ∈ R𝑃 𝑢 𝑖 ×𝑀 represents POI category information for region 𝑢 𝑖 , where 𝑃 𝑢 𝑖 denotes the number of POI instances in the region, and each row is an 𝑀 -dimensional one-hot vector over the POI category set; 𝑥 3d 
+
+𝑢 𝑖 = {(P 𝑖 , ℎ 𝑖 )} , where P𝑖 denotes the planar footprint polygon of region 𝑖 , and ℎ𝑖 denotes its measured height. The Urban Region Profiling (URP) problem is therefore to learn a mapping F : X𝑢 𝑖 → Y𝑢 𝑖 , to infer 𝐷 urban indicators Y 𝑢 𝑖 ∈ R𝐷 .
+
+2.2 Related Work 
+
+2.2.1 Urban Region Profiling. URP aims to predict region-level socioeconomic indicators from heterogeneous urban observations, with the central challenge of capturing the multi-faceted nature of urban environments. Early studies learned region representa-tions from human mobility and POIs [ 4 , 16 , 23 , 32 , 45 , 60 , 65 , 66 ], characterizing human activity patterns in urban space. Some work incorporated physical environment cues via satellite or street-view imagery to model what the city looks like [ 18 , 19 , 25 , 28 , 29 , 47 , 66 ]. Follow-up studies further integrate visual, human-activity, and semantic signals to inject higher-level urban concepts [ 13 , 35 , 49 ,62 ]. More recently, self-supervised pretraining and multimodal foundation models have been explored for urban analysis [ 3, 26 ,48 , 53 , 61 ]. However, naively compressing potentially conflicting modalities into a unified representation can cause semantic dilution and logical gaps. In this work, we propose a structured reasoning framework that explicitly preserves and reconciles heterogeneous urban modalities, enabling verifiable and interpretable urban region profiling. 
+
+2.2.2 Agentic Reinforcement Learning (RL). Agentic RL reframes LLMs as operational agents capable of multi-step reasoning and environment interaction [ 55 ], supported by stable policy optimiza-tion methods such as GRPO [ 10 , 68 ]. By integrating a loop of reasoning–action–observation [ 50 , 57 ], agents can invoke external tools to ground decisions in verifiable evidence and mitigate hallu-cinations. Despite its success in general reasoning tasks, Agentic RL remains underexplored for urban region profiling. Despite several pioneering efforts [ 27 , 28 , 43 ], existing methods still suffer from spu-rious causal reasoning. In this work, we reformulate urban region profiling as a collaborative agentic task equipped with external tool calling [ 44 ], enabling agents to dynamically query task-relevant external information and perform evidence-driven reasoning. 
+
+2.2.3 Multi-Agent Systems (MAS). MAS leverages the collective intelligence of interacting agents to solve complex problems beyond the capacity of a single agent [ 11 , 12 , 37 , 38 , 40 , 42 , 54 , 63 ]. Prior work shows that collaboration mechanisms—such as reflection [ 40 ], tool use [ 37 , 38 ], planning [ 54 ], and negotiation [ 42 ]—can sig-nificantly enhance problem-solving performance. Recent studies further demonstrate that Agentic RL enables scalable multi-agent decision-making through multi-turn environmental feedback [ 36 ,57 ]. In geospatial reasoning, graph-based multi-agent frameworks have been increasingly adopted to facilitate structured communica-tion and consensus [ 12 , 15 ], highlighting the potential of collabora-tive reasoning for domain-intensive tasks. In this paper, we adopt a graph-based multi-agent collaborative reasoning framework to resolve the inconsistency across urban modalities. 
+
+3 Methodology 
+
+As shown in Figure 2, UrbanAgent is a two-stage framework that integrates tool-augmented agentic learning with multi-agent col-laborative reasoning for urban region profiling. In the first stage, modality-specific agents are trained via Supervised Fine-Tuning KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xixuan Hao et al. Multi -Modal Input Construction Tool Calling                              
+
+> TooUse Trajectory Construction
+> Text Description
+> POI Data 3D Building
+> JSON Annotation
+> HTML Visualization
+> {“prompt ”:“…”,
+> “response ”:“…”,
+> “tools ”:[…],
+> }
+> LLM Agent
+> (Qwen3 -VL)
+> <reasoning> <tool call>
+> Web Search
+> Crop -and -Zoom
+> Nightlight Retrieval
+> Historical Satellite
+> Human Prompt
+> Urban Region
+> Profiling task
+> Assistant
+> Reasoning
+> <reasoning>
+> Tool Call
+> <tool call>
+> Tool: Nightlight
+> (e.g. Nightlight)
+> Tool
+> Response
+> Value: 45
+> <tool response>
+> Final Answer
+> The satellite image
+> description provides
+> a comprehensive
+> overview of the urban
+> characteristics of …
+> The comprehensive
+> analysis of the Instituto
+> Superior Técnico area
+> reveals a highly
+> developed urban …
+> Evidence -based inference
+> Satellite Imagery
+> Coordinate
+> Result
+> Historical  Response
+> BBox
+> Crop
+
+Figure 3: Tool-use trajectory curation pipeline. 
+
+(SFT) cold start and Group Relative Policy Optimization (GRPO)-based reinforcement learning to actively invoke external tools and produce evidence-grounded predictions with confidence estimates. In the second stage, these agents interact through a structured collaboration graph with corroboration, rectification, and supervi-sory relations, enabling iterative conflict resolution and consensus consolidation beyond static multimodal fusion. 
+
+3.1 Tool-Augmented Agentic Learning 
+
+In urban region profiling, the prediction of socio-economic indi-cators mainly depends on latent information that is not directly observable. As discussed in the Introduction, when relying solely on internal knowledge acquired through large-scale pretraining [ 34 ], LLMs tend to exhibit inherent limitations related to correlation-driven inference. Moreover, urban analysis requires strong do-main knowledge that is highly context-specific, which general-purpose LLMs largely lack [ 33 ]. Therefore, the incorporation of explicit tool chains and interpretable intermediate artifacts is necessary to suppress hallucinations and improve overall robustness . In this section, we describe the construction of the tool-use trajectory dataset and its use for training agentic RL. 
+
+3.1.1 Tool-use Trajectory Curation Pipeline. We select four rep-resentative categories of tools to construct the tool suite that are closely related to socio-economic indicators: (1) Web Search , (2) 
+
+Crop-and-Zoom , (3) Nightlight Retrieval and (4) Historical Satellite Imagery Retrieval . See more details in Appendix A. Figure 3 illustrates the overall pipeline of Tool-use Trajectory Curation. Given geo-referenced location samples with labels, the pipeline processes four complementary input modalities—satellite imagery, textual descriptions, POI distributions, and 3D building information. For different modalities, available tools are randomly sampled to drive the model to progressively acquire external ev-idence via multi-round interactions, while iteratively updating its judgments. During trajectory curation, we employ Qwen3-VL-7B [ 1 ] as the annotation MLLM, and enforce a unified output schema to record the complete sequence consisting of model reasoning, tool invocation, tool feedback, and iterative reasoning [50]. 
+
+3.1.2 Agentic Reinforcement Learning. Recent urban foundation models [ 15 , 58 ] have largely shifted from self-supervised pretrain-ing [ 3 , 13 , 61 ] to instruction fine-tuning (SFT) [ 8, 59 ], achieving strong in-distribution performance but relying primarily on token-level supervision that fails to distinguish robust urban reasoning from spurious statistical correlations. In contrast, reinforcement learning—particularly GRPO [ 10 , 21 , 31 , 43 ]—directly aligns op-timization with verifiable, task-relevant rewards, enabling more stable and scalable learning of robust reasoning strategies. In this work, we employ GRPO to incentivize tool-use reasoning capabilities in LLMs via reinforcement learning. In practice, tool invocation differs fundamentally from natural language dialogue, and models typically lack the necessary priors, such as reasoning-pattern priors (e.g., ReAct-style structures [ 50 ]), tool-timing priors (i.e., when to invoke tools), and tool-call formatting priors. There-fore, we first apply instruction-based supervised fine-tuning (SFT) to activate and ground the model’s tool-calling syntax, providing a stable foundation for subsequent RL optimization. The core role of SFT cold start is to inject executable tool-use priors into agentic models, as pure reinforcement learning without such initialization often leads to unstable training dynamics and degenerate solu-tions [ 39 , 46 ]. The core idea of GRPO is to sample multiple candidate trajectories for a given input and update the policy based on relative feedback within each group, thereby eliminating the need for an absolute reward scale and providing more stable learning signals under heterogeneous reward functions [10]. 
+
+Tool-aware Composite Reward. For an input 𝑥 and a sampled response trajectory 𝑦 , we define the total reward of three items: 
+
+𝑅 total (𝑥, 𝑦 ) = 𝛼 𝑅 outcome (𝑥, 𝑦 ) + 𝛽 𝑅 format (𝑥, 𝑦 ) + 𝛾 𝑅 process (𝑥, 𝑦 ), (1) where 𝑅 outcome measures predictive correctness (e.g., numeric ac-curacy), 𝑅 format enforces strict compliance with the tool-calling / output grammar, and 𝑅 process encourages well-structured and appropriate tool use, preventing degeneration into tool-free, re-dundant, or invalid invocation behaviors (e.g., exceeding call limits or applying image-specific tools to text-only inputs). 
+
+Group-wise Sampling and Relative Advantage . For each training instance 𝑥 , we sample a group of 𝐺 candidates from the current policy 𝜋 𝜃 and obtain their rewards {𝑟 𝑖 }𝐺 𝑖 =1. GRPO converts these absolute rewards into a group-relative advantage, which measures the relative performance of each candidate within the group. Specifically, the advantage of candidate 𝑖 is defined as 
+
+𝐴 𝑖 = 𝑟 𝑖 − 1
+
+𝐺 
+
+Í𝐺 𝑗 =1 𝑟 𝑗 √︂ 
+
+1
+
+𝐺 
+
+Í𝐺 𝑗 =1
+
+
+
+𝑟 𝑗 − 1
+
+𝐺 
+
+Í𝐺 𝑘 =1 𝑟 𝑘 
+
+2 . (2) 
+
+Policy Optimization with KL Regularization. We update 
+
+𝜋 𝜃 to increase the likelihood of candidates with positive relative advantage, while constraining drift from a reference policy 𝜋 𝑟𝑒 𝑓 via KL regularization: 
+
+J ( 𝜃 ) = E{𝑦 𝑖 }𝐺 𝑖 =1∼𝜋 𝜃 old (· | 𝑥 )
+
+"
+
+1
+
+𝐺 
+
+𝐺 ∑︁ 
+
+𝑖 =1
+
+min 
+
+
+
+𝜎 𝑖 𝐴 𝑖 , clip (𝜎 𝑖 , 1 − 𝜖, 1 + 𝜖 ) 𝐴 𝑖 
+
+
+
+− 𝜆 KL (𝜋 𝜃 (· | 𝑥 ) ∥ 𝜋 ref (· | 𝑥 )) 
+
+#
+
+,
+
+(3) where 𝜎 𝑖 = 𝜋 𝜃 (𝑦 𝑖 |𝑥 )
+
+𝜋 𝜃 old (𝑦 𝑖 |𝑥 ) , 𝜖 is the clipping threshold, and 𝜆 controls the weight of the KL regularization. 𝜋 ref denotes a fixed reference UrbanAgent KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+policy, initialized from the SFT model, which constrains the policy update and preserves the base language behavior. 
+
+3.2 Multi-Agent Collaborative Reasoning 
+
+After obtaining initial predictions from modality-specific agents via tool-augmented agentic learning, our Multi-Agent Collaborative Reasoning proceeds in two stages: (1) Multi-Agent Interaction Graph construction and (2) Relation-Aware Iterative Reasoning. 
+
+3.2.1 Multi-Agent Interaction Graph. Multi-agent collaboration organizes agents associated with distinct modalities or perspectives into a cooperative system that enables structured interaction and cross-verification. This transforms multimodal fusion from static representational alignment into a dynamic reasoning process and improving the robustness and controllability of heterogeneous information fusion. As illustrated in Figure 2 (b), we propose a heterogeneous graph-based framework for multi-agent collaborative reasoning. In prac-tice, multi-agent interactions are inherently heterogeneous, which we summarize into three categories: ❶ Consistent predictions call for confirmation and consolidation; ❷ Conflicting predictions re-quire error rectification, and ❸ When agent confidence exhibits strong asymmetry, the interaction topology becomes supervision-oriented. Motivated by this observation, we construct three types of edges and allow them to dynamically express three interaction semantics— Corroboration, Rectification and Supervision .In the beginning, we employ 𝐾 modality-specific, tool-augmented agents, denoted by V = {𝑣 1, 𝑣 2, . . . , 𝑣 𝐾 }. Each agent 𝑣 𝑘 produces indicator predictions 𝑦 𝑘 and an associated confidence score 𝑐 𝑘 ∈[0, 1]. The collaborative reasoning process can be modeled as a graph G = (V , E) where nodes V represent agents and edges 
+
+E encode their interaction patterns. the edge set is defined as 
+
+E = Ecor ∪ E rec ∪ E sup .
+
+Next, we introduce three kinds of edges in detail. 
+
+(1) Corroboration Edge. Corroboration edges connect agents whose predictions are sufficiently close, indicating mutually sup-portive predictions that consolidate consensus and reinforce con-sistent interpretations. A corroboration edge is constructed as 
+
+(𝑣 𝑗 → 𝑣 𝑖 ) ∈ E cor if pred 𝑖 − pred 𝑗 < 𝜏 cor , (4) where 𝜏 cor is corroboration threshold. Intuitively, this relation cor-responds to mutual confirmation and evidence reinforcement, am-plifying reliable shared information and stabilizing consensus. 
+
+(2) Rectification Edge. Rectification edges explicitly model conflict-aware correction. When agent 𝑣 𝑖 ’s hypothesis shows signif-icant inconsistency with other agents, other agents are encouraged to challenge and correct it. A rectification edge is constructed as 
+
+(𝑣 𝑗 → 𝑣 𝑖 ) ∈ E rec if pred 𝑖 − pred 𝑗 > 𝜏 rec , (5) where 𝜏 rec is rectification threshold. This relation explicitly exposes cross-modal inconsistency and drives hypothesis refinement. 
+
+(3) Supervisory Edge. While corroboration and rectification explicitly address agreement and conflict among agents, they do not determine which agent should exert greater influence during the reasoning process. At this stage, the confidence estimation mecha-nism plays a critical role by guiding the direction and strength of inter-agent interactions. When the confidence difference between two agents’ predictions exceeds a threshold 𝜏 sup , we construct a directed supervisory edge as 
+
+(𝑣 𝑗 → 𝑣 𝑖 ) ∈ E sup if 𝑐 𝑗 − 𝑐 𝑖 > 𝜏 sup . (6) This structure forms a guidance-oriented topology analogous to teacher-forcing knowledge distillation, enabling high-confidence agents to exert stronger influence. 
+
+3.2.2 Relation-Aware Iterative Reasoning. After the construction of multi-agent interaction graph, agents iteratively refine their predictions through multi-round interactions. Each agent maintains a hidden state initialized from its modality-specific encoding and initial predictions. 
+
+h(0) 
+
+> 𝑖
+
+= Init 𝜃 
+
+
+
+pred 𝑖 , Embed 𝜓 (s𝑖 ), 𝑐 𝑖 
+
+
+
+, (7) where h(0) 
+
+> 𝑖
+
+∈ R𝑑 ℎ denotes the initial hidden state of agent 𝑖 , pred 𝑖 is its initial indicator prediction, s𝑖 is the modality-specific reasoning text, 𝑐 𝑖 ∈ [ 0, 1] is the associated confidence score. Embed 𝜓 (·) maps 
+
+s𝑖 into a shared embedding space using an LLM-based encoder, and 
+
+Init 𝜃 (·) is a learnable initialization function (e.g., MLP layers) that fuses these information to produce h(0) 
+
+> 𝑖
+
+.Subsequently, the agents engage in 𝐿 rounds of iterative interac-tion. At each interaction round ℓ, for each agent 𝑣 𝑖 , we partition its neighborhood N ( 𝑖 ) by edge type: 
+
+N𝑡 (𝑖 ) = { 𝑣 𝑗 | ( 𝑣 𝑗 →𝑣 𝑖 ) ∈ E 𝑡 }, 𝑡 ∈ R , (8) where R = {cor , rec , sup }. The node-level interaction then pro-duces relation-specific messages, enabling distinct message-passing mechanisms tailored to corroboration, rectification, and supervision influence: 
+
+⋄ Corroboration Message 
+
+𝑔 𝑗𝑖 = 𝜎 
+
+
+
+𝑊 cor [ℎ(𝑙 ) 
+
+> 𝑗
+
+∥ ℎ(𝑙 ) 
+
+> 𝑖
+
+] + 𝑏 conf (𝑐 𝑣 𝑗 − 𝑐 𝑣 𝑖 )
+
+
+
+,𝜇 cor  
+
+> 𝑗𝑖
+
+= 𝑔 𝑗𝑖 ⊙ ( 𝑊 𝑔 ℎ(𝑙 ) 
+
+> 𝑗
+
+),
+
+(9) where 𝑊 cor denotes a learnable weight matrix, 𝑏 conf is learnable that modulates the influence of confidence differences, 𝜎 (·) de-notes sigmoid activation, and 𝜇 cor  
+
+> 𝑗𝑖
+
+represents the corroboration message propagated from node 𝑣 𝑗 to node 𝑣 𝑖 .
+
+⋄ Rectification Message 
+
+𝜇 rec  
+
+> 𝑗𝑖
+
+= 𝑊 rec · ReLU (ℎ(𝑙 ) 
+
+> 𝑗
+
+− ℎ(𝑙 ) 
+
+> 𝑖
+
+), (10) where 𝑊 rec denotes a learnable transformation matrix, and 𝜇 rec 
+
+> 𝑗𝑖
+
+represents the rectification message propagated from 𝑣 𝑗 to 𝑣 𝑖 .
+
+⋄ Supervisory Message 
+
+𝛼 𝑗𝑖 =
+
+exp 
+
+
+
+𝑐 𝑗 ℎ(𝑙 )
+
+> 𝑗
+> ⊤
+
+𝑊 attn ℎ(𝑙 )
+
+> 𝑖
+
+Í   
+
+> 𝑧 ∈ N sup (𝑖 )
+
+exp 
+
+
+
+𝑐 𝑧 ℎ(𝑙 )
+
+> 𝑧
+> ⊤
+
+𝑊 attn ℎ(𝑙 )
+
+> 𝑖
+
+ , 𝜇 sup  
+
+> 𝑗𝑖
+
+= 𝛼 𝑗𝑖 𝑊 sup (ℎ(𝑙 ) 
+
+> 𝑗
+
+),
+
+where 𝑊 attn denotes a learnable attention weight matrix, 𝑊 sup 
+
+is a learnable transformation matrix for supervisory message construction, and 𝜇 sup  
+
+> 𝑗𝑖
+
+represents the supervisory message prop-agated from node 𝑣 𝑗 to node 𝑣 𝑖 .KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xixuan Hao et al. 
+
+The aggregated message for each agent is computed via relation-aware aggregation. 
+
+𝑚 𝑡 𝑖 = 1
+
+max (1, |N 𝑡 (𝑖 )|) ∑︁ 𝑗 ∈ N 𝑡 (𝑖 )
+
+𝜇 𝑡 𝑗𝑖 , 𝜇 𝑖 = 𝑊 𝑓 
+
+𝑚 cor  
+
+> 𝑖
+
+∥ 𝑚 rec  
+
+> 𝑖
+
+∥ 𝑚 sup 
+
+> 𝑖
+
+,
+
+(11) where 𝑡 ∈ { cor , rec , sup }, W𝑓 represents learnable parameters. The agent state is then updated via a gated update function. 
+
+ℎ(𝑙 +1) 
+
+> 𝑖
+
+= GRU (ℎ(𝑙 ) 
+
+> 𝑖
+
+, 𝜇 (𝑙 ) 
+
+> 𝑖
+
+) (12) After each round, the agent confidence is recalibrated as 𝑐 (𝑙 ) 
+
+> 𝑖
+
+=
+
+𝜎 (w⊤h(𝑙 ) 
+
+> 𝑖
+
++ 𝑏 ).
+
+⋄ Hierarchical Final Judge. After 𝐿 interaction rounds, each agent yields a calibrated hidden state and a confidence sequence. To avoid relying solely on the final-round output, we introduce a Hierarchical Spatio-Temporal Judge to jointly evaluate process reliability and cross-agent contribution. The temporal judge evaluates each agent’s calibration trajectory, capturing stability and uncertainty across rounds. 
+
+˜ℎ𝑖 = TemporalEnc (ℎ(1: 𝐿 ) 
+
+> 𝑖
+
+, 𝑐 (1: 𝐿 ) 
+
+> 𝑖
+
+). (13) The spatial judge performs cross-agent attention over tempo-rally refined representations to compute importance weights and produce the final prediction. 
+
+ˆ𝑌 =
+
+> 𝐾
+
+∑︁ 
+
+> 𝑖 =1
+
+exp  Attn ( ˜ℎ𝑖 )Í𝐾 𝑗 =1 exp  Attn ( ˜ℎ𝑗 ) · 𝑔 ( ˜ℎ𝑖 ), (14) where 𝑔 (·) denotes learnable prediction head. 
+
+4 Experiments 
+
+In this section, we conduct extensive experiments to investigate the following Research Questions (RQ): 
+
+• RQ1 : Does UrbanAgent achieve superior performance over state-of-the-art DL-based and multi-agent baselines across multiple urban socio-economic prediction tasks? 
+
+• RQ2 : What are the individual contributions of the various com-ponents of UrbanAgent to its overall effectiveness ? 
+
+• RQ3 : How well does UrbanAgent generalize to unseen cities ? 
+
+• RQ4 : How does UrbanAgent perform qualitatively in practice? 
+
+4.1 Experimental Setup 
+
+4.1.1 Datasets. In this work, we construct our dataset from four kinds of representative modalities: Satellite Imagery, Text, POI, 3D .Following [ 49 ], we evaluate UrbanAgent on three classical socio-economic indicators: Carbon emissions, GDP , and Population . Fol-lowing [ 34 , 43 ], we sample locations globally and provide the model with longitude–latitude coordinates, addresses, and nearby places. We collect 2,000 locations in total, each covering a 1km ×1km area, and split them into training, validation, and test sets with a ratio of 7:1:2. Following the practice of [ 34 ], we convert raw indicator values into relative magnitude scores and scale them to the range [0, 9.9], enabling stable learning across heterogeneous socio-economic variables with disparate units and scales. In total, we curate 300 ×
+
+3 cold-start reasoning trajectories for SFT and 1000 × 3 samples for RL, each corresponding to a specific region–indicator pair. More Details about dataset are provided in Appendix B. Figure 4 illustrates the statistics of our dataset. Figure 4 (a) presents the global distributions of the training and test sets. Fig-ure 4 (b) visualizes the meta information of the training set, in-cluding addresses and nearby places, in the form of a word cloud. Figure 4 (c) shows the statistical breakdown of the POI data using a pie chart. (a) 
+
+(b) (c) 
+
+> POI
+> Distribution
+
+Figure 4: Dataset Analysis. 
+
+4.1.2 Baseline. We compare UrbanAgent with the following base-lines on our dataset: Open-source LLMs like Qwen2.5-VL-3B [ 2], Qwen3-VL-4B [ 1 ], InternVL2.5-4B [ 6] and Kimi-VL-A3B [ 41 ]; close-source LLMs like GPT-4o [ 17 ] and Gemini-2.5-Flash [ 7 ]; Conven-tional pretraining methods like UrbanCLIP [ 49 ] and UrbanVLP [ 13 ]. We also compared different multi-agent collaboration methods like AgentFusion, AgentBlender, Agent-Arbiter and Hierarchical Prompting. Please refer to the Appendix C for more details. 
+
+4.1.3 Evaluation Metrics and Implementation. We evaluate model performance using the coefficient of determination ( 𝑅 2) and Spear-man’s rank correlation coefficient ( 𝜌 ). 𝑅 2 measures how much variance in the ground-truth values is explained by the predictions, while Spearman’s 𝜌 evaluates the monotonicity of the relationship, capturing the model’s ability to rank socio-economic indicators correctly irrespective of linear scale. All experiments are conducted on A800 GPUs using Qwen3-VL-4B [ 1 ] as the backbone for training tool-use capabilities and multi-agent collaborative reasoning. Multi-agent collaborative reasoning is implemented with a relation-aware debate mechanism, where agent interactions are dynamically governed by three thresholds: 
+
+𝜏 𝑐𝑜𝑟 =0.4, 𝜏 𝑟𝑒𝑐 =1.2, 𝜏 𝑠𝑢𝑝 =0.25, enabling balanced consensus reinforce-ment, conflict rectification, and confidence-guided supervision. The number of interaction rounds 𝐿 is set to 5. 𝑑 ℎ is set to 192. The training pipeline is built on VeRL, with a batch size of 8, a learning rate of 1e-6, and a maximum of 4 tool-use turns per trajectory to control reasoning depth and computational cost. In Multi-Agent Collaborative Reasoning, the batch size is set to 128, with a learning rate of 1e-4. The model is optimized by AdamW [30]. 
+
+4.2 RQ1: Overall Performance 
+
+To demonstrate the effectiveness of UrbanAgent , we compare it against state-of-the-art models, including representative open-source, closed-source, and multi-agent systems. Table 2 summarizes the UrbanAgent KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+Table 2: Performance comparison under In-Domain and Unseen Cities settings. AgentBlender_w denotes confidence weighted mean, while AgentBlender_v stands for majority voting. UrbanVLP* represents UrbanVLP without street-view imagery branch. 
+
+Model In-Domain Unseen Cities Carbon Population GDP Carbon Population GDP 
+
+𝑅 2 𝜌 𝑅 2 𝜌 𝑅 2 𝜌 𝑅 2 𝜌 𝑅 2 𝜌 𝑅 2 𝜌 
+
+Qwen2.5-VL-3B ——Satellite 0.164 0.541 0.153 0.552 0.194 0.582 0.136 0.561 0.152 0.587 0.203 0.614 ——Text 0.175 0.457 0.129 0.518 0.303 0.564 0.262 0.593 0.153 0.553 0.251 0.601 ——POI 0.159 0.482 0.109 0.447 0.145 0.474 0.132 0.457 0.126 0.498 0.108 0.373 ——3D 0.172 0.542 0.146 0.494 0.228 0.600 0.178 0.598 0.247 0.574 0.188 0.608 Qwen3-VL-4B ——Satellite 0.321 0.684 0.183 0.562 0.284 0.667 0.289 0.608 0.204 0.535 0.262 0.564 ——Text 0.314 0.581 0.143 0.546 0.311 0.640 0.319 0.619 0.237 0.598 0.247 0.627 ——POI 0.265 0.556 0.259 0.635 0.235 0.554 0.285 0.627 0.224 0.648 0.215 0.582 ——3D 0.201 0.579 0.167 0.569 0.248 0.578 0.202 0.564 0.085 0.709 0.299 0.588 InternVL2.5-4B ——Satellite 0.089 0.375 -0.120 0.222 0.056 0.327 0.132 0.473 -0.040 0.408 0.032 0.371 ——Text 0.186 0.474 0.226 0.513 0.181 0.538 0.159 0.455 0.219 0.520 0.120 0.466 ——POI -0.159 0.282 -0.139 0.347 0.145 0.474 -0.133 0.216 -0.202 0.198 -0.081 0.307 ——3D 0.143 0.542 0.126 0.494 0.228 0.544 0.158 0.538 0.124 0.466 -0.018 0.612 Kimi-VL-A3B ——Satellite 0.065 0.381 -0.179 0.320 0.122 0.417 0.042 0.289 0.049 0.445 0.083 0.545 ——Text -0.109 0.532 0.005 0.538 0.078 0.561 -0.176 0.496 0.092 0.633 -0.098 0.527 ——POI 0.121 0.359 0.208 0.437 0.153 0.503 -0.171 0.033 -0.085 0.142 -0.098 0.251 ——3D 0.243 0.542 0.227 0.494 0.328 0.612 0.178 0.598 0.210 0.566 -0.019 0.608 GPT-4o ——Satellite 0.460 0.770 0.431 0.652 0.520 0.816 0.336 0.752 0.477 0.709 0.138 0.725 ——Text 0.344 0.643 0.231 0.549 0.388 0.651 0.296 0.653 0.201 0.492 0.303 0.721 ——POI 0.326 0.740 0.419 0.617 0.353 0.634 0.327 0.733 0.411 0.715 0.318 0.702 ——3D 0.559 0.767 0.554 0.783 0.432 0.652 0.522 0.748 0.589 0.755 0.385 0.734 Gemini-2.5-Flash ——Satellite 0.533 0.768 0.532 0.801 0.381 0.639 0.496 0.744 0.502 0.751 0.358 0.757 ——Text 0.421 0.693 0.226 0.603 0.406 0.674 0.388 0.679 0.259 0.623 0.386 0.673 ——POI 0.414 0.725 0.337 0.635 0.408 0.765 0.337 0.742 0.339 0.648 0.266 0.722 ——3D 0.535 0.753 0.238 0.573 0.515 0.754 0.517 0.759 0.268 0.583 0.365 0.671 Ours w/o MAS ——Satellite 0.386 0.677 0.255 0.522 0.387 0.682 0.369 0.656 0.250 0.543 0.237 0.630 ——Text 0.428 0.676 0.220 0.574 0.443 0.671 0.453 0.625 0.221 0.550 0.416 0.670 ——POI 0.329 0.586 0.291 0.568 0.285 0.605 0.326 0.594 0.120 0.575 0.322 0.646 ——3D 0.365 0.664 0.207 0.573 0.416 0.694 0.354 0.669 0.204 0.552 0.429 0.763 UrbanCLIP 0.544 0.743 0.445 0.620 0.532 0.732 0.421 0.690 0.382 0.654 0.522 0.751 UrbanVLP* 0.551 0.747 0.448 0.631 0.526 0.728 0.430 0.682 0.383 0.657 0.518 0.742 AgentFusion 0.512 0.721 0.383 0.645 0.551 0.748 0.472 0.704 0.409 0.676 0.536 0.738 AgentBlender_w 0.504 0.718 0.378 0.647 0.543 0.745 0.516 0.713 0.308 0.629 0.532 0.782 AgentBlender_v 0.441 0.678 0.262 0.585 0.535 0.735 0.429 0.638 0.310 0.614 0.508 0.708 Agent-Arbiter 0.564 0.771 0.355 0.725 0.553 0.772 0.530 0.724 0.345 0.709 0.521 0.715 Hierarchical Prompting 0.311 0.606 0.215 0.542 0.194 0.556 0.279 0.547 0.261 0.572 0.147 0.487 Ours 0.638 0.800 0.649 0.803 0.626 0.799 0.608 0.768 0.621 0.779 0.598 0.786 
+
+overall performance of all methods evaluated in our experiments, from which we can obtain the following findings: i) UrbanAgent con-sistently achieves superior performance across all socio eco-nomic prediction tasks. Compared with the strongest baselines, 
+
+UrbanAgent demonstrates notable improvements on Carbon Emis-sion, Population, and GDP, with 𝑅 2 gains of 7.4%, 9.5%, and 7.3%, respectively, while preserving high Spearman correlation. This sug-gests that UrbanAgent improves both predictive accuracy and the stability of regional ranking. These results highlight the advantage of explicit multi-agent collaboration over DL-based static aggre-gation or single-decision paradigms. ii) The performance gains vary across different indicators, reflecting heterogeneous modality contributions. UrbanAgent achieves the strongest per-formance on Population, followed by Carbon Emission, while GDP remains relatively more challenging. This trend suggests that indica-tors closely tied to physical urban form and functional distribution (e.g., residential density and land use) benefit more from collabora-tive reasoning, whereas purely economic indicators rely on more implicit and noisy signals. In comparison, closed-source models generally outperform open-source models. Static fusion approaches (e.g., AgentFusion and AgentBlender) exhibit capability in complex urban prediction tasks. Centralized arbitration methods (e.g., Agent-Arbiter) can further im-prove performance but remain constrained by single-point decision-making. In contrast, sequential hierarchical prompting introduces structured reasoning but is susceptible to error accumulation. These differences suggest that the effectiveness of multi-agent systems depends not only on the inclusion of multiple specialists, but more critically on the design of their collaboration and information interaction mechanisms. KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xixuan Hao et al. 
+
+4.3 RQ2: Ablation Studies 
+
+We conduct ablation studies to assess the impact of individual com-ponents in UrbanAgent (Figure 5a). Removing the multi-agent col-laboration mechanism ( UrbanAgent w/o MAS) leads to consistent performance degradation across all tasks, particularly for Population 
+
+prediction, underscoring the importance of inter-agent interaction for resolving cross-modal inconsistencies. Disabling tool usage results in an average performance drop of about 13%, which is less severe than that of UrbanAgent w/o MAS, showing that multi-agent collaboration contributes more substantially to overall performance. Moreover, the degradation observed when tools are used without GRPO suggests that SFT alone, while enabling instruction following, is insufficient to bridge the accuracy gap. We further analyze sensitivity to key hyperparameters in Fig-ure 5b. Different configurations yield noticeable performance vari-ations, with ( 𝜏 𝑐𝑜𝑟 , 𝜏 𝑟𝑒𝑐 , 𝜏 𝑠𝑢𝑝 )=(0.40, 1.20, 0.25) achieving the best overall results, reflecting a balanced trade-off between agent agree-ment and conflict resolution. Increasing the number of reasoning rounds improves performance up to five rounds, beyond which gains plateau or slightly decline, indicating limited performance gains from additional interaction rounds. 
+
+4.4 RQ3: Transferability Study 
+
+To evaluate out-of-distribution generalization, we conduct exper-iments under the Unseen Cities setting, where test samples are drawn from cities absent during training. The evaluation set in-cludes 200 locations from four countries—Japan, Norway, Mada-gascar, and Mexico—covering diverse geographic and economic conditions. This setting requires models to generalize beyond city-specific statistics and rely on transferable urban cues. As shown in Table 2, UrbanAgent consistently achieves the best performance across all indicators and effectively transfers to unseen urban environments. While some baselines show occasional gains for certain indicators, these improvements are neither consistent across tasks nor stable across metrics, and often reflect reduced data complexity rather than genuine transferability. In contrast, 
+
+(a) Ablation results on 𝑅 2 and 𝜌 .
+
+(b) Hyperparameter Analysis. 
+
+Figure 5: Ablation and hyperparameter analysis. 
+
+UrbanAgent exhibits uniformly small and stable performance degra-dation, indicating robust, city-agnostic reasoning rather than re-liance on distributional artifacts. 
+
+4.4.1 Illustration of Tool-Use Example. As shown in Table 2, the comparison between Ours w/o MAS and Qwen3-VL-4B highlights the effectiveness of tool-use in enhancing reasoning accuracy and prediction reliability. To illustrate this more intuitively, we present a representative example in Figure 6. The model first conducts a preliminary morphological analysis from a satellite image to form initial socio-economic analysis based on visual cues such as building density and road connectivity. It then actively identifies missing information and invokes the web_search tool to incorporate external socio-economic facts about Longhua District, grounding its assessment beyond static visual correlations. 
+
+4.5 RQ4: Qualitative Analysis 
+
+The web search results supplement information on population and economic conditions. To further disambiguate between a mature urban core and a rapidly expanding area (the former typically exhibiting higher and more stable socio-economic indicators), the model calls the historical satellite tool and analyzes imagery from 2015 to 2020, revealing a trajectory of rapid development followed by stabilization. Through iterative reasoning with tool invocation and evidence feedback, the model refines its predictions and pro-duces estimates consistent with the region’s development stage and associated with high confidence. Due to space constraints, some information is omitted in Figure 6. Please refer to Figure 10 in the Appendix for a detailed illustration. 
+
+4.5.1 Case Study of Multi-Agent Collaborative Reasoning. We present a representative example to illustrate Multi-Agent Collaborative Reasoning in Figure 7. As we can see, given a target region, the model first ingests multi-source information from satellite imagery, POIs, 3D building structures, and textual descriptions. Each modality-specific agent independently produces an initial prediction along with a confidence estimate. Due to the heterogeneous nature of the Sample #19   
+
+> Carbon: 9.2, GDP : 8.7, Population : 9.1
+
+System Prompt 
+
+HUMAN   
+
+> <image> Analyze the satellite image of a
+> location.
+> Task: Analyze this satellite image to assess
+> the following urban indicators for this area
+> Emission (on a scale from 0.0 to 9.9) :
+> Carbon ,GDP ,Population
+
+ASSISTANT      
+
+> Tool: search_web (Longhua: economy /
+> population /planning)
+
+HUMAN                 
+
+> <reasoning> Mixed residential and
+> commercial land use …, Connected arterials
+> /highways …, Dense and continuous built -
+> up morphology …Interspersed green spaces
+> within the built -up areas … </reasoning>
+> [{ "title": "Longhua District, Haikou -
+> Wikipedia",
+> “body”: “Longhua District is an urban
+> district of Haikou, Hainan Province, China.
+> The district has a total area of 302.49 km²
+> and a population of 593,018, with a
+> population density of approximately 1,960
+> persons/km², indicating moderate -to -high
+> urban population concentration. As a core
+> urban district of Haikou, the area supports
+> continuous residential and service -oriented
+> economic activities ….... " },
+> <image> (2015 satellite image) <image> (2020 satellite image)
+> My answer is: Carbon Emission: 8.8
+> GDP :8.5 Population: 8.0. Confidence: 7. 0
+> <reasoning> Satellite imagery reveals a
+> dense built -up core with complex road
+> connectivity …
+> External textual information describes
+> Longhua District as Haikou’s central urban
+> area with high population density and
+> service -dominated economic activity …
+> </reasoning>
+> <reasoning> Based on the information
+> provided ... exhibits a high -density and
+> continuous urban fabric ... Historical
+> satellite imagery suggests that during 2015 –
+> 2020, Longhua District experienced rapid ...
+> After 2020, the urban form stabilized,
+> entering a mature stage …
+> Overall ... well -developed ... </reasoning>
+
+ASSISTANT                      
+
+> Input Type: Satellite
+> Coordinates : (20.00375, 110.32792)
+> Address : Longhua District, Hainan
+> Province, China
+> Nearby Places:
+> 2.4 km East: Qiongshan District
+> ……
+> You are a helpful assistant specialized
+> in urban socio -economic analysis.
+> When calling a tool:
+> <reasoning> [Your detailed analysis
+> of the input data...] </reasoning>
+> <tool_call >{“name”: “ tool_name ”,
+> “arguments”: {...}} </ tool_call >
+> When providing final answer (after all
+> tool calls):
+> <reasoning> [Your comprehensive
+> analysis ...] </reasoning>
+> My answer is:
+> -Carbon Emission: [X.X] -GDP:
+> [X.X] -Population: [X.X]
+> Confidence Score: [0.X]
+> {“name”: “ get_historical_satellite ”,
+> “arguments”: (20.00, 110.32)}
+> <image> (2015 satellite image)
+> <image> (2020 satellite image)
+> To better understand the socio -economic
+> context of this location, I will use the
+> ** search_web ** tool to find relevant
+> information about local economy,
+> population, and urban development .
+> To understand the temporal changes and
+> development trends, I will use the
+> get_historical_satellite tool to compare
+> satellite images from 2015 and 2020 .
+
+HUMAN 
+
+ASSISTANT 
+
+Figure 6: Tool-Use Example Illustration. UrbanAgent KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Ground Truth: Carbon 5.0, GDP 2.8, Population 4.4      
+
+> τcor =0. 4, τrec =1.2 τsup =0. 25
+> Address :Pingyuan Middle School, Weihai –Shantou Road, Meizhou City, Guangdong Province, China
+> "Education": 3,
+> "Residential": 14,
+> "Commercial": 15,
+> "Food": 20,
+> "Healthcare": 5,
+> "Transportation": 8,
+
+POI Satellite 
+
+3D 
+
+Text 
+
+> Urban Fabric:
+> Mixed urban environment with medium -density residential areas and
+> larger institutional -style complexes, including organized building
+> layouts and sports fields …
+> Infrastructure and Land Use:
+> A developed road network connects residential and institutional
+> zones … Built -up areas are interwoven with substantial green spaces,
+> indicating a planned urban layout.
+> Summary:
+> Overall, the scene depicts a moderately dense urban area with mixed
+> land use and a clear balance between built -up environments and
+> surrounding green spaces …
+
+Multi -Agent Collaborative Reasoning 
+
+Carbon 
+
+(a) (b) (c)             
+
+> 5.1
+> (conf 0.82)
+> 4.3
+> (conf 0.58)
+> 6.7
+> (conf 0.65)
+> 5.0
+> (conf 0.81)
+> 5.9
+> (conf 0.69)
+> 4.6
+> (conf 0.63)
+> 4.7
+> (conf 0.58)
+> 4.8
+> (conf 0.78)
+> 4.9
+> (conf 0.68)
+> 5.5
+> (conf 0.72)
+> 4.8
+> (conf 0.67)
+> 4.5
+> (conf 0.52)
+
+Figure 7: Case study of Multi-Agent Collaborative Reasoning. Purple edges denote Corroboration, blue edges indicate Rectification, and orange edges represent Supervisory relations. Figure values represent the carbon indicator. 
+
+modalities, these initial predictions often exhibit notable discrepan-cies at the early stage (Figure 7 (a)). Subsequently, the model proceeds through multiple rounds of multi-agent collaborative reasoning, where inter-agent interactions are explicitly modeled via a relation-aware collaboration mecha-nism. Consistent judgments are reinforced through corroboration (purple edges), conflicting judgments are questioned and corrected via rectification (blue edges), and agents with higher confidence exert guiding influence through supervision (orange edges). During this iterative process, the predictions and confidence estimates of in-dividual agents are progressively calibrated and driven toward con-vergence, with cross-modal inconsistencies transformed into signals that facilitate refinement. This process demonstrates UrbanAgent ’s ability to achieve more reliable urban indicator inference through explicit collaboration and systematic evidence integration. 
+
+4.5.2 Visualization of Region Representations. In this section, we visualize region representations using t-SNE in Figure 8. The two re-gions exhibit markedly different distances across modality-specific feature spaces. From the satellite imagery perspective, they appear highly similar in urban morphology, characterized by dense built-up areas and regular road grids. Although satellite-derived textual descriptions introduce additional external knowledge, the resulting representations remain predominantly driven by satellite imagery. In contrast, the differences become more pronounced from the 3D perspective. One region exhibits a higher degree of building height variability and stronger mass concentration, indicating more intensive vertical development and land use. The other region, however, shows a flatter 3D distribution, with generally lower building heights and more dispersed volumes, lacking prominent vertical structural features and reflecting a development pattern dominated by low-rise or multi-story residential buildings. Such vertical morphological differences are often obscured in top-down satellite views but are explicitly amplified in the 3D representation space. This trend is also reflected in the relative distances observed in the 3D feature space, further highlighting the complementary role of 3D information in distinguishing urban regions with similar planar appearances. POI Satellite   
+
+> 3D
+> POI Satellite
+> 3D
+> Text
+> Text
+> Urban Fabric:
+> Densely built urban environment with
+> mixed residential and commercial
+> structures, including medium -rise
+> apartments and tightly packed
+> housing units … ..
+> Infrastructure and Land Use:
+> A well -developed road network with
+> wide roads and major intersections
+> supports strong connectivity … Built -
+> up areas dominate, with only limited,
+> park -like green spaces … …
+> Urban Fabric:
+> Medium -density, predominantly low -
+> rise residential area with small houses
+> and apartment units … lacking high -
+> rise or intensive development.
+> Infrastructure Connectivity:
+> A simple road network with mostly
+> narrow roads and limited major
+> connections … suggesting modest
+> accessibility and activity levels… …
+> Education: 5,
+> Residential: 22,
+> Commercial: 18,
+> Restaurant : 16,
+> Public_Service : 6
+> Education: 3,
+> Residential: 14,
+> Commercial: 8,
+> Restaurant : 7,
+> Transportation: 4
+> Satellite Text
+> POI 3D
+> 600
+> 400
+> 200
+> 0
+
+Figure 8: Representation space visualization. 
+
+5 Conclusion and Future Work 
+
+In this work, we propose UrbanAgent , a tool-augmented multi-agent collaborative reasoning framework for urban region profil-ing, which advances beyond conventional DL-based profiling by enabling explicit multi-agent collaborative reasoning and evidence-grounded tool-use. By decomposing multimodal urban understand-ing into modality-specific agents and coordinating them through corroboration, rectification, and supervisory interactions, our model actively verifies, reconciles, and refines predictions to explicitly resolve modality inconsistency, rather than absorbing conflicts into a single latent fusion space. Moreover, RL-based agentic learn-ing enables each modality agent to operate in a closed-loop “rea-son–act–observe” process: the agent can actively acquire external evidence and update its judgment iteratively, supported by curated tool-use trajectories and a tool-aware composite reward. Extensive experiments across multiple socioeconomic indicators demonstrate consistent performance gains over existing approaches. Future work will extend UrbanAgent in three complementary directions: (i) incorporating richer external tools to provide more reliable and diverse evidence [ 9]; (ii) scaling to a larger set of specialized agents to enable finer-grained division of labor; and (iii) exploring alterna-tive interaction topologies to support more adaptive coordination and conflict resolution under heterogeneous evidence [9, 56]. 
+
+Acknowledgments 
+
+This work is supported by the National Natural Science Founda-tion of China (No. 62402414), the Guangdong Basic and Applied Basic Research Foundation (No. 2025A1515011994), Guangdong Provincial Project 2025D03J0014, Guangzhou Municipal Science and Technology Project (No. 2023A03J0011), the Guangzhou In-dustrial Information and Intelligent Key Laboratory Project (No. 2024A03J0628), and Guangdong Provincial Key Lab of Integrated Communication, Sensing and Computation for Ubiquitous Internet of Things (No. 2023B1212010007). KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xixuan Hao et al. 
+
+References 
+
+[1] Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xiong-Hui Chen, Zesen Cheng, Lianghao Deng, Wei Ding, Rongyao Fang, Chang Gao, Chunjiang Ge, Wenbin Ge, Zhifang Guo, Qidong Huang, Qidong Huang, Fei Huang, Binyuan Hui, Shutong Jiang, Zhaohai Li, Mingsheng Li, Mei Li, Kaixin Li, Zicheng Lin, Junyang Lin, Xuejing Liu, Jiawei Liu, Chenglong Liu, Yang Liu, Dayiheng Liu, Shixuan Liu, Dunjie Lu, Ruilin Luo, Chenxu Lv, Rui Men, Li Ying Meng, Xuancheng Ren, Xin yi Ren, Sibo Song, Yu-Chen Sun, Jun Tang, Jianhong Tu, Jianqiang Wan, Peng Wang, Pengfei Wang, Qiuyue Wang, Yuxuan Wang, Tianbao Xie, Yihe Xu, Haiyang Xu, Jin Xu, Zhibo Yang, Mingkun Yang, Jianxin Yang, An Yang, Bowen Yu, Fei Zhang, Hang Zhang, Xi Zhang, Botao Zheng, Humen Zhong, Jingren Zhou, Fanxi Zhou, Jingren Zhou, Yuanzhi Zhu, and Keming Zhu. 2025. Qwen3-VL Technical Report. ArXiv abs/2511.21631 (2025). https://api.semanticscholar.org/CorpusID: 283262018 [2] Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Tang, et al . 2025. Qwen2. 5-vl technical report. arXiv preprint arXiv:2502.13923 (2025). [3] Jinzhou Cao, Jiashi Chen, Xiangxu Wang, Weiming Huang, Dongsheng Chen, Tianhong Zhao, Wei Tu, and Qingquan Li. 2026. UrbanMMCL: Urban region representations via multi-modal and multi-graph self-supervised contrastive learning. ISPRS Journal of Photogrammetry and Remote Sensing 232 (2026), 75–93. [4] Weiliang Chan and Qianqian Ren. 2023. Region-wise attentive multi-view representation learning for urban region embedding. In Proceedings of the 32nd ACM International Conference on Information and Knowledge Management .3763–3767. [5] Yangzi Che, Xuecao Li, Xiaoping Liu, Yuhao Wang, Weilin Liao, Xianwei Zheng, Xucai Zhang, Xiaocong Xu, Qian Shi, Jiajun Zhu, et al . 2024. 3D-GloBFP: The first global three-dimensional building footprint dataset. Earth System Science Data Discussions 2024 (2024), 1–28. [6] Zhe Chen, Weiyun Wang, Yue Cao, Yangzhou Liu, Zhangwei Gao, Erfei Cui, Jinguo Zhu, Shenglong Ye, Hao Tian, Zhaoyang Liu, et al . 2024. Expanding performance boundaries of open-source multimodal models with model, data, and test-time scaling. arXiv preprint arXiv:2412.05271 (2024). [7] Gheorghe Comanici, Eric Bieber, Mike Schaekermann, Ice Pasupat, Noveen Sachdeva, Inderjit Dhillon, Marcel Blistein, Ori Ram, Dan Zhang, Evan Rosen, et al . 2025. Gemini 2.5: Pushing the frontier with advanced reasoning, multimodality, long context, and next generation agentic capabilities. arXiv preprint arXiv:2507.06261 (2025). [8] Jie Feng, Shengyuan Wang, Tianhui Liu, Yanxin Xi, and Yong Li. 2025. UrbanLLaVA: A Multi-modal Large Language Model for Urban Intelligence with Spatial Reasoning and Understanding. In Proceedings of the IEEE/CVF international conference on computer vision .[9] Peilin Feng, Zhutao Lv, Junyan Ye, Xiaolei Wang, Xinjie Huo, Jinhua Yu, Wanghan Xu, Wenlong Zhang, Lei Bai, Conghui He, et al . 2025. Earth-agent: Unlocking the full landscape of earth observation with agents. arXiv preprint arXiv:2509.23141 
+
+(2025). [10] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et al . 2025. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 (2025). [11] Xusen Guo, Mingxing Peng, Xixuan Hao, Xingchen Zou, Qiongyan Wang, Sijie Ruan, and Yuxuan Liang. 2026. AgentSense: LLMs empower generalizable and explainable web-based participatory urban sensing. In Proceedings of the ACM Web Conference 2026 . 5439–5450. [12] Xiao Han, Chen Zhu, Hengshu Zhu, and Xiangyu Zhao. 2025. Swarm intelligence in geo-localization: A multi-agent large vision-language model collaborative framework. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 . 814–825. [13] Xixuan Hao, Wei Chen, Yibo Yan, Siru Zhong, Kun Wang, Qingsong Wen, and Yuxuan Liang. 2025. Urbanvlp: Multi-granularity vision-language pretraining for urban socioeconomic indicator prediction. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 39. 28061–28069. [14] Xixuan Hao, Wei Chen, Xingchen Zou, and Yuxuan Liang. 2025. Nature makes no leaps: Building continuous location embeddings with satellite imagery from the web. In Proceedings of the ACM on Web Conference 2025 . 2799–2812. [15] Xixuan Hao, Yutian Jiang, Xingchen Zou, Jiabo Liu, Yifang Yin, and Yuxuan Liang. 2025. Unlocking Location Intelligence: A Survey from Deep Learning to The LLM Era. arXiv preprint arXiv:2505.09651 (2025). [16] Xixuan Hao, Guicheng Li, Daiqiang Wu, Xusen Guo, Yumeng Zhu, Zhichao Zou, Peng Zhen, Yao Yao, and Yuxuan Liang. 2026. Enhancing Ride-Hailing Forecasting at DiDi with Multi-View Geospatial Representation Learning from the Web. In Proceedings of the ACM Web Conference 2026 . 8200–8211. [17] Aaron Hurst, Adam Lerer, Adam P Goucher, Adam Perelman, Aditya Ramesh, Aidan Clark, AJ Ostrow, Akila Welihinda, Alan Hayes, Alec Radford, et al . 2024. Gpt-4o system card. arXiv preprint arXiv:2410.21276 (2024). [18] Neal Jean, Sherrie Wang, Anshul Samar, George Azzari, David Lobell, and Stefano Ermon. 2019. Tile2vec: Unsupervised representation learning for spatially distributed data. In Proceedings of the AAAI Conference on Artificial Intelligence ,Vol. 33. 3967–3974. [19] Porter Jenkins, Ahmad Farag, Suhang Wang, and Zhenhui Li. 2019. Unsupervised representation learning of spatial data via multimodal embedding. In Proceedings of the 28th ACM international conference on information and knowledge management . 1993–2002. [20] Dongfu Jiang, Xiang Ren, and Bill Yuchen Lin. 2023. LLM-Blender: Ensembling Large Language Models with Pairwise Comparison and Generative Fusion. In 
+
+Proceedings of the 61th Annual Meeting of the Association for Computational Linguistics (ACL 2023) .[21] Ling Li, Yao Zhou, Yuxuan Liang, Fugee Tsung, and Jiaheng Wei. 2025. Recognition through Reasoning: Reinforcing Image Geo-localization with Large Vision-Language Models. In Advances in Neural Information Processing Systems .[22] Yi Li, Weiming Huang, Gao Cong, Hao Wang, and Zheng Wang. 2023. Urban region representation learning with openstreetmap building footprints. In 
+
+Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . 1363–1373. [23] Zechen Li, Weiming Huang, Kai Zhao, Min Yang, Yongshun Gong, and Meng Chen. 2024. Urban region embedding via multi-view contrastive prediction. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 38. 8724–8732. [24] Zhonghang Li, Lianghao Xia, Xubin Ren, Jiabin Tang, Tianyi Chen, Yong Xu, and Chao Huang. 2025. Urban computing in the era of large language models. ACM Transactions on Intelligent Systems and Technology 16, 6 (2025), 1–43. [25] Zhili Li, Yiqun Xie, Xiaowei Jia, Kara Stuart, Caroline Delaire, and Sergii Skakun. 2023. Point-to-region co-learning for poverty mapping at high resolution using satellite imagery. In Proceedings of the AAAI Conference on Artificial Intelligence ,Vol. 37. 14321–14328. [26] Pingping Liu, Jiamiao Liu, Zijian Zhang, Hao Miao, Qi Jiang, Qingliang Li, Qiuzhan Zhou, and Irwin King. 2026. UrbanMoE: A Sparse Multi-Modal Mixture-of-Experts Framework for Multi-Task Urban Region Profiling. arXiv preprint arXiv:2601.22746 (2026). [27] Tianhui Liu, Hetian Pang, Xin Zhang, Jie Feng, Yong Li, and Pan Hui. 2025. CityRiSE: Reasoning Urban Socio-Economic Status in Vision-Language Models via Reinforcement Learning. arXiv preprint arXiv:2510.22282 (2025). [28] Tianhui Liu, Hetian Pang, Xin Zhang, Tianjian Ouyang, Zhiyuan Zhang, Jie Feng, Yong Li, and Hui Pan. 2025. CityLens: Evaluating Large Vision-Language Models for Urban Socioeconomic Sensing. arXiv preprint arXiv:2506.00530 (2025). [29] Yu Liu, Xin Zhang, Jingtao Ding, Yanxin Xi, and Yong Li. 2023. Knowledge-infused contrastive learning for urban imagery-based socioeconomic prediction. In Proceedings of the ACM web conference 2023 . 4150–4160. [30] Ilya Loshchilov and Frank Hutter. 2017. Decoupled Weight Decay Regularization. In International Conference on Learning Representations . https://api. semanticscholar.org/CorpusID:53592270 [31] Run Luo, Lu Wang, Wanwei He, Longze Chen, Jiaming Li, and Xiaobo Xia. 2025. Gui-r1: A generalist r1-style vision-language action model for gui agents. arXiv preprint arXiv:2504.10458 (2025). [32] Yan Luo, Fu-lai Chung, and Kai Chen. 2022. Urban region profiling via multi-graph representation learning. In Proceedings of the 31st ACM international conference on information & knowledge management . 4294–4298. [33] Rohin Manvi, Samar Khanna, Marshall Burke, David B. Lobell, and Stefano Ermon. 2024. Large Language Models are Geographically Biased. In Forty-first International Conference on Machine Learning . https://openreview.net/forum? id=sHtIStlg0v [34] Rohin Manvi, Samar Khanna, Gengchen Mai, Marshall Burke, David Lobell, and Stefano Ermon. 2024. GeoLLM: Extracting Geospatial Knowledge from Large Language Models. In International Conference on Learning Representations ,B. Kim, Y. Yue, S. Chaudhuri, K. Fragkiadaki, M. Khan, and Y. Sun (Eds.), Vol. 2024. 38791–38807. https://proceedings.iclr.cc/paper_files/paper/2024/file/ a87f2df7c4ab0213c6ea228e7b7f0a4d-Paper-Conference.pdf [35] Dominik J Mühlematter, Lin Che, Ye Hong, Martin Raubal, and Nina Wiedemann. 2025. UrbanFusion: Stochastic Multimodal Fusion for Contrastive Learning of Robust Spatial Representations. arXiv preprint arXiv:2510.13774 (2025). [36] Chanwoo Park, Seungju Han, Xingzhi Guo, Asuman E Ozdaglar, Kaiqing Zhang, and Joo-Kyung Kim. 2025. Maporl: Multi-agent post-co-training for collaborative large language models with reinforcement learning. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 30215–30248. [37] Ankur Samanta, Akshayaa Magesh, Youliang Yu, Runzhe Wu, Ayush Jain, Daniel Jiang, Boris Vidolov, Paul Sajda, Yonathan Efroni, and Kaveh Hassani. 2025. Internalizing Self-Consistency in Language Models: Multi-Agent Consensus Alignment. arXiv preprint arXiv:2509.15172 (2025). [38] Timo Schick, Jane Dwivedi-Yu, Roberto Dessì, Roberta Raileanu, Maria Lomeli, Eric Hambro, Luke Zettlemoyer, Nicola Cancedda, and Thomas Scialom. 2023. Toolformer: Language models can teach themselves to use tools. Advances in Neural Information Processing Systems 36 (2023), 68539–68551. [39] Akashah Shabbir, Muhammad Akhtar Munir, Akshay Dudhane, Muham-mad Umer Sheikh, Muhammad Haris Khan, Paolo Fraccaro, Juan Bernabe Moreno, UrbanAgent KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+Fahad Shahbaz Khan, and Salman Khan. 2025. ThinkGeo: Evaluating Tool-Augmented Agents for Remote Sensing Tasks. arXiv preprint arXiv:2505.23752 
+
+(2025). [40] Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. 2023. Reflexion: Language agents with verbal reinforcement learning. 
+
+Advances in Neural Information Processing Systems 36 (2023), 8634–8652. [41] Kimi Team, Angang Du, Bohong Yin, Bowei Xing, Bowen Qu, Bowen Wang, Cheng Chen, Chenlin Zhang, Chenzhuang Du, Chu Wei, et al . 2025. Kimi-vl technical report. arXiv preprint arXiv:2504.07491 (2025). [42] Khanh-Tung Tran, Dung Dao, Minh-Duong Nguyen, Quoc-Viet Pham, Barry O’Sullivan, and Hoang D Nguyen. 2025. Multi-agent collaboration mechanisms: A survey of llms. arXiv preprint arXiv:2501.06322 (2025). [43] Qiongyan Wang, Xingchen Zou, Yutian Jiang, Haomin Wen, Jiaheng Wei, Qingsong Wen, and Yuxuan Liang. 2025. Urban-R1: Reinforced MLLMs Mitigate Geospatial Biases for Urban General Intelligence. arXiv preprint arXiv:2510.16555 
+
+(2025). [44] Yikun Wang, Zuyan Liu, Ziyi Wang, Han Hu, Pengfei Liu, and Yongming Rao. 2025. GeoVista: Web-Augmented Agentic Visual Reasoning for Geolocalization. 
+
+arXiv preprint arXiv:2511.15705 (2025). [45] Ya Wen and Yulun Zhou. 2024. Demo2vec: Learning region embedding with demographic information. In Proceedings of the 7th ACM SIGSPATIAL International Workshop on AI for Geographic Knowledge Discovery . 71–74. [46] Qinzhuo Wu, Wei Liu, Jian Luan, and Bin Wang. 2024. ToolPlanner: A tool augmented LLM for multi granularity instructions with path planning and feedback. arXiv preprint arXiv:2409.14826 (2024). [47] Yanxin Xi, Tong Li, Huandong Wang, Yong Li, Sasu Tarkoma, and Pan Hui. 2022. Beyond the first law of geography: Learning representations of satellite imagery by leveraging point-of-interests. In Proceedings of the ACM web conference 2022 .3308–3316. [48] Congxi Xiao, Jingbo Zhou, Yixiong Xiao, Jizhou Huang, and Hui Xiong. 2024. Refound: Crafting a foundation model for urban region understanding upon language and visual foundations. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . 3527–3538. [49] Yibo Yan, Haomin Wen, Siru Zhong, Wei Chen, Haodong Chen, Qingsong Wen, Roger Zimmermann, and Yuxuan Liang. 2024. Urbanclip: Learning text-enhanced urban region profiling with contrastive language-image pretraining from the web. In Proceedings of the ACM Web Conference 2024 . 4006–4017. [50] Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik R Narasimhan, and Yuan Cao. 2022. React: Synergizing reasoning and acting in language models. In The eleventh international conference on learning representations .[51] Christopher Yeh, Anthony Perez, Anne Driscoll, George Azzari, Zhongyi Tang, David Lobell, Stefano Ermon, and Marshall Burke. 2020. Using publicly available satellite imagery and deep learning to understand economic well-being in Africa. 
+
+Nature communications 11, 1 (2020), 2583. [52] Xixian Yong and Xiao Zhou. 2024. MuseCL: Predicting Urban Socioeconomic Indicators via Multi-Semantic Contrastive Learning. In Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence, IJCAI-24 , Kate Larson (Ed.). International Joint Conferences on Artificial Intelligence Organization, 7536–7544. doi:10.24963/ijcai.2024/834 AI for Good. [53] Xixian Yong and Xiao Zhou. 2024. Musecl: predicting urban socioeconomic indicators via multi-semantic contrastive learning. arXiv preprint arXiv:2407.09523 
+
+(2024). [54] Cong Zhang, Xin Deik Goh, Dexun Li, Hao Zhang, and Yong Liu. 2025. Planning with multi-constraints via collaborative language agents. In Proceedings of the 31st International Conference on Computational Linguistics . 10054–10082. [55] Guibin Zhang, Hejia Geng, Xiaohang Yu, Zhenfei Yin, Zaibin Zhang, Zelin Tan, Heng Zhou, Zhongzhi Li, Xiangyuan Xue, Yijiang Li, et al . 2025. The landscape of agentic reinforcement learning for llms: A survey. arXiv preprint arXiv:2509.02547 
+
+(2025). [56] Guibin Zhang, Yanwei Yue, Xiangguo Sun, Guancheng Wan, Miao Yu, Junfeng Fang, Kun Wang, Tianlong Chen, and Dawei Cheng. 2025. G-Designer: Architecting Multi-agent Communication Topologies via Graph Neural Networks. In Forty-second International Conference on Machine Learning . https://openreview. net/forum?id=LpE54NUnmO [57] Hanchen Zhang, Xiao Liu, Bowen Lv, Xueqiao Sun, Bohao Jing, Iat Long Iong, Zhenyu Hou, Zehan Qi, Hanyu Lai, Yifan Xu, et al . 2025. AgentRL: Scaling Agentic Reinforcement Learning with a Multi-Turn, Multi-Task Framework. arXiv preprint arXiv:2510.04206 (2025). [58] Weijia Zhang, Jindong Han, Zhao Xu, Hang Ni, Hao Liu, and Hui Xiong. 2024. Urban foundation models: A survey. In Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining . 6633–6643. [59] Xin Zhang, Tianjian Ouyang, Yu Shang, Qingmin Liao, and Yong Li. 2025. UrbanMLLM: Joint Learning of Cross-view Imagery for Urban Understanding. (2025). [60] Yu Zhang, Weiming Huang, Yao Yao, Song Gao, Lizhen Cui, and Zhongmin Yan. 2024. Urban region representation learning with human trajectories: a multi-view approach incorporating transition, spatial, and temporal perspectives. GIScience & Remote Sensing 61, 1 (2024), 2387392. [61] Yimei Zhang, Guojiang Shen, Kaili Ning, Tongwei Ren, Xuebo Qiu, Mengmeng Wang, and Xiangjie Kong. 2026. Improving Region Representation Learning from Urban Imagery with Noisy Long-Caption Supervision. In Proceedings of the AAAI Conference on Artificial Intelligence .[62] Yaya Zhao, Kaiqi Zhao, Zixuan Tang, Xiaoling Lu, Yuanyuan Zhang, and Yalei Du. 2025. GraphJCL: A Dual-Perspective Graph-Based Framework for Urban Region Representation via Joint Contrastive Learning. In Joint European Conference on Machine Learning and Knowledge Discovery in Databases . Springer, 37–53. [63] Heng Zheng, Yuling Shi, Xiaodong Gu, Haochen You, Zijian Zhang, Lubin Gan, Hao Zhang, Wenjun Huang, and Jin Huang. 2025. GraphGeo: Multi-Agent Debate Framework for Visual Geo-localization with Heterogeneous Graph Neural Networks. arXiv preprint arXiv:2511.00908 (2025). [64] Siru Zhong, Xixuan Hao, Yibo Yan, Ying Zhang, Yangqiu Song, and Yuxuan Liang. 2024. Urbancross: Enhancing satellite image-text retrieval with cross-domain adaptation. In Proceedings of the 32nd ACM International Conference on Multimedia .6307–6315. [65] Silin Zhou, Dan He, Lisi Chen, Shuo Shang, and Peng Han. 2023. Heterogeneous region embedding with prompt learning. In Proceedings of the AAAI conference on artificial intelligence , Vol. 37. 4981–4989. [66] Xingchen Zou, Jiani Huang, Xixuan Hao, Yuhao Yang, Haomin Wen, Yibo Yan, Chao Huang, and Yuxuan Liang. 2024. Space-aware Socioeconomic Indicator Inference with Heterogeneous Graphs. Proceedings of the 33rd ACM International Conference on Advances in Geographic Information Systems (2024). https://api. semanticscholar.org/CorpusID:269982736 [67] Xingchen Zou, Yibo Yan, Xixuan Hao, Yuehong Hu, Haomin Wen, Erdong Liu, Junbo Zhang, Yong Li, Tianrui Li, Yu Zheng, et al . 2025. Deep learning for cross-domain data fusion in urban computing: Taxonomy, advances, and outlook. 
+
+Information Fusion 113 (2025), 102606. [68] Xingchen Zou, Yuhao Yang, Zheng Chen, Xixuan Hao, Yiqi Chen, Chao Huang, and Yuxuan Liang. 2025. Traffic-r1: Reinforced llms bring human-like reasoning to traffic signal control systems. arXiv preprint arXiv:2508.02344 (2025). KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xixuan Hao et al. 
+
+# Appendix 
+
+A Detailed Introduction of Tool-Use 
+
+In this section, we introduce the four kinds of external tools used in our Tool-Augmented Agentic Learning. 
+
+• Web Search . The model formulates a web search query to re-trieve up to a fixed number of relevant socio-economic informa-tion sources from the internet. The search service is provided by a third-party web search service 1. The search request is formatted as: {name: search_web, arguments: economic development, population statistics, industrial struc-ture energy consumption of "Address"} . The results con-sist of unstructured textual documents accompanied by their corresponding web URLs, which supply external and up-to-date contextual knowledge for evidence-based inference. 
+
+• Crop-and-Zoom . The model predicts a bounding box parame-terized as bbox_2d , specified by pixel coordinates on the original satellite image. This bounding box is used to crop and magnify a region of interest, enabling fine-grained visual inspection of local structures. The resulting observation is the zoomed-in cropped subfigure, which provides enhanced spatial details. This tool is only applicable to satellite imagery. 
+
+• Nightlight Retrieval . The model queries a nightlight intensity service using geographic coordinates (latitude and longitude) to obtain nighttime illumination measurements. Higher intensities typically indicate greater levels of urbanization and economic activity. The observation is a scalar numerical signal that serves as a proxy indicator for regional development. 
+
+• Historical Satellite Imagery Retrieval . The model retrieves historical satellite imagery for the same geographic location at two time points (2015 and 2020) based on latitude and longitude. This tool enables temporal comparison of land-use patterns, urban expansion, and infrastructure development over an ap-proximately five-year interval. This tool is only applicable to satellite imagery. 
+
+A.1 Discussion on Possible Web Search Data Leakage 
+
+In our work, Web Search provides only qualitative contextual in-formation (e.g., economic structure, industrial composition), not quantitative ground-truth labels. Our labels, including Carbon, Pop-ulation, and GDP, are 1 km × 1 km gridded measurements derived from specialized remote sensing products, which are unavailable via general web search. Web results typically appear as city-level aggregates with mismatched spatial granularity. Furthermore, raw indicators are transformed into relative mag-nitude scores in [0, 9.9] based on the global dataset distribution, making direct label retrieval impossible even if a raw statistic were found online. 
+
+B Detailed Dataset Introduction 
+
+In this section, we introduction the data sources of our dataset including input modality data and downstream task data. 
+
+> 1https://www.tavily.com
+
+• Satellite Imagery . We collect satellite imagery from Google Maps using a tile-based retrieval scheme. For each region, we download an image centered at the region centroid (lat,lon) that covers an area of approximately 1km ×1km. Specifically, we fix the zoom level to z=18, under which each map tile has a spatial resolution of 256 ×256 pixels, and stitch multiple tiles to obtain the target image. These images provide fine-grained visual cues related to urban morphology, land-use patterns, and built environment structures. 
+
+• Textual Description . Following [ 13 , 49 ], we generate region-level textual descriptions from satellite imagery using GPT-4o [ 17 ]. These descriptions summarize salient visual patterns and inferred urban characteristics—such as building density, land-use func-tions, and infrastructure layouts—thereby serving as a comple-mentary semantic modality to raw imagery. To ensure description quality and perceptual consistency, we retain only texts with a PerceptionScore [ 13 ] above 0.6, filtering out low-confidence or visually misaligned generations. The prompt for generating textual description is provided in Figure 9. 
+
+• POI . We collect Points of Interest (POIs) data from OpenStreetMap (OSM) via the Overpass API 2 . For each region, we query OSM entities within a circular area with radius=1000 meters centered at the region coordinates. For incorporating POI data as input to the LLM, we construct a textual description based on category-level statistics, including the total number of elements and aggregated functional POI types (e.g., buildings, amenities, and land use) .
+
+• 3D . We incorporate 3D building information from [ 5 ], which provides three-dimensional representations of urban built envi-ronments. This modality captures structural attributes such as building height distributions, volumetric density, and vertical spatial organization, complementing 2D satellite imagery with explicit geometric cues. We rasterize 3D building footprints with height attributes into a fixed 64 ×64 height map using an affine transformation defined over the local bounding box [ 22 ]. From the rasterized map, we extract a structured textual representation that includes global height statistics (e.g., building coverage ratio, minimum/maximum/mean/median height), height distribution histograms (e.g., proportions of pixels falling into predefined height ranges), and a downsampled relative-height grid (e.g., a low-resolution normalized height map encoding spatial height patterns). 
+
+• Carbon Emission . Carbon emission data are sourced from the Open-source Data Inventory for Anthropogenic CO 2 (ODIAC)  
+
+> 3
+
+. We use the 2023 release, which provides gridded fossil-fuel CO 2 emissions at a global scale. Monthly emission values are aggregated into an annual mean for each 1 km × 1 km region. 
+
+• Population . Following the setup in [ 34 ], Population data are obtained from the WorldPop project. We use the 2020 global un-constrained population mosaic, which provides gridded estimates of resident population at a spatial resolution of approximately 1 km × 1 km. Each grid cell stores the estimated population count 
+
+> 2http://overpass-api.de/api/interpreter
+> 3https://db.cger.nies.go.jp/dataset/ODIAC/DL_odiac2024.html
+
+UrbanAgent KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+within the corresponding area. Population values are aggregated to the region level and used as a key sociodemographic indicator. 
+
+• GDP . Regional economic activity is characterized using GDP data adapted from the CityLens dataset [ 28 ] and publicly avail-able records hosted on Zenodo 4 . GDP values are reported in PPP-adjusted U.S. dollars (USD), representing the total gross domestic product aggregated within each 1 km × 1 km spatial grid cell. This modality provides a macro-level economic perspective complementary to fine-grained urban signals. Ø Role : You are an expert in Remote Sensing and Urban Economics .       
+
+> ØTask : Analyze the provided satellite image (at coordinates: { coord_str }) and generate a detailed
+> description specifically tailored for predicting Socio -Economic Indicators (GDP, Population Density,
+> and Carbon Emissions ).
+> ØInstructions : Please focus your description on the following visual features and explain their potential
+> implications :
+> üUrban Fabric : Describe the density, size, and arrangement of buildings. Distinguish between
+> residential areas (e.g., detached houses vs. high -rises) and industrial/commercial zones (e.g.,
+> large warehouses).
+> üInfrastructure Connectivity : Analyze the road network (highways vs. local roads), identifying
+> major transport hubs or parking lots that suggest high economic activity or traffic -related
+> emissions .
+> üLand Use Patterns : Identify the ratio of built -up areas to natural elements (vegetation, water).
+> Note specifically if vegetation looks like agriculture (crop fields) or urban parks.
+> üActivity Intensity : Based on the visual cues, infer the level of human activity (e.g., "high -
+> intensity industrial zone" vs. "low -density rural settlement ").
+> ØOutput Format : Provide a structured summary describing these features, avoiding purely aesthetic
+> language (like "beautiful scenery") and focusing on functional descriptions .
+
+Prompt: Textual Description 
+
+Figure 9: Prompt for textual description. 
+
+C In-depth Overview of Baseline Methods 
+
+We provide a detailed introduction of baseline methods used in our paper. 
+
+• Qwen2.5-VL-3B [ 2 ]: A lightweight 3B-parameter vision-language model in the Qwen2.5-VL family, designed to retain strong mul-timodal capability under resource constraints. It emphasizes omni-document parsing (e.g., handwriting, tables, charts), precise object grounding (via points/bounding boxes and structured coordinate / JSON formats), and ultra-long video understanding with second-level event localization, while also targeting agentic interaction on computers and mobile devices. Architecturally, Qwen2.5-VL follows a Vision Encoder + Vision-Language Merger + LLM design: the vision side is a redesigned ViT that supports native dynamic resolution, uses window attention for efficiency, and splits images into patches; for video, it introduces MRoPE aligned to absolute time to better model temporal dynamics and enable precise moment localization. 
+
+• Qwen3-VL-4B [ 1 ]: Qwen3-VL-4B is a lightweight yet strong vision–language foundation model in the Qwen3-VL family, built upon a 4B-parameter Qwen3 language backbone. It supports na-tive interleaved multimodal inputs (text, images, and video) with long-context modeling up to 256K tokens, enabling robust cross-modal understanding and reasoning. Architecturally, it integrates a SigLIP-2 vision encoder with DeepStack multi-level feature fusion and interleaved MRoPE positional encoding, which jointly 
+
+> 4
+
+https://zenodo.org/records/5880037 
+
+enhance fine-grained visual perception and vision–language alignment. Despite its compact scale, Qwen3-VL-4B demonstrates competitive performance on a wide range of multimodal bench-marks, making it a strong and efficient baseline for multimodal representation learning and reasoning tasks. 
+
+• InternVL2.5-4B [ 6]: InternVL2.5-4B is a medium-scale multi-modal large language model in the InternVL 2.5 series, following the widely adopted “ViT–MLP–LLM” architecture. It connects an InternViT-300M vision encoder with a 4B-level language backbone (e.g., Qwen2.5-3B-Instruct) via an MLP projector for efficient vision–language alignment. The model supports dy-namic high-resolution visual inputs and is capable of processing single-image, multi-image, and video data. Through progressive training strategies and strict data quality filtering, InternVL2.5-4B achieves notably improved multimodal reasoning and un-derstanding performance, offering a strong balance between efficiency and accuracy and serving as a competitive open-source baseline for multimodal representation learning. 
+
+• Kimi-VL-A3B [ 41 ]: Kimi-VL-A3B is an efficient open-source vi-sion–language model built upon a Mixture-of-Experts (MoE) architecture, activating only 2.8B parameters in the language decoder while maintaining strong multimodal reasoning capabil-ities. It combines a native-resolution vision encoder (MoonViT) with an MoE language model, enabling effective understanding of high-resolution images, long videos, and long documents within a 128K context window. Kimi-VL-A3B demonstrates competitive performance across a wide range of vision–language benchmarks, including OCR, mathematical reasoning, multi-image understand-ing, and agent-based tasks, achieving a favorable balance between performance and computational efficiency and serving as a strong baseline for efficient multimodal representation learning. 
+
+• GPT-4o [ 17 ]: GPT-4o is an end-to-end trained omni-modal large language model that natively supports text, image, audio, and video inputs within a unified architecture. Unlike prior modular multimodal systems, GPT-4o processes and generates different modalities using a single neural network, enabling stronger cross-modal alignment and reasoning. It achieves performance compa-rable to GPT-4 Turbo on English text and code, while significantly improving non-English, vision, and audio understanding, with substantially lower latency and cost. Owing to its strong mul-timodal perception and reasoning capabilities, GPT-4o serves as a powerful general-purpose multimodal foundation model and a representative upper-bound baseline for vision–language understanding and reasoning tasks. 
+
+• Gemini-2.5-Flash [ 7 ]: Gemini-2.5-Flash is a hybrid reasoning, natively multimodal large language model designed to balance strong reasoning capability with low latency and cost. It sup-ports long-context inputs (up to 1M tokens) and multimodal understanding across text, images, audio, and video, while pro-viding a controllable thinking budget that allows users to trade off reasoning depth against efficiency. Compared to flagship models, Gemini-2.5-Flash achieves competitive performance on reasoning, coding, and multimodal benchmarks at a fraction of the computational overhead, making it well suited as a scalable baseline for complex but cost-sensitive tasks. KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Xixuan Hao et al. 
+
+• UrbanCLIP [ 49 ]: UrbanCLIP is the first framework that explicitly introduces text modality into urban region profiling by leverag-ing contrastive language–image pretraining. It generates high-quality region-level textual descriptions from satellite images using an MLLM, and jointly learns visual representations via image–text contrastive loss and language modeling loss. 
+
+• UrbanVLP [ 13 ]: UrbanVLP is a multi-granularity vision–language pretraining framework for urban socioeconomic indicator pre-diction. It jointly leverages macro-level satellite imagery and micro-level street-view imagery, and aligns them with high-quality textual descriptions through contrastive vision–language learning. Unlike UrbanCLIP, which relies on directly generated text from LLMs, UrbanVLP introduces an automatic text gener-ation and calibration mechanism with a reference-free quality metric to mitigate hallucination and homogenization. By per-forming multi-granularity cross-modal alignment at both global and token levels, UrbanVLP learns more fine-grained and robust urban representations, achieving state-of-the-art performance and improved transferability across multiple urban tasks. 
+
+• AgentFusion: AgentFusion aggregates the predictions of multiple modality-specific agents through MLP layers. This approach does not model inter-agent communication or reasoning dynamics, but instead relies on supervised learning to capture fixed combi-nation patterns across modalities, providing a straightforward parametric fusion baseline. 
+
+• AgentBlender: AgentBlender aggregates the outputs of four modality-specific agents using result-level fusion strategies, similar to LLM ensembling [ 20 ]. We consider two variants: (i) confidence-weighted mean , where agent predictions are combined via a weighted average based on their self-reported confidence scores; and (ii) majority voting , where predictions are discretized into fixed-width bins and the final result is determined by cross-agent consensus. These variants serve as lightweight baselines for eval-uating the effectiveness of collaborative reasoning mechanisms. 
+
+• Agent-Arbiter: Agent-Arbiter is an LLM-based arbitration base-line that formulates multimodal fusion as a single-shot decision synthesis problem. For each sample, it inputs the predictions, self-reported confidence scores, and textual rationales independently produced by four modality-specific agents (satellite imagery, text, POI, and 3D structure), and employs an extra LLM as a judge to generate the final estimates for Carbon Emission, Population, and GDP. During arbitration, the judge explicitly considers cross-agent agreement and conflicts as well as confidence disparities, and outputs both the final predictions, calibrated confidence scores, and a natural-language justification for the decision. 
+
+• Hierarchical Prompting: Hierarchical Prompting organizes mul-tiple modality-specific agents in a predefined sequential order, where agents operate one after another in a pipeline manner. The output of each agent (including predictions and intermediate reasoning) is passed as contextual input to the subsequent agent, allowing later agents to condition their predictions on earlier results. The agent order follows a progressive transition from directly observable urban form to higher-level semantic inter-pretation (Satellite → 3D → POI → Text), such that spatial and structural cues are established first, functional activity patterns are incorporated next, and textual reasoning is applied last for semantic synthesis and consistency checking. 
+
+D Detailed Tool-Use Example Illustration 
+
+Figure 10 demonstrates detailed Tool-Use Example corresponding Figure 6 in the main text. 
+
+E Discussion about Evaluation Metrics 
+
+We justify our choice of 𝑅 2 and Spearman 𝜌 over RMSE from three perspectives: (1) Limited interpretability of RMSE after label scaling. Following [ 27 , 34 , 43 ], we convert raw indicator values into rank-normalized scores in [0, 9.9]. RMSE computed on scaled values loses clear physical meaning, and since this transformation is non-invertible, scaling back to original values for recomputation is infeasible. By contrast, 𝑅 2 remains interpretable as the proportion of variance explained, regardless of the scaling procedure. (2) Suitabil-ity for rank-normalized labels. Since the scaled labels reflect rela-tive ordering rather than absolute magnitude, Spearman 𝜌 naturally measures rank consistency without depending on absolute values. Together, 𝑅 2 and Spearman 𝜌 provide complementary evaluation: the former captures variance explanation, while the latter assesses ranking consistency. (3) Consistency with prior work. Related studies adopting similar label-scaling protocols [ 27 , 34 , 43 ] do not report RMSE, and we follow the same evaluation protocol to ensure fair and comparable assessment. UrbanAgent KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Sample #19 Carbon: 9.2, GDP : 8.7, Population : 9.1 
+
+Input Type: Satellite 
+
+Coordinates : (20.00375, 110.32792) 
+
+Address : Longhua District, Hainan Province, 
+
+China 
+
+Nearby Places: 
+
+2.4 km East: Qiongshan District \n 3.2 km 
+
+North: Guomao (Central Business District) 
+
+\n 3.3 km North: Longhua District \n 3.6 
+
+km North -West: Baifang Plaza \n 4.0 km 
+
+West: Shuiyuntian \n 4.1 km West: Xiuying 
+
+District 
+
+System Prompt 
+
+You are a helpful assistant specialized in urban socio -economic analysis. 
+
+You analyze various data sources (satellite images, text descriptions, 
+
+POI data, 3D building data) to assess urban indicators. 
+
+# Tools Definition 
+
+[Web_search : …] [NightLight Retrieval:…] [Crop -and -Zoom: …] 
+
+[Historical Satellite Retrieval:…] 
+
+# Response Format Please 
+
+You MUST strictly follow the template below. 
+
+When calling a tool: 
+
+<reasoning> [Your detailed analysis of the input data...] </reasoning> 
+
+<tool_call > {“name”: “ tool_name ”, “arguments”: {...}} </ tool_call >
+
+When providing final answer (after 
+
+all tool calls): 
+
+<reasoning> [Your 
+
+comprehensive...] </reasoning> 
+
+My answer is: 
+
+- Carbon Emission: [X.X] -
+
+GDP: [X.X] - Population: [X.X] 
+
+Confidence Score: [0.X] 
+
+HUMAN 
+
+<image> You are analyzing a satellite image of a location. 
+
+You will be given data about a specific location randomly 
+
+sampled from all human -populated locations on Earth. 
+
+Task: Analyze this satellite image to assess the following 
+
+urban indicators for this area Emission (on a scale from 0.0 
+
+to 9.9) : Carbon emission, GDP , Population 
+
+ASSISTANT 
+
+<reasoning> The satellite image reveals a moderately dense 
+
+urban area with a mix of residential, commercial, and 
+
+possibly industrial land uses . The road network appears 
+
+well -developed, with multiple intersecting highways and 
+
+arterial roads, suggesting a high level of connectivity and 
+
+transportation infrastructure . There are visible clusters of 
+
+high -rise buildings, particularly in the lower right quadrant, 
+
+indicating commercial or mixed -use development. 
+
+Residential areas are interspersed with green spaces and 
+
+parks, which may suggest urban planning efforts to balance 
+
+development with environmental considerations. The 
+
+presence of construction sites and undeveloped land indicates 
+
+ongoing urban expansion and economic activity. The density 
+
+of buildings and the extent of paved surfaces suggest a 
+
+significant level of human activity and energy demand, 
+
+which would contribute to carbon emissions. The 
+
+infrastructure appears modern and well -maintained, which 
+
+would support a higher GDP through efficient economic 
+
+operations and service provision. The residential areas are 
+
+densely packed in some sections, indicating a substantial 
+
+population, though not excessively sprawling, which may 
+
+suggest a relatively compact urban form. </reasoning> 
+
+To better understand the socio -economic context of this 
+
+location, I will use the search_web tool to find relevant 
+
+information about local economy, population statistics, and 
+
+urban development. 
+
+{“name”: “ search_web ”, "arguments": "economic 
+
+development, population statistics, urban planning of 
+
+Longhua District, Hainan Province, China"} 
+
+{“name”: “ get_historical_satellite ”, “arguments”: 
+
+(20.00375, 110.32792)} 
+
+<reasoning> From the current satellite image, this area can 
+
+be identified as a core built -up zone of Longhua District, 
+
+Haikou . It features high building density , a complex and 
+
+highly connected road network , and multiple large 
+
+building clusters alongside contiguous residential areas ,
+
+collectively reflecting a mature urban form . This 
+
+observation is consistent with external textual information 
+
+describing Longhua District as a central urban area of 
+
+Haikou with relatively high population density , a service -
+
+oriented economic structure , and elevated energy 
+
+consumption and carbon emissions . To more accurately 
+
+assess the level of economic development in this area, it is 
+
+important to determine whether these high -density buildings 
+
+and road infrastructures are long -established and stable or 
+
+the result of rapid development in recent years , and 
+
+whether the development on the right side and surrounding 
+
+areas is still expanding or has largely reached saturation .
+
+</reasoning> 
+
+To understand the temporal changes and development trends, 
+
+I will use the get_historical_satellite tool to compare 
+
+satellite images from 2015 and 2020, which will reveal 
+
+urban expansion and infrastructure changes.” 
+
+ASSISTANT 
+
+HUMAN 
+
+<image> (2015 satellite image) <image> (2020 satellite 
+
+image) 
+
+<image> (2015 satellite image) <image> (2020 satellite 
+
+image) 
+
+My answer is: 
+
+- Carbon Emission: 8.8
+
+- GDP: 8.5 
+
+- Population: 8.0 
+
+Confidence Score: 0. 8
+
+<reasoning> Based on the information provided , this area 
+
+can be identified as one of the core built -up zones of 
+
+Longhua District. The imagery exhibits a high -density and 
+
+continuous urban fabric , with clusters of mid - to high -rise 
+
+residential and commercial buildings, a dense road network, 
+
+and compact mixed -use urban blocks —typical features of a 
+
+mature urban core. Green spaces and public areas are present 
+
+but largely embedded within highly urbanized structures, 
+
+indicating strong human activity intensity and energy 
+
+consumption … 
+
+Historical satellite imagery suggests that during 2015 –2020 ,
+
+Longhua District experienced rapid, investment -driven urban 
+
+renewal, transitioning from an old urban area to a 
+
+modernized core with increased construction intensity and 
+
+economic activity. After 2020 , the urban form stabilized, 
+
+entering a mature stage characterized by high population 
+
+density, high GDP output, and consistently high carbon 
+
+emissions …
+
+Overall, external sources describing Longhua District as 
+
+Haikou’s primary urban center are highly consistent with the 
+
+intensive land use patterns and well -developed infrastructure 
+
+observed in the satellite imagery. </reasoning> 
+
+ASSISTANT 
+
+HUMAN     
+
+> [{
+> "title": "Longhua District, Haikou -Wikipedia",
+> "body": "Longhua District is an urban district of Haikou,
+> Hainan Province, China. The district has a total area of 302.49
+> km² and a population of 593,018, with a population density of
+> approximately 1,960 persons/km², indicating moderate -to -high
+> urban population concentration. As a core urban district of
+> Haikou, the area supports continuous residential and service -
+> oriented economic activities, consistent with moderate -to -high
+> GDP levels. The dense urban form and developed
+> infrastructure imply elevated energy consumption and
+> associated carbon emissions ... "
+> }
+
+Figure 10: Detailed tool-use example illustration.

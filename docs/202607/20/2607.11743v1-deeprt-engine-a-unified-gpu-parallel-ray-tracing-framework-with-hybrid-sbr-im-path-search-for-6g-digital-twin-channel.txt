@@ -1,0 +1,238 @@
+Title: DeepRT Engine: A Unified GPU-Parallel Ray-Tracing Framework with Hybrid SBR-IM Path Search for 6G Digital Twin Channel
+
+URL Source: https://arxiv.org/pdf/2607.11743v1
+
+Published Time: Tue, 14 Jul 2026 03:05:59 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+> JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 1
+
+# DeepRT Engine: A Unified GPU-Parallel Ray-Tracing Framework with Hybrid SBR-IM Path Search for 6G Digital Twin Channel 
+
+Tao Wu, Student Member, IEEE , Li Yu, Member, IEEE , Yuxiang Zhang, Member, IEEE ,Jianhua Zhang, Fellow, IEEE , Qixing Wang, Member, IEEE , and Guangyi Liu, Member, IEEE 
+
+Abstract —Digital twin channel (DTC) aims to establish areal-time digital counterpart of physical wireless channels for reproducing and predicting site-specific propagation character-istics. As a high-precision channel computation method for realistic propagation scenarios, ray tracing (RT) serves as a key enabler for DTC construction. However, conventional RT suffers from high complexity under serial path-searching workflows. This letter proposes DeepRT Engine (DeepRT-E), a parallel RT acceleration architecture with a three-stage physically-inspired pipeline for real-time DTC construction. Firstly, DeepRT-E con-structs a bounding volume hierarchy (BVH) to partition the scene and reduce redundant ray-surface intersections. Secondly, the shooting and bouncing rays (SBR) algorithm is executed through a ray-level parallel tracing framework to identify candidate surface sequences and prune the search space of the image method (IM). Finally, a parallel batched IM solver refines the retained candidates for accurate propagation-path recovery. Simulation results show that DeepRT-E reduces runtime by 96.3 %
+
+and achieves a converged error of only 0.001 dB, outperforming Wireless InSite and Sionna in efficiency and accuracy. 
+
+Index Terms —ray tracing, digital twin channel, parallelization, shooting and bouncing rays. 
+
+I. I NTRODUCTION 
+
+# THE evolution toward 6G environment intelligence com-munication requires accurate, environment-consistent, and low-latency channel data for beam management, resource allocation, and network optimization [1]. Digital twin channel (DTC) refers to the real-time digital mapping of physical wireless channels [2], where radio environment information is utilized to reproduce and predict site-specific channel charac-teristics [3]. Such DTC-oriented channel data are essential for 6G air-interface design and channel foundation model train-ing [4], [5]. Ray tracing (RT) provides deterministic channel prediction from environmental geometry and electromagnetic properties, making it effective for DTC construction [6], [7]. Our previous DeepRT work uses RT-derived channel data as physical priors for artificial intelligence (AI)-based DTC generation, motivating an efficient RT engine to provide low-latency and physics-consistent ray-level data [8]. However,                
+
+> This work was supported in part by the National Natural Science Foundation of China under Grants 62401084 and 62525101, in part by the National Key Research and Development Program of China under Grant 2023YFB2904805, and in part by the Beijing University of Posts and Telecommunications–China Mobile Communications Group Co., Ltd. Joint Institute. Tao Wu, Li Yu, Yuxiang Zhang, and Jianhua Zhang are with the State Key Laboratory of Networking and Switching Technology, Beijing University of Posts and Telecommunications, Beijing 100876, China (e-mail: {vvt, li.yu, zhangyx, jhzhang }@bupt.edu.cn). Li Yu is the corresponding author. Qixing Wang and Guangyi Liu are with China Mobile Research Institute, Beijing 100053, China (e-mail: {wangqixing, liuguangyi }@chinamobile.com).
+
+conventional RT still suffers from high path-searching com-plexity in complex scenarios, especially for high-order reflec-tions. Existing RT platforms have significantly promoted site-specific wireless channel modeling. Wireless InSite provides mature engineering-level RT capabilities and has been widely used for deterministic propagation simulation [9]. Sionna supports graphics processing unit (GPU)-accelerated and dif-ferentiable RT, making RT more accessible for learning-based communication systems [10]. Nevertheless, for real-time-oriented DTC construction, there remains an efficiency– accuracy tradeoff among massive ray launching, candidate-path pruning, exact path recovery, and repeated channel up-dates. Therefore, an RT engine that jointly considers path-searching accuracy, candidate-space compression, and GPU-parallel execution is still required. To improve the speed and accuracy of RT-based path search [11], various enhanced algorithms have been proposed. In [12], shooting and bouncing rays (SBR) is used for coarse path identification and the image method (IM) is subsequently applied for exact path recovery in suburban channel anal-ysis. GPU-based parallel SBR implementations have been developed to accelerate massive ray launching and ray-surface intersection tests [13], [14], while parallel IM acceleration has also been investigated [15]. However, existing studies mainly focus on either isolated acceleration of SBR/IM or algorithm-level SBR-IM combination. An integrated RT engine that jointly supports hybrid path search, GPU-parallel execution, and DTC-oriented channel generation remains insufficiently explored. This letter proposes DeepRT Engine (DeepRT-E), a parallel RT acceleration framework for real-time DTC construction. DeepRT-E integrates bounding volume hierarchy (BVH)-based scene representation, SBR-IM hybrid path search, and channel data generation into a unified physics-inspired computation engine for DTC-oriented applications. Specifically, DeepRT-E decomposes the hybrid path-search workflow according to the physical structure of ray propagation and maps it onto a two-level parallel architecture. BVH-based spatial partitioning accelerates ray–surface intersection tests through hierarchical scene traversal, while SBR candidates exploration is executed concurrently across independent rays. The retained candidate sequences are then processed by batched IM kernels for parallel exact path recovery. Compared with Sionna’s general-purpose parallel RT framework, DeepRT-E adopts a hardware-oriented kernel architecture that exploits fine-grained paral-lelism to enable real-time channel generation for DTC. arXiv:2607.11743v1 [eess.SP] 13 Jul 2026 JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 2
+
+II. D EEP RT-E F RAMEWORK 
+
+A. Architecture of DeepRT-E Load Environment 
+
+> Host-To-Device Memory Transfer
+> Ray Launching
+> Interaction With The Scene
+> Receiver Detection
+> Compact Candidate Surface-Sequence Set
+> Image Method
+> Device-To-Host Memory Transfer
+> Field Calculation
+> initial rays BVH-accelerated scene data NO
+> Host: Control Processor (CPU)
+> Device: Parallel Accelerator (GPU, NPU, ...)
+> triangle mesh
+> BVH Tree Construction
+> BVH-Based Environment Preprocessing
+> SBR-Based Candidate Space Compression
+> parallel coarse surface-sequence discovery
+> IM-Based Exact Path Recovery
+> candidate-constrained path re fi nement
+
+DeepRT Engine (DeepRT-E)              
+
+> Ray 1 Ray 2 Ray 3 ... RayN r
+> Cand 1 Cand 2 Cand 3... Cand Nc
+> Path 1 Path 2 Path 3 ... Path N p
+> path-searching results
+> Double-Counting Removal
+> Reach The Maximum Order Of Re fl ections ?
+> YES
+> 321
+> Hybrid path search: candidate-space compression + exact path recovery
+> parallel ray processing parallel candidate-path processing
+
+Fig. 1. Overall architecture of DeepRT-E for real-time DTC construction. 
+
+Fig. 1 illustrates the overall architecture of the proposed DeepRT-E framework. DeepRT-E integrates BVH-based en-vironment preprocessing, SBR-based candidate space com-pression, IM-based exact path recovery, and channel data output in a pipeline-oriented manner. First, in the BVH-based environment preprocessing stage, the environment is loaded on the host side, where a BVH is constructed over the simu-lation scene to reduce redundant ray-surface intersection tests. The initial rays are generated by subdividing an icosahedron according to a specified subdivision level, ensuring uniform angular coverage. The generated ray set and BVH-accelerated scene data are then transferred from the host to the GPU for parallel processing. Second, in the SBR-based candidate space compression stage, DeepRT-E performs parallel coarse surface-sequence discovery on the device. Multiple rays are traced concurrently, and the interacted surface-index sequence is recorded when a ray is received. After double-counting removal, repeated sequences generated by different received rays are eliminated, producing a compact candidate surface-sequence set for subse-quent IM solving. This avoids storing intermediate reflection-point information during SBR and reduces the search space for accurate path recovery. Third, in the IM-based exact path recovery stage, the compressed candidate surface sequences are further processed by the IM module. Different from conventional IM, which requires exhaustive enumeration of possible surface combi-nations, DeepRT-E applies IM only to the SBR-compressed candidate sequences. The IM module evaluates these candi-dates in parallel and recovers accurate propagation paths with exact reflection points and path parameters. Based on the re-covered propagation paths, field calculation is then performed to generate channel results for real-time DTC construction. 
+
+B. SBR-IM Hybrid Path Search 
+
+The second stage of DeepRT-E is the hybrid SBR-IM path search, which combines forward candidate discovery and exact path recovery. As shown in Fig. 2(a), the SBR method launches multiple rays from the transmitter and traces their interactions with the scene until the rays either reach the receiver region or exit the scene boundary. Initial rays are generated through uniform sampling of points on a sphere centered at the transmitter [16]. Common sampling techniques include normalized random distribution, Fibonacci spiral sam-pling, and Platonic solid subdivision. In this work, we adopt a subdivided icosahedron for sampling, where each triangular face of the icosahedron is divided into several meshes and the rays are launched toward the vertices of these subdivided meshes. During SBR tracing, ray-surface intersection tests are per-formed iteratively to detect interactions with the scene ge-ometry. In conventional SBR, the interacted surfaces and the corresponding intersection coordinates can be recorded during ray tracing. In DeepRT-E, only the interacted surface-index sequence is retained for subsequent IM-based path recovery, since the exact interaction points and path parameters are finally determined by the IM module. At the receiver, a reception sphere with radius r is established, and a ray is considered received once it intersects this sphere. The reception radius is calculated as r = αd/ √3 [17], where 
+
+α = tan −1
+
+ 12 (n−1) √3(3+ √5) 
+
+
+
+is determined by the icosahedral subdivision level n, and d denotes the total propagation distance. Since multiple rays within a certain angular range may intersect the reception sphere, identical surface-index sequences can be recorded repeatedly, resulting in double counting. Therefore, duplicate sequences are removed to ob-tain a compact candidate surface-sequence set. Rx Tx 
+
+> on
+> SBR: Massive Rays, Massive Intersection Tests
+
+(a) Rx Tx      
+
+> IM: Exponential Computational Complexity
+> Tx 1
+> Scene with M faces
+> ……1M1st order re fl ection M candidate surfaces 2nd order re fl ect 1) candidate surfaces 3nd order re fl ection candidate surfaces
+
+(b) 
+
+Fig. 2. Comparison of SBR and IM path-searching mechanisms, (a) shooting and bouncing rays, (b) image method. 
+
+IM employs the method of images to identify specular reflection paths, as illustrated in Fig. 2(b). Based on a preset re-flection order N , conventional IM enumerates possible surface combinations in the scene and verifies whether valid reflection paths exist between the transmitter and receiver. IM can accurately recover reflection points and path parameters, but its JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 3
+
+computational complexity increases rapidly with the reflection order. In contrast, SBR avoids exhaustive enumeration, but its accuracy depends on ray density and receiver-detection settings. A sparse ray distribution improves efficiency but may miss valid paths, whereas a denser distribution improves accuracy at the expense of increased ray-surface intersection costs. DeepRT-E exploits the complementary characteristics of SBR and IM. The SBR stage is used for coarse candidate-sequence discovery, while the IM stage is applied only to the retained candidate surface sequences for exact path recovery. Therefore, DeepRT-E avoids exhaustive IM enumeration over all surface combinations and reduces the candidate space before accurate path computation. By integrating SBR-based candidate compression and IM-based path recovery, DeepRT-E improves the efficiency–accuracy tradeoff in complex propa-gation environments with high-order reflections. III. P ARALLEL EXECUTION ARCHITECTURE 
+
+In the process of ray tracing for multipath identification, the computation of each individual ray is independent of the oth-ers. Therefore, a parallel architecture can be adopted to process a large number of rays simultaneously. As illustrated in Fig. 3, the parallel execution is organized through a grid–block–warp– thread hierarchy, where each thread traces an individual ray or candidate path, and threads within the same warp execute the same path-searching kernel on different data. In this way, the conventional ray-by-ray loop is mapped to concurrent thread-level execution on GPU, thereby significantly improving the efficiency of the path-searching process. For a scene consisting of M surfaces and a predefined maximum reflection order N , the computational complexity of the conventional SBR method is O (M N x ), where x denotes the number of rays launched from the transmitter. In contrast, directly applying the IM method results in a complexity of 
+
+O  M N , which becomes extremely time-consuming for high-order reflections in complex environments. Therefore, path search becomes the major bottleneck in conventional RT, which motivates parallelization. In DeepRT-E, BVH reduces the average intersection cost from O(M ) to approximately 
+
+O(log M ), and IM is applied only to the compact candidate set 
+
+CSBR obtained after reception detection and double-counting removal. Therefore, the path-searching complexity of DeepRT-E can be approximated as 
+
+TDeepRT -E = O (xN log M + |C SBR |) . (1) Here, the two terms correspond to BVH-accelerated SBR can-didate discovery and candidate-constrained IM path recovery, respectively. IV. S IMULATION AND ANALYSIS 
+
+To validate the efficiency of the parallel algorithm, the execution times before and after parallelization were compared in the scenario shown in Fig. 4(a). In the simulations, the number of launched rays was controlled by the subdivision level n, and their relationship is formulated as 
+
+x = 10 ( n − 1) ( n − 2) + 30 ( n − 1) + 12 , (2) Block(0,0) 
+
+> Parallelization
+
+…                 
+
+> Block(0,1)
+> Grid
+> …
+> ……
+> …
+> …
+> Warp 0 Path-Finding
+> Thread 0 Thread 1 Thread 31 …
+> Warp 1 Path-Finding
+> …
+> …
+> Warp M-1 Path-Finding
+> …
+> Global Memory: scene geometry/ BVH / …
+> Resulting paths
+> Massive ray launching
+> Resulting paths Resulting paths
+> Tx Rx
+> Ray Tracing Parallel
+> Massive ray launching
+> Path-Finding
+> Resulting paths
+> Serial
+> …
+> Thread 0 Thread 1 Thread 31
+> Thread 0 Thread 1 Thread 31
+> Block(0,1) Block(0,N-1)
+> Block(N-1,N-1) Block(N-1,1) Block(N-1,0)
+> 1
+> 2
+> 3
+> 4
+> Nr
+> …
+> 1
+> 2
+> 3
+> 4
+> Nr
+> 1234Nr
+
+Fig. 3. Parallel execution architecture of DeepRT-E. 
+
+(a) (b) 
+
+Fig. 4. Simulation scenario for performance evaluation: (a) the indoor geometric model; (b) the receiver movement trajectory. 
+
+where x denotes the total number of launched rays. The comparison results are shown in Fig. 5. The simulations were conducted on a server platform equipped with dual Intel Xeon Gold 6330 CPUs (2.00 GHz) and an NVIDIA GeForce RTX 4090 GPU. While the runtime of the conventional algorithm increases as the number of launched rays grows, DeepRT-E maintains high computational efficiency even with a massive ray count, benefiting from its parallel processing architecture. As demonstrated in Table I, the execution time is reduced by 96.3 % after parallelization. Icosahedral subdivision level: n           
+
+> 010 20 30 40 50 60 70 80 90 100
+> Runtime (s)
+> 0
+> 0.5
+> 1
+> 1.5
+> 2
+> 2.5
+> 3
+> 3.5
+> 4
+> Serial RT
+> DeepRT-E
+
+Fig. 5. Runtime comparison between serial RT and DeepRT-E. 
+
+The performance gains of the proposed DeepRT-E algo-rithm over the conventional SBR method were evaluated through comparative simulations conducted along the prede-fined trajectory depicted in Fig. 4(b). During the simulation, the transmitter remained stationary while the receiver moved JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 4
+
+sequentially along the path. At each receiver location, both ray launching (RL) algorithms configured with n = 100 were executed, and the received power obtained by DeepRT-E, SBR, and IM along the receiver trajectory is presented in Fig. 6. It can be observed that the results produced by DeepRT-E closely match those of the IM algorithm, whereas the con-ventional SBR method exhibits relatively larger deviations. As detailed in Table II, the proposed DeepRT-E method achieves a marginal average error of only 0.02 dB, while the conventional SBR algorithm exhibits a significantly larger average error of 0.14 dB. Rx Position index              
+
+> 010 20 30 40 50 60 70 80 90 100 110
+> Received power (dBm)
+> -43.5
+> -43
+> -42.5
+> -42
+> -41.5
+> -41 IM
+> SBR
+> DeepRT-E
+> Fig. 6. Received power comparison among IM, SBR, and DeepRT-E along the receiver trajectory.
+
+For a comprehensive evaluation, a comparative study was conducted in the indoor scenario shown in Fig. 4(a) at a carrier frequency of 28 GHz, using ray tracing results obtained from Wireless InSite and Sionna, both of which are based on RL algorithm. Wireless InSite adopts the X3D model, which is built upon the SBR method and employs a reception sphere to detect rays arriving at the receiver. It further applies exact path correction to force rays to terminate at the receiver location, thereby improving the accuracy of power and phase calculations, and is deployed on GPUs for accelerated compu-tation. Sionna employs a hybrid ray-tracing strategy in which initial rays are generated by Fibonacci spiral sampling and the resulting propagation candidates are further processed through an IM-related path validation procedure. Different from the reflection- and transmission-order settings used in DeepRT-E and Wireless InSite, Sionna limits the total number of propagation interactions through a bouncing-depth parameter. Therefore, paths whose total interaction order exceeds the specified bouncing depth were filtered out for fair comparison. Fig. 7 illustrates the simulation error and execution time as a function of the number of launched rays. As the ray count increases, the ray tracing results exhibit a clear con-vergence trend. Among the evaluated methods, the proposed DeepRT-E exhibits the fastest convergence rate and stabilizes at approximately n = 10 (corresponding to roughly 1,000 launched rays). In contrast, Sionna converges more slowly and requires approximately n = 30 to reach a stable state. Regarding accuracy, when benchmarked against the IM al-gorithm, both DeepRT-E and Sionna achieve exceptionally high precision and exhibit nearly negligible errors after con-vergence. However, Wireless InSite presents a residual error of approximately 0.55 dB upon convergence, as shown in Table II. In terms of execution time, as the number of rays in-creases, the simulation times for DeepRT-E and Sionna remain almost constant, demonstrating excellent parallel computing capabilities. Consistent with this observation, the execution time comparison conducted on the same server platform, as summarized in Table I, indicates that DeepRT-E achieves a substantial speedup over Wireless InSite and demonstrates computational efficiency on the same order of magnitude as Sionna.                                          
+
+> TABLE I RUNTIME COMPARISON OF DIFFERENT RT IMPLEMENTATIONS .
+> Algorithm DeepRT-E serial hybrid RT Wireless InSite Sionna
+> Runtime 0.148 s 3.981 s 2.804 s 0.286 s TABLE II ACCURACY COMPARISON OF DIFFERENT RT ALGORITHMS .
+> Error Type DeepRT-E SBR WI Sionna
+> Average error 0.021 dB 0.145 dB ––Post-convergence error 0.001 dB –0.550 dB 0.028 dB Icosahedral subdivision level: n
+> 510 15 20 25 30 35 40 45 50
+> Absolute error w.r.t. IM (dB)
+> 0
+> 0.5
+> 1
+> 1.5
+> 2
+> 2.5
+> 3
+> 3.5
+> Runtime (s)
+> 0
+> 0.5
+> 1
+> 1.5
+> 2
+> DeepRT-E error
+> WI error
+> Sionna error
+> DeepRT-E runtime
+> WI runtime
+> Sionna runtime
+> Fig. 7. Convergence error and runtime comparison among DeepRT-E, Wireless InSite, and Sionna.
+
+V. C ONCLUSION 
+
+This letter proposes DeepRT-E to improve the efficiency– accuracy tradeoff in channel generation. By combining SBR-based candidate space compression, IM-based exact path re-covery, and parallel execution, DeepRT-E enables efficient and accurate propagation-path computation. Simulation results show that DeepRT-E reduces runtime by 96.3 % compared with conventional serial methods and achieves competitive performance against Sionna and Wireless InSite. These results demonstrate its potential as an efficient physical RT engine for high-fidelity real-time channel generation in DTC construc-tion. JOURNAL OF L ATEX CLASS FILES, VOL. 14, NO. 8, AUGUST 2021 5
+
+REFERENCES [1] J. Zhang, L. Yu, S. Liu, Y. Cai, Y. Zhang, H. Xing, and T. Jiang, “Wireless environmental information theory: A new paradigm toward 6G online and proactive environment intelligence communication,” 
+
+Engineering , vol. 56, no. 1, pp. 186–200, 2026. [2] H. Wang, J. Zhang, G. Nie, L. Yu, Z. Yuan, T. Li, J. Wang, and G. Liu, “Digital twin channel for 6G: Concepts, architectures and potential applications,” IEEE Communications Magazine , vol. 63, no. 3, pp. 24– 30, 2025. [3] J. Wang, J. Zhang, Y. Zhang, Y. Sun, G. Nie, L. Shi, P. Zhang, and G. Liu, “Radio environment knowledge pool for 6G digital twin channel,” IEEE Communications Magazine , vol. 63, no. 5, pp. 158–164, May 2025. [4] H. Tataria, M. Shafi, A. F. Molisch, M. Dohler, H. Q. Ngo, G. C. Alexan-dropoulos, and R. W. Heath, “6G wireless systems: Vision, require-ments, challenges, insights, and opportunities,” Proceedings of the IEEE ,vol. 109, no. 7, pp. 1166–1199, Jul. 2021. [5] L. Yu, L. Shi, J. Zhang, et al. , “ChannelGPT: A large model toward real-world channel foundation model for 6G environment intelligence communication,” IEEE Communications Magazine , vol. 63, no. 10, pp. 68–74, 2025. [6] S. Y. Seidel and T. S. Rappaport, “Site-specific propagation prediction for wireless in-building personal communication system design,” IEEE Transactions on Vehicular Technology , vol. 43, no. 4, pp. 879–891, Nov. 1994. [7] J. Zhang, J. Lin, P. Tang, et al. , “Deterministic ray tracing: A promising approach to THz channel modeling in 6G deployment scenarios,” IEEE Communications Magazine , vol. 62, no. 2, pp. 48–54, Feb. 2024. [8] M. Li, T. Wu, Z. Dong, et al. , “DeepRT: A hybrid framework combining large model architectures and ray tracing principles for 6G digital twin channels,” Electronics , vol. 14, no. 9, Art. no. 1849, May 2025. [9] Remcom, “Wireless InSite.” Accessed: Jun. 29, 2026. [Online]. Avail-able: https://www.remcom.com/wireless-insite [10] J. Hoydis, F. A¨ ıt Aoudia, S. Cammerer, et al. , “Learning radio envi-ronments by differentiable ray tracing,” IEEE Transactions on Machine Learning in Communications and Networking , vol. 2, pp. 1527–1539, 2024. [11] M. Pang, H. Wang, K. Lin, et al. , “A GPU-based radio wave propagation prediction with progressive processing on point cloud,” IEEE Antennas and Wireless Propagation Letters , vol. 20, no. 6, pp. 1078–1082, Jun. 2021. [12] K. G. Lee, S. J. Oh, J. S. Woo, et al. , “Propagation characteristics of suburban environments using hybrid ray-tracing simulation,” in Proc. IEEE 84th Vehicular Technology Conf. (VTC-Fall) , Montreal, QC, Canada, 2016, pp. 1–5. [13] J. Huo, L. Xu, X. Shi, et al. , “An accelerated shooting and bouncing ray method based on GPU and virtual ray tube for fast RCS prediction,” 
+
+IEEE Antennas and Wireless Propagation Letters , vol. 20, no. 9, pp. 1839–1843, Sep. 2021. [14] S. Kasdorf, B. Troksa, C. Key, et al. , “Parallel GPU optimization of the shooting and bouncing ray tracing methodology for propagation modeling,” IEEE Transactions on Antennas and Propagation , vol. 72, no. 1, pp. 174–182, Jan. 2024. [15] P. B. Wei, M. Zhang, W. Niu, et al. , “GPU-based combination of GO and PO for electromagnetic scattering of satellite,” IEEE Transactions on Antennas and Propagation , vol. 60, no. 11, pp. 5278–5285, Nov. 2012. [16] C. Key, B. Troksa, F. Kunkel, et al. , “Comparison of three sampling methods for shooting-bouncing ray tracing using a simple waveguide model,” in Proc. 2018 IEEE International Symposium on Antennas and Propagation & USNC/URSI National Radio Science Meeting , Boston, MA, USA, 2018, pp. 2273–2274. [17] S. Kasdorf, B. Troksa, C. Key, et al. , “Advancing accuracy of shooting and bouncing rays method for ray-tracing propagation modeling based on novel approaches to ray cone angle calculation,” IEEE Transactions on Antennas and Propagation , vol. 69, no. 8, pp. 4808–4815, Aug. 2021.
