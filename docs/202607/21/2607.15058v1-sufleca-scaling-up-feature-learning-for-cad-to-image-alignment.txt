@@ -1,0 +1,313 @@
+Title: SUFLECA: Scaling Up Feature Learning for CAD-to-image Alignment
+
+URL Source: https://arxiv.org/pdf/2607.15058v1
+
+Published Time: Fri, 17 Jul 2026 01:41:58 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# SUFLECA: Scaling Up Feature Learning for CAD-to-image Alignment 
+
+Saad Ejaz 1, Miguel Fernandez-Cortizas 1, Javier Civera 2, Holger Voos 1, and Jose Luis Sanchez-Lopez 1
+
+Abstract —CAD-to-image alignment aims to estimate an ob-ject’s 9D pose (rotation, translation, and anisotropic scale) from a single RGB image, enabling applications in robotics and aug-mented reality. Recent zero-shot methods use visual foundation models to match image regions to CAD models, yet typically their correspondences are appearance-driven and degrade under occlusion or sim-to-real domain shift. To address these limita-tions, we introduce SUFLECA (Scaling Up Feature LEarning for CAD Alignment), a weakly-supervised framework for zero-shot CAD alignment with two key contributions. First, SUFLECA scales up geometry-grounded feature learning from pretrained visual representations through Normalized Object Coordinates (NOCs) supervision on 674K images spanning 12 real and syn-thetic datasets, learning compact geometry-aware features that generalize across domains. Second, we propose a geometrically consistent matching algorithm that establishes reliable one-to-one CAD-to-image correspondences. Together, these contributions en-able accurate, sub-second alignment per object instance without iterative pose refinement. On ScanNet25k, SUFLECA achieves 33.4%/42.3% category/instance accuracy, outperforming, with a smaller computational footprint, the strongest zero-shot baseline by 10.3/12.2 percentage points and, for the first time on this benchmark, even surpassing fully supervised methods. Code is available at: https://github.com/snt-arg/SUFLECA 
+
+I. I NTRODUCTION 
+
+Recovering the 3D pose and shape of objects from images is a fundamental challenge in computer vision, with relevant applications in robotic perception [3] and manipulation [4]. A practical pipeline typically first retrieves a CAD model that approximately matches the target object, and then estimates a 9D alignment (rotation, translation, and anisotropic scale) to register it to the image observation [1], [2]. The alignment step is typically solved by establishing correspondences between the CAD model and the observed image, followed by robust pose estimation from the resulting matches. Early works cast this as a supervised learning problem, us-ing end-to-end [1], [5] or render-and-compare [6], [7] training setups, which lack generalization to out-of-distribution images and require costly pose-annotated data. Advances in foun-dation models for visual perception have enabled zero-shot  
+
+> 1Authors are with the Automation and Robotics Research Group, Inter-disciplinary Centre for Security, Reliability, and Trust (SnT), University of Luxembourg, Luxembourg. Holger Voos is also associated with the Faculty of Science, Technology, and Medicine, University of Luxembourg, Luxem-bourg.
+
+{saad.ejaz, miguel.fernandez, holger.voos, joseluis.sanchezlopez }@uni.lu  
+
+> 2Author is with I3A, Universidad de Zaragoza.
+
+jcivera@unizar.es                       
+
+> This research was funded, in whole or in part, by the Luxem-bourg National Research Fund (FNR) under the DEUS Project (Ref. C22/IS/17387634/DEUS). *For the purpose of open access, and in fulfillment of the obligations arising from the grant agreement, the author has applied a Creative Commons Attribution 4.0 International (CC BY 4.0) license to any Author Accepted Manuscript version arising from this submission. 012
+
+Objects per second  
+
+> 0
+> 10
+> 20
+> 30
+> 40
+> Accuracy  (%)
+> Supervised SOTA
+> DINOv3-L
+> DUNE-B
+> Diorama
+> FoundationPose ZeroCAD
+> ZeroCAD
+> SUFLECA
+> 8,000
+> 4,500
+> 2,000
+> VRAM (MB )
+
+Fig. 1: Accuracy, runtime, and GPU memory comparison of zero-shot CAD-to-image alignment methods on the Scan-Net25k validation split [1]. ZeroCAD † denotes ZeroCAD [2] without iterative pose refinement. SUFLECA achieves the highest accuracy, surpassing even supervised methods, while attaining the lowest runtime and smallest GPU memory foot-print among zero-shot methods. CAD alignment through pretrained backbones that produce high-dimensional features for correspondence estimation, im-proving generalization across categories and distributions [8], [9]. However, features from visual foundation models are primarily appearance-based and lack grounding in the 3D object geometries. This results in a domain gap, leading to suboptimal alignment accuracy. Weak supervision via synthetic renders of CAD models has been used to align this feature space with the geometry-focused Normalized Object Coordinates (NOCs) [2], [10], yet models trained on synthetic and isolated data struggle to generalize to the clutter, occlusion, and appearance variation present in real scenes. Beyond training data, nearest-neighbor matching in high-dimensional semantic feature spaces, as used in existing works, is costly in both memory and computation and fails to exploit the rigid geometric structure of the prob-lem. This produces noisy matches that often require expensive iterative refinement to recover accuracy. In this paper we propose SUFLECA (Scaling Up Feature 
+
+LE arning for CAD-to-image Alignment), which addresses these limitations through two key contributions. First, it scales NOC-supervised feature learning to a large mixture of real and synthetic datasets, substantially improving generalization. The resulting low-dimensional feature space reduces both matching cost and memory footprint, making it well suited for arXiv:2607.15058v1 [cs.CV] 16 Jul 2026 robotic applications. Second, we introduce a correspondence estimation algorithm that replaces conventional semantic-only nearest-neighbor matching with a method that enforces mutu-ality and geometric consistency. Together, these contributions enable zero-shot alignment accuracy that surpasses supervised methods while maintaining sub-second runtime, as shown in Figure 1. II. R ELATED WORK 
+
+A. Normalized Object Coordinates (NOCs) 
+
+NOCs [10] represent each object point in a category-level canonical coordinate frame, allowing pose estimation to be formulated as dense coordinate prediction followed by 3D registration. OmniNOCS [11] introduced large-scale NOC supervision for pose estimation, although it draws heavily from single-object datasets such as Objectron [12]. Vision backbones implicitly encode 3D-awareness [13], motivating the use of NOC supervision as an auxiliary signal on top of frozen features to shape a high-dimensional feature space for correspondence estimation [2]. However, this remains limited in coverage of occlusions and real-synthetic pairings, which are particularly important in CAD alignment, where a synthetic CAD model is aligned to a real object observation that may be affected from partial occlusion. 
+
+B. Supervised CAD-to-image alignment 
+
+Supervised approaches to single-image CAD align-ment span three paradigms. Direct regression methods predict 9D pose in a single feed-forward pass. To-tal3DUnderstanding [14] jointly regresses layout, boxes, and meshes; and Mask2CAD [5] couples detection with image-shape embeddings. Render-and-compare methods refine an initial CAD pose by minimising the difference between the rendered hypothesis and the input image. 3D-RCNN [15] pio-neered this idea with differentiable rendering and CAD priors, while SPARC [6] and MultiObj-SPARC [7] achieve strong results through sparse transformer-based 9D pose updates. In contrast, indirect methods first estimate correspondences and then recover pose through registration. ROCA [1] regresses NOCs from images to establish such correspondences and is trained end-to-end. More recently, CosCAD [16] combines cross-modal CAD retrieval with pose alignment by integrating image, CAD, and text features in a shared representation space, improving retrieval and alignment under occlusion. However, all of these methods rely on direct pose supervision, which limits their scalability. 
+
+C. Zero-shot CAD-to-image alignment 
+
+A parallel line of work aims to remove the dependence on pose-annotated training data. DiffCAD [17] trains cas-caded diffusion models on synthetic data for scale, pose, and shape estimation, while SDFit [9] fits a morphable SDF through iterative render-and-compare optimization. However, both methods require per-category priors and are computation-ally expensive. Related category-level approaches [3], [18] aim to estimate optimal object pose and shape by progressively Synthetic Pairs  - denser and cross-domain supervision   
+
+> RGB Frames - posed videos, casual captures
+> NOC Overlay - depth backprojection + 6-DoF object poses
+
+Fig. 2: Example frames from the multi-dataset validation set. Top row: RGB images. Middle row: ground-truth NOC maps (provided or derived) overlaid on the RGB. Bottom row: synthetic counterparts generated from CAD annotations. pruning outliers to recover the largest set of compatible mea-surements. Our correspondence filtering is inspired by this line of work, but these methods still rely on active shape models and keypoint detectors, which are difficult to obtain for most categories. Among other works, Diorama [8] uses an additional off-the-shelf model for scale inference and targets open-world scene-level layout, but its accuracy degrades in real-world scenes with occlusions. Recently, ZeroCAD [2] trains a NOC-supervised adapter over a frozen visual backbone for zero-shot 9D alignment. However, training exclusively on synthetic single-object scenes across nine categories leaves a substantial domain gap, and its simple nearest-neighbor matching admits many-to-one geometrically inconsistent correspondences. III. SUFLECA 
+
+A. Problem Definition 
+
+Given an RGB image, camera intrinsics, and a candidate CAD model retrieved from off-the-shelf methods, the goal is to estimate a 9D transformation from the CAD coordinate frame 
+
+Xcad to the camera coordinate frame Xcam , as follows: 
+
+Xcam = RS Xcad + t, (1) where R ∈ SO (3) , S = diag( sx, s y , s z ) is an axis-aligned anisotropic scale matrix, and t ∈ R3. We extend this standard formulation and also output a score, Sfit ∈ R, that measures the quality of the estimated alignment, which is useful for ranking alignments or multi-view aggregation. 
+
+B. Overall CAD Fitting Pipeline 
+
+SUFLECA follows the standard indirect CAD alignment pipeline used in prior work [1], [2], [8], [9]. Given the input image, the pipeline first extracts an object mask and computes per-pixel descriptors. The same descriptors are also extracted DPT  NOC Head   
+
+> Masked RGB Multi-scale Perception
+> Encoder Features
+> Dense Patch
+> Features NOC bins
+> Predicted NOCs
+> Discarded at test time
+> Used for correspondence
+> at test time
+
+Fig. 3: Overview of the feature model architecture. Multi-scale features from a frozen perception encoder are fused and upsampled via a Dense Prediction Transformer (DPT), then decoded by a lightweight binned NOC head. This aligns the high-dimensional DPT features to the NOC space while preserving their discriminative capacity for correspondence estimation.                                       
+
+> RGB frames source Annotation source Number of frames Avg. ob-jects/frame
+> Pascal3D+ [19] Included 6, 108 1.00 Objectron [12] OmniNOCS [11] 7, 357 1.20 ARKitScenes [20] OmniNOCS [11] 52, 146 3.55 REAL275 [10] Included 7, 072 5.00 RealEstate10K [21] CAD-Estate [22] 127, 214 2.16 ScanNet [23] Scannotate [24] 117, 284 2.58 ScanNet++ [25] Scannotate++ [24] 88, 198 2.96 Pix3D [26] Included 11, 622 1.00 ObjectNet3D [27] Included 20, 520 1.00 3D-Front [28] Rendering 69, 578 6.43 Hypersim [29] OmniNOCS [11] 44, 545 13.55 ShapeNet [30] Rendering 123,207 1.00
+> Overall 674, 851 3.38
+
+TABLE I: Datasets used for training the feature model. Datasets above the horizontal line are real-world; those below are synthetic. Notably, the ScanNet [23] dataset is omitted from training when evaluating on ScanNet25K [1] to have a strict zero-shot setting, leading to a reduced count of 557, 567 frames at 3.55 annotated objects per frame. for the candidate CAD model. Image-to-CAD correspondences are then established in feature space, lifted to 3D using monocular depth estimates, and passed to a RANSAC-based Procrustes solver to estimate the alignment in Equation (1). SUFLECA improves two key modules of this pipeline: the feature model, which is learned at scale and unified across real and synthetic data as described in Section III-C, and the correspondence estimation module, which adds geometric consistency as described in Section III-D. Throughout this paper, zero-shot refers specifically to the alignment stage: object detection and segmentation, depth estimation, and CAD retrieval are treated as upstream components inherited from prior work. 
+
+C. Scaling Unified NOC-aligned Feature Learning 
+
+Multi-Dataset Setup We adopt a scaling paradigm similar to [11], focused primarily on the indoor domain and aug-mented with synthetic data. Since correspondence for CAD alignment occurs between a real image and a synthetic CAD render, we augment, wherever CAD annotations are available, each real image with a synthetic counterpart in which the CAD objects are rendered at approximately the same pose. The synthetic counterparts are rendered with randomized back-grounds and object textures, with some objects occasionally replaced by visually similar ones. This yields a larger and more balanced training set with comparable numbers of real and synthetic samples, sharing similar occlusion patterns and scene context, which encourages the model to learn domain-invariant features. Compared with [2], which trains on 300K synthetic images of single objects across 9 categories, our dataset comprises 674K images from 12 datasets (see Table I) with an average of 3.38 annotated objects per frame across a broader range of categories, providing denser and more diverse supervision. Furthermore, while most datasets we train on originate from SLAM-focused camera trajectories, the inclusion of casual imagery [19], [26], [27] further broadens the data distribution. 
+
+NOC Derivation and Verification Most datasets do not provide NOC maps directly, but instead supply object poses in 3D from which NOCs must be derived. To this end, we render the ground-truth object onto the image to obtain an approximate bounding box, from which a mask is extracted using SAM2 [31]. The masked region is then backprojected into 3D using available depth maps or a monocular metric depth estimator [32], after which NOCs are computed fol-lowing [11] (see the middle row in Figure 2). To ensure annotation quality, we verify the computed NOCs against the overlaid CAD NOCs and reject object instances whose mean error exceeds a threshold. Frames for which the total number of valid NOC pixels falls below a threshold are discarded entirely. For datasets derived from high frame-rate cameras [21], [23], [25], we subsample frames at regular intervals and additionally enforce a minimum camera pose displacement to ensure sufficient viewpoint diversity. 
+
+Model Architecture As shown in Figure 3, our model builds upon a pretrained perception encoder, kept frozen during training, that provides rich patch-level features from images. These patch features are upsampled using a Dense Prediction Transformer (DPT) [33], which fuses multi-scale outputs from different layers of the encoder to produce denser feature maps of dimension dim . The DPT features are decoded by a lightweight NOC head: a binned classifier [10], [11] that partitions each coordinate axis ( x, y, z) of the NOC space into m uniform bins, estimating value as the expectation over the bin probabilities. This supervision encourages the DPT features to be spatially smooth and geometrically meaningful. The training loss comprises a categorical cross-entropy term between the predicted bin probabilities and the ground-truth bin, and an ℓ1 regression term on the expected NOC, 
+
+LNOC = LCE + λ∥ ˆN − N ∥ 1, (2) where LCE is the cross-entropy loss, ˆN is the predicted NOC value, N is the ground-truth NOC value, and λ is a weighting coefficient. The NOC head is discarded at test time, and the ℓ2-normalized DPT features are used as descriptors for correspondence estimation in SUFLECA. Optionally, these features can be concatenated with the output layer features of the vision backbone, following [2], to mitigate forgetting caused by weak supervision over a limited set of categories. We refer to this variant as SUFLECA-blend. 
+
+D. Geometrically-consistent Correspondence Estimation 
+
+To align a CAD model C to a masked image I, we start by featurizing the image using the aforementioned feature model M, yielding per-patch features interpolated to pixel level, FI = M(I). Unlike prior works that aggregate 2D features across multiple renders of C to obtain 3D features over a mesh [2], [9], a process that is both arbitrary and lossy, we keep the matching task entirely within the 2D domain. To this end, we maintain a small set of n pre-rendered views of C with precomputed features and point maps. Perception encoders have been shown to encode global pose information in an image [8], which we exploit to select the closest render to the query image prior to estimating correspondences. For that, we start by using a monocular metric depth estimator [32] to lift the masked image pixels into a 3D point cloud Qi, and apply Farthest Point Sampling (FPS) to obtain a representative subset ˆQi ⊂ Q i of N points for correspondence estimation. Then, given the set of pre-rendered views VC from distinct fixed viewpoints, we select the view V ∗ that maximises the mean nearest-neighbor cosine similarity over ˆQi,
+
+V ∗ = argmax  
+
+> V∈V C
+
+1
+
+| ˆQi|
+
+X 
+
+> q∈ˆQi
+
+max  
+
+> p∈V
+
+FI (q)⊤FV (p), (3) where FV (p) is the precomputed feature at pixel p of view V
+
+and FI (q) is the feature at pixel q in I.Using the selected render feature map FV ∗ and image feature map FI , we need to estimate correspondences between the lifted render and observed object pixels. While nearest-neighbor matching suffices for the aforementioned coarse view selection, it is unreliable for correspondence estimation, as it produces geometrically inconsistent and many-to-one matches. Mutual nearest-neighbor matching reduces these ambiguities but is overly conservative. We therefore adopt mutual k-nearest-neighbors matching, retaining a correspondence only when the render and image descriptors lie within each other’s top-k neighbors, with duplicates resolved by greedy assign-ment to the highest-scoring source match. However, this only considers the semantic feature space and does not enforce geometric consistency; and since the transformation includes anisotropic scaling, pairwise distance preservation is not di-rectly applicable. Therefore, we first estimate an approximate scale to normalize the correspondence set before applying pairwise distance preservation. Concretely, let {(pi, qi)}Mi=1 
+
+be a set of putative correspondences, where pi ∈ R3 are source points from V ∗ and qi ∈ R3 are target points from I.We seek a boolean inlier mask m ∈ { 0, 1}M that retains cor-respondences geometrically consistent with the unknown 9D transformation. Denoting by s2 = ( s2
+
+> x
+
+, s 2 
+
+> y
+
+, s 2 
+
+> z
+
+)⊤ the squared anisotropic scale vector, we obtain the following from pairwise differences, 
+
+∥qi − qj ∥2 = ∆⊤ 
+
+> ij
+
+diag( s2) ∆ij = ( s2)⊤ (∆ij ⊙ ∆ij )
+
+∆ij = pi − pj , (4) which yields a linear system in s2,
+
+ϕij = f ⊤ 
+
+> ij
+
+s2, fij = ∆ij ⊙ ∆ij 
+
+∥∆ij ∥2 , ϕij = ∥qi − qj ∥2
+
+∥∆ij ∥2 . (5) Solving this system in the presence of outliers requires robust initialisation. To this end, we obtain an isotropic scale estimate by computing the per-pair isotropic log-scale ψij = 12 log ϕij 
+
+over all  M
+
+> 2
+
+ pairs and taking the histogram mode, assuming that inlier pairs coarsely concentrate in a common bin. This gives the isotropic log-scale ˆℓiso = mode {ψij }, from which we initialise ˆs2 = exp(2 ˆℓiso ) · 1. From this, we refine the anisotropic log-scales ˆℓ via Iteratively Reweighted Least Squares (IRLS). Since this estimate degrades when correspon-dences do not cover all axes sufficiently, we shrink towards the more robust isotropic estimate, leading to 
+
+˜ℓ = αˆℓ + (1 − α)ˆℓiso 1, ˜s2 = exp(2 ˜ℓ), (6) where α ∈ [0 , 1] controls the trust placed in the anisotropic estimate. We then build a consensus matrix G ∈ { 0, 1}M ×M ,whose entries compare the observed squared distance against the value predicted by ˜s2,
+
+Gij = 1
+
+" ∥qi − qj ∥2 − ˜d2
+
+> ij
+
+˜d2
+
+> ij
+
+< β 
+
+#
+
+, Gii = 0 ,
+
+˜d2 
+
+> ij
+
+= (˜ s2)⊤ (∆ij ⊙ ∆ij ) ,
+
+(7) where β > 0 is the relative inlier threshold. The principal eigenvector e of G scores each correspondence by its consis-tency with the inlier group, following which correspondences are retained by, 
+
+m = 1[e ≥ δ · max( e)] , (8) where δ ∈ (0 , 1] is the relative gating threshold. The 
+
+m-masked set with cardinality ˆM is passed to a space-partitioning RANSAC [34] that uses Procrustes registration under anisotropic scaling to recover the final alignment. 
+
+Alignment quality Unlike prior works [1], [2], which use the CAD retrieval score as a proxy for alignment quality, SUFLECA estimates Sfit from the registration residuals, pro-viding a more principled measure of alignment quality. The information matrix Λ ∈ R9×9 is computed analytically from the Jacobians of the registration residuals with respect to the parameter vector x = [δθ, δ t, δ s], where δθ is a left rotation perturbation, δt is an additive translation, and δs is an additive perturbation on the diagonal scale. The residual for each correspondence i is ri = qi − RS pi − t, with per-correspondence Jacobian, 
+
+Ji = [ui]× −I3 −R diag( pi) ∈ R3×9, (9) where ui = RS pi is the rotated and scaled source point and 
+
+[·]× denotes the skew-symmetric cross-product matrix. The information matrix is then 
+
+Λ = 1
+
+σ2
+
+X
+
+> i
+
+J⊤ 
+
+> i
+
+Ji, σ2 =
+
+P 
+
+> i
+
+∥ri∥2
+
+3 ˆM − 9 , (10) from which the alignment quality score is Sfit = log det( Λ).IV. E VALUATION 
+
+A. Implementation Details 
+
+Our feature model uses DUNE-B [13] as the frozen percep-tion encoder and produces DPT patch features with dim = 384 . These are fed to the NOC head, which consists of two shallow convolutional layers and classifies each coordinate into 
+
+m = 64 bins. We train for 50 epochs using AdamW with 
+
+λ = 0 .33 and a learning rate of 1.1 × 10 −4. We also train a smaller variant, SUFLECA-S, which uses DUNE-S [13] as the encoder with dim = 256 and m = 50 . For alignment, we maintain n = 6 pre-rendered fixed views per CAD model, and set N = 512 , k = 13 , M = 256 , α = 0 .5, β = 0 .01 ,and δ = 0 .05 . All hyperparameters are empirically determined and remain consistent across all experiments, conducted on a workstation with an NVIDIA RTX 5090 GPU. 
+
+B. Methodology 
+
+We evaluate SUFLECA across complementary settings. ScanNet25k [1] serves as the main benchmark for alignment accuracy, while CO3D [38] is adapted to assess generalization to categories not observed during weak supervision (Sec-tion IV-D). We further include ablation studies to isolate the contributions of our design choices (Section IV-E), analyze robustness to inexactly retrieved CAD models (Section IV-F), and perform an efficiency analysis (Section IV-G). While our comparisons primarily focus on zero-shot methods, we also include results from supervised methods on ScanNet25k for reference. We also report results with the smaller SUFLECA-S variant (from Section IV-A) and the SUFLECA-blend variant (from Section III-C) of our method. 
+
+C. Datasets 
+
+ScanNet25k [1] are a dataset of images derived from the ScanNet [23] dataset with Scan2CAD annotations [39]. An alignment on this dataset is considered correct when trans-lation, rotation, and scale errors are below 20 cm , 20 ◦, and 
+
+20% , respectively. We report both category- and instance-averaged accuracy over the nine categories on the validation split. We follow the NMS-based evaluation protocol [35], ranking detections by the product of the ROCA semantic retrieval score [1] and Sfit defined in Equation (10). To ensure zero-shot evaluation, we exclude all ScanNet-derived images during weak supervision for this dataset. Following [2], all methods use ROCA bounding boxes and CAD retrievals [1], SAM2 masks [31], and depth from a monocular metric depth estimator [32] fine-tuned on the ScanNet25k training split. The DiffCAD split [17] covers six of the ScanNet25k object categories, evaluated without NMS and using non-fine-tuned depth. This split was introduced by DiffCAD [17], whose priors are available only for six categories. 
+
+CO3D [38] is an object-centric dataset that we adapt for the inexact CAD fitting setting. We convert its COLMAP point clouds to metric scale by selecting the depth scale with the lowest error against monocular depth estimates. We also simulate occlusions by placing a rectangular occluder within the GroundedSAM [40] bounding box. For CAD retrieval, we use SAM3D [41] to generate category-level CAD pools and retrieve candidates with OSCAR [42]. We restrict the categories to two domains: seen categories ( chair , couch ), which appear during weak supervision of SUFLECA, and unseen categories ( toaster , hairdryer , microwave , suitcase ), which are used to evaluate generalization performance. We sample 100 frames per category across 208 objects. Since CO3D lacks ground-truth poses and SAM3D meshes have inconsistent canonical orientations, we report 3D-IoU, ICP-Rot, ADD-S, and ADD-S@0.1 [41] for comparison. 
+
+D. Results 
+
+Table II reports alignment accuracy on ScanNet25k and the respective DiffCAD split. Among zero-shot methods, SUFLECA achieves 33 .4% category-averaged and 42 .3% 
+
+instance-averaged accuracy using the NMS protocol, surpass-ing ZeroCAD [2] by 10 .3 and 12 .2 percentage points respec-tively, and outperforming FoundationPose [37] by a larger margin. This can be attributed to two factors: broader and more diverse NOC-supervised training data, which reduces the domain gap to real images, and our correspondence estimation, which produces geometrically consistent matches. Notably, SUFLECA also surpasses fully supervised methods, achieving the best or second-best accuracy across seven of the nine categories and outperforming MultiObj-SPARC [7] despite the latter being trained with 9D pose supervision on ScanNet. On the DiffCAD split, competing zero-shot methods perform poorly because alignment errors are not suppressed through NMS. In contrast, SUFLECA more than doubles the performance of ZeroCAD [2], achieving gains of 20 .2 and 
+
+23 .9 percentage points in category- and instance-averaged accuracy, respectively. Moreover, SUFLECA even outperforms the oracle variant of DiffCAD [17], which uses ground-truth pose to select the best result from eight hypotheses. Notably, the other SUFLECA variants also achieve competi-tive performance, outperforming competing zero-shot methods by a large margin and remaining comparable to supervised methods. SUFLECA-S attains lower overall accuracy than the base model, but still substantially outperforms other zero-shot methods, highlighting the effectiveness of its compact Method Sup. Category-specific accuracy (%) Average (%) bathtub bed bin bkshlf cabinet chair display sofa table cat. inst. ScanNet25k [23] – Vid2CAD [35] NMS Protocol ROCA [1] ✓ 20.8 8.6 26.3 9.0 13.1 39.9 24.6 10.6 12.7 18.4 25.0 SPARC [6] ✓ 25.8 25.7 24.6 14.2 20.8 51.5 17.8 28.3 15.4 24.9 31.8 MultiObj-SPARC [7] ✓ 25.8 34.3 44.8 17.0 19.2 64.8 5.8 35.4 25.5 30.3 40.3 CosCAD [16] ✓ 24.9 18.9 31.1 20.8 33.1 45.4 27.5 19.9 24.6 27.4 33.2 DINOv3-L [36] – 7.5 7.1 6.5 4.7 6.5 24.7 11.0 29.2 8.7 11.8 15.1 DUNE-B [13] – 6.7 2.9 8.6 2.4 6.9 28.6 12.6 23.9 10.1 11.4 16.6 Diorama [8] – 6.7 1.4 19.8 3.8 4.2 16.7 11.5 9.0 6.0 8.7 11.3 FoundationPose (9D) [2], [37] * 20.0 22.9 27.6 0.9 3.1 41.8 23.6 15.0 17.5 19.2 25.7 ZeroCAD (w/o refine) [2] * 16.7 10.0 10.8 15.1 7.3 46.8 16.2 31.0 10.7 18.3 26.0 ZeroCAD [2] * 16.7 18.6 22.8 12.7 9.2 49.3 24.1 38.1 16.5 23.1 30.1 SUFLECA ( Ours ) * 23.3 38.6 27.6 18.9 24.6 64.4 31.4 40.7 30.7 33.4 42.3                                                                                                                                     
+
+> SUFLECA-S ( Ours )*21.7 28.6 30.2 20.3 22.7 60.5 22.0 41.6 28.1 30.6 39.5 SUFLECA-blend ( Ours )*22.5 24.3 28.5 18.9 22.7 59.4 24.1 44.3 25.5 30.0 38.5 DiffCAD [17] Split DiffCAD (GT) [17] *–27.1 –24.4 33.0 65.9 –46.3 18.3 35.8 41.9 DINOv3-L [36] ––5.2 –9.2 12.5 25.1 –23.8 5.9 13.6 16.0 DUNE-B [13] ––3.2 –9.2 13.1 26.0 –23.4 8.7 14.0 17.0 Diorama [8] ––0.7 –5.4 13.1 33.5 –6.5 12.2 11.9 18.4 DiffCAD [17] *–7.7 –7.6 10.4 31.1 –15.3 4.3 12.7 16.7 ZeroCAD [2] *–2.8 –8.2 12.0 41.3 –21.4 9.8 15.9 20.9 SUFLECA ( Ours )*–23.2 –21.7 34.3 71.1 –41.4 24.9 36.1 44.8 SUFLECA-S ( Ours )*–20.0 –23.9 29.6 67.6 –38.7 21.8 33.6 41.7 SUFLECA-blend ( Ours )*–23.9 –22.8 35.4 71.1 –42.2 24.1 36.6 44.9
+
+TABLE II: Evaluation on ScanNet25k NMS and DiffCAD split. We report per-category and per-instance average accuracies for 20 cm /20 ◦/20% thresholds. ✓ denotes full supervision; * denotes weak supervision; and – stands for unsupervised methods. Both * and – operate in the zero-shot setting. Bold and shaded indicate best and second-best results respectively.                                                                
+
+> Method Seen categories (CAD retrieval accuracy: 77.5%) Unseen categories (CAD retrieval accuracy: 52.5%) 3D-IoU ↑ICP-Rot ↓ADD-S ↓ADD-S@0.1 ↑3D-IoU ↑ICP-Rot ↓ADD-S ↓ADD-S@0.1 ↑
+> DINOv3-L [36] 36.21 27.32 6.54 71.50 8.77 40.44 10.31 46.50 DUNE-B [13] 23.40 35.81 8.48 63.50 4.46 44.44 11.84 34.50 Diorama [8] 39.41 21.06 5.79 82.00 39.12 14.54 6.33 81.50
+> SUFLECA ( Ours )62.63 10.24 3.80 84.00 48.89 16.64 5.86 78.75 SUFLECA-S ( Ours )62.50 10.31 3.71 85.50 46.42 16.44 6.49 74.00 SUFLECA-blend ( Ours )62.71 10.86 3.77 86.00 49.50 12.93 5.56 81.25
+
+TABLE III: Evaluation on selected CO3D [38] sequences (600 images). For each category, we first compute the median metric across all instances and then report the mean of these per-category medians. Seen categories include chair and couch , while unseen categories include toaster , hairdryer , microwave , and suitcase . 3D-IoU is in percentage, ICP-Rot is reported in degrees, ADD-S is unitless and scaled by 100, and ADD-S@0.1 is in percentage. feature space. SUFLECA-blend performs on par with, or slightly below, SUFLECA, since the added DUNE-B features primarily improve generalization, which is less critical for the common object categories in ScanNet25k. On CO3D, results are obtained under occluded masks and inexact retrieved CADs, posing significant front–back and left– right geometric ambiguities, as shown in Figure 4. SUFLECA grounds objects in 3D substantially better than competing methods in this challenging setting, with its features more effectively able to disambiguate such cases. In seen categories, all variants of SUFLECA perform comparably and outperform competing methods, highlighting the effectiveness of our weak supervision. For unseen categories, SUFLECA-blend generally outperforms other methods, as it compensates for the limited supervision coverage for uncommon objects at the cost of a larger feature representation. 
+
+E. Ablation Study 
+
+We ablate the main design choices, and report alignment accuracy on ScanNet25k (NMS protocol) in Table IV. 
+
+Training data This ablation evaluates the impact of including in-distribution training data. Training on the complete col-lected dataset, including ScanNet-derived images, improves performance from 33 .4/42 .3 to 34 .4/42 .8. This modest gain of only 1.0/0.5 percentage points suggests that SUFLECA benefits from additional data, but it already learns strong features without in-distribution images. 
+
+Correspondence estimation We also ablate the correspon-dence estimation strategy. Using nearest-neighbor matching alone yields the largest drop, reducing accuracy to 26 .3/34 .2.Adding mutual consistency improves over nearest-neighbor matching to 30 .7/39 .4, but still remains below the full model. Using mutual k-nearest-neighbors matching further improves Fig. 4: Qualitative comparison of zero-shot methods in align-ing an inexact retrieved CAD on masked images from CO3D. The top grid is the input to all methods. performance to 32 .0/41 .0, but still underperforms the full pipeline that applies geometric consistency. These results show that both mutual matching and geometric consensus are important for accurate alignment. 
+
+NMS scoring We further evaluate the score used to rank alignments during NMS. Replacing our combined score based on Sfit with the ROCA retrieval score reduces accuracy from 
+
+33 .4/42 .3 to 30 .4/39 .3. This drop of 3.0/3.0 percentage points shows that semantic retrieval confidence alone is not a reliable proxy for alignment quality. We also note that the render-selection score from Equation (3) performs even worse, reducing accuracy to 29 .2/38 .8, since it is coarse and hence sensitive to the choice of render viewpoints. 
+
+F. Robustness to Inexact CADs 
+
+We further analyze how alignment accuracy depends on the quality of the retrieved CAD model. As shown in Table V, replacing ground-truth Scan2CAD annotations [39] with zero-shot retrieval using GroundedSAM [40] w/ OSCAR [42] leads to a gap of more than 20 percentage points in both category-and instance-averaged alignment accuracy. This is primarily due to the low instance retrieval accuracy of 3.8% (most retrieved CADs are inexact), resulting from heavy occlusion, appearance differences, and annotation bias. This indicates                    
+
+> Variant cat. inst. SUFLECA (Ours) 33.4 42.3
+> Training data
+> ScanNet included during training 34.4 ↑42.8 ↑
+> Correspondence estimation
+> Nearest neighbor [1], [2] 26.3 ↓34.2 ↓
+> Mutual nearest-neighbor 30.7 ↓39.4 ↓
+> Mutual k-nearest-neighbors w/o filtering 32.0 ↓41.0 ↓
+> NMS scoring
+> ROCA retrieval score [1] 30.4 ↓39.3 ↓
+> Render selection score – Equation (3) 29.2 ↓38.8 ↓
+
+TABLE IV: Ablation study on ScanNet25k, isolating one component per group while keeping the rest fixed.             
+
+> Detection and retrieval Retrieval acc. Alignment acc. cat. inst. Scan2CAD annotations (GT) [39] 100.0 43.0 54.2 ROCA [1] 34.3 33.4 42.3 GroundedSAM [40] w/ OSCAR [42] 3.8 22.5 33.1
+
+TABLE V: Effect of CAD retrieval accuracy on alignment on ScanNet25k. ROCA is supervised on the dataset, and GroundedSAM w/ OSCAR is the zero-shot retrieval mode. that zero-shot CAD retrieval from real-world observations remains an open problem and a key bottleneck for a fully zero-shot CAD fitting pipeline. Nevertheless, as we move from the ground-truth oracle to supervised ROCA [1] and then to fully zero-shot retrieval, the drop in instance retrieval accuracy is much steeper than the corresponding drop in alignment accuracy, suggesting that SUFLECA is moderately robust to CAD inexactness. 
+
+G. Efficiency Analysis 
+
+Setup We compare the CAD alignment runtime and peak VRAM usage of different zero-shot methods, with the results reported in Table VI. We exclude detection, segmentation, depth estimation, and retrieval, as these stages are consistent across all methods. Moreover, since ZeroCAD [2] is not open-source, we implement a runtime-only proxy, termed as ZeroCAD*, to estimate a lower bound on its true runtime. 
+
+Discussion SUFLECA achieves lower runtime and VRAM usage than competing methods owing to its compact feature representation (2.0 × to 5.3 × smaller than those of competing methods), and the absence of iterative pose refinement stages used in [2], [37]. The smaller SUFLECA-S further improves runtime and VRAM usage without a significant sacrifice in performance, while SUFLECA-blend improves generalization at the cost of increased runtime and VRAM usage. Notably, the majority of the runtime in SUFLECA is spent in RANSAC, enabling a straightforward accuracy-speed trade-off by adjust-ing the maximum iteration count. V. C ONCLUSION 
+
+We introduced SUFLECA, a weakly-supervised zero-shot method for 9D CAD alignment from images. Its two core con-tributions, scaled NOC-supervised feature learning across di-verse real and synthetic data and a mutual k-nearest-neighbors Method dim VRAM Per-inst. (MB) ↓ (s) ↓
+
+DINOv3-L [36] 1024 3394 0.94 DUNE-B [13] 768 2696 0.82 Diorama [8] 1024 3426 2.39 DiffCAD [17] – 3146 13.1 FoundationPose [37] – 8544 0.61 ZeroCAD ∗ (w/o refine) [2] 2048 4988 1.30 ZeroCAD ∗ [2] 2048 5158 3.77 SUFLECA ( Ours ) 384 2178 0.53 SUFLECA-S ( Ours ) 256 1556 0.49 
+
+SUFLECA-blend ( Ours ) 1152 3972 0.76 SUFLECA – CAD alignment timing by component (ms) Featurizer (once per image) 86.6 Target render selection 43.1 Correspondence estimation and filtering 68.7 3D registration w/ RANSAC (300k iterations) 332.0 
+
+TABLE VI: Peak GPU memory and runtime for single-instance CAD alignment across zero-shot methods, evaluated on ScanNet25k frames. ZeroCAD ∗ denotes a runtime-only proxy implementation of [2]. matching algorithm with geometric consensus filtering, jointly address the domain gap and spatial inconsistencies that limit prior approaches. SUFLECA uses compact, geometrically discriminative features to enable sub-second CAD alignment without pose-annotated training data or iterative refinement, achieving state-of-the-art performance on ScanNet25K and, for the first time, surpassing supervised methods on this benchmark. Despite these advances, important limitations re-main. First, alignment quality is still limited by CAD retrieval accuracy, making robust open-set retrieval from occluded real-world observations an important direction for future work. Second, SUFLECA is currently restricted to indoor scenes and common object categories, motivating the inclusion of outdoor scenes and less common categories to improve scalability and generalization. REFERENCES [1] C. G¨ umeli, A. Dai, and M. Nießner, “Roca: Robust cad model retrieval and alignment from a single image,” in Proc. IEEE/CVF conference on Computer Vision and Pattern Recognition, 2022. [2] P. Arsomngern, S. Khwanmuang, M. Nießner, and S. Suwajanakorn, “Zero-shot inexact cad model alignment from a single image,” in Proc. IEEE International Conference on Computer Vision, 2025. [3] J. Shi, H. Yang, and L. Carlone, “Optimal and robust category-level perception: Object pose and shape estimation from 2-d and 3-d semantic keypoints,” IEEE Transactions on Robotics, 2023. [4] A. Collet, D. Berenson, S. S. Srinivasa, and D. Ferguson, “Object recog-nition and full pose registration from a single image for robotic manip-ulation,” in IEEE international conference on robotics and automation, 2009. [5] W. Kuo, A. Angelova, T.-Y. Lin, and A. Dai, “Mask2cad: 3d shape prediction by learning to segment and retrieve,” in Proc. European Conference on Computer Vision, 2020. [6] F. Langer, G. Bae, I. Budvytis, and R. Cipolla, “Sparc: Sparse render-and-compare for cad model alignment in a single rgb image,” in Proc. British Machine Vision Conference, 2022. [7] F. Langer, R. Cipolla, and I. Budvytis, “Sparse multi-object render-and-compare,” in Proc. British Machine Vision Conference, 2023. [8] Q. Wu, D. Iliash, D. Ritchie, M. Savva, and A. X. Chang, “Diorama: Unleashing zero-shot single-view 3d indoor scene modeling,” in Proc. IEEE/CVF International Conference on Computer Vision, 2025. [9] D. Anti´ c, G. Paschalidis, S. Tripathi, T. Gevers, S. K. Dwivedi, and D. Tzionas, “SDFit: 3D object pose and shape by fitting a morphable SDF to a single image,” in Proc. IEEE/CVF International Conference on Computer Vision, 2025. [10] H. Wang, S. Sridhar, J. Huang, J. Valentin, S. Song, and L. J. Guibas, “Normalized object coordinate space for category-level 6d object pose and size estimation,” in Proc. IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2019. [11] A. Krishnan, A. Kundu, K.-K. Maninis, J. Hays, and M. Brown, “Omninocs: A unified nocs dataset and model for 3d lifting of 2d objects,” in Proc. European Conference on Computer Vision, 2024. [12] A. Ahmadyan, L. Zhang, A. Ablavatski, J. Wei, and M. Grundmann, “Objectron: A large scale dataset of object-centric videos in the wild with pose annotations,” Proc. IEEE Conference on Computer Vision and Pattern Recognition, 2021. [13] M. B. Sarıyıldız, P. Weinzaepfel, T. Lucas, P. De Jorge, D. Larlus, and Y. Kalantidis, “Dune: Distilling a universal encoder from heterogeneous 2d and 3d teachers,” in Proc. IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2025. [14] Y. Nie, X. Han, S. Guo, Y. Zheng, J. Chang, and J. J. Zhang, “To-tal3dunderstanding: Joint layout, object pose and mesh reconstruction for indoor scenes from a single image,” in Proc. IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2020. [15] A. Kundu, Y. Li, and J. M. Rehg, “3d-rcnn: Instance-level 3d object reconstruction via render-and-compare,” in Proc. IEEE conference on computer vision and pattern recognition, 2018. [16] Z. Wen, H. Chen, Z. Zhu, Z. Wei, L. Nan, and M. Wei, “Coscad: Cross-modal cad model retrieval and pose alignment from a single image,” in International Conf. on Computational Visual Media, 2025. [17] D. Gao, D. Rozenberszki, S. Leutenegger, and A. Dai, “Diffcad: Weakly-supervised probabilistic cad model retrieval and alignment from an rgb image,” ACM Trans. Graph., 2024. [18] L. Shaikewitz, T. Nguyen, and L. Carlone, “Category-level object shape and pose estimation in less than a millisecond,” IEEE International Conference on Robotics and Automation, 2026. [19] M. Everingham, L. Van Gool, C. K. Williams, J. Winn, and A. Zisser-man, “The pascal visual object classes (voc) challenge,” International journal of computer vision, 2010. [20] G. Baruch, Z. Chen et al., “ARKitscenes - a diverse real-world dataset for 3d indoor scene understanding using mobile RGB-d data,” in Conference on Neural Information Processing Systems, 2021. [21] T. Zhou, R. Tucker, J. Flynn, G. Fyffe, and N. Snavely, “Stereo magnification: Learning view synthesis using multiplane images,” in SIGGRAPH, 2018. [22] K.-K. Maninis, S. Popov, M. Nießner, and V. Ferrari, “Cad-estate: Large-scale cad model annotation in rgb videos,” in Proc. IEEE/CVF International Conference on Computer Vision, 2023. [23] A. Dai, A. X. Chang, M. Savva, M. Halber, T. Funkhouser, and M. Nießner, “Scannet: Richly-annotated 3d reconstructions of indoor scenes,” in IEEE Computer Vision and Pattern Recognition, 2017. [24] Y. Rao, S. Ainetter, S. Stekovic, V. Lepetit, and F. Fraundorfer, “Lever-aging automatic cad annotations for supervised learning in 3d scene understanding,” arXiv preprint arXiv:2504.13580, 2025. [25] C. Yeshwanth, Y.-C. Liu, M. Nießner, and A. Dai, “Scannet++: A high-fidelity dataset of 3d indoor scenes,” in Proc. IEEE/CVF International Conference on Computer Vision, 2023. [26] X. Sun, J. Wu, X. Zhang, Z. Zhang, C. Zhang, T. Xue, J. B. Tenenbaum, and W. T. Freeman, “Pix3d: Dataset and methods for single-image 3d shape modeling,” in Proc. IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2018. [27] Y. Xiang, W. Kim, W. Chen, J. Ji, C. Choy, H. Su, R. Mottaghi, L. Guibas, and S. Savarese, “Objectnet3d: A large scale database for 3d object recognition,” in European Conference Computer Vision, 2016. [28] H. Fu et al., “3d-front: 3d furnished rooms with layouts and semantics,” in Proc. International Conference on Computer Vision, 2021. [29] M. Roberts, J. Ramapuram, A. Ranjan, A. Kumar, M. A. Bautista, N. Paczan, R. Webb, and J. M. Susskind, “Hypersim: A photore-alistic synthetic dataset for holistic indoor scene understanding,” in International Conference on Computer Vision, 2021. [30] A. X. Chang, T. Funkhouser et al., “Shapenet: An information-rich 3d model repository,” arXiv preprint arXiv:1512.03012, 2015. [31] N. Ravi, V. Gabeur et al., “Sam 2: Segment anything in images and videos,” arXiv preprint arXiv:2408.00714, 2024. [32] B. Ma, J. Yang, D. Di, X. Zhang, J. Cui, H. Li, Y. Xie, and W. Chen, “Metricanything: Scaling metric depth pretraining with noisy heteroge-neous sources,” arXiv preprint arXiv:2601.22054, 2026. [33] R. Ranftl, A. Bochkovskiy, and V. Koltun, “Vision transformers for dense prediction,” in Proc. IEEE/CVF international conference on computer vision, 2021. [34] D. Barath, “Superansac: One ransac to rule them all,” arXiv preprint arXiv:2506.04803, 2025. [35] K.-K. Maninis, S. Popov, M. Niesner, and V. Ferrari, “ Vid2CAD: CAD Model Alignment Using Multi-View Constraints From Videos ,” IEEE Transactions on Pattern Analysis & Machine Intelligence, 2023. [36] O. Sim´ eoni, H. V. Vo et al., “Dinov3,” arXiv preprint arXiv:2508.10104, 2025. [37] B. Wen, W. Yang, J. Kautz, and S. Birchfield, “Foundationpose: Unified 6d pose estimation and tracking of novel objects,” in Proc. IEEE conference on Computer Vision and Pattern Recognition, 2024. [38] J. Reizenstein, R. Shapovalov, P. Henzler, L. Sbordone, P. Labatut, and D. Novotny, “Common objects in 3d: Large-scale learning and evalua-tion of real-life 3d category reconstruction,” in International Conference on Computer Vision, 2021. [39] A. Avetisyan, M. Dahnert, A. Dai, M. Savva, A. X. Chang, and M. Nießner, “Scan2cad: Learning cad model alignment in rgb-d scans,” in Proc. Conference on computer vision and pattern recognition, 2019. [40] T. Ren, S. Liu, A. Zeng, J. Lin, K. Li, H. Cao, J. Chen, X. Huang, Y. Chen, F. Yan et al., “Grounded sam: Assembling open-world models for diverse visual tasks,” arXiv preprint arXiv:2401.14159, 2024. [41] X. Chen et al., “Sam 3d: 3dfy anything in images,” in Proc. IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2026. [42] T. Pulli, J.-B. Weibel, P. H¨ onig, M. Hirschmanner, M. Vincze, and A. Holzinger, “Oscar: Open-set cad retrieval from a language prompt and a single image,” arXiv preprint arXiv:2601.07333, 2026.
