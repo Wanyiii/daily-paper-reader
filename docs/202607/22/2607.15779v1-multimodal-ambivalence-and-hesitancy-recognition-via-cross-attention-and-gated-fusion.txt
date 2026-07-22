@@ -1,0 +1,147 @@
+Title: Multimodal Ambivalence and Hesitancy Recognition via Cross-Attention and Gated Fusion
+
+URL Source: https://arxiv.org/pdf/2607.15779v1
+
+Published Time: Mon, 20 Jul 2026 00:42:41 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Multimodal Ambivalence and Hesitancy Recognition via Cross-Attention and Gated Fusion 
+
+Oussama Berhili, Yassine Ouzar and Larbi Boubchir 
+
+LIASD Laboratory, University of Paris 8, Saint-Denis, France 
+
+oussama.berhili@etud.univ-paris8.fr, larbi.boubchir@univ-paris8.fr, yassine.ouzar@univ-paris8.fr 
+
+Abstract. We present a multimodal framework for Ambivalence/Hesitancy (A/H) recognition in video, developed for the ABAW11 challenge at ECCV 2026. The proposed approach fuses textual, acoustic, and visual modalities extracted from the BAH dataset using three pretrained en-coders: F2LLM-v2-0.6B for transcripts (1024-d), WavLM-Large for audio (1024-d), and VideoMAE V2 for facial video (768-d). We first estab-lish comprehensive unimodal baselines using classical classifiers (MLP, Random Forest, GBDT), each optimized via Optuna, and obtain a best unimodal Macro F1 of 0.6659 on the test set using text features alone; substantially outperforming the zero-shot Video-LLaVA baseline (Macro F1: 0.2827). Building on these baselines, we propose a multimodal fu-sion architecture that combines bidirectional cross-attention across all three modalities with a Gated Multimodal Unit (GMU), with both ar-chitectural and optimization hyperparameters selected through a 50-trial Optuna search. This model achieves a Macro F1 of 0.7394 on the valida-tion set, a relative improvement of 11.0% over the best unimodal baseline, confirming that explicit cross-modal interaction captures complementary cues that no single modality provides in isolation. Final predictions on the official, unlabeled private test set are generated using this model and submitted according to the challenge protocol. Code is publicly available at https://github.com/yassineouzar/IUSD_AH/ .
+
+Keywords: Ambivalence · Hesitancy · Multimodal Learning · Cross-Attention 
+
+· Gated Fusion · ABAW11 
+
+# 1 Introduction 
+
+Ambivalence and hesitancy (A/H) are subtle affective states characterized by simultaneous conflicting emotions or motivations, setting a person in a state between acceptance and refusal to act. They are among the primary reasons individuals delay, avoid, or abandon health-behavior changes, making automatic A/H recognition directly relevant to digital behavioral-change interventions and mental-health monitoring. arXiv:2607.15779v1 [cs.CV] 17 Jul 2026 2 Berhili et al. 
+
+The ABAW11 A/H Video Recognition Challenge provides the BAH dataset, comprising 1,427 video recordings from 300 participants with binary labels in-dicating the presence or absence of ambivalence/hesitancy at the video level [1]. A/H can manifest across multiple modalities simultaneously: lexical hedging in speech transcripts, prosodic variation in audio, and micro-expressions in facial behavior. Critically, conflicting emotional cues may occur across modalities (e.g., positive words with a negative tone) or within a single modality, the latter being comparatively harder to detect. This motivates a principled multimodal fusion approach capable of modeling interactions both within and across modalities. Our contributions in this paper are: - Comprehensive unimodal baselines using state-of-the-art pretrained encoders (F2LLM-v2-0.6B for text, WavLM-Large for audio, and VideoMAE V2 for visual data), specifically configured to extract full-sequence temporal tokens, bypassing standard pooling to preserve fine-grained dynamics. - Systematic evaluation of classification heads, comparing MLP, Random For-est, and Gradient Boosting Decision Tree (GBDT) classifiers per modality, each optimized via Optuna. - A multimodal fusion architecture combining bidirectional cross-attention across all three modality pairs with a Gated Multimodal Unit, whose hy-perparameters are tuned via a 50-trial Optuna search. - A standardized, modular, and reproducible feature-extraction and training pipeline, released publicly, that preserves variable-length token sequences at every stage to remain compatible with future cross-attention or multimodal-LLM extensions. - Significant performance gains over both the zero-shot Video-LLaVA base-line and our own strongest unimodal classifier, demonstrating the benefit of explicit cross-modal interaction for A/H detection. 
+
+# 2 Related Work 
+
+Ambivalence and Hesitancy Recognition. The BAH dataset was introduced by González-González et al. [1] alongside a zero-shot Video-LLaVA baseline achiev-ing P = 0 .2827 on the public test set using a simple vision-only prompt. The BROTHER system [2], winner of the ABAW10 A/H track, demonstrated the effectiveness of multimodal fusion combining text (F2LLM), audio (HuBERT), visual (SigLIP2), and temporal statistics features, achieving a Macro F1 of 0.7465 on that edition’s test set. 
+
+Multimodal Fusion for Affective Computing. Cross-attention mechanisms have become a standard tool for multimodal affective recognition, allowing one modal-ity to query and attend to another’s representation rather than relying on naive concatenation. Gated fusion mechanisms, such as the Gated Multimodal Unit (GMU), further allow a model to down-weight modalities that are noisy or un-informative for a given instance (e.g., an occluded face or low-quality audio), which is particularly relevant for in-the-wild recordings such as those in BAH. Multimodal A/H Recognition 3
+
+# 3 Dataset 
+
+The BAH dataset [1] consists of 1,427 video recordings split participant-wise into 778 training, 124 validation, and 525 (annotated) test samples. Labels are binary: 0 (no A/H) and 1 (A/H present). The training set is nearly balanced (393 class-0, 385 class-1), while the validation set contains 49 class-0 and 75 class-1 samples. Each recording includes the raw video, cropped and aligned facial frames at 256 × 256 pixels, audio at 16 kHz, and time-stamped transcription files. A second, unlabeled private test set of 152 videos was released separately by the organizers prior to the final submission deadline, on which teams must generate and submit predictions without access to ground-truth labels. 
+
+# 4 Feature Extraction 
+
+To preserve fine-grained temporal and semantic dynamics for subsequent fusion, we extract full-sequence token representations for each modality rather than performing global pooling at extraction time. All three extraction pipelines are implemented as independent, CLI-configurable modules and released publicly (see Section 8). 
+
+Text – F2LLM-v2-0.6B. The transcript of each video is tokenized with the of-ficial F2LLM tokenizer and processed through the F2LLM-v2-0.6B encoder (a decoder-only model built on Qwen3-0.6B, fine-tuned for text embedding) [5]. We retain the full last_hidden_state sequence, without padding at extraction time, resulting in a variable-length representation of dimension Nt × 1024 , where 
+
+Nt is the number of tokens. This sequence serves as the Query in our multimodal cross-attention architecture. 
+
+Audio – WavLM-Large. Each video’s 16 kHz mono audio (extracted from the source video via ffmpeg , downmixed to mono and resampled when necessary) is processed by WavLM-Large (316M parameters) using the official HuggingFace feature extractor. Instead of collapsing the temporal dimension via pooling, we extract the entire last_hidden_state sequence, yielding a tensor of dimension 
+
+Na × 1024 and preserving the prosodic nuances required for high-resolution A/H detection. 
+
+Visual – VideoMAE V2. We process the visual modality using the VideoMAE V2 (Base) architecture over the pre-extracted, aligned 256 × 256 face frames. Since VideoMAE V2 requires a fixed number of input frames per forward pass, videos are split into non-overlapping chunks of 16 frames (the final chunk, if incomplete, is padded by repeating its last frame so that no frame is discarded). Each chunk is passed through the encoder’s transformer backbone (patch embed-ding, positional embedding, transformer blocks, and final normalization, without any CLS-token pooling), and the resulting patch-level token sequences from all chunks are concatenated. This yields a representation of dimension Nv × 768 ,preserving the full spatio-temporal context of facial micro-expressions across the entire video. 4 Berhili et al. 
+
+# 5 Unimodal Classification 
+
+5.1 Experimental Setup 
+
+To evaluate the predictive power of each modality in isolation before fusion, we employ a supervised classification framework. For each modality, we train three classical classifiers: - MLP: a Multi-Layer Perceptron, optimized for layer depth and regulariza-tion. - RF: Random Forest, with fine-tuned estimator count, depth, and split cri-teria. - GBDT: Gradient Boosted Decision Trees, configured for robust handling of high-dimensional embeddings. 
+
+Training Protocol. All extracted features are normalized using a StandardScaler 
+
+fitted on the union of the training and validation sets (902 videos) to prevent data leakage while maximizing distribution coverage. The models are then trained on this combined set and evaluated on the independent (annotated) test set (525 videos). 
+
+Hyperparameter Optimization. Hyperparameters are determined using Optuna [6] with a Tree-structured Parzen Estimator (TPE) sampler over 100 trials per classifier. We maximize the Macro F1-score on the validation set, covering key structural parameters such as hidden-layer dimensions (MLP), tree count and depth (RF/GBDT), and learning rates. The final models are deployed with the configurations yielding the highest validation performance. 
+
+5.2 Results 
+
+Table 1 reports unimodal results on the BAH test set (525 videos), compared to the zero-shot Video-LLaVA [1] baseline. 
+
+5.3 Discussion 
+
+Our trained baselines significantly outperform the zero-shot baseline across all three modalities, confirming the necessity of domain-specific training for this task. Text consistently achieves the highest Macro F1 (0.6659 with Random For-est), followed by audio (0.6275) and visual (0.5727). This ordering is consistent with the intuition that lexical hedging (e.g., qualifying language, indirect phras-ing) provides a more directly interpretable signal for A/H than audio prosody or facial micro-expressions alone, which may be more subtle and harder to capture with classical classifiers on non-fine-tuned pretrained embeddings. Multimodal A/H Recognition 5                                     
+
+> Table 1. Unimodal classification results on the BAH test set (525 videos). Best per modality in bold . Macro F1 is the official challenge metric.
+> Modality Classifier Macro F1 F1 0F1 1
+> Text (F2LLM-v2-0.6B) MLP 0.6550 0.6096 0.7003 RF 0.6659 0.6360 0.6958 GBDT 0.6505 0.5959 0.7051 Audio (WavLM-Large) MLP 0.5946 0.5336 0.6556 RF 0.6275 0.5494 0.7055 GBDT 0.5717 0.5089 0.6346 Visual (VideoMAE V2) MLP 0.5727 0.5206 0.6248 RF 0.5364 0.4905 0.5823 GBDT 0.5368 0.4926 0.5809 Zero-shot Video-LLaVA [1] 0.2827 ––
+
+Error Analysis. Examination of the confusion matrices (e.g., for the Text-RF model) reveals a tendency to misclassify non-hesitant samples as hesitant. This indicates that while our models are sensitive to A/H markers, they may over-trigger on linguistic or acoustic features that are also present in neutral speech. Interestingly, audio and visual modalities, despite lower absolute performance, produce distinct confusion patterns compared to the text model, suggesting they capture partially orthogonal cues regarding hesitancy. This motivates our multi-modal fusion architecture (Section 6), designed to combine these complementary signals and refine the decision boundary. 
+
+# 6 Proposed Multimodal Architecture 
+
+We propose a multimodal fusion architecture that leverages cross-modal depen-dencies through multi-head cross-attention blocks followed by a Gated Multi-modal Unit (GMU). An overview is shown in Figure 1. 
+
+Modality Projection and Positional Encoding. Each modality’s variable-length token sequence ( Nt ×1024 for text, Na ×1024 for audio, Nv ×768 for video) is first linearly projected to a shared embedding dimension dmodel (tuned via Optuna, see Section 7), followed by layer normalization and dropout. A fixed sinusoidal positional encoding is then added to each projected sequence to inject temporal order information, since the cross-attention mechanism itself is permutation-invariant. 
+
+Cross-Modal Attention. The core MultimodalCrossAttention module allows each modality to act as a query to retrieve information from the other two. We implement six directional cross-attention stacks (text ←video, text ←audio, video ←text, video ←audio, audio ←text, audio ←video), each composed of one or 6 Berhili et al. 
+
+more pre-norm cross-attention blocks with residual connections and a position-wise feed-forward network. Padding positions (for the variable-length text se-quences and, where applicable, other modalities) are masked out via key-padding masks so they do not contribute to the attention-weighted context. This design allows the model to resolve modality-specific ambiguities, such as distinguish-ing hesitant speech patterns from unrelated background audio, by attending to corresponding visual or textual cues. 
+
+Pooling. After cross-attention, each modality’s contextualized token sequence is reduced to a single vector via a configurable pooling strategy (mean, max, or learned attention pooling, selected per experiment via Optuna), each followed by layer normalization. 
+
+Gated Multimodal Fusion (GMU). The three pooled vectors are concatenated and processed by a GatedFusion unit. Unlike simple concatenation or averaging, the GMU computes a context vector from the concatenated representation and, from it, a separate sigmoid gate per modality. Each modality’s pooled vector is scaled by its own gate before summation, allowing the model to dynamically suppress modalities that are uninformative or noisy for a given instance (e.g., an occluded face or low-quality audio) and prioritize the most informative stream. 
+
+Classification. The final fused representation is passed through a configurable multi-layer perceptron (variable depth, width, activation, and dropout, all tuned via Optuna) that outputs a single logit, trained with binary cross-entropy loss against the A/H presence label. 
+
+# 7 Multimodal Fusion Results 
+
+7.1 Experimental Setup 
+
+The multimodal model (Section 6) is trained on the combination of the BAH training and annotated test splits (1,303 videos), validated on the 124-video vali-dation set – a design choice that maximizes the amount of labeled data available for training before generating predictions on the official, separately released, un-labeled private test set. Sequence lengths are normalized via uniform temporal resampling (linear-interpolation index sampling, with tiling for sequences shorter than the target length) to fixed lengths ( Nv = 128 for video, Na = 500 for au-dio); text sequences retain their true variable length, with attention masking used to exclude padding positions from all pooling and attention operations. Architecture and optimization hyperparameters – shared embedding dimen-sion, number of attention heads, feed-forward dimension, number of cross-attention layers per modality pair, dropout, pooling strategy, GMU gate dimension, clas-sifier depth/width/activation/ dropout, learning rate, weight decay, gradient-clipping norm, and optimizer (AdamW or RAdam) – are selected via a 50-trial Optuna search (TPE sampler, seeded for reproducibility across runs), with each trial trained for up to 15 epochs and early stopping (patience 5) on validation Multimodal A/H Recognition 7        
+
+> Table 2. Multimodal fusion results on the BAH validation set (124 videos), compared to the best unimodal baseline and the zero-shot baseline.
+> Model Macro F1 Accuracy
+> Zero-shot Video-LLaVA [1] 0.2827 –Best Unimodal (Text, RF) 0.6659 –
+> Cross-Attention + GMU (Ours) 0.7394 0.7500
+
+Macro F1. The final model is retrained from scratch with the best configura-tion found, for up to 100 epochs, with early stopping (patience 15) on validation Macro F1; the checkpoint with the highest validation Macro F1 across all epochs is retained for inference. 
+
+7.2 Results 
+
+The multimodal model with bidirectional cross-attention and gated fusion sub-stantially outperforms both the zero-shot baseline ( +0 .4567 Macro F1) and the best unimodal classifier ( +0 .0735 Macro F1, an 11 .0% relative improvement), confirming that cross-modal interactions carry complementary information be-yond what any single modality captures in isolation, consistent with the error-analysis observations of Section 5. The best configuration found via Optuna (trial 17 of 50, search-phase vali-dation Macro F1 of 0.7301) uses a shared embedding dimension of 256, a single attention head, a feed-forward dimension of 256, two cross-attention layers per modality pair, mean pooling, a GMU gate dimension of 64, a single-layer classi-fier head (width 128, tanh activation), the RAdam optimizer, a learning rate of 
+
+5.19 × 10 −4, and a gradient-clipping norm of 2.31. Full hyperparameter search results are reported in Appendix A. Training the final model with this configuration converges within 28 epochs before early stopping is triggered, with the best validation Macro F1 (0.7394) reached at epoch 13, alongside a training Macro F1 of 0.9498 – indicating that the model fits the (larger) combined training set well while generalizing to held-out validation participants, though the gap between training and validation per-formance also suggests that further regularization or data augmentation could improve generalization in future iterations. 
+
+7.3 Discussion 
+
+While our multimodal result (0.7394) approaches the ABAW10-winning BROTHER system’s reported Macro F1 of 0.7465 [2], a direct comparison should be inter-preted with caution, as the two results are obtained on different editions of the challenge with potentially different test-set compositions and dataset versions. Nonetheless, the consistent and substantial gain of our cross-attention and GMU fusion over every unimodal baseline supports the central hypothesis that A/H 8 Berhili et al. 
+
+recognition benefits from explicit modeling of cross-modal interactions, rather than reliance on any single modality or naive late fusion. Predictions on the official, unlabeled private test set (152 videos) are gener-ated with this final model and submitted per the ABAW11 challenge protocol, following the required video_id,proba_0,proba_1,label_prediction format. 
+
+# 8 Implementation Details 
+
+All experiments are run on a single NVIDIA GPU server. Features are ex-tracted once per split and cached as PyTorch .pt files. Unimodal classifiers use scikit-learn with an Optuna TPE sampler, 100 trials per classifier, with direct train →validation evaluation. The multimodal model is implemented in PyTorch; the full feature-extraction, preprocessing, training, and prediction pipeline is or-ganized as independent, CLI-configurable modules , released publicly with per-module documentation at https://github.com/yassineouzar/IUSD_AH/ .Random seed is fixed to 42 for all experiments (PyTorch, NumPy, and the Op-tuna sampler). 
+
+# 9 Conclusion 
+
+We presented a comprehensive evaluation of unimodal and multimodal approaches for Ambivalence/Hesitancy (A/H) detection on the ABAW11 BAH dataset. By utilizing state-of-the-art pretrained encoders – F2LLM-v2-0.6B, WavLM-Large, and VideoMAE V2 – coupled with classical classifiers optimized via Optuna, we established robust unimodal benchmarks for the text, audio, and visual modali-ties, with text proving the most discriminative in isolation (Macro F1 of 0.6659). Building on these baselines, our proposed cross-attention and Gated Multimodal Unit fusion architecture, with hyperparameters selected via a 50-trial Optuna search, achieves a Macro F1 of 0.7394 on the validation set – an 11.0% rela-tive improvement over the best unimodal model and a substantial gain over the zero-shot Video-LLaVA baseline. These results confirm that explicit cross-modal interaction is essential for capturing the subtle, sometimes conflicting, cues that characterize ambivalence and hesitancy. Final predictions on the official private test set were generated with this model and submitted per the challenge protocol. Future work includes exploring richer temporal modeling, personalization and domain-adaptation strategies leveraging participant metadata, and parameter-efficient fine-tuning of multimodal LLMs for this task. Multimodal A/H Recognition 9
+
+Fig. 1. Overview of the proposed multimodal recognition pipeline, integrating modality-specific feature projection and positional encoding, bidirectional interactions through cross-attention across all modality pairs, followed by pooling, gated multi-modal fusion, and classification using an MLP head 10 Berhili et al. 
+
+# A Appendix: Best Hyperparameters Found 
+
+Table 3 reports the full configuration selected by the 50-trial Optuna search (trial 17), used to train the final multimodal model reported in Section 7. 
+
+Table 3. Best hyperparameters found by the Optuna search for the multimodal cross-attention and GMU model. 
+
+Hyperparameter Value 
+
+Shared embedding dimension ( dmodel ) 256 Number of attention heads 1Feed-forward dimension 256 Cross-attention layers per modality pair 2 Dropout 0.278 Pooling strategy Mean GMU gate dimension 64 Classifier hidden layers 1 (width 128) Classifier activation Tanh Classifier dropout 0.221 Learning rate 5.19 × 10 −4
+
+Weight decay 5.09 × 10 −6
+
+Gradient clipping norm 2.31 Optimizer RAdam 
+
+# References 
+
+1. GONZÁLEZ-GONZÁLEZ, Manuela, BELHARBI, Soufiane, ZEESHAN, Muham-mad Osama, et al. BAH Dataset for Ambivalence/Hesitancy Recognition in Videos for Digital Behavioural Change, ICLR, 2026. 2. PEREIRA, Alexandre, BARROS, Pablo, et FERNANDES, Bruno. Brother: Be-havioral recognition optimized through heterogeneous ensemble regularization for ambivalence and hesitancy. In : Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition. 2026. p. 5362-5369. 3. CHEN, Sanyuan, WANG, Chengyi, CHEN, Zhengyang, et al. Wavlm: Large-scale self-supervised pre-training for full stack speech processing. IEEE Journal of Se-lected Topics in Signal Processing, 2022, vol. 16, no 6, p. 1505-1518. 4. Wang, L., et al.: VideoMAE V2: Scaling Video Masked Autoencoders with Dual Masking. In: CVPR (2023) 5. ZHANG, Ziyin, LIAO, Zihan, YU, Hang, et al. F2llm-v2: Inclusive, performant, and efficient embeddings for a multilingual world. arXiv preprint arXiv:2603.19223, 2026. 6. AKIBA, Takuya, SANO, Shotaro, YANASE, Toshihiko, et al. Optuna: A next-generation hyperparameter optimization framework. In : Proceedings of the 25th ACM SIGKDD international conference on knowledge discovery & data mining. 2019. p. 2623-2631.
