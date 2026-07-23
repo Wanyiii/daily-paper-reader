@@ -6,86 +6,77 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-22
-- 运行时间：2026-07-22 21:39:33 UTC
+- 最新运行日期：2026-07-23
+- 运行时间：2026-07-23 21:44:24 UTC
 - 运行状态：成功
-- 本次总论文数：22
-- 精读区：10
+- 本次总论文数：19
+- 精读区：7
 - 速读区：12
 
 ### 今日简报（AI）
-今日精读两篇9分论文，聚焦CLIP表示优化与语言中心多模态框架，速读涵盖视频生成、情感识别及3D场景映射等方向。最值得关注AspectCLIP的方面引导一致性正则化，以及从模态到命题的语言中心推理框架。建议普通读者重点关注多模态对齐与统一表示的最新尝试，便于理解未来AI融合趋势。
-- 详情：[/202607/22/README](/202607/22/README)
+今日共分析19篇论文，精读2篇高分（9/10），重点关注分布式边缘学习与异构医学数据多模态融合。最值得看的是《Distributed Edge Learning under Imperfect Data Sensing》与《Advancing Multimodal Fusion on Heterogeneous Medical Data with Hybrid Geometry Attention》。建议进一步关注边缘计算与多模态学习的交叉应用，可结合速读中的物理感知室内生成方法。
+- 详情：[/202607/23/README](/202607/23/README)
 
 ### 精读区论文标签
-1. [AspectCLIP: Optimizing CLIP Representation Space via Aspect-Guided Consistency Regularization](/202607/22/2607.13805v1-aspectclip-optimizing-clip-representation-space-via-aspect-guided-consistency-regularization)  
+1. [Distributed Edge Learning under Imperfect Data Sensing](/202607/23/2607.18649v1-distributed-edge-learning-under-imperfect-data-sensing)  
    标签：评分：9.0/10、query:multimodal
-   evidence：通过方面引导的一致性正则优化CLIP跨模态表示空间
-2. [From Modalities to Propositions: A Language-Centric Framework for Multimodal Intelligence](/202607/22/2607.16560v1-from-modalities-to-propositions-a-language-centric-framework-for-multimodal-intelligence)  
+   evidence：不完善数据感知下的分布式边缘学习，依赖模态噪声
+2. [Advancing Multimodal Fusion on Heterogeneous Medical Data with Hybrid Geometry Attention](/202607/23/2607.19086v1-advancing-multimodal-fusion-on-heterogeneous-medical-data-with-hybrid-geometry-attention)  
    标签：评分：9.0/10、query:multimodal
-   evidence：通过语言中心的原子命题实现跨模态理解和检索
-3. [STBridge: Shared-Target Alignment for Bridging Understanding and Generation in UMMs](/202607/22/2607.17140v1-stbridge-shared-target-alignment-for-bridging-understanding-and-generation-in-umms)  
-   标签：评分：9.0/10、query:multimodal
-   evidence：共享目标对齐桥接理解与生成差距
-4. [Asynchronous Multimodal Diffusion Policy Composition via Latency-Aware Guidance Fusion](/202607/22/2607.17257v1-asynchronous-multimodal-diffusion-policy-composition-via-latency-aware-guidance-fusion)  
-   标签：评分：9.0/10、query:multimodal
-   evidence：用于异步多模态扩散策略的延迟感知指导融合
-5. [ConsiSpace: Learning Geometric Consistency Matters for Video Spatial Reasoning](/202607/22/2607.17599v1-consispace-learning-geometric-consistency-matters-for-video-spatial-reasoning)  
+   evidence：基于混合几何注意力的异构医疗数据多模态融合
+3. [IGGT4D: Streaming 4D Instance-Grounded Geometry Transformer](/202607/23/2607.19228v1-iggt4d-streaming-4d-instance-grounded-geometry-transformer)  
    标签：评分：9.0/10、query:d-vision
-   evidence：面向视频空间推理的几何一致性感知框架
-6. [DA-Fusion: Deformable Attention-Based RGB-D Fusion Transformer for Unseen Object Instance Segmentation](/202607/22/2607.17754v1-da-fusion-deformable-attention-based-rgb-d-fusion-transformer-for-unseen-object-instance-segmentation)  
+   evidence：流式4D实例接地几何变换器，在线场景理解、三维重建与空间推理
+4. [MTVDiff: Multimodal Conditional Latent Diffusion for Enhanced Thermal-to-Visible Face Translation](/202607/23/2607.19886v1-mtvdiff-multimodal-conditional-latent-diffusion-for-enhanced-thermal-to-visible-face-translation)  
    标签：评分：9.0/10、query:multimodal
-   evidence：基于可变形注意力的RGB-D融合用于实例分割
-7. [Seeing Before Generating: Object Perception Enhances Single-View 3D Reconstruction](/202607/22/2607.18630v1-seeing-before-generating-object-perception-enhances-single-view-3d-reconstruction)  
+   evidence：多模态条件潜扩散，双分支交叉注意力融合和门控对齐
+5. [Digital Twin Modeling of a Highly Automated Agricultural Tractor](/202607/23/2607.19912v1-digital-twin-modeling-of-a-highly-automated-agricultural-tractor)  
    标签：评分：9.0/10、query:d-vision
-   evidence：通过物体感知增强单视图3D物体重建
-8. [Beyond Noisy Signals: Dual-Level Denoising for Multi-modal Sequential Recommendation](/202607/22/2607.18786v1-beyond-noisy-signals-dual-level-denoising-for-multi-modal-sequential-recommendation)  
-   标签：评分：9.0/10、query:multimodal
-   evidence：多模态序列推荐中的双层去噪
-9. [IGGT4D: Streaming 4D Instance-Grounded Geometry Transformer](/202607/22/2607.19228v1-iggt4d-streaming-4d-instance-grounded-geometry-transformer)  
+   evidence：农业拖拉机的数字孪生建模与仿真验证
+6. [SenWorld: A Digital-Twin Simulation for Generating Context-Rich Evaluation Data](/202607/23/2607.19949v1-senworld-a-digital-twin-simulation-for-generating-context-rich-evaluation-data)  
    标签：评分：9.0/10、query:d-vision
-   evidence：流式4D场景理解与实例分割
-10. [OmniReasoner: Thinking with Long Audio-Video via Native Tool Use](/202607/22/2607.19339v1-omnireasoner-thinking-with-long-audio-video-via-native-tool-use)  
+   evidence：数字孪生仿真生成情境丰富的评估数据
+7. [Toward Reliable RGB-D Semantic Segmentation: Handling Missing Modalities via Condition Dropout](/202607/23/2607.20326v1-toward-reliable-rgb-d-semantic-segmentation-handling-missing-modalities-via-condition-dropout)  
    标签：评分：9.0/10、query:multimodal
-   evidence：跨模态长音视频推理工具使用框架
+   evidence：通过条件失活处理RGB-D语义分割中的缺失模态
 
 ### 速读区论文标签
-1. [PE-Field 4D: Video Generation Models as Canvas](/202607/22/2607.15667v1-pe-field-4d-video-generation-models-as-canvas)  
-   标签：评分：8.0/10、query:d-vision
-   evidence：几何感知交叉注意力实现视频生成的视角控制
-2. [Multimodal Ambivalence and Hesitancy Recognition via Cross-Attention and Gated Fusion](/202607/22/2607.15779v1-multimodal-ambivalence-and-hesitancy-recognition-via-cross-attention-and-gated-fusion)  
+1. [Art Beyond Semantics: Sheaf-Informed Contrastive Learning for Multi-Relational Representations](/202607/23/2607.16321v1-art-beyond-semantics-sheaf-informed-contrastive-learning-for-multi-relational-representations)  
    标签：评分：8.0/10、query:multimodal
-   evidence：通过交叉注意力和门控融合进行多模态矛盾情绪识别
-3. [Vision-Language-Motion Maps: An Open-Vocabulary, Uncertainty-Aware, Queryable Motion Attribute for 3D Scene Maps](/202607/22/2607.16173v1-vision-language-motion-maps-an-open-vocabulary-uncertainty-aware-queryable-motion-attribute-for-3d-scene-maps)  
+   evidence：基于层理论的对比学习实现多关系多模态表示
+2. [Text2Villa: Hierarchical Generation of 3D Indoor Environments with Physics-Aware Analysis-by-Synthesis](/202607/23/2607.17145v1-text2villa-hierarchical-generation-of-3d-indoor-environments-with-physics-aware-analysis-by-synthesis)  
    标签：评分：8.0/10、query:d-vision
-   evidence：用于数字孪生的开放词汇3D场景地图，带有运动属性
-4. [SaaF: Scene-Specific Ambiguity-Aware 3D Language Fields towards Interactive Real-World Object Retrieval](/202607/22/2607.16309v1-saaf-scene-specific-ambiguity-aware-3d-language-fields-towards-interactive-real-world-object-retrieval)  
-   标签：评分：8.0/10、query:multimodal
-   evidence：跨模态学习用于自然语言的3D对象检索
-5. [IoUPD: IoU-Aware Privileged Distillation for Visual Grounding with Multimodal Large Language Models](/202607/22/2607.15732v1-ioupd-iou-aware-privileged-distillation-for-visual-grounding-with-multimodal-large-language-models)  
-   标签：评分：7.0/10、query:multimodal
-   evidence：通过特权蒸馏进行跨模态对齐
-6. [On the Geometry of Learned Representations in Event-Based Multi-Modal Egomotion Estimation](/202607/22/2607.15794v1-on-the-geometry-of-learned-representations-in-event-based-multi-modal-egomotion-estimation)  
-   标签：评分：7.0/10、query:multimodal
-   evidence：跨模态注意力融合的多模态自我运动估计
-7. [DPNeXt: A Lightweight Multi-Scale Feature Fusion Framework for Efficient ViT-Based Multi-Task Dense Prediction](/202607/22/2607.16012v1-dpnext-a-lightweight-multi-scale-feature-fusion-framework-for-efficient-vit-based-multi-task-dense-prediction)  
+   evidence：从文本层次化生成带物理感知的三维室内环境
+3. [RayOcc: Occlusion-Aware Ray Occupancy Estimation via Gaussian Mixture Intensity](/202607/23/2607.17660v1-rayocc-occlusion-aware-ray-occupancy-estimation-via-gaussian-mixture-intensity)  
+   标签：评分：8.0/10、query:d-vision
+   evidence：基于高斯混合强度的遮挡感知射线占用估计用于3D场景理解
+4. [Fine-Detail Monocular Geometry Estimation with Self-Guided Sparse Volumetric Refinement](/202607/23/2607.17967v1-fine-detail-monocular-geometry-estimation-with-self-guided-sparse-volumetric-refinement)  
+   标签：评分：8.0/10、query:d-vision
+   evidence：单目几何估计，从图像进行三维重建
+5. [Vision-Language-Motion Maps: An Open-Vocabulary, Uncertainty-Aware, Queryable Motion Attribute for 3D Scene Maps](/202607/23/2607.16173v1-vision-language-motion-maps-an-open-vocabulary-uncertainty-aware-queryable-motion-attribute-for-3d-scene-maps)  
    标签：评分：7.0/10、query:d-vision
-   evidence：多尺度特征融合用于多任务密集预测，支持3D空间场景理解
-8. [Think, Plan, Paint: Layout-Aware Reasoning for Controllable Image Generation in Unified Models](/202607/22/2607.16409v1-think-plan-paint-layout-aware-reasoning-for-controllable-image-generation-in-unified-models)  
+   evidence：开放词汇3D场景地图结合运动属性用于场景理解
+6. [LenGuard-GPC: Length Guarding with Guided-Prompt Consistency for Spatial Reasoning Reinforce Learning](/202607/23/2607.17243v1-lenguard-gpc-length-guarding-with-guided-prompt-consistency-for-spatial-reasoning-reinforce-learning)  
    标签：评分：7.0/10、query:d-vision
-   evidence：布局感知推理以实现空间关系推理
-9. [Attention-Free and Lightweight Token Reduction for Efficient Vision-Language Models](/202607/22/2607.13500v1-attention-free-and-lightweight-token-reduction-for-efficient-vision-language-models)  
+   evidence：基于强化学习的多视图空间推理
+7. [CDIS: Cross-Dimensional Class-Agnostic 3D Instance Segmentation via 2D Mask Tracking and 3D-2D Projection Merging](/202607/23/2607.17778v1-cdis-cross-dimensional-class-agnostic-3d-instance-segmentation-via-2d-mask-tracking-and-3d-2d-projection-merging)  
+   标签：评分：7.0/10、query:d-vision
+   evidence：跨维度3D实例分割用于场景理解
+8. [MuViSeg: Multi-View Segment Correspondences from Dense Geometry Priors](/202607/23/2607.17938v1-muviseg-multi-view-segment-correspondences-from-dense-geometry-priors)  
+   标签：评分：7.0/10、query:d-vision
+   evidence：基于密集几何先验的多视图分割对应用于三维理解
+9. [BanClickThumb: A Multimodal Dataset and Transformer Fusion Benchmarks for Clickbait Detection in Bengali YouTube Videos](/202607/23/2607.17182v1-banclickthumb-a-multimodal-dataset-and-transformer-fusion-benchmarks-for-clickbait-detection-in-bengali-youtube-videos)  
    标签：评分：6.0/10、query:multimodal
-   evidence：用于高效跨模态理解的令牌缩减方法
-10. [SeeSE3: Emergence of 3D Space in Vision Features](/202607/22/2607.14228v1-seese3-emergence-of-3d-space-in-vision-features)  
+   evidence：用于点击诱饵检测的多模态数据集和变换器融合基准
+10. [UVFaceFusion: Fast Multi-view Topologically Consistent Face Reconstruction in the Wild via UV-space Neural Fusion](/202607/23/2607.18798v1-uvfacefusion-fast-multi-view-topologically-consistent-face-reconstruction-in-the-wild-via-uv-space-neural-fusion)  
    标签：评分：6.0/10、query:d-vision
-   evidence：探测视觉特征中3D空间意识的探针方法
-11. [HOMIE: Human-object Centric Video Personalization via Multimodal Intelligent Enchancement](/202607/22/2607.18217v1-homie-human-object-centric-video-personalization-via-multimodal-intelligent-enchancement)  
-   标签：评分：6.0/10、query:multimodal
-   evidence：基于多模态的人-物中心视频个性化
-12. [Stochastic Meta-Unlearning: Bridging Language Backbone and Multimodal Unlearning](/202607/22/2607.18615v1-stochastic-meta-unlearning-bridging-language-backbone-and-multimodal-unlearning)  
-   标签：评分：6.0/10、query:multimodal
-   evidence：多模态遗忘方法连接语言和视觉模态
+   evidence：多视图人脸重建及UV空间神经融合
+11. [Fast Wave-optics Rendering of Multiplane Images for 3D Holographic Displays](/202607/23/2607.19731v1-fast-wave-optics-rendering-of-multiplane-images-for-3d-holographic-displays)  
+   标签：评分：6.0/10、query:d-vision
+   evidence：用于3D全息显示的波动光学渲染，与神经渲染和新视角合成相关
+12. [Memory-Augmented Multimodal Large Language Models for Small Object Understanding in Streaming Aerial Videos](/202607/23/2607.19857v1-memory-augmented-multimodal-large-language-models-for-small-object-understanding-in-streaming-aerial-videos)  
+   标签：评分：6.0/10、query:d-vision
+   evidence：多模态大模型用于航拍视频场景理解和小目标跟踪
 
 
 <div class="dpr-home-promo-card">
