@@ -1,0 +1,592 @@
+Title: InLiER: Learning-Free Heterogeneous LiDAR Place Recognition via Intermediate Mixed-Radix Structural Keypoint Tokenization
+
+URL Source: https://arxiv.org/pdf/2607.16862v1
+
+Published Time: Tue, 21 Jul 2026 00:48:41 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# InLiER: Learning-Free Heterogeneous LiDAR Place Recognition via Intermediate Mixed-Radix Structural Keypoint Tokenization 
+
+Nikolaos Stathoulopoulos and George Nikolakopoulos 
+
+Abstract —LiDAR place recognition supports loop closure, relocalization, and multi-agent map management. As robotic platforms increasingly combine LiDARs with different fields of view, resolutions, and scanning patterns, existing descriptors degrade because they are tightly coupled to sensor-specific characteristics. We present InLiER, a learning-free pipeline based on an intermediate tokenization step. Height-sliced keypoints from structural elements receive mixed-radix token IDs en-coding height, radial distance, local shape, and azimuth from local 3D geometry, in a compact sub-2KB representation. The same vocabulary is reorganized across three retrieval stages: height-ceiling histogram intersection for fast rotation-invariant shortlisting, binary bitmask alignment for yaw estimation and reranking, and token-guided geometric verification for 6-DoF pose estimation. InLiER achieves state-of-the-art performance on the HeLiPR dataset and in real-world field experiments, among modern handcrafted methods and outperforms the learning-based baseline on most cross-sensor configurations. 
+
+Index Terms —Place Recognition, Loop Closures, SLAM 
+
+I. I NTRODUCTION 
+
+# LIDAR-based place recognition (LiPR) is essential for loop closure in SLAM [1], relocalization [2], and multi-agent map management [3], and offers geometric consistency across illumination and weather where vision-based alterna-tives degrade [4]. Modern platforms increasingly combine heterogeneous LiDARs: spinning sensors with 360 ◦ coverage (e.g. Ouster), solid-state units with a narrow non-repetitive field-of-view (FoV) (e.g. Livox Avia, 70 ◦ ×77 ◦), and FMCW sensors (e.g. Aeva Aeries II, 120 ◦ ×20 ◦). These sensors differ in FoV, resolution (6–128 channels), and scanning pattern, so two scans of the same place may share only partial spatial overlap [5]. This heterogeneity exposes two orthogonal failure modes. (a) Density variation: the same surface sampled by a 16-channel sensor yields only a handful of points where a 128-channel device produces dozens, and density-dependent descriptors conflate this with true geometric differences. (b) FoV asymmetry: a 70 ◦ solid-state and a 360 ◦ spinning sensor observe fundamentally different scene subsets from the same pose. Descriptors that fill a fixed polar grid then read unob-served directions as geometric emptiness, injecting a structured false signal into retrieval. Under a 70 ◦ FoV, over 80% of such a descriptor is vacant [6]. Existing methods address only subsets of these requirements. BEV descriptors like Scan 
+
+The authors are with the Robotics and AI Group, Department of Computer, Electrical and Space Engineering, Luleå University of Technology, 971 87 Luleå, Sweden. Corresponding Author’s e-mail: niksta@ltu.se 
+
+Additional material and the source code of this letter are available at our github repo: https://github.com/LTU-RAI/InLiER.git .Intermediate 
+
+6-DoF Pose 
+
+Estim. &  Verif.  
+
+> DB
+
+BEAM 
+
+MINT pruned   
+
+> ~62% inliers ~35% overlap
+> Livox Avia
+> OS2-128 kp=717 kp=202
+
+Fig. 1. Overview of InLiER . Heterogeneous input scans are mapped to an intermediate representation of keypoints and token IDs. The same token set is progressively reorganized across three retrieval stages: MINT for rotation-invariant shortlisting, BEAM for yaw estimation via binary bitmask alignment, and a final token-guided verification with 6-DoF pose estimation. Despite different scanning patterns and FoVs, the keypoints between the Ouster OS2-128 and Livox Avia yield ∼ 62% inliers, showcasing cross-sensor robustness. 
+
+Context++ [7] and RING++ [8] assume 360 ◦ coverage and col-lapse under narrow FoV. SOLiD [6] handles narrow FoV via spatial organization but has not been validated for cross-sensor matching and degrades under density variation. Learning-based HeLiOS [9] achieves the best heterogeneous retrieval to date. However, its overlap-based supervision optimizes for 3D point cloud overlap rather than metric pose proximity, so top retrievals can be substantially displaced from the query. This undermines the role of place recognition as spatial initializa-tion for ICP-based metric refinement, which fails under large translational offsets [3], [4]. Moreover, HeLiOS yields only a retrieval descriptor with no intermediate structure to repurpose (e.g. for geometric verification, pose estimation etc.) Both failure modes share a common cause: descriptors built directly on raw points conflate scene content with sensor sampling. Within this letter, we introduce InLiER (In termediate Li DAR Encoding for Retrieval), a learning-free global localization pipeline that breaks this coupling by inserting an intermediate representation between the scan and the descriptor. This representation consists of height-sliced keypoints extracted from structural elements, each mapped to a compact mixed-radix token. Since tokens depend on what the sensor sees rather than how it sees it, a narrow-FoV or sparse LiDAR produces fewer tokens instead of a corrupted signal. arXiv:2607.16862v1 [cs.CV] 18 Jul 2026 Thus, descriptor quality degrades gracefully under FoV and resolution disparities. The same token set is then progressively reorganized across three retrieval stages: rotation-invariant shortlisting, yaw-aware reranking, and geometric verification, yielding a full 6-DoF (degrees-of-freedom) pose estimate from a single intermediate representation, as seen in Fig. 1. Our contributions are: (a) A learning-free intermediate LiDAR representation that maps heterogeneous scans into a shared vocabulary of height-sliced structural keypoints and mixed-radix tokens, reducing dependence on sensor FoV, resolution, and scanning pattern while remaining compact for storage and transmission; (b) A unified multi-stage localization pipeline that reorganizes this representation on the fly for each query-database pair. It includes height-ceiling pruning for mutually supported vertical FoV matching. Retrieval, align-ment, and pose estimation are all derived from a single rep-resentation; (c) InLiER achieves state-of-the-art performance among handcrafted methods and outperforms the learning-based baseline on most cross-sensor configurations both in HeLiPR and in a real-world field experiment. It also retrieves spatially close candidates rather than merely high-overlap matches, supporting reliable downstream metric refinement. II. R ELATED WORK 
+
+We focus on LiPR methods that address heterogeneity in point density or FoV; for a broader taxonomy, we refer the reader to [10]. Methods assuming homogeneous 360 ◦ sensors are discussed only insofar as they motivate InLiER’s design. The dominant family of handcrafted descriptors encodes scans as bird’s-eye-view (BEV) projections. Scan Con-text++ [7] uses complementary polar and Cartesian sub-descriptors for pseudo-invariance to yaw rotation and lateral translation, with efficient k-D tree retrieval. RING++ [8] ex-tends this paradigm analytically: successive Radon and Fourier transforms over a multichannel BEV yield a representation with provable roto-translation invariance and globally conver-gent pose solvers. It is the first learning-free framework to jointly address retrieval and 3-DoF localization on a sparse scan. Both share a structural limitation in heterogeneous settings: a fixed polar grid treats unobserved directions as geometric emptiness, injecting a structured false signal rather than gracefully reducing information content. This failure has motivated more selective encoding strategies. BTC [4] abandons the global grid in favor of local geometric primi-tives. Keypoints from detected plane boundaries form triangles whose sorted side lengths are rigidly invariant, enabling O(1) 
+
+hash-table retrieval and direct 6-DoF pose recovery. Matches are refined by a binary height-encoding string at each vertex. Operating directly in 3D grants greater sensor adaptability, but heterogeneous FoVs alter observable plane cross-sections and shift keypoint locations, while horizontal FoV (HFoV) asymmetry changes which triangles can be formed, ambigu-ities the descriptor cannot resolve. SOLiD [6] explicitly tar-gets restricted-FoV scenarios via range-elevation and azimuth-elevation histograms reweighted by vertical point dominance, so that sparse observations reduce descriptor density gracefully rather than catastrophically. DVMM [11] pursues a similar dual-view philosophy, combining a Gaussian-weighted az-imuthal descriptor with a height-filtered binary BEV cross-section and demonstrating cross-modal retrieval across sev-eral LiDAR types. Both, however, embed implicit shared-FoV assumptions. SOLiD parameterizes its elevation binning per sensor and was validated only with query and database from the same LiDAR, while DVMM’s Gaussian weighting presumes a common equatorial vertical FoV (VFoV) region, an assumption that breaks down when sensor orientations or FoV extents differ substantially. HeLiOS [9] is the only method to date that explicitly addresses all three heterogeneity axes: FoV, resolution, and scanning pattern, within a single frame-work. It learns a shared descriptor using sparse-convolutions, local spherical-window attention, and optimal-transport feature aggregation. It also replaces distance-based sample mining with a 3D overlap criterion, which remains meaningful even when narrow-FoV scans from the same pose do not spatially overlap. HeLiOS achieves the best heterogeneous retrieval on HeLiPR [5], but its 3D overlap supervision biases the descrip-tor toward scan-overlap rather than proximity, so retrievals may be distant from the query and thus poor initializations for downstream pose refinement. The descriptor is also limited to retrieval, with no yaw or pose estimation stages. Beyond de-scriptor design, two recent pipelines share InLiER’s structure of ground alignment, reduced-DoF estimation, and geometric verification. MapClosures [12] ground-align accumulated local maps and match image features on density-preserving BEV projections, agnostic to scanning pattern and platform motion. TreeLoc [13] aligns tree-stem landmarks via their axes and couples histogram retrieval with triangle matching and two-step verification for 6-DoF localization in forests. InLiER occupies a complementary position: it is learning-free and addresses both FoV asymmetry and density variation through an explicit intermediate tokenization that decouples place description from sensor sampling. A single compact token vocabulary is reorganized across all stages, with pairwise height-ceiling pruning for explicit VFoV handling, rather than relying on dense BEV imagery [12] or domain-specific landmarks [13]. From this same representation it produces fast retrieval, verification, and 6-DoF pose estimation. III. M ETHODOLOGY 
+
+Given an input point cloud, InLiER first extracts an in-termediate representation consisting of keypoints and their associated token IDs. In contrast to conventional pipelines that encode each scan into a single descriptor through a predetermined spatial organization, InLiER retains this in-termediate representation and reorganizes it during querying. Two complementary mechanisms exploit this flexibility. First, within each stage, the descriptor is conditioned on the query-candidate pair: unsupported height levels are pruned and the overlapping VFoV is matched implicitly, enabling robust com-parison between sensors with unknown and different configu-rations. Second, across stages, the same token set is projected onto progressively richer structures: the early stage produces compact rotation-invariant descriptors for fast shortlisting, the next stage restores directional information for selective scoring such as yaw alignment, and the final stage operates on token correspondences for verification and 6-DoF pose estimation. A. Preprocessing 
+
+Following recent works [4], [11], we adopt a submap as the input unit. Each submap is formed by accumulating N
+
+consecutive LiDAR scans to reduce sparsity and improve structural completeness under heterogeneous scanning patterns and resolutions. Let the resulting submap at time t be denoted by Pt = {pi ∈ R3}Mt
+
+> i=1
+
+. We first apply voxel downsampling with voxel size vs and retain only points within [Rmin , R max ],partially normalizing point density and sensing range across sensors. To handle differences in mounting height and orienta-tion, we then establish a gravity-aligned frame following [11]. We estimate the dominant ground plane πg = [ n⊤ 
+
+> g
+
+, d g ]⊤ from 
+
+Pt via RANSAC [14] and compute a rigid transformation 
+
+Tground ∈ SE (3) that aligns the ground normal with the vertical axis and places the ground plane at z = 0 , yielding the aligned submap ¯Pt, as shown in Fig. 2 (a, b 1, b 2). After alignment, all submaps share a common height baseline, enabling consis-tent height slices for the subsequent keypoint extraction and providing the basis for handling VFoV mismatch. Finally, the points are cropped to a fixed region of interest, |x|, |y| ⩽ L
+
+and z ∈ [zmin , z max ], where L is the spatial half-extent. 
+
+B. Intermediate LiDAR Encoding 
+
+Given the preprocessed submap ¯Pt, InLiER constructs an intermediate representation consisting of height-sliced key-points and their associated token IDs . The keypoints form a sparse, height-indexed structural scaffold, and each is as-signed a local shape class for additional discriminability. Each keypoint is then mapped one-to-one to a discrete token ID that encodes its height, radial position, shape class, and azimuth as bin indices. The resulting representation is compact and fully decomposable, supporting stage-specific descriptor construction during retrieval without revisiting the raw points. 
+
+1) Height-Sliced Keypoint Extraction: The aligned vertical range [zmin , z max ] is partitioned into Nh uniform height slices with edges z(h) = zmin +h ∆z, where ∆z = ( zmax −zmin )/N h
+
+and h = 0 , . . . , N h, as shown in Fig. 2 (a). For each slice h,we collect the subset ¯P(h) 
+
+> t
+
+= {¯p ∈ ¯Pt : z(h) ⩽ ¯pz < z (h+1) } and project it onto a BEV grid of cell size cs = 2 vs over the fixed region of interest, yielding an image of size H×W with H =
+
+W = 2 L/c s. An example is given in Fig. 2 (b 1, c 1, b 2, c 2). For each cell (x, y ), we define a saliency value from the vertical span ( z-span) of its contained points as: 
+
+I(h)(x, y ) = max 
+
+> ¯p∈C (h)
+> x,y
+
+¯pz − min 
+
+> ¯p∈C (h)
+> x,y
+
+¯pz , (1) where C(h) 
+
+> x,y
+
+⊂ ¯P(h) 
+
+> t
+
+is the set of points falling into cell (x, y ),and I(h)(x, y ) = 0 for empty cells. This quantity emphasizes vertically expressive structures while being less sensitive to absolute point count than density-based statistics and more locally descriptive than maximum-height selection. Keypoints are detected as local maxima of I(h) under Non-Maximum Suppression (NMS) over a w × w neighborhood, subject to a minimum saliency τI = ∆ z/ 2, as shown in Fig. 2 (b 2, c 2). Within each slice, the top-Kh cells by saliency are retained; a global cap Kmax is then applied by re-ranking the retained cells across all slices by I(h)(x, y ). For each retained cell, the keypoint position ¯pc ∈ R3 is defined as the arithmetic mean of (b 1)          
+
+> Correspondences Keypoints
+> (d) ~60% inliers
+> sensor frame
+> ground-aligned frame
+> Ouster OS2-128 Livox Avia
+> (a)
+> (b 2)*
+> z-span
+> (c 2)
+> *
+> (c 1)
+> z-span
+> NMS
+> Fig. 2. Overview of InLiER keypoint extraction (a) Both point clouds after RANSAC ground-plane estimation (gray points) and partitioning into Nh
+> height slices. (b 1, b 2) Side views in the ground-aligned frame with slice
+> h= 2 highlighted (blue: Ouster, orange: Livox); the sensor-frame and ground-aligned axes are shown at the origin. (c 1, c 2) Top-down BEV z-span intensity images for the corresponding slice; the inset in (b 2, c 2) details the w×wNon-Maximum Suppression (NMS) window. (d) Extracted keypoints from both sensors with correspondences ( ∼60% inliers), demonstrating cross-sensor repeatability despite vastly different scanning patterns and FoVs.
+
+the points in C(h) 
+
+> x,y
+
+. The resulting keypoint set Kt = {¯pck}Kt
+
+> k=1
+
+is a sparse, height-indexed collection of structurally salient anchors, with an example shown in Fig. 2 (d). 
+
+2) Local Shape Classification: To improve discriminabil-ity beyond spatial binning alone, each keypoint center ¯pck
+
+is assigned a local structural class from PCA [15] over a spherical neighborhood Nk = {p ∈ P t : ∥p − ¯pck∥ ⩽ rPCA }.If |N k| < n min , the keypoint is directly assigned to the scatter class. Otherwise, we compute the covariance matrix 
+
+Σk. Let λ1 ⩾ λ2 ⩾ λ3 ⩾ 0 be the eigenvalues of Σk, with corresponding eigenvectors e1, e2, e3. We then compute the standard linearity, planarity, and scatter scores [16] as: Lk =(λ1 − λ2)/λ 1, P k = ( λ2 − λ3)/λ 1, S k = λ3/λ 1, respectively. Each keypoint receives a single shape label s(k) 
+
+> b
+
+. The base type is assigned based on arg max( Lk, P k, S k). Linear and planar types are refined by inclination relative to gravity, measured from the dominant direction e1 (linear) or surface normal 
+
+e3 (planar): ϕk = arccos  |e⊤ 
+
+> z
+
+nk| , ϕk ∈ [0 , π/ 2] , where nk
+
+is this selected axis. Quantizing ϕk uniformly into nϕ bins separates, e.g., vertical poles from horizontal edges and ground from walls; scatter is left undivided. Concatenating the base type with its inclination bin gives s(k) 
+
+> b
+
+∈ { 0, . . ., N s −1}, with 
+
+Ns = 2 nϕ + 1 the total number of shape classes. 
+
+3) Token Encoding: Each retained keypoint is then mapped 
+
+1–1 to a discrete token, yielding a sparse cylindrical-coordinate discretization of the scene as depicted in Fig. 3 (a). Each keypoint is indexed by four bin quantities: a height bin 
+
+h(k) 
+
+> b
+
+∈ { 0, . . .,N h − 1} given by the slice index; a radial bin 
+
+r(k) 
+
+> b
+
+∈ { 0, . . .,N r − 1} from uniform quantization of rk =px2 
+
+> k
+
++ y2 
+
+> k
+
+over [0 , R max ]; a shape bin s(k) 
+
+> b
+
+from Sec. III-B2; and an azimuth bin a(k) 
+
+> b
+
+∈ { 0, . . ., N a − 1} from uniform quantization of θk = atan2( yk, x k) over [0 , 2π). These indices are packed into a mixed-radix token ID as: 
+
+t(k)id =  (h(k) 
+
+> b
+
+Nr + r(k) 
+
+> b
+
+)Ns + s(k)
+
+> b
+
+Na + a(k) 
+
+> b
+
+, (2) OS2-128                 
+
+> ... ... ...
+> 3
+> 0pruned
+> azimuth
+> range
+> height
+> (a)
+> (b)
+> (c)
+> ... ... ...
+> MINT
+> ... ... ... ...
+> BEAM Fig. 3. Overview of the keypoint-based spatial organization. (a) The input point cloud is discretized into radial, azimuthal, and height bins, with key-points assigned to shape classes sb. (b) In the Minimum-ceiling Intersection (MINT) retrieval stage, azimuth is marginalized to form H. Height bins above the query-database minimum ceiling ˆhqd are pruned, and the remaining height columns are summed to produce the retrieval key R. (c) In the Binary-Elevation Azimuth Matching (BEAM) alignment stage, azimuth is retained to construct the alignment key A. Circular shifts of Aare compared to recover the yaw shift that maximizes the overlap of occupied height bits.
+
+The packing is bijective: any token ID decomposes back into its constituent (hb, r b, s b, a b) bins, so the token set can be reorganized during retrieval to form different descriptors and matching spaces, e.g. suppressing azimuth for rotation-invariant retrieval or pruning unsupported height bins for VFoV-aware matching. We denote the resulting token set as Tt = {t(k)id }Kt
+
+> k=1
+
+. Thus, InLiER t = ( Kt, Tt) defines the proposed intermediate representation. For retrieval, at most 
+
+Kmax tokens are stored or transmitted, yielding a compact representation of size Kmax × 1. If geometric verification or pose estimation is required, the keypoints are retained along their tokens as (x, y, z, t id ), yielding a Kmax ×4 representation. 
+
+C. Multi-Stage Place Recognition 
+
+Given InLiER t, LiPR proceeds in three progressive stages, each reorganizing the same token set to address a distinct source of heterogeneity. First, MINT (Sec. III-C1) performs efficient database-wide shortlisting via a rotation-invariant, height-ceiling-pruned histogram intersection. The shortlist is then reranked by BEAM (Sec. III-C2), which restores azimuth information and recovers a coarse yaw estimate through binary bitmask alignment. An example is given in Fig. 3 (b, c). Finally, the top candidates are passed to geometric verification and pose estimation (Sec. III-D), which establishes token-guided correspondences and recovers the full 6-DoF relative pose. 
+
+1) MINT Shortlisting: The first stage, termed MINT (Minimum-ceiling INTersection ), performs efficient database-wide shortlisting using a compact rotation-invariant descriptor derived from the token IDs. It combines pairwise height-ceiling pruning with intersection-based similarity to provide a lightweight first-pass comparison that is robust to heteroge-neous VFoV and insensitive to relative yaw. For each scan, the azimuth component of the token ID is suppressed and the remaining height, radial, and shape indices are accumulated into a histogram H ∈ RNh×(Nr Ns). This produces a height-indexed cylindrical distribution over radial location and local shape, removing horizontal view dependence, which is handled in the next stage. To account for the differing vertical extents of heterogeneous LiDARs, we apply height-ceiling pruning .For a query Tq and database entry Td, the pairwise ceiling is: 
+
+ˆhqd = min   max( hqb ), max( hdb ), (3) and only rows with hb ⩽ ˆhqd are retained in both histograms. This avoids penalizing a candidate simply because one sensor observes height layers that are unavailable to the other. The surviving rows are summed over height into a compact range-shape vector: 
+
+Rq =
+
+> ˆhqd
+
+X
+
+> h=0
+
+H(h) 
+
+> q
+
+, Rd =
+
+> ˆhqd
+
+X
+
+> h=0
+
+H(h) 
+
+> d
+
+, (4) where Rq , Rd ∈ RNr Ns . Marginalizing height after ceiling pruning retains the radial and local-shape statistics of the overlapping support while suppressing slice-level sensitivity, yielding a representation suited to fast shortlisting. The simi-larity is computed as an L1-normalized histogram intersection: 
+
+SM (Rq , Rd) = 
+
+P 
+
+> i
+
+min( rqi , r di )
+
+P 
+
+> i
+
+rqi + ϵ , (5) where ri denotes the i-th component of the corresponding compact vector R and ϵ is a small number for stability. The denominator sums over the query, making SM asymmetric: it measures the fraction of the query distribution contained in the candidate. This is well-suited to heterogeneous settings where the query has narrower FoV than the database. A partial query is not penalized for not spanning the candidate’s full distribution. The top-K1 candidates move to the next stage. 
+
+2) BEAM Scoring: The second stage, termed BEAM ( Bi-nary Elevation-Azimuth Matching ), refines the shortlist by reincorporating azimuth information and estimating the rel-ative yaw between the query and each candidate. It converts the tokenized scan into a compact binary elevation-azimuth representation and scores it under circular azimuth shifts. For a given tokenized scan, we construct a packed binary elevation matrix A ∈ { 0, . . . , 2Nh −1}Nr ×Na . Each entry Ar,a encodes the set of occupied height bins in the radial-azimuth cell (r, a )
+
+as a binary code, as seen in Fig. 3 (a, c): 
+
+Ar,a = _
+
+> k∈S r,a
+
+2h(k) 
+
+> b
+
+, Sr,a = { k : r(k) 
+
+> b
+
+= r, a (k) 
+
+> b
+
+= a }. (6) Here, ∨ denotes bitwise OR, and Sr,a is the set of tokens assigned to cell (r, a ). This collapses all tokens at the same radial-azimuth location into a compact vertical occupancy code, enabling efficient bitwise comparison while preserving the height support required for cross-sensor matching. As in MINT, comparison is restricted to the overlapping vertical extent: we compute the pairwise ceiling ˆhqd from Eq. (3) and mask all BEAM entries so that only bits with hb ⩽ ˆhqd 
+
+remain active. To recover the relative yaw, we score all circular azimuth shifts nθ ∈ { 0, . . . , N a − 1}. For each shift, let 
+
+A(nθ ) 
+
+> d
+
+= roll (Ad, n θ ) denote the circularly shifted candidate matrix. The shifted candidate is compared to the query via a bit-level Jaccard similarity: 
+
+SB (Aq , Ad, n θ ) = 
+
+pop 
+
+
+
+Aq ∧ A (nθ )
+
+> d
+
+
+
+pop 
+
+
+
+Aq ∨ A (nθ )
+
+> d
+
+ , (7) where ∧ and ∨ denote element-wise bitwise AND and OR, and pop (·) is the total popcount over all matrix entries. Intuitively, this measures the overlap of occupied height bits after compensating for a yaw shift. To avoid unstable scores from weak overlaps, a shift is considered valid only if the union contains at least ηb occupied bits and the aligned pair spans at least ηa occupied azimuth columns, evaluated from the column-wise occupancy of the union after shifting. Among valid shifts, the optimal alignment and corresponding yaw estimate are given by: 
+
+n∗ 
+
+> θ
+
+= arg max 
+
+> nθ
+
+SB (Aq , Ad, n θ ), ˆθqd = − n∗
+
+> θ
+
+2πNa
+
+. (8) Compared to MINT, BEAM restores directional information and provides a coarse heading estimate while remaining lightweight. Matching is performed on bitmasks via bitwise operations and popcount rather than floating-point histograms. 
+
+D. Verification and Pose Estimation 
+
+The final stage takes the top-K2 candidates from BEAM together with their azimuth shifts n∗ 
+
+> θ
+
+. It performs token-guided geometric verification with pose estimation, rejecting spurious candidates and recovering a relative pose for those accepted. 
+
+1) Token-Guided Correspondences: For each candidate, putative 3D correspondences are formed in the ground-aligned frame under the azimuth alignment recovered by BEAM. Given a query token set Tq and a database token set Td, the database azimuth bins are circularly shifted by n∗ 
+
+> θ
+
+, and cor-respondences are matched on the spatial indices (hb, r b, a b).Each query token is matched to at most one database token, yielding keypoint index pairs Cqd = {(qk, d k)}.
+
+2) 6-DoF Pose Estimation: Pose estimation proceeds in the gravity-aligned frame, where the enforced ground align-ment reduces the relative motion to 4-DoF, planar translation 
+
+(ˆ tx, ˆty ), vertical offset ˆtz and yaw ˆθ. We apply RANSAC [14] to the XY coordinates of Cqd to recover (ˆ tx, ˆty , ˆθ) robustly, evaluating inliers by full 3D Euclidean distance. The surviving inlier set Iqd ⊆ C qd is then used to refine the in-plane transform via a closed-form Singular Value Decomposition (SVD) on the centered correspondences, while ˆtz is estimated independently as the median height residual over Iqd , which avoids coupling the vertical estimate to the planar optimization and is robust to the sparse and non-uniform height coverage that characterizes heterogeneous submaps. To recover the full 6-DoF relative pose in the original sensor frame, the 4-DoF aligned estimate is assembled into the SE (3) transform Taligned and the roll/pitch recovered during ground-plane alignment are reincorporated via: Tsensor = T−1ground ,d Taligned Tground ,q , where Tground ,q 
+
+and Tground ,d are the ground-alignment transforms of the query and database scan, respectively. 
+
+3) Verification and Place Acceptance: All query keypoints are transformed by the refined pose, and the ratio of those falling within distance δinlier of their nearest database coun-terpart, denoted as the keypoint inlier ratio ρinlier ∈ [0 , 1] ,serves as the final verification score. A candidate is accepted if 
+
+ρinlier ⩾ τ , providing a geometric quality gate before the pose is committed. ρinlier also serves as a deployable place-acceptance threshold: sweeping τ at evaluation time trades precision for recall without rerunning any stage of the pipeline. IV. E XPERIMENTS AND RESULTS 
+
+We evaluate on the HeLiPR dataset [5], a heteroge-neous inter-session benchmark covering three environments (Roundabout , Town , Bridge ) across multiple sessions with four LiDAR types: Ouster OS2-128 (128 channels, 
+
+360 ◦×22 .5◦, 200 m), Aeva Aeries II (64 channels, 120 ◦×19 .2◦,
+
+150 m), Velodyne VLP-16 (16 channels, 360 ◦ × 30 ◦, 100 m), and Livox Avia (6 channels, 70 ◦ × 77 ◦, 450 m). For full dataset and sensor specifications we refer the reader to [5]. Evaluation spans seven sensor pairings: two homogeneous and five cross-sensor, denoted Database ← Query. Each submap is formed from N = 10 accumulated scans. InLiER is compared against BTC [4], SOLiD [6], Scan Context++ (SC++) [7], HeLiOS [9], and DVMM [11], all executed with their authors’ recommended parameters on the same platform (Intel i9-14900K, 128GB RAM). InLiER is configured with 
+
+(Na, N r , N h, N s) = (60 , 20 , 10 , 7) , vs = 0 .5m, [Rmin , R max ] = [0 , 100 m], [zmin , z max ] = [0 , 20 m], Kmax = 1280 , K1 = 10% of the database size, and K2 = 20 .We report AUC of the precision-recall curve, Recall@1, and Recall@1% following standard place recognition protocol [5]. A candidate is a true positive if dTP ⩽ dmax = 10 m and 
+
+O > 0.2, where O is the point cloud overlap computed via 
+
+0.5m voxelization following [9]. Here dTP denotes the ground truth Euclidean distance between a query and a candidate, and 
+
+dmax is the maximum dTP admitted as a positive. The distance threshold is higher than the 3–5m single-scan convention to reflect the larger submap footprint, consistent with [5]. The 
+
+O > 0.2 threshold filters geometrically non-informative nearby candidates and is set at the mean overlap of positive pairs under partial-FoV conditions, since higher thresholds yield too few true positives for the Avia and Aeries II pairings. This joint criterion reflects the operational requirement of SLAM back-ends, where place recognition provides the spatial initialization for metric refinement [4], [8]. Candidates displaced beyond the convergence basin of a lightweight local aligner yield invalid loop closure constraints regardless of overlap [3], [4]. Robust global registration can extend this basin at additional cost (Sec. IV-A5), so the criterion keeps retrieval within the regime a lightweight back-end can exploit. Additional field validation is reported in Section IV-C. 
+
+A. LiDAR Place Recognition (LiPR) 1) Homogeneous LiPR: Table I reports results for the two homogeneous pairings (OS2-128 and Aeries II). InLiER achieves the highest AUC and Recall@1 in the majority of configurations, matching or exceeding the closest alternative, across all three environments. Performance is consistent be-tween the Roundabout and Town sequences, while Bridge 
+
+presents a harder case for all methods due to its geometrically sparse and repetitive structure [5]. In this environment, InLiER maintains competitive Recall@1 and Recall@1% despite a lower AUC relative to DVMM on the OS2-128 pairing, suggesting that its top-ranked candidates remain reliable even when the overall precision-recall envelope narrows. Notably, InLiER achieves this without any training data, matching the performance of HeLiOS [9] in Roundabout and surpassing it in Town and Bridge .TABLE I INTER -SESSION PLACE RECOGNITION RESULTS ON THE HELIPR DATASET . E ACH METHOD IS EVALUATED ACROSS THREE ENVIRONMENTS , AND SEVEN LIDAR PAIRINGS . M ETRICS : AUC OF THE PR CURVE , R ECALL @1, AND RECALL @1%. GREEN /BLUE : BEST AND SECOND -BEST PERFORMANCE .                                                                                                                                                                                                                                                                                                                                                                                                                                           
+
+> Identical LiDARs (Database ←Query) Heterogeneous LiDARs (Database ←Query) OS2-128 ←OS2-128 Aeries II ←Aeries II OS2-128 ←VLP-16 OS2-128 ←Avia OS2-128 ←Aeries II Aeries II ←VLP-16 Aeries II ←Avia Seq. Method AUC R@1 R@1% AUC R@1 R@1% AUC R@1 R@1% AUC R@1 R@1% AUC R@1 R@1% AUC R@1 R@1% AUC R@1 R@1%
+> Round01-03  SC++ 0.86 0.67 0.91 0.70 0.58 0.90 0.02 0.01 0.08 0.01 0.01 0.02 0.01 0.01 0.02 0.01 0.01 0.12 0.06 0.06 0.30 BTC 0.75 0.69 0.92 0.71 0.60 0.70 0.19 0.17 0.30 0.10 0.09 0.26 0.11 0.11 0.27 0.08 0.08 0.24 0.53 0.55 0.68 SOLiD 0.81 0.57 0.78 0.88 0.71 0.93 0.02 0.02 0.14 0.01 0.01 0.12 0.02 0.02 0.08 0.01 0.01 0.05 0.01 0.01 0.01 HeLiOS 0.95 0.86 1.00 0.98 0.91 0.97 0.72 0.66 1.00 0.10 0.10 0.58 0.13 0.13 0.74 0.02 0.02 0.46 0.74 0.68 0.96
+> DVMM 0.99 0.88 0.89 0.92 0.67 0.68 0.19 0.10 0.12 0.80 0.62 0.71 0.66 0.45 0.56 0.04 0.03 0.05 0.87 0.64 0.66
+> InLiER 0.99 0.92 0.99 0.99 0.92 0.95 0.34 0.22 0.34 0.85 0.61 0.70 0.86 0.62 0.74 0.32 0.10 0.30 0.97 0.81 0.87
+> Town01-03  SC++ 0.89 0.73 0.91 0.82 0.70 0.88 0.04 0.03 0.18 0.01 0.01 0.09 0.01 0.01 0.06 0.02 0.02 0.10 0.04 0.05 0.22 BTC 0.77 0.72 0.93 0.78 0.70 0.74 0.24 0.26 0.42 0.11 0.11 0.29 0.10 0.11 0.26 0.10 0.08 0.26 0.49 0.45 0.55 SOLiD 0.73 0.55 0.80 0.93 0.75 0.92 0.02 0.02 0.17 0.01 0.01 0.13 0.02 0.02 0.08 0.01 0.01 0.08 0.01 0.01 0.15 HeLiOS 0.97 0.87 0.99 0.98 0.90 0.98 0.76 0.66 0.97 0.22 0.21 0.73 0.34 0.31 0.82 0.06 0.06 0.57 0.66 0.58 0.95
+> DVMM 0.98 0.87 0.90 0.77 0.64 0.74 0.30 0.19 0.33 0.70 0.60 0.80 0.67 0.53 0.73 0.03 0.03 0.13 0.60 0.59 0.77
+> InLiER 0.99 0.89 0.94 0.96 0.82 0.91 0.50 0.27 0.47 0.87 0.64 0.77 0.84 0.63 0.79 0.49 0.11 0.35 0.67 0.62 0.83
+> Bridge02-03  SC++ 0.65 0.66 0.96 0.37 0.38 0.90 0.03 0.03 0.14 0.01 0.01 0.03 0.01 0.01 0.03 0.01 0.01 0.07 0.06 0.06 0.33 BTC 0.63 0.62 0.73 0.59 0.53 0.61 0.23 0.22 0.41 0.10 0.11 0.20 0.10 0.10 0.19 0.09 0.08 0.19 0.33 0.32 0.38 SOLiD 0.31 0.27 0.58 0.56 0.54 0.88 0.02 0.02 0.11 0.01 0.01 0.05 0.01 0.01 0.04 0.01 0.01 0.03 0.01 0.01 0.06 HeLiOS 0.69 0.79 0.98 0.72 0.79 0.97 0.44 0.50 0.94 0.08 0.07 0.68 0.13 0.14 0.82 0.04 0.04 0.68 0.39 0.45 0.95
+> DVMM 0.93 0.91 0.95 0.76 0.70 0.87 0.12 0.08 0.11 0.62 0.57 0.80 0.48 0.36 0.57 0.01 0.01 0.04 0.52 0.56 0.83
+> InLiER 0.76 0.89 0.98 0.66 0.77 0.98 0.31 0.26 0.47 0.51 0.51 0.75 0.54 0.56 0.84 0.28 0.15 0.45 0.56 0.59 0.92
+
+2) Heterogeneous LiPR: The five cross-sensor pairings expose the full heterogeneity challenge. SC++ and SOLiD collapse across all heterogeneous configurations. For SC++ this reflects the structured false-signal mode of Section I. SOLiD instead fails because its point-count histograms and per-scan vertical reweighting stay tied to the observing sen-sor’s beam layout and footprint. The descriptor was designed and validated only for a single sensor’s restricted FoV, not for cross-sensor asymmetry. BTC retains modest recall but remains well below InLiER in all pairings. InLiER achieves the best or second-best performance on four of the five cross-sensor pairings, with particularly consistent gains on the OS2-128 ← Avia, OS2-128 ← Aeries II, and Aeries II ← Avia con-figurations across all three environments. The VLP-16 pairings are the most demanding, and the two behave differently. On OS2-128 ← VLP-16 both sensors are 360 ◦ spinners sharing broad support, and HeLiOS leads on all metrics. We attribute this to its training-time exposure to VLP-16 sparsity, which keeps learned features discriminative at 16-channel density where the z-span saliency lacks vertically separated returns. Aeries II ← VLP-16 is different: the rear-mounted, forward-occluded VLP-16 and the front-facing 120 ◦ Aeries II share little instantaneous overlap [5], and their inter-session co-visible structure is spatially displaced and hard to recover, so AUC and R@1 collapse for every method. InLiER still attains the highest AUC in all three environments, which we attribute to submap accumulation thickening this displaced but genuine overlap, whereas HeLiOS’s residual edge is confined to R@1% and reflects its overlap-based retrieval surfacing displaced can-didates. InLiER outperforms all handcrafted baselines on the VLP-16 pairings and remains the only learning-free method competitive across the full cross-sensor evaluation. 
+
+3) Retrieval Quality and Loop Closure Utility: Place recog-nition provides a spatial initialization for metric refinement in a SLAM back-end, where ICP-based methods have been shown to fail under large translational offsets [3], [4], [8]. A high-overlap candidate that is spatially displaced is therefore a poor initialization for a lightweight local aligner and, absent a robust global-registration stage, typically fails to yield a valid 0 20 40 60 80 100                      
+
+> dmax [m]
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> AUC
+> OS2-128 OS2-128
+> 020 40 60 80 100
+> dmax [m]
+> OS2-128 Aeries II
+> 50
+> 0
+> 50
+> y [m]
+> dTP = 1.4 m, O= 0.43
+> InLiER
+> 100 50 050 100
+> x [m]
+> 50
+> 0
+> 50
+> y [m]
+> dTP = 50.9 m, O= 0.57
+> HeLiOS
+> HeLiOS - AUC
+> InLiER - AUC
+> HeLiOS -dTP
+> InLiER -dTP
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> 35
+> dTP  [m]
+
+Fig. 4. Performance as a function of the maximum distance threshold dmax for InLiER and HeLiOS. The left plot corresponds to a same sensor configuration, while the center plot shows a cross-sensor configuration. Dual axes report AUC (left; orange /blue solid lines) and the average true positive retrieval distance dTP (right; red /green dashed lines). The subfigures on the right are an example where for the same query, InLiER retrieves the spatially closest candidate while HeLiOS returns a high-overlap but spatially displaced match. 
+
+loop closure constraint, a failure mode that emerges under heterogeneous configurations where overlap-based objectives decouple from spatial proximity. Fig. 4 illustrates this on 
+
+Roundabout01-03 : as dmax relaxes, HeLiOS’s AUC rises as more true positives become available, while InLiER’s AUC remains stable across all thresholds, indicating that its top retrievals are already spatially close regardless of how the positive set is defined. dTP further confirms this distinction, revealing where the retrieved candidates actually are. Under the homogeneous configuration, both methods retrieve spa-tially close candidates across all thresholds, with InLiER at 
+
+dTP = 1 .5m and HeLiOS at dTP = 7 .5m. Under the cross-sensor configuration, HeLiOS’s dTP grows substantially with 
+
+dmax . This indicates that its AUC gains come from progres-sively more displaced retrievals, so its AUC collapses when only spatially close candidates are considered. The pattern suggests that its overlap-based training objective has overfit to high-overlap matches at the expense of spatial proximity. InLiER’s dTP remains consistently low in both configurations, reflecting that descriptor similarity in the intermediate token space is grounded in local 3D structure rather than global overlap. Fig. 4 further demonstrates this on a representative retrieval, where HeLiOS returns a candidate at dTP = 50 .9mwith O = 0 .57 , while InLiER retrieves the spatially closest match at dTP = 1 .4m with O = 0 .43 .4) Metric Pose Estimation: Table II reports pose estimation results on Town01-02 across homogeneous and cross-sensor configurations. The standalone token-guided pose achieves translational errors below 1.2m and rotational errors below 
+
+2.2◦, with only a minor degradation under the cross-sensor pairing, confirming that the intermediate token representation preserves sufficient geometric structure for metric pose recov-ery even under sensor heterogeneity. This result is particularly relevant in bandwidth-constrained or multi-agent scenarios, where the compact Kmax ×1 token representation can be trans-mitted directly and a valid pose estimate recovered without access to the raw point cloud. Keypoint-level refinement with 
+
+K-GICP yields a substantial improvement at modest additional cost, since matching operates on the already-available Kmax ×4
+
+keypoint set rather than the full point cloud. Full refinement with P-GICP achieves the lowest errors across all configu-rations, and remains available when maximum accuracy is required. The three operating modes offer a natural accuracy-transmission tradeoff, from compact token-only pose up to full point cloud refinement, without altering the retrieval pipeline. 
+
+5) Registration Back-End Comparison: Our joint distance-overlap true positive criterion presumes that a spatially dis-placed candidate lies outside the convergence basin of a local aligner and thus can yield an invalid loop closure constraint. This premise is specific to local registration since robust global aligners such as KISS-Matcher (KM) [17] are built to absorb large misalignment and could, in principle, make spatial proximity unnecessary. We therefore test whether the distance term of our criterion is still required once a robust global aligner is placed in the back-end. At dmax = 60 m, the threshold where InLiER and HeLiOS reach equal retrieval AUC in Fig. 4, we register each method’s top-1 retrievals with GICP [18], KM, and KM+GICP, declaring a success when 
+
+(TE , RE ) ⩽ (2 m, 5◦) [17]. Fig. 5 (a) shows InLiER’s built-in prior with P-GICP registering 86% of retrievals with no global 
+
+TABLE II POSE ESTIMATION ON THE TO W N 01-02 OF HELIPR . TE : TRANSLATIONAL ERROR IN METERS , RE : ROTATIONAL ERROR IN DEGREES .Pair InLiER InLiER w. K–GICP InLiER w. P–GICP                                                    
+
+> TE [m] RE [◦]TE [m] RE [◦]TE [m] RE [◦]OS2-128 ←OS2-128 1.024 1.189 0.290 0.437 0.229 0.168
+> ±0.676 ±0.797 ±0.276 ±0.303 ±0.237 ±0.177 OS2-128 ←Aeries II 1.140 2.143 0.655 1.256 0.277 0.250
+> ±0.529 ±1.342 ±0.390 ±1.022 ±0.157 ±0.146 Aeries II ←Aeries II 1.179 1.750 0.617 0.951 0.226 0.128
+> ±0.600 ±0.937 ±0.489 ±0.740 ±0.230 ±0.074
+
+K / P–GICP: Pose refinement with the keypoints or raw points, respectively. 0.0     
+
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Success Rate  86%
+> 96% 97%
+> 4%
+> 45%
+> 65%
+> (a)
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> TE [m]
+> 0200 400
+> InLiER+ -GICP
+> HeLiOS+KM+GICP
+> InLiER+KM+GICP
+> (c)
+> 0
+> 1
+> 2
+> 3
+> 4
+> RE [  ]
+> TE
+> RE
+> (b)
+> InLiER+ -GICP
+> InLiER+KM
+> InLiER+KM+GICP
+> HeLiOS+GICP
+> HeLiOS+KM
+> HeLiOS+KM+GICP
+
+Fig. 5. Registration study at dmax = 60 m on Roundabout01-03 (OS2-128 ← Aeries II). Top-1 retrievals are aligned with GICP, KISS-Matcher (KM), or combined. P-GICP is seeded by InLiER’s pose estimation. Success requires (TE, RE) ⩽ (2 m, 5◦). (a) Success rate. (b) Translation and rotation error over successful pairs. (c) Mean per-query runtime (HeLiOS on GPU). 1 3 5 7 9 11                     
+
+> Ns
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> AUC
+> 0.5 0.7 11.3 24
+> z[m]
+> 122.5 4510
+> r[m]
+> 44.8 6812 24
+> []
+> 0
+> 100
+> 200
+> 300
+> 400
+> 500
+> Runtime [ms]
+> Encoding MINT BEAM
+
+Fig. 6. Parameter sensitivity and per-module runtime for InLiER. AUC (left axis) and runtime (right axis) are reported as a function of Ns, ∆z, ∆r, ∆θ.
+
+stage, against 4% for HeLiOS+GICP. KM raises both ( 96% vs. 
+
+45% ), confirming that the back-end is a dominant factor. The ceiling for HeLiOS+KM, however, shows that a robust aligner still leaves its more displaced retrievals frequently unregis-tered. Over the pairs each configuration registers, InLiER+ P-GICP attains the lowest median error, below the three-stage HeLiOS+KM+GICP, as depicted in Fig. 5 (b), while remaining fastest at 87 ms versus 170 ms and 418 ms for the KM pipelines as shown in Fig. 5 (c). This holds even though InLiER runs entirely on CPU while HeLiOS’s descriptor extraction requires a GPU. Our joint distance-overlap criterion is therefore a design choice that keeps retrieval within the convergence basin a lightweight GICP back-end can exploit, avoiding a dedicated global-registration or outlier-rejection stage. 
+
+B. Ablation Studies and Runtime 
+
+Fig. 6 examines the sensitivity of InLiER to its four key parameters, evaluated on OS2-128. Increasing Ns from 1 to 
+
+7 yields consistent AUC improvements, confirming that shape classification provides a meaningful discriminative signal be-yond spatial binning alone. Beyond Ns = 7 performance plateaus with negligible runtime impact, as finer angular subdivisions of the shape classes yield diminishing returns in urban environments where structural primitives are dominated by horizontal and vertical configurations. For the resolution pa-rameters, derived as ∆z = ( zmax − zmin )/N h, ∆r = Rmax /N r ,and ∆θ = 2 π/N a, AUC degrades at coarse discretizations where distinct structures collapse into the same bin, while finer resolutions plateau without further gain. The defaults 
+
+(Nh, N r , N a) = (10 , 20 , 60) , corresponding to (∆ z, ∆r, ∆θ) = (2 m, 5m, 6◦), balance discriminability and compactness. Per-query Python runtimes at default parameters: encoding 70 ms, MINT 4.5ms, and BEAM 160 ms. Encoding is the worst case due to the high density of the OS2-128; the sparser Aeries II yields 40 ms. MINT stays lightweight by operating on marginalized histograms, while BEAM dominates due to the exhaustive circular shift scoring over Na azimuth bins. 
+
+C. Field Experiment Validation 
+
+Field validation is conducted on a campus dataset collected with a Clearpath Warthog UGV across two ∼ 2.7km sessions, each yielding ∼ 1000 submaps per session. The database is built from an Ouster OS0-32 (32 spinning beams, 360 ◦×90 ◦,
+
+75 m range) and queries are collected with a Seyond Robin-W (semi-solid-state, 192 scan lines, 120 ◦ ×70 ◦, 150 m range), challenging cross-modal pairing in FoV, scanning modality, and point density. The two sessions overlap only partially, further increasing retrieval difficulty. Fig. 7 reports the precision-recall curves (authors’ default parameters; HeLiOS evaluated zero-shot from its released weights) across three configurations. InLiER achieves an AUC of 0.96 , 0.94 , and 0.91 for intra-session OS0-32, intra-session 0.0 0.2 0.4 0.6 0.8 1.0            
+
+> Recall
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Precision
+> Intra-Sess. OS0-32
+> InLiER
+> BTC
+> DVMM
+> HeLiOS
+> SOLiD
+> SC++
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Recall
+> Intra-Sess. Seyond Robin-W
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Recall
+> Inter-Sess. OS0-32 SR-W
+
+Fig. 7. Precision-recall curves for the compared methods in the campus field experiment. Results are shown for intra-session place recognition with the Ouster OS0-32 and Seyond Robin-W (SR-W) sensors, and for inter-session retrieval from Robin-W queries to the OS0-32 database. InLiER maintains high precision across all three settings, showing the most consistent performance under both homogeneous and heterogeneous LiDAR conditions. DB: OS0-32 
+
+> Q: Seyond Robin-W
+> 163 keypoint inliers
+
+Fig. 8. Loop closure edges from the campus field experiment using an Ouster OS0-32 as the database (DB) sensor and a Seyond Robin-W as the query (Q) sensor, mounted on a Clearpath Warthog UGV. True positives are shown in 
+
+green and false positives in red , with candidates accepted for ρinlier ⩾ 0.3.The false positives arise from self-similar plain wall segments, where scans separated by 44 m and 71 m are incorrectly aligned yielding high inlier ratios. 
+
+Robin-W, and inter-session OS0-32 ← SR-W respectively, out-performing all baselines in each setting, with the largest mar-gin on the heterogeneous pairing. DVMM is also competitive, likely because both sensors are mounted at similar heights, satisfying its shared equatorial FoV assumption [11]. Fig. 8 shows the accepted loop closures at ρinlier ⩾ 0.3, yielding 400 true positives and only 4 false positives concentrated in a structurally self-similar plain wall region. The 200 false nega-tives (against 400 true positives and 300 true negatives) arise primarily in areas of high pedestrian density: slow-moving individuals are registered across accumulated submaps, intro-ducing spurious keypoints that reduce descriptor consistency. Fast-moving vehicles leave sparser, less disruptive artifacts. This identifies dynamic obstacles during submap accumulation as a current limitation. The OS0-32 database submaps average 360 keypoints (1.4KB token-only; 9.8KB with keypoints), the narrower-FoV Robin-W queries 230 keypoints ( 0.9KB; 
+
+6.2KB), keeping the token set well within practical transmis-sion budgets for multi-agent deployments. V. C ONCLUSIONS AND FUTURE WORK 
+
+We presented InLiER, a learning-free global localization pipeline for heterogeneous LiPR that maps scans into a shared vocabulary of height-sliced keypoints and mixed-radix tokens derived solely from local 3D geometry, decoupling place description from sensor FoV, resolution, and scanning pattern. On the HeLiPR benchmark across seven sensor pairings and in a real-world cross-sensor field experiment, InLiER achieves state-of-the-art performance among handcrafted methods and outperforms the learning-based baseline on most cross-sensor configurations. It retrieves spatially close candidates suitable for SLAM loop closure, requires no training, runs on CPU, and uses a sub-2KB representation. Its main limitation is sensitivity to dynamic obstacles, particularly slow pedestrians that create spurious keypoints during submap accumulation. Future work will address dynamic point removal, integrate InLiER with SLAM back-ends, and explore informed keyframe [19] and submap selection [20] to reduce map redundancy. REFERENCES [1] K. A. Tsintotas, et al. , “The Revisiting Problem in Simultaneous Lo-calization and Mapping: A Survey on Visual Loop Closure Detection,” 
+
+IEEE Transactions on Intelligent Transportation Systems , vol. 23, pp. 19 929–19 953, 2022. [2] C. Shi, et al. , “Fast and Accurate Deep Loop Closing and Relocalization for Reliable LiDAR SLAM,” IEEE Transactions on Robotics , vol. 40, pp. 2620–2640, 2024. [3] N. Stathoulopoulos, et al. , “FRAME: A Modular Framework for Au-tonomous Map Merging: Advancements in the Field,” IEEE Transac-tions on Field Robotics , vol. 1, pp. 1–26, 2024. [4] C. Yuan, et al. , “BTC: A Binary and Triangle Combined Descriptor for 3-D Place Recognition,” IEEE Transactions on Robotics , vol. 40, pp. 1580–1599, 2024. [5] M. Jung, et al. , “HeLiPR: Heterogeneous LiDAR dataset for inter-LiDAR place recognition under spatiotemporal variations,” The Inter-national Journal of Robotics Research , vol. 43, pp. 1867–1883, 2024. [6] H. Kim, et al. , “Narrowing Your FOV With SOLiD: Spatially Organized and Lightweight Global Descriptor for FOV-Constrained LiDAR Place Recognition,” IEEE Robotics and Automation Letters , vol. 9, pp. 9645– 9652, 2024. [7] G. Kim, et al. , “Scan Context++: Structural Place Recognition Robust to Rotation and Lateral Variations in Urban Environments,” IEEE Transactions on Robotics , vol. 38, pp. 1856–1874, 2022. [8] X. Xu, et al. , “RING++: Roto-Translation Invariant Gram for Global Localization on a Sparse Scan Map,” IEEE Transactions on Robotics ,vol. 39, pp. 4616–4635, 2023. [9] M. Jung, et al. , “HeLiOS: Heterogeneous Lidar Place Recognition via Overlap-Based Learning and Local Spherical Transformer,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) ,2025, pp. 2204–2211. [10] K. Luo, et al. , “3D Point Cloud-based Place Recognition: A Survey,” 
+
+Artificial Intelligence Review , vol. 57, p. 83, Mar 2024. [11] X. Duan, et al. , “DVMM: A Dual-View Combination Descriptor for Multi-Modal LiDARs Online Place Recognition,” IEEE Robotics and Automation Letters , vol. 10, pp. 10 434–10 441, Oct. 2025. [12] S. Gupta, et al. , “Effectively Detecting Loop Closures using Point Cloud Density Maps,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , 2024, pp. 10 260–10 266. [13] M. Jung, et al. , “TreeLoc: 6-DoF LiDAR Global Localization in Forests via Inter-Tree Geometric Matching,” Feb. 2026, arXiv:2602.01501 [cs]. [14] M. A. Fischler et al. , “Random Sample Consensus: A Paradigm for Model Fitting with Applications to Image Analysis and Automated Cartography,” Commun. ACM , vol. 24, p. 381–395, June 1981. [15] A. Ma´ ckiewicz et al. , “Principal Components Analysis (PCA),” Com-puters & Geosciences , vol. 19, pp. 303–342, 1993. [16] M. Weinmann, et al. , “Semantic Point Cloud Interpretation based on Optimal Neighborhoods, Relevant Features and Efficient Classifiers,” 
+
+ISPRS Journal of Photogrammetry and Remote Sensing , vol. 105, pp. 286–304, 2015. [17] H. Lim, et al. , “KISS-Matcher: Fast and Robust Point Cloud Registration Revisited,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) , 2025, pp. 11 104–11 111. [18] K. Koide, “small_gicp: Efficient and Parallel Algorithms for Point Cloud Registration,” Journal of Open Source Software , vol. 9, p. 6948, Aug. 2024. [19] N. Stathoulopoulos, et al. , “A Minimal Subset Approach for Informed Keyframe Sampling in Large-Scale SLAM,” IEEE Robotics and Au-tomation Letters , vol. 11, pp. 738–745, 2026. [20] D. Thorne, et al. , “Submodular Optimization for Keyframe Selection & Usage in SLAM,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) , 2025, pp. 5033–5039.

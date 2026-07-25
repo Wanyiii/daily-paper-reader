@@ -6,77 +6,77 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-24
-- 运行时间：2026-07-24 21:24:26 UTC
+- 最新运行日期：2026-07-25
+- 运行时间：2026-07-25 20:25:40 UTC
 - 运行状态：成功
 - 本次总论文数：19
 - 精读区：7
 - 速读区：12
 
 ### 今日简报（AI）
-今日共推荐19篇论文，精读7篇，涵盖3D场景重建与模型生成对齐两大前沿方向。最值得关注：《Immediate 3D Gaussian Splat Reconstruction》实现无序输入的全局一致三维重建（9.0分）与《Symbal》系统性检测模型生成文本的语义对齐偏差（9.0分）。建议优先精读上述两篇突破性工作，速读空间理解、跨模态遗忘等应用论文。
-- 详情：[/202607/24/README](/202607/24/README)
+今日精读聚焦两项9.0高分研究：统一文本/图像/视频/音频的融合嵌入空间，以及基于视觉-语言模型的异质图学习。最值得关注的是融合嵌入方向，它有望打通多模态数据的共享表征瓶颈。建议普通读者先从“统一嵌入空间”概念入手，了解如何用一个模型处理多种媒体类型以降低应用门槛。
+- 详情：[/202607/25/README](/202607/25/README)
 
 ### 精读区论文标签
-1. [Immediate 3D Gaussian Splat Reconstruction of Unordered Input with Global Consistency](/202607/24/2607.14481v1-immediate-3d-gaussian-splat-reconstruction-of-unordered-input-with-global-consistency)  
-   标签：评分：9.0/10、query:d-vision
-   evidence：从无序输入即时进行3D高斯泼溅重建
-2. [Symbal: Detecting Systematic Misalignments in Model-Generated Captions](/202607/24/2607.15216v1-symbal-detecting-systematic-misalignments-in-model-generated-captions)  
+1. [Fusion Embedding: A Unified Embedding Space for Text, Image, Video, and Audio](/202607/25/2607.18666v1-fusion-embedding-a-unified-embedding-space-for-text-image-video-and-audio)  
    标签：评分：9.0/10、query:multimodal
-   evidence：检测多模态描述中的系统不对齐
-3. [Points as Tori: Fast Pointwise Signed Distance for Point Clouds](/202607/24/2607.16946v1-points-as-tori-fast-pointwise-signed-distance-for-point-clouds)  
+   evidence：通过多模态融合实现文本、图像、视频和音频的统一嵌入空间
+2. [One Model, Many Graphs: Learning over Attributed Graphs across Heterogeneous Modalities with Vision-Language Models](/202607/25/2607.19128v1-one-model-many-graphs-learning-over-attributed-graphs-across-heterogeneous-modalities-with-vision-language-models)  
+   标签：评分：9.0/10、query:multimodal
+   evidence：利用视觉语言模型统一异构模态图学习
+3. [Engine-Native Editable 3D World Reconstruction with Objects and Lighting](/202607/25/2607.20889v1-engine-native-editable-3d-world-reconstruction-with-objects-and-lighting)  
    标签：评分：9.0/10、query:d-vision
-   evidence：点云距离计算与三维重建
-4. [IGGT4D: Streaming 4D Instance-Grounded Geometry Transformer](/202607/24/2607.19228v1-iggt4d-streaming-4d-instance-grounded-geometry-transformer)  
+   evidence：从单张图像重建引擎原生3D世界
+4. [GrainGS: Gradient-Decoupled Gaussian Splatting for Efficient Dynamic Novel View Synthesis](/202607/25/2607.21448v1-graings-gradient-decoupled-gaussian-splatting-for-efficient-dynamic-novel-view-synthesis)  
    标签：评分：9.0/10、query:d-vision
-   evidence：流式4D场景理解，结合实例与几何
-5. [GaussianSeed: Hierarchical Gaussian Seeding for High-Resolution 3D Occupancy Prediction](/202607/24/2607.20071v1-gaussianseed-hierarchical-gaussian-seeding-for-high-resolution-3d-occupancy-prediction)  
+   evidence：提出梯度解耦的高斯泼溅实现高效动态新视图合成
+5. [UnDA: Unpaired Domain Alignment for Cross-Modal Knowledge Transfer in Medical Imaging](/202607/25/2607.21546v1-unda-unpaired-domain-alignment-for-cross-modal-knowledge-transfer-in-medical-imaging)  
+   标签：评分：9.0/10、query:multimodal
+   evidence：无配对跨模态蒸馏与对齐模块
+6. [3D-Aware VLMs with Implicit and Explicit Geometries](/202607/25/2607.21595v1-3d-aware-vlms-with-implicit-and-explicit-geometries)  
    标签：评分：9.0/10、query:d-vision
-   evidence：分层高斯占用预测用于高分辨率3D场景重建
-6. [Geo3R: Mitigating Spatial Reasoning Hallucination in Multimodal Large Language Models](/202607/24/2607.21085v1-geo3r-mitigating-spatial-reasoning-hallucination-in-multimodal-large-language-models)  
-   标签：评分：9.0/10、query:d-vision
-   evidence：缓解多模态大模型中的空间推理幻觉
-7. [Toward Federated Cognitive Digital Twins over the Edge-to-Cloud Continuum](/202607/24/2607.21357v1-toward-federated-cognitive-digital-twins-over-the-edge-to-cloud-continuum)  
-   标签：评分：9.0/10、query:d-vision
-   evidence：联邦认知数字孪生边缘云
+   evidence：通过隐式和显式几何增强VLM的3D空间感知
+7. [Extending a Large View Synthesis Model for Multi-view Panoptic Segmentation](/202607/25/2607.19765v1-extending-a-large-view-synthesis-model-for-multi-view-panoptic-segmentation)  
+   标签：评分：8.0/10、query:d-vision
+   evidence：将大型视图合成模型扩展到多视图全景分割，用于三维场景理解，涉及神经渲染
 
 ### 速读区论文标签
-1. [Beyond Single Expert: Harmonizing Diverse Visual Priors in MLLMs for Spatial Understanding](/202607/24/2607.15054v1-beyond-single-expert-harmonizing-diverse-visual-priors-in-mllms-for-spatial-understanding)  
-   标签：评分：8.0/10、query:d-vision
-   evidence：融合多种视觉先验提升多模态大模型的空间理解
-2. [Trajectory-aware Cross-view Geo-localization with Sequential Observations](/202607/24/2607.15491v1-trajectory-aware-cross-view-geo-localization-with-sequential-observations)  
+1. [Not All Patches are Equal: Sampling Matters for Visible-Infrared Pre-Training](/202607/25/2607.20238v1-not-all-patches-are-equal-sampling-matters-for-visible-infrared-pre-training)  
    标签：评分：8.0/10、query:multimodal
-   evidence：视频与文本跨模态融合用于地理定位
-3. [One Modality to Forget Them All: Enhancing Cross-Modal Unlearning in Vision-Language Models](/202607/24/2607.16442v1-one-modality-to-forget-them-all-enhancing-cross-modal-unlearning-in-vision-language-models)  
+   evidence：可见光-红外跨模态对齐的重要性采样策略
+2. [Test-Time Training for Modality Order Consistency in Vision-Language Models](/202607/25/2607.20351v1-test-time-training-for-modality-order-consistency-in-vision-language-models)  
    标签：评分：8.0/10、query:multimodal
-   evidence：视觉语言模型中的跨模态遗忘
-4. [MuViSeg: Multi-View Segment Correspondences from Dense Geometry Priors](/202607/24/2607.17938v1-muviseg-multi-view-segment-correspondences-from-dense-geometry-priors)  
+   evidence：视觉语言模型中模态顺序一致性的测试时训练
+3. [PolySim: Deterministic Polynomial Surrogates for Cross-Modal Retrieval on CiM](/202607/25/2607.20358v1-polysim-deterministic-polynomial-surrogates-for-cross-modal-retrieval-on-cim)  
+   标签：评分：8.0/10、query:multimodal
+   evidence：跨模态检索的确定性替代方法
+4. [Axolotl3D: a Unified Framework for Faithful 3D Shape Completion](/202607/25/2607.20660v1-axolotl3d-a-unified-framework-for-faithful-3d-shape-completion)  
    标签：评分：8.0/10、query:d-vision
-   evidence：多视图片段对应实现场景理解
-5. [CityLLM: A framework for natural-language querying of semantic 3D city models](/202607/24/2607.14542v1-cityllm-a-framework-for-natural-language-querying-of-semantic-3d-city-models)  
-   标签：评分：7.0/10、query:d-vision
-   evidence：面向数字孪生的语义3D城市模型自然语言查询
-6. [Blurring Modal Boundaries: A Unified Survey from Single- to Multi-Modal Person Re-ldentification](/202607/24/2607.14821v1-blurring-modal-boundaries-a-unified-survey-from-single--to-multi-modal-person-re-ldentification)  
+   evidence：基于图像与点云的三维形状补全
+5. [PIXIE: A Zero-Shot texture-invariant 6D pose estimation framework for unseen objects with assembly defects](/202607/25/2607.16015v2-pixie-a-zero-shot-texture-invariant-6d-pose-estimation-framework-for-unseen-objects-with-assembly-defects)  
    标签：评分：7.0/10、query:multimodal
-   evidence：综述跨模态多模态行人重识别
-7. [Text2Villa: Hierarchical Generation of 3D Indoor Environments with Physics-Aware Analysis-by-Synthesis](/202607/24/2607.17145v1-text2villa-hierarchical-generation-of-3d-indoor-environments-with-physics-aware-analysis-by-synthesis)  
+   evidence：跨模态特征匹配用于6D位姿估计
+6. [Robust Multimodal Dynamic Object Segmentation](/202607/25/2607.18153v1-robust-multimodal-dynamic-object-segmentation)  
    标签：评分：7.0/10、query:d-vision
-   evidence：从文本生成3D室内场景并考虑物理约束
-8. [Feature-Guided Diffusion for Non-Differentiable Inverse Rendering](/202607/24/2607.17411v1-feature-guided-diffusion-for-non-differentiable-inverse-rendering)  
+   evidence：利用多模态线索进行动态物体分割以实现场景理解
+7. [FlexiAvatar: Unified 3D Gaussian Human Avatars Under Arbitrary Body Visibility](/202607/25/2607.19100v1-flexiavatar-unified-3d-gaussian-human-avatars-under-arbitrary-body-visibility)  
    标签：评分：7.0/10、query:d-vision
-   evidence：特征引导扩散用于逆渲染，可应用于新视角合成
-9. [HarmoHOI: Harmonizing Appearance and 3D Motion for Multi-view Hand-Object Interaction Synthesis](/202607/24/2607.17097v1-harmohoi-harmonizing-appearance-and-3d-motion-for-multi-view-hand-object-interaction-synthesis)  
-   标签：评分：6.0/10、query:d-vision
-   evidence：多视角3D手物交互合成与神经渲染
-10. [Dual-Edged Homogeneous-Modality Similarity: Towards Visible-Infrared Modality-Incomplete Person Re-Identification with Modality Adaptive Matching](/202607/24/2607.18688v1-dual-edged-homogeneous-modality-similarity-towards-visible-infrared-modality-incomplete-person-re-identification-with-modality-adaptive-matching)  
+   evidence：基于3D高斯人体虚拟人的神经渲染
+8. [Look Before You Edit: Attention-Guided Camera Placement and Multi-View Alignment for 3D Gaussian Splatting Editing](/202607/25/2607.19777v1-look-before-you-edit-attention-guided-camera-placement-and-multi-view-alignment-for-3d-gaussian-splatting-editing)  
+   标签：评分：7.0/10、query:d-vision
+   evidence：面向3D高斯溅射编辑的注意力引导相机放置与多视图对齐
+9. [OmniStyle-INR: Universal and Multimodal Style Transfer for INRs](/202607/25/2607.16362v1-omnistyle-inr-universal-and-multimodal-style-transfer-for-inrs)  
    标签：评分：6.0/10、query:multimodal
-   evidence：跨模态行人重识别模态不完整
-11. [CR-Refiner: An Object-Centric Optimal Transport Reranker for Edit-Conditioned 3D Scene Retrieval](/202607/24/2607.19115v1-cr-refiner-an-object-centric-optimal-transport-reranker-for-edit-conditioned-3d-scene-retrieval)  
+   evidence：使用隐式神经表示的通用多模态风格迁移
+10. [InLiER: Learning-Free Heterogeneous LiDAR Place Recognition via Intermediate Mixed-Radix Structural Keypoint Tokenization](/202607/25/2607.16862v1-inlier-learning-free-heterogeneous-lidar-place-recognition-via-intermediate-mixed-radix-structural-keypoint-tokenization)  
    标签：评分：6.0/10、query:d-vision
-   evidence：基于编辑条件的3D场景检索，理解场景布局
-12. [Beyond Independent Optimization: Compression, MoE Routing, and Quantization Interactions in Multimodal Edge Intelligence](/202607/24/2607.20981v1-beyond-independent-optimization-compression-moe-routing-and-quantization-interactions-in-multimodal-edge-intelligence)  
+   evidence：3D结构关键点令牌化用于LiDAR位置识别
+11. [Text2Villa: Hierarchical Generation of 3D Indoor Environments with Physics-Aware Analysis-by-Synthesis](/202607/25/2607.17145v1-text2villa-hierarchical-generation-of-3d-indoor-environments-with-physics-aware-analysis-by-synthesis)  
+   标签：评分：6.0/10、query:d-vision
+   evidence：层次化物理感知的3D室内环境生成
+12. [EmoEUS: Uncertainty Supervision for Multimodal Emotion Recognition in Conversation](/202607/25/2607.18336v1-emoeus-uncertainty-supervision-for-multimodal-emotion-recognition-in-conversation)  
    标签：评分：6.0/10、query:multimodal
-   evidence：多模态边缘智能效率优化综述
+   evidence：不确定性感知的多模态融合用于情感识别
 
 
 <div class="dpr-home-promo-card">
