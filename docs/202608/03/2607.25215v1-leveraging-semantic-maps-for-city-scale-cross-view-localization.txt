@@ -1,0 +1,501 @@
+Title: Leveraging Semantic Maps for City-Scale Cross-View Localization
+
+URL Source: https://arxiv.org/pdf/2607.25215v1
+
+Published Time: Wed, 29 Jul 2026 00:31:04 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+> 1
+
+# Leveraging Semantic Maps for City-Scale Cross-View Localization 
+
+Ethan Fahnestock ∗1 Erick Fuentes ∗1 Philip R Osteen 2 Nicholas Roy 11 CSAIL, MIT 2 DEVCOM Army Research Laboratory (ARL) 
+
+Abstract —We want robots to localize in previously untraversed environments against commonly available prior data. Rich se-mantic data available from OpenStreetMap can be useful in this task. However, existing methods either ignore this semantic information, directly matching panoramas and overhead imagery, or dramatically compress the semantic information, working with a small set of fixed classes. To leverage this rich semantic information, two challenges need to be overcome. First, useful semantic information needs to be extracted from the robot’s egocentric observations. Second, the observed information must be quickly associated with the large prior semantic map (e.g., up to 628 km 2). We show that VLMs are effective at both extracting relevant landmarks from panoramas, and identifying feasible correspondences between these landmarks and prior overhead landmarks. However, using VLMs to propose all correspondences scales poorly as the number of mapped landmarks increases. Instead, we propose distilling a lightweight matcher from a VLM which computes correspondences for all entities in a map. We use this output to form an observation likelihood which is fused over time with a Bayes filter to create a time series of pose estimates. To support further investigation into generalizable cross-view methods that leverage semantic information, we re-lease a dataset of extracted semantics and evaluation trajectories spanning eleven environments, including panoramas we collected in a snowstorm and at night in Boston. We demonstrate our method, trained on a single city’s fair-weather data, generalizes across location, lighting, weather, and other challenges. Code and datasets are available at https://efahnestock.github.io/loci/. 
+
+Index Terms —Cross-view localization, metric-semantic maps, robot localization 
+
+I. I NTRODUCTION 
+
+Robots leverage prior information in the form of maps to enhance environmental awareness and improve navigation performance. In order for these maps to be useful, the robot must localize itself within the maps. Maps built from data such as overhead imagery or metric-semantic maps (MSMs), like OpenStreetMap (OSM) [1], often give rise to a representation gap: it is difficult to associate online robot sensor data with the contents of the map, complicating localization. For example, the name of a street in a MSM or how the street appears in overhead imagery can differ substantially in format or perspective from how the street appears in robot sensor data (e.g., pixels in a ground-level panorama). If the maps are georeferenced, then global navigation satel-lite systems (GNSS) can sidestep the representation gap by directly providing the robot’s location in a global frame. However, GNSS can be unreliable without direct line of sight             
+
+> ∗indicates equal contribution. Distribution Statement A: Approved for public release: distribution unlimited. This work has been submitted to the IEEE for possible publication. Copyright may be transferred without notice, after which this version may no longer be accessible.
+> Fig. 1. To leverage generally available overhead data, robots need to localize themselves with respect to it. (a) Self-similarity or domain shift can make satellite imagery alone difficult to localize against. (b) Rich semantic features like street names, parks, etc., are often more discriminative and robust to visual change than image-only information. (c) We extract these features and leverage them to more rapidly localize the robot within prior overhead data.
+
+to the satellites (e.g., urban canyons) and are susceptible to ad-versarial jamming. In this paper, we assume that such absolute positioning sensors are not a viable option. Without GNSS or a strong prior on the robot’s location, we are forced to resolve the representation gap, which can be nontrivial. Additionally, to be broadly useful, we are interested in approaches that scale to large areas and generalize to new regions without retraining. Cross-view localization [2] directly tackles the representa-tion gap between robot observations and overhead imagery. Typically, ground and overhead image encoders are trained with a contrastive loss to minimize the distance between em-beddings of a ground level observation and its overhead image patch. This overhead-to-ground image matching approach has seen success on continent scale retrieval tasks [3], but the approach struggles in situations where landmarks present in ground level observations are not visible in the overhead imagery, such as in places with heavy tree cover. Furthermore, the image matching performance can degrade significantly when the test region differs from the training region due to domain shift in visual appearances [3]. MSMs can mitigate some of the shortcomings of image-based cross-view localization. These maps annotate landmarks at varying levels of granularity, from coarse categories (e.g., building, road, grass, body of water) to instance-level seman-tics (e.g., name, street address, number of floors). As with overhead imagery, it is still nontrivial to associate ground-level observations with the semantic features of these metric-semantic maps. arXiv:2607.25215v1 [cs.RO] 28 Jul 2026 2
+
+Existing approaches rasterize the MSM into a semantically segmented overhead image, retaining only the coarse cate-gories such as roads, fields, water, etc., and discarding the instance-level semantics. Association occurs through a dense cross-correlation with bird’s eye view projections of robot observations, such as imagery [4], or semantic point clouds [5], [6]. Since these approaches only rely on the coarse semantic categories, they tend to generalize well to new test regions [4], [5], [6]. However, these approaches are only practical for neighborhood-scale environments, or when a strong prior pose belief is available, as the dense cross-correlation scales poorly with the size of the region of interest. If we wish to extend the use of MSMs to large areas, then we must move beyond coarse semantic classes and leverage the instance-level features contained within these maps. Knowing that one is at the base of the Eiffel Tower is much more informative than knowing one is next to a building, and yet, current approaches discard precisely this kind of highly specific semantic information. The key question is how to bridge the representation gap between a robot’s raw sensory observations and the annotations contained within MSMs. Closing this gap will require the specification of which representations are extracted from the robot observations and the metric-semantic map, and how the representations are compared. We address the problem of localization in a Bayesian filtering framework. In this context, our approach, which we call Landmark-Oriented Cross-view Inference (LOCI), is used to provide an observation likelihood given a MSM by bridging the representation gap. We model the observation likelihood as a product of experts, allowing us to combine existing cross-view localization approaches that provide a likelihood based on overhead imagery, with our model using MSMs to compensate for limitations in the image-based techniques (as illustrated in Figure 1). LOCI leverages vision language models (VLMs), having been trained on images and language, to identify possibly mapped landmarks and produce descrip-tions in the format of MSM annotations (e.g., {build-ing:tower, name:Eiffel Tower} ). VLMs are also effective at determining if two sets of annotations refer to the same landmark [7]. However, VLMs are not efficient at performing the hundreds of thousands of comparisons that are required for every observed landmark for real-time localization in city-scale environments. Therefore, LOCI uses a lightweight classifier distilled from a dataset of comparisons performed by a VLM. We demonstrate in areas as large as 628 km 2
+
+that integrating the rich semantics into a localization pipeline can accelerate the filter convergence to the true location in challenging scenarios, including conditions common in field deployments where appearance-based matching is most strained: night and snowstorm operation, heavy rain, fog, post-hurricane environment change, and landmark-sparse rural regions. Our contributions are as follows:  
+
+> •
+
+A method for bridging the representation gap between robot observations and metric-semantic maps like OSM. In particular, we show that a model that aligns panorama image annotations structurally with MSM annotations outperforms unstructured joint panorama/annotation em-beddings.  
+
+> •
+
+A cross-view dataset targeting conditions relevant to field deployments, including trajectories collected with our own panoramic rig (Figure 4), along with VLM-extracted landmarks and labeled correspondence pairs for training and evaluating new semantic cross-view localization ap-proaches.  
+
+> •
+
+Open-source tooling to augment existing robotics datasets with OSM landmark annotations and to reproduce all presented results. II. P ROBLEM FORMULATION 
+
+We formulate cross-view geolocalization as a Bayesian filtering problem: given prior overhead information and a sequence of robot actions and observations, we produce a belief of the robot’s current location in the overhead frame. In this section, we review the Bayesian belief update process and then describe how the prior information and models of the robot and its observations fit within this framework. 
+
+A. Bayesian Update of Belief 
+
+A Bayes filter [8] is often used to fuse sequences of actions u0: t−1 ∈ U t and observations o1: t ∈ Ot into a belief 
+
+bt = p(xt | u0: t−1, o 1: t, P) ∈ B over xt ∈ X where prior information P is additional information that is available before the robot is deployed, X is the robot’s state space, and B is the space of beliefs over X. When an observation ot+1 is made, the belief can be updated using an observation model 
+
+p(ot+1 |xt+1 , P):
+
+bt+1 = ηp (ot+1 | xt+1 , P)p(xt+1 | u0: t, o 1: t, P) (1) where η is a normalization constant. For general distributions, these update equations can be unwieldy. However, for partic-ular choices of belief, transition dynamics, and observation models, these equations become tractable. 
+
+B. Prior Information 
+
+Sources of prior information, such as overhead imagery, MSMs, and topographic maps, are rich but partial views of the physical environment, each capturing complementary aspects. The maps can all be placed into a common world frame, allowing a robot to reason jointly about its pose with respect to the different sources. In this work, we focus on overhead imagery and MSMs, which we refer to collectively as P = ( I, M).Overhead imagery I ∈ RH×W ×3 is a georeferenced image where each pixel corresponds to a known location in the world and its value indicates the color observed by a camera at that location. An image patch centered at location p ∈ R2
+
+is denoted as Ip ∈ Rh×w×3 where h ≤ H and w ≤ W .A metric-semantic map M = {ℓM 
+
+> i
+
+}Ni=1 is a set of land-marks where each landmark ℓM = ( gℓ, a ℓ) has geometry gℓ
+
+in a common frame and annotations aℓ. The geometry gℓ is a geometric primitive in R2 (e.g., point, polyline, polygon, 3
+
+etc.). The annotations aℓ = {(kj , v j )}Nℓ 
+
+> j=1
+
+are a set of key-value pairs describing the properties of the landmark (e.g. aℓ =
+
+{amenity:restaurant, cuisine:Vietnamese} ). 1
+
+C. Robot Model 
+
+We take the set of robot poses X and actions U to be subsets of R2. The heading is omitted from the state, as justified in Section II-D. A robot takes an action ut ∈ U
+
+and the stochastic transition model p(xt+1 |xt, u t) is given by 
+
+xt+1 = f (xt, u t, v t) where xt and ut are the current state and applied action and vt ∼ N (0 , I ) is a noise parameter. 
+
+D. Observation Model 
+
+We assume that the robot is equipped with a panoramic camera, which produces observations o ∈ O ⊂ RHc×Wc×3
+
+according to the distribution p(o|x, P). Hc and Wc are the height and width of the image. We further assume that the observations can be axis aligned to the world frame (e.g., via a magnetometer). As a result, the robot heading does not affect the observation likelihood and is omitted from the robot state. During a deployment, the robot takes observations o, and we assume these are generated according to the observation model 
+
+p(o|x, P). However, in order to perform Bayesian filtering, we need to be able to evaluate the density of the observation model at the observed panorama, up to a normalization constant. The key challenge addressed by this paper is how to specify this observation model. III. A PPROACH 
+
+Rather than specify p(o | x, P) directly, we approximate the observation likelihood as a product of experts [10]: 
+
+p(o | x, P) = p(o | x, I, M) ∝ p(o | x, I)p(o | x, M), (2) where each term relates the observation to a source of prior information. This structure is exact when I and M are conditionally independent given the location and panorama. We adopt this structure because it lets us build each expert independently and because the two experts contribute com-plementary signal 2. However, in practice, they are correlated views of the same scene 3, so the product over-counts shared evidence, yielding overconfident estimates. Despite this short-coming, we find that this structured approach outperforms an approach that learns the jointly conditioned likelihood (see Section V). As illustrated in Figure 2, LOCI is implemented as a three-stage pipeline. First, the panorama is processed by a VLM, yielding a set of extracted landmarks. Next, similarity scores between each extracted landmark and each landmark in the MSM are computed. Finally, the similarity             
+
+> 1Examples of MSMs include GIS maps, HD maps, object-level semantic SLAM maps, scene graphs, and OpenStreetMap. Maps that don’t meet this definition include topological maps (no geometric information), point clouds, voxel grids, and rasterized maps (no discrete landmarks).
+> 2A sign with the name of a street is apparent in the MSM but not the overhead imagery. Conversely, an unmarked trail can be visible from the overhead imagery but not the MSM.
+> 3A church that is apparent in both the overhead imagery and the MSM would yield an overconfident observation likelihood. TABLE I STRUCTURE OF THE VLM PROMPT FOR LANDMARK EXTRACTION FROM PANORAMIC OBSERVATION .
+> Prompt Component Description
+> Panorama Images Pinhole projections of the panorama. Task Instructions General task description, recommended workflow, and desired output information. Landmark Selection Landmark specific criteria for selection. MSM Ontology MSM Tagging background and examples. Exclusion Criteria Landmark-independent filtering rules. Output Schema JSON schema describing the output format.
+
+scores are used to compute the MSM-based likelihood. This MSM-based likelihood is then combined with an overhead-imagery-based observation likelihood. The overhead-imagery-based likelihood is provided by Wide Area Geolocalization (WAG) [9]. Each stage is now described in turn, starting with landmark extraction from panoramas. 
+
+A. Landmark Extraction From Panoramas 
+
+Consider a physical landmark which is observed by the robot and is also described by the MSM. Let oℓ denote the landmark’s visual appearance and ℓM its corresponding entry in the MSM. The detected object oℓ and mapped landmark 
+
+ℓM are fundamentally different: one is a region of an image and the other is a pair of the landmark geometry and semantic annotations. To assess whether they refer to the same land-mark, we must first map them to a common representation that admits comparison. One could imagine a system that encodes oℓ and ℓM into a joint embedding space, for example by using readily available sentence embedding models to embed natural language de-scriptions of oℓ and ℓM. However, this approach collapses the landmark’s attributes such as name and category into a single descriptor. As a result, “a McDonald’s fast food restaurant”, “a Wendy’s fast food restaurant”, and “Old MacDonald’s Farm” could be deemed similar, even though in a localization context, these are all distinct landmarks. In contrast, the MSM schema keeps these different concepts separate. We are able to reason that although an amenity tag is shared by {name:McDonald’s, amenity:restaurant} and {name:Wendy’s, amenity:restaurant} , the names identify them as separate landmarks. Similarly, although 
+
+{name:McDonald’s,amenity:restaurant} and 
+
+{name:Old MacDonald’s,landuse:farmland} 
+
+have similar names, the amenity and landuse tags clearly distinguish them. Therefore, we choose to have a VLM produce annotations aligned with the structure of those contained in MSMs. Concretely, given a robot observation o, we want the VLM to identify relevant landmarks and produce ˆao = {ˆaoi }No
+
+> i=1
+
+,where ˆao is a set of annotations describing a landmark and 
+
+No is the number of landmarks identified in o. The VLM receives two kinds of inputs: a set of pinhole projections 4
+
+Landmark Extraction (Sec. III-A) 
+
+Annotation Correspondence (Sec. III-B) 
+
+Spatial Likelihood (Sec. III-C) 
+
+LOCI 
+
+Panorama 
+
+ot ∈ RHc×Wc×3
+
+Satellite Patches 
+
+Ip ∈ Rh×w×3
+
+MSM Landmarks 
+
+M
+
+Q
+
+Image-based Likelihood [9] 
+
+Bayes Filter 
+
+Odometry 
+
+ut ∈ R2
+
+Belief 
+
+bt+1 ∈ B                 
+
+> {ˆaoi}No i=1 C∈RNo ×|M|
+> p(ot|x, M)
+> p(ot|x, I)
+> p(ot|x, M,I)
+> bt
+> (a) Landmark Extraction (b) Annotation Correspondence (c) Spatial Likelihood
+
+VLM  
+
+> amenity = conference_centre
+
+ˆao       
+
+> 1name =Moscone Center West shop =mall
+
+ˆao    
+
+> 2name =Metreon tourism = museum
+
+ˆao   
+
+> 3name =Children’s Creativity Museum
+
+Correspondence Classifier 
+
+ˆaoi ˆℓM
+
+> j
+
+Cij 
+
+C ℓM 
+
+> 1
+
+ℓM 
+
+> 2
+
+ℓM 
+
+> 3
+
+. . . 
+
+ˆao 
+
+> 1
+
+0.83 0.40 0.00 . . . 
+
+ˆao 
+
+> 2
+
+0.72 0.00 0.45 . . . 
+
+ˆao 
+
+> 3
+
+0.95 0.05 0.25 . . . 
+
+Cp ℓp 
+
+> 1
+
+ℓp
+
+> 2
+
+ˆao 
+
+> 1
+
+0.09 ✗ 0.90 ✓
+
+ˆao 
+
+> 2
+
+0.00 ✗ 0.00 ✗
+
+ˆao 
+
+> 3
+
+0.95 ✓ 0.85 ✗
+
+Weighted Sum 
+
+Likelihood Calibration 
+
+p(ot | x, M)
+
+Fig. 2. (Top) System diagram of the proposed approach. An image-based observation likelihood p(o|x, I) from WAG [9] is fused with LOCI’s MSM-based likelihood to form the combined likelihood p(o|x, I, M). A Bayes filter incorporates this likelihood with odometry ut to update the pose belief bt+1 . (a) LOCI processes an observation o with a VLM to extract landmark annotations {ˆaoi }No
+
+> i=1
+
+. (b) A correspondence classifier then matches each annotation ˆaoi
+
+against MSM landmarks M. (c) A spatial likelihood module aggregates the correspondence scores into per-patch observation probabilities p(ot|x, M).
+
+from the panorama, and a structured text prompt outlined in Table I. We provide four square pinhole projections each with 90 ◦ field of view from the panoramic observations as the distortion introduced by the equirectangular projection is likely to be out of distribution for the VLM. The VLM prompt provides task instructions, MSM ontology examples, landmark selection and exclusion criteria, and a target output schema. The instructions ask the VLM to extract useful landmarks (e.g., street names, branded locations, architecturally unique buildings) while ignoring less informative ones (e.g., traffic signals, trees, buildings described only by appearance). We also instruct the VLM to ignore distant landmarks, transient landmarks, and illegible signs. 
+
+B. Correspondence of Annotations to Prior Information 
+
+Having extracted a set of annotations from the panorama, we now need to match them against entries in the MSM. For each annotation ˆaoi extracted from the panorama and each landmark 
+
+ℓM 
+
+> j
+
+in the MSM, we would like to compute a correspondence score Cij that is maximal when ˆaoi and ℓM 
+
+> j
+
+refer to the same physical landmark. When approaching this problem, it is important to consider what goes into an MSM. These maps are often crowd-sourced, meaning which landmarks are annotated and how they are annotated is up to the individual contributor. Annotation conventions have developed over time, but any given landmark may deviate from these established conventions. As a result, different instances of the same kind of landmark may be annotated differently. For example, an apartment building might be richly annotated with its date of construction, number of floors and architecture style, and another apartment building might have no information other than that the building exists. Given the variation in annotations, it is difficult to write down criteria for when two sets of annotations describe the same physical landmark. 
+
+TABLE II STRUCTURE OF THE VLM PROMPT FOR ANNOTATION CORRESPONDENCE LABELING .
+
+Section Description 
+
+Task Instructions Definition of the matching task on annota-tions, with the caveat that some landmarks have no counterpart. Hard-Negative Criteria Explicit rules for what counts as a hard negative and which tag-level disagreements to ignore. Set 1 (panorama) Numbered list of key=value bundles for the panorama-extracted annotations. Set 2 (map) Numbered list of key=value bundles for nearby map landmarks. Output Schema JSON schema requiring, for each Set 1entry, the matching Set 2 indices and 0–2 negatives labeled hard or easy .
+
+VLMs are proficient at judging whether two descriptions could refer to the same entity [7], a capability we leverage to match landmark annotations. However, the latency and expense of querying a VLM to perform the hundreds of thousands of comparisons required for each observed landmark is untenable for a robot deployment (see runtime reported in Section V-B). Therefore, we use the VLM as a teacher to generate training examples of positive and negative matches offline. We then distill a lightweight classifier p(cij | ˆaoi , ℓ M 
+
+> j
+
+)
+
+suitable for online inference, where cij is a binary random variable indicating correspondence between an annotation ˆaoi
+
+and landmark ℓM 
+
+> j
+
+.To assemble a training set for this classifier, we pair the set of landmarks detected by the VLM in each panorama at a known location in the training city with the set of MSM landmarks near that location. The teacher receives both sets in their native key=value form, using the same structured 5                    
+
+> A={(ki, v i)}TA
+> i=1 B={(kj, v j)}TB
+> j=1
+> cross feats (4)
+> Annotation Encoder
+> Tag Encoder
+> Key emb. Value emb.
+> concat
+> Tag MLP
+> mean pool max pool
+> concat
+> Annot. Encoder
+> concat: [a;b;a⊙b;cross ]
+> MLP
+> p(match )
+> Fig. 3. Network architecture for the correspondence classifier. This classifier takes in two sets of annotations ( A, B ) and predicts if the two sets of annotations could refer to the same physical landmark. An annotation encoder embeds then pools across each set of annotations to create a descriptor. The descriptors for the two sets, alongside their Hadamard product and 4 cross features are fed to a final MLP to produce the probability the landmarks described by Aand Bcould match.
+
+representation that the distilled classifier will consume. The prompt, summarized in Table II, supplies a task description, the two numbered tag-bundle lists Set 1 (panorama landmarks) and Set 2 (map landmarks), and a JSON output schema. For each panorama, we ask the teacher to produce, for each Set 1 entry, the indices of any Set 2 landmarks that refer to the same physical object and up to two explicit negatives drawn from Set 2. Negatives are labeled easy when the two annotations describe obviously different kinds of objects (e.g., a restaurant versus a street) and hard when they share a general category but unambiguously refer to different instances such as distinct branded names or vastly different number of floors. The prompt explicitly tells the teacher to not mine hard negatives from disagreements that the annotation extractor is known to be unreliable about, such as small numeric differences in building:levels , equiv-alent tags of different specificity ( building=apartments 
+
+versus building=yes ), or one name being a substring of another. This prompting strategy shapes the negative set toward the failure modes that the lightweight classifier actually needs to learn to distinguish, rather than penalizing it for noise that the extractor introduces. The resulting (ˆ aoi , ℓ M 
+
+> j
+
+, c ij ) triples — positives from the VLM’s match list, hard and easy negatives from its negative list — are then used to train the lightweight classifier. The lightweight classifier consumes two sets of annotations and predicts if the annotations could describe the same physi-cal landmark. The network architecture for the correspondence classification model is illustrated in Figure 3. Each key-value pair is first encoded by separately encoding the key and the value. To encode the key, we map each of a set of 108 prede-termined keys to a unique learned 32-dimensional embedding. To encode the value, we use Google’s text-embedding-005 model to produce a 768-dimensional embedding that is projected down to a 128-dimensional vector. These two embeddings are concatenated and then projected down to a 64-dimensional embedding with an MLP. After performing this concatenation and projection for each key-value pair in an annotation set, the embeddings are combined via mean and max pooling. These pooled vectors are concatenated to form an annotation embedding, one for each of the two annotation sets. In addition, the two sets of annotations are used to compute a set of cross features. These cross features include the mean value cosine similarity among key-value pairs that share a key, the max value cosine similarity among the same pairs, the cosine similarity if both annotations contain a name key, and finally, a boolean flag denoting if both sets contain a compatible addr:housenumber field. Two house number fields are compatible if they are equal, or if either/both of the values represents a range, if the ranges overlap. The embeddings for the two sets of annotations, their Hadamard product, and the cross features are concatenated to form the input for an MLP which produces the confidence that both annotations could describe the same landmark. With this correspondence classifier, we can now produce a score matrix C ∈ RNo×|M| where the rows correspond to the annotations extracted from the panorama and the columns correspond to mapped landmarks. Each entry of the matrix is the confidence that the relevant row and column describe the same physical landmark. We now show how this score matrix can be used to produce the observation likelihood p(o|x, M).
+
+C. Observation Likelihood from Matches 
+
+In the last stage of the pipeline, given a score matrix, we compute the observation likelihood p(o | x, M). The most faithful model of the observation likelihood would include a location conditioned occlusion model, a noise model for VLM extraction, and a model of map incompleteness. Specifying each of these components would require extensive modeling effort. In addition, evaluating such a model would likely be prohibitively expensive as the area of interest grows larger. As a tractable approximation, we discretize the world into patches of fixed size, and visibility is approximated as constant for features within the area of the observer’s patch and zero elsewhere. We now show how this approximation is used to compute p(o | x, M). To compute a panorama-patch score between panorama o and overhead image patch Ip centered at p, we start with the set of annotations ˆao = {ˆaoi }No
+
+> i=1
+
+extracted from the panorama, and the set of MSM landmarks 
+
+Mp located within patch Ip. We then collect the relevant correspondence scores Cp ∈ RNo×|M p| described in Section III-B, where the rows correspond to annotations ˆao and the columns correspond to the mapped landmarks that overlap with Ip. We then use the Hungarian algorithm [11] with these correspondence scores to determine the most compatible assignment of extracted annotations to mapped landmarks. To avoid low confidence matches, the matrix is augmented with dummy rows and columns such that each annotation can be assigned to a dummy landmark at some fixed cost [12]. Finally, we perform a weighted sum of the correspondence scores for the pairs selected by the Hungarian algorithm. We weight each correspondence score by 1/ log 2(1 + max(1 , N matches ,i )) 6
+
+where Nmatches ,i is the number of MSM landmarks whose correspondence score with the annotations ˆaoi exceeds the Hungarian matching threshold. This weighting scheme makes distinctive landmarks more impactful on the final matching score. We now have a score so,p ∈ R+ for every overhead patch Ip.Inspired by Downes et al. [9], we use a Gaussian likelihood to model the distribution of scores. To compute the observation likelihood p(o | x, M), we compute: 
+
+p(o | xi, M) ∝ exp −1
+
+σ2
+
+> l
+
+
+
+1 − so,i 
+
+max j so,j 
+
+2
+
+. (3) Now that we have a landmark-based observation likelihood, as illustrated in Figure 2, it can be fused with the over-head imagery-based likelihood to accelerate filter convergence. Next, we describe the datasets we construct to train and evaluate LOCI. IV. LOCI D ATASET 
+
+The first step to training and evaluating semantic landmark-based cross-view localization approaches is to gather data. The datasets for cross-view localization have become more numerous in recent years but often consist solely of imagery and lack semantic landmarks. Datasets that contain semantic landmarks both focus on fair-weather panoramas and leverage privileged information during generation (e.g., providing the nearby OSM landmarks while extracting semantic descriptions from a panorama) [13], making extracted scene descriptions unrealistic for new environments. To support future work in landmark-based cross-view local-ization in a range of environments, we release three artifacts: a curated set of GPS-stamped panoramas with associated OSM landmarks and overhead satellite images, a set of VLM ex-tracted annotations from these panoramas, and finally a dataset of annotation correspondences used to train and evaluate our correspondence model. All of the processes, code, and data can be found at the Github repository linked in the abstract. In the following three sections we describe each of these three artifacts. General dataset statistics are detailed in Table III. 
+
+A. Panoramas and Overhead Data 
+
+The base of the dataset is collections of north-aligned geo-located egocentric panoramas ot ∈ RHc×Wc×3. We source these panoramas from the VIGOR dataset [14], Mapillary (a crowd-sourced street-level imagery platform) [15], and through our own data collection. The VIGOR dataset [14] is a foundational dataset in the field of cross-view localization and provides densely sampled panoramas in fair-weather daytime conditions in four cities in the United States (Chicago, Seattle, New York and San Francisco). VIGOR dataset panoramas are north-aligned (where the center of the panorama points north) and are 2048 ×1024 px. Note we do not use the San Francisco VIGOR panoramas in this paper. Generalization to novel conditions and environments is a key focus of our work, so we curate evaluation trajectories of GPS-stamped panoramas in settings beyond fair-weather urban environments. We are further motivated by the resolution  
+
+> Fig. 4. Panorama collection rig used for Boston data collects. A Qoocam 8k Enterprise 360 degree camera mounted on the roof captured panoramas while a u-blox F9R GPS receiver inside the car recorded GPS position. The Livox lidar was only used to later align the camera and GPS data by matching the point of initial movement.
+
+of VIGOR panoramas, which is often limiting for land-mark extraction. We source these higher-resolution trajectories from Mapillary [15] and by recording our own GPS-stamped panoramas with the rig shown in Figure 4. Specifically, we investigate robustness to weather with a Mapillary trajectory collected during a rain storm in Mid-dletown (CT, USA) and a trajectory we recorded during a snowstorm in Boston (MA, USA). We investigate impact of lighting with a trajectory we collect at night in Boston, and performance in very rural to more urban environments with Mapillary trajectories from Veluwe (Netherlands), Noor-doostpolder (Netherlands), Framingham (MA, USA), and San Francisco (CA, USA) respectively. We also explore robustness to non-trivial environment change after a natural disaster with Fort Myers (FL, USA), where the Mapillary trajectory was collected shortly after Hurricane Ian passed through the area. Trajectories vary in length from 5 km to 25 km, and generally do not contain large loops with the exception of San Francisco. Mapillary provides an estimated compass angle for each of its panoramas, which was used to north-align each image, matching the panoramas in the VIGOR dataset. Resolution varies by Mapillary trajectory with a minimum resolution of 
+
+4096 ×2048 px. For the self-collected panoramas, heading was derived from sequential GPS readings and image resolution was 7680 × 3840 px. Each collection of panoramas (each VIGOR city, along with the Mapillary and recorded trajectories), is then paired with overhead imagery I covering the area we wish to localize within, and a metric-semantic map M for that same area. The VIGOR dataset already provides 640 ×640 px satellite patches at Web Mercator zoom level 20, which translates to each individual satellite patch being ~73 m on each side at latitudes similar to the city of Chicago. Satellite patches overlap by 50 %with all of their neighboring patches [14]. For the Mapillary trajectories and our recorded panorama trajectories, overhead regions encompassing large areas (vary-ing from 32 km 2 to 628 km 2) around the trajectories were defined. Satellite images were collected from distributable 7  
+
+> TABLE III DATASET STATISTICS .†INDICATES DATA COLLECTED BY OUR CAMERA RIG .
+
+City Conditions #Panos / Sat. Patches Sat. Cov. (km 2) Traj. (km) Landmarks (Pano / OSM) Dates (YY-MM) (Pano / OSM) Chicago (VIGOR) Metro area 25,479 / 22,308 30.1 – 62,594 / 57,531 2019 / 20-01 Seattle (VIGOR) Metro area 23,751 / 20,776 28.0 – 42,124 / 60,964 2019 / 20-01 New York (VIGOR) Metro area 27,769 / 23,279 59.6 – 95,462 / 109,548 2019 / 20-01 San Francisco Metro area 300 / 24,255 32.8 5.2 1,434 / 113,387 21-08 / 22-01 Boston Snowy † Actively snowing 1,674 / 44,290 62.4 12.4 6,159 / 162,558 26-01 / 26-01 Boston Night † Recorded at night 1,378 / 44,290 62.4 12.5 4,028 / 162,558 26-02 / 26-01 Middletown Rainy, suburban 263 / 39,601 51.0 6.9 233 / 20,256 25-04 / 25-01 Framingham Suburban 478 / 40,401 50.9 5.6 209 / 28,827 25-08 / 26-01 Fort Myers Post-disaster 1,073 / 471,822 627.6 11.8 1,365 / 119,990 22-10 / 22-01 Noordoostpolder Foggy, rural, suburban 1,916 / 492,804 627.0 13.0 2,508 / 162,263 25-01 / 25-01 Veluwe Highway, forest, rural 3,654 / 494,209 628.4 25.0 3,607 / 419,969 25-02 / 25-01 
+
+sources: MassGIS spring 2025 [16] imagery was used for Framingham, Connecticut spring 2023 state-wide orthoim-agery was used for Middletown [17], VIGOR’s satellite im-agery was used for San Francisco, and ESRI World Im-agery pinned to Wayback releases [18] was used for Boston Snowy/Night (capture date 2023-05), Fort Myers (2021-01, be-fore Hurricane Ian), Noordoostpolder (2025-01), and Veluwe (2025-01). Additionally, satellite patches for Noordoostpolder, Veluwe, and Fort Myers were cropped or upsampled to main-tain roughly 73 m a side because of their latitude difference from the Northern US. The same 640 ×640 px and 50% overlap as the VIGOR overhead satellite patches was maintained. We source our MSM data from OpenStreetMap for each environment using GeoFabrik’s historical OSM backups of each region, allowing the state of the OSM landmarks to coarsely align with when the panorama images were captured. All landmarks with coordinates lying outside of the specified overhead imagery coverage were discarded, resulting in the final landmark statistics shown in Table III. Finally, we combine all of these sources of data together, pairing every panorama trajectory (or collection of unse-quenced panoramas for the VIGOR cities) with overhead satellite imagery and OSM landmarks that cover a large region encompassing each respective set of panoramas. Sample panoramas, the full panorama trajectory, and overhead regions for some of the self-collected trajectories and Mapillary tra-jectories are shown in Figure 5. 
+
+B. Annotation Dataset 
+
+To extract annotations from the panoramas, the procedure defined in Section III-A was followed using Gemini 3 Flash [19] with high thinking as the VLM with the prompt described in Table I. The square pinhole reprojected images that were provided to the VLM had a 90 ◦ vertical and horizontal FoV and a resolution of 1024 px for pinhole images projected from VIGOR panoramas and 2048 px for all other panoramas (as non-VIGOR panoramas were higher resolution). All prompts and scripts to perform this extraction are provided in the Github repository. Annotation extraction for the VIGOR cities (Chicago/Seattle/NewYork) consumed 808M/390M/32M in-put/thinking/output tokens, and all other panoramas consumed 
+
+> Fig. 5. Representative panoramas, overhead map coverage (red dashed lines), and trajectories (yellow) for both the snowy and night Boston datasets (A), Middletown (B), Framingham (C), Fort Myers (D) and Noordoostpolder (E). The vehicle trajectory starts at green and ends at red. The trajectory driven for Boston was the same for both collects. Orange dashed lines separate the snowy and night panoramas in (A) and the consistent MassGIS mosaic above versus the Mixed-Sat Google mosaic below (discussed in Section V) in (C).
+
+116M/50M/3.1M input/thinking/output tokens. An example of annotations extracted from a panorama is shown in Figure 2. To evaluate the quality of the extracted annotations, two human labelers independently inspected a random subset of 500 annotations per city in Chicago and Seattle (1,000 total). The labelers marked each annotation as valid (the landmark is visible somewhere in the panorama), valid with minor tag mistakes (defined as a tag mistake that is unlikely to affect its correspondence with the correct MSM landmark, e.g., identifying a building as 4 instead of 5 floors while getting 8
+
+Positive Example P (match) = 0 .997       
+
+> Set 1: Panorama Annotation
+> amenity=restaurant name=Carnitas Don Pedro cuisine=mexican
+> Set 2: MSM Annotation
+> name=Don Pedro Carnitas amenity=cafe addr:housenumber=1113 addr:street=West 18th Street
+
+Negative Example P (match) = 0 .591        
+
+> Set 1: Panorama Annotation
+> amenity=hospital name=UChicago Medicine building=yes
+> Set 2: MSM Annotation
+> name=UIC College of Medicine building=yes addr:housenumber=1835 addr:street=West Polk Street
+> Fig. 6. A positive and negative example from the annotation correspondence dataset. For the positive example, even though no key-value pair matches, these annotations describe the same physical landmark. The trained correspon-dence classifier assigns a true match probability of 0.997. For the negative example, even though both annotations are university-based and healthcare related, they are different physical landmarks. The trained correspondence classifier assigns a match probability of 0.591. This is below the decision point of 0.8 and is therefore treated as an invalid match.
+
+the building name correct), or invalid (no such landmark is visible anywhere in the panorama). During the inspection process, the labelers consulted with OSM and Google Maps for additional context. Inter-rater agreement was substantial with Cohen’s κ = 0.70/0.75 [20] on Chicago/Seattle, rising to 
+
+κ = 0 .72 /0.8 when “minor” is collapsed into “valid”. The 87 of 1,000 annotations (8.7%) on which the labelers disagreed were adjudicated by a third pass. The results in Table IV show the final annotation accuracy using the unified labels. Overall, ~85% of the evaluated annotations extracted by the VLM in Chicago and Seattle were valid or contained only minor tag mistakes. 
+
+C. Annotation Correspondence Dataset 
+
+As part of this dataset, we also release the correspondence datasets used to train and validate the correspondence model described in Section III-B. The annotation correspondence dataset is a set of (ˆ ao, a M, m ) tuples where ˆao and aM
+
+are a pair of annotations and m denotes if ˆao and aM
+
+could describe the same landmark. To create the annotation correspondence training and validation dataset, we follow the procedure outlined in Section III-B for Chicago and Seattle respectively. The prompt described in Table II was used with Gemini 3 Flash with low thinking, consuming 42M/4.4M/5.4M input/thinking/output tokens total to produce 36K/40K/37K and 32K/27K/27K positive/easy negative/hard negative correspondences for Chicago and Seattle respectively. Some example correspondences can be seen in Figure 6. To evaluate the quality of the correspondence dataset, two labelers independently rated a random subset of 1,000 pro-posed correspondence pairs per city in Chicago and Seattle. Each pair consisted of one panorama-extracted annotation and one OSM landmark; the labelers were shown only the two sets of annotations, without the dataset’s proposed label or difficulty class, and marked each pair as the same landmark or different. Pairs were sampled equally from the dataset’s proposed positives and proposed negatives, with the latter drawn proportionally across easy and hard difficulty levels. Inter-rater agreement was high with κ = 0.88 /0.90 for                               
+
+> TABLE IV HUMAN EVALUATION OF THE PANORAMA ANNOTATION EXTRACTOR AND THE ANNOTATION CORRESPONDENCE DATASET
+> Chicago Seattle Combined
+> Panorama annotation extraction (n=500 /500 /1000 )Valid 83.6% 78.2% 80.9% Valid, minor tag mistakes 4.2% 5.0% 4.6% Invalid 12.2% 16.8% 14.5%
+> Annotation correspondence (n=1000 /1000 /2000 )Precision 0.976 0.976 0.976 Recall 0.859 0.850 0.855 F1 0.914 0.909 0.911
+
+Chicago/Seattle. The 112 of 2,000 pairs (5.6%) on which the labelers disagreed were adjudicated by a third pass, and the metrics comparing the VLM’s correspondence labels to the human consensus labels are reported alongside the extraction evaluation in Table IV. Finally, with these datasets, we now turn to using them to evaluate LOCI. V. E VALUATION 
+
+In our evaluation, we show that LOCI better enables robust and generalizable localization against prior overhead data across a diverse set of real-world data. We first describe in detail our experimental setup, baseline approaches, and evalu-ation infrastructure that enables us to evaluate each approach. 
+
+A. Baselines and Ablations 
+
+WAG [9] performs city-scale cross-view localization by matching learned features between street-level panoramas and overhead satellite imagery. We substituted the original VGG-16 backbone with frozen DINOv3 [21] patch level features, which we found substantially improved retrieval performance over the original architecture. WAG serves as our primary cross-view localization baseline as it operates without restric-tions over large overhead areas. The siamese network for the WAG baseline was trained on all panoramas in Chicago. A batch size of 18 was used for 60 epochs with the AdamW optimizer and a learning rate of 0.0001 . All satellite patches were resized to 320 × 320 px and panoramas were resized to 640 × 320 px. Hard negative mining was enabled after epoch 20. A pairwise contrastive loss was used with weights of 5 for positive pairs and 20 for negative pairs. Semi-positive panorama-satellite matches (where the panorama lies outside of the middle 50% of the satellite patch) were treated identically to positives (within the center 50%), differing from Downes et al. [9]. Training took 5 h on an Nvidia GeForce RTX 5090. To select a variance for the Gaussian observation likelihood used in Downes et al. [9] (shown in Equation 4), we found its maximum likelihood fit on true panorama-satellite patch pairs for the Seattle VIGOR dataset resulting in σWAG = 0 .1809 . This same fitting method was used for all approaches described below. Note that Equa-tion 4 is similar to Equation 3 but uses a different form of the residual as the similarity values so,i produced by WAG are cosine similarities and bounded in magnitude. 9
+
+p(o | xi, I) ∝ exp −1
+
+σ2
+
+> WAG
+
+
+
+max  
+
+> j
+
+so,j − so,i 
+
+2
+
+(4) 
+
+WAG + OSM represents approaches that keep only coarse semantics and drop instance details (e.g., shop names or house numbers) from OSM and is based on Zhou et al. [22]. This approach is very similar to WAG, but instead of using satellite images as the overhead data, Zhou et al. [22] uses rendered OSM tiles as the overhead data representation, claiming that the semantics in the OSM tiles provide more invariance to changing conditions. To align this approach to our problem setting we made a few changes. First, as we assume heading information is available, we removed the heading estimation from Zhou et al. [22]. Second, we removed the strong prior that the only feasible locations are on roads present in the OSM data. Third, we reduced the sampling density of overhead tiles from 1 m (as done in Zhou et al. [22]) to 36 m as is provided by our datasets and our approach to make scaling to the large environments more achievable. Finally, to make the comparison fair, we fused the outputs of Zhou et al. [22] with WAG in the same manner we describe in Section III. We observed this fusion to generally improve metrics for this baseline across evaluation datasets. This fusion narrows the key difference between Zhou et al. [22] and our approach to the rasterization of OSM tiles instead of treating landmarks independently. The OSM component of this baseline was trained with the same hyperparameters described above, and its Gaussian observation likelihood (matching Equation 4) 
+
+σOSM = 0 .2462 was also fit on Seattle identically to WAG. 
+
+LOCI-EF is an alternative “early fusion” approach that fuses landmark information with image information early instead of estimating both independently and fusing their distributions “late” with product of experts. LOCI-EF adds a transformer encoder to the end of each panorama/satellite model. This transformer takes in the frozen WAG pro-duced embedding, a CLS token, and self-attends both with panorama/satellite landmark tokens produced by the annota-tion encoder in Figure 3. The CLS token is then normalized and used as the panorama/satellite embedding. An InfoNCE contrastive loss [23] is combined with a distillation loss that rewards high cosine similarity between model outputs and the frozen WAG embeddings to encourage the model to only deviate from WAG’s predictions when the landmark tokens are discriminative. LOCI-EF again was trained only on Chicago and used the Gaussian observation likelihood (Equation 4) with a fit σEF = 0 .1876 on Seattle. 
+
+B. Approach Details 
+
+The correspondence model described in Section III-B was trained with a batch size of 512 for 20 epochs and a learning rate of 3 × 10 −4 with a binary cross entropy loss. We used the correspondences generated from the Chicago subset as the training set and those from Seattle served as the validation set. This achieved a train and validation ROC-AUC score of 0.993 and 0.976 respectively after training for 90 s on an Nvidia GeForce RTX 5090. With this correspondence model we generated confidences that an individual panorama landmark corresponded to an OSM landmark. We followed the procedure outlined in Section III-C with a Hungarian matching threshold of 0.8. With a final landmark-based similarity score for each panorama-overhead patch pair, we calculated σl in Equation 3 using the same MLE fit as done for the baseline approaches, except we exclude positive matches where so,i = 0 which otherwise lead to a poor fit. Performing this fit on Seattle resulted in σl = 0 .4673 .The pipeline processing time was measured for a subset of the locations in the Chicago dataset. The median processing time was 36.6 s, with landmark extraction taking 32.9 s and correspondence computation taking 3.7 s. Assuming a typical walking speed of 2 m/s of a quadrupedal robot, this translates to roughly 75 m of travel between processed observations. We additionally measured the cost of replacing the learned correspondence model with a local language model prompted to match a panorama’s landmarks directly against the OSM landmarks for Chicago. As the 28,582 sets of unique annota-tions in Chicago’s landmarks far exceed the models’ context window, we streamed them through in chunks and timed inference on an Nvidia GeForce RTX 5090. This yielded roughly 5.4/7.6 min per panorama without/with thinking for Gemma 3 27B [24], roughly two orders of magnitude slower than the 3.7 s learned correspondence step. 
+
+C. Path Experiment Setup 
+
+To evaluate localization performance, we need robot trajec-tories. As the VIGOR panoramas were sampled from a large set of Google Streetview panoramas, there is not a natural trajectory through the panoramas. To obtain an evaluation set of trajectories, we generated a set of 5000 5 km trajectories using walks through a graph where nearby panoramas are connected to each other. The self-collected and Mapillary datasets were each col-lected as a single sequence of panoramas. Panoramas were spatially downsampled with a minimum spacing of 5 m, pro-viding the number of panoramas per trajectory reported in Table III. We subsampled the full trajectory into overlapping continuous 3 km segments spread uniformly along the full trajectory’s length, sampling 500 forward and 500 backwards. We evaluated each approach on this set of evaluation trajectories. For all approaches we used a histogram filter to instantiate the Bayes filter. With ~20 m ×20 m cell size we observed that using a histogram filter was effective at representing the state probability density over large city-scale areas while allowing us to avoid particle starvation issues and tuning of additional hyperparameters as compared to a particle filter. One limitation of a histogram filter is a lower bound on achievable error, but ~20 m ×20 m grid cells were sufficient for our localization task. Odometry ut ∈ R2 was derived by taking the deltas in latitude and longitude between sequential panora-mas in the evaluation path. Odometry noise was sampled from 
+
+N (0 , σ 2
+
+> n
+
+dij ), where σn is fixed at 0.141 m/ √m and dij is the distance between the ith and jth panorama in the trajectory in meters, and was added to the odometry measurements at each step, which corresponds to 1 m error standard deviation for 50 m of travel. 10 
+
+The prediction step of the histogram filter shifts the cur-rent distribution by the odometry and then applies Gaussian smoothing over the 2D histogram similarly with a variance of σ2 
+
+> np
+
+= 0 .141 2dij . We report two types of metrics for each trajectory evaluation. Final Error (m) measures the Euclidean distance between the estimated position at the end of the trajectory and ground truth, capturing the final accuracy of each approach. We used the mean of the histogram filter as the estimated location for this metric. Expected Distance to Convergence (EDC) at δ threshold (m), detailed in Equation 5, captures how much distance is traveled weighted by the probability of the belief being at least δ away from the true location. The faster the belief converges to the true location, the lower this metric becomes. We report both of these metrics averaged across all trajectories τ ∈ T in an evaluation set. EDC δ (τ ) = 
+
+Z
+
+> τ
+
+p(|| x(s) − x∗(s)|| 2 > δ )ds (5) 
+
+D. Path Experiment Results 
+
+Aggregate statistics across paths for LOCI and all baselines can be seen in Table V and probability mass within r = 50 
+
+and r = 100 m from the true position as a function of distance traveled can be seen in Figure 7. Veluwe aside, LOCI has marginally higher mean final error (by at most 8 meters, within a single histogram filter cell), while placing more probability mass closer to the true location faster than all other approaches, significantly reducing EDC 100 scores. In the city environments (left four plots on the top row of Figure 7) all approaches converged to within 100 m of the true location by the end of the trajectory, except for on the Boston Snowy dataset where only LOCI regularly accumulated all probability mass within 100 m. In these landmark-rich envi-ronments, we saw LOCI converged to the true location much faster (within 100-500 m) compared to all other approaches (900+ m depending on the dataset). Among the baseline ap-proaches, we saw rasterized OSM helping WAG + OSM in Boston Night and New York, and LOCI-EF offered limited benefit over just WAG in most city environments. Notably, LOCI-EF significantly under-performing LOCI suggests that the approach fails to combine image and landmark data in a way that generalizes as well past its training data. We see a similar pattern in Middletown, a more suburban dataset captured during a rainstorm. As landmarks are less dense in Middletown than in Boston Snowy, LOCI did not localize as quickly as in the city datasets, but still converged faster than other approaches. Framingham is a self-similar suburban environment, and we use it to probe how much each approach relies on the quality of the overhead imagery. Holding all else fixed, we evaluate against two satellite sources: the single-date MassGIS spring 2025 orthomosaic mentioned in Section IV, and a second mosaic (“Framingham Mixed-Sat”) stitched from tiles pulled from Google Maps. Though all tiles were pulled on the same date, the satellite tiles themselves come from different imaging dates, which leaves visible seams between the west and east regions (leaf-on data) and the rest of the patches (leaf-off data). See the overhead image in the bottom of Figure 5-C. Such temporally inconsistent mosaics are common in practice. Because only the overhead imagery differs between the two conditions, the comparison isolates each approach’s reliance on consistent satellite appearance. With the clean overhead, all approaches converge to within 100 m by the end of the 3 km trajectories, though LOCI converges roughly three times faster than WAG (EDC 100 of 418.7 m versus 1272.0 m), leveraging house numbers and street names to disambiguate otherwise repetitive suburban blocks. On Framingham Mixed-Sat, all approaches except LOCI fail to gain any traction (EDC 100 ≈ 3007 m, near the trajectory-length ceiling), as the satellite-appearance matching consistently biased approaches towards the leaf-on imagery on the east/west side of the overhead region. LOCI does not fully localize (1349.7 m final error), but retains more localization signal than any other approach with the help of instance-level semantics. The Fort Myers, Noordoostpolder, and Veluwe datasets cover a much larger area (627 km 2 instead of ~50 km 2). As we started each trial with a uniform prior over the dataset area, this larger area can make localization more difficult. Evaluation on the Fort Myers dataset explored how robust approaches were to severe changes in environment appearance, with sand and debris covering many of the roadways and vehicles and buildings overturned. LOCI placed probability mass close to the true position meaningfully faster than all other approaches. In Noordoostpolder we see slower and less successful localization across approaches, with LOCI still leading with an EDC 100 of 1202.3 compared to the next best score of 1937.2 from WAG. Interestingly, WAG+OSM performed quite poorly, suggesting that the rasterized OSM tiles were more difficult to match against than the satellite imagery in these more landmark-sparse environments. Veluwe was an environment where LOCI was outperformed by WAG. Veluwe’s trajectory lies on a landmark-sparse stretch of multi-lane highway. Though Framingham/Middletown/Fort Myers/Noordoostpolder had similar landmark per panorama density, their panorama landmarks were regularly more dis-criminative (street name signs, house numbers). We observed some landmarks in Veluwe, like communication towers, were inconsistently mapped in OSM, pulling probability mass away from the true location towards where the landmarks were mapped. Veluwe’s key difference was that landmarks were dominantly mile markers, overpasses, and signs referring to landmarks far from the robot’s current location, violating the proximity assumption we make in our observation model. We discuss possible ways to address this in Section VII. Across most environments, incorporating landmarks mean-ingfully accelerated convergence, consistent with the hypoth-esis that semantic landmarks provide a localization signal complementary to image-based retrieval. The gains were largest where either image-only matching was most strained or landmarks were dense and informative. In landmark-dense cities, where overhead imagery was informative but self-similar across blocks, LOCI converged 3-10 times faster than WAG while reaching comparable final accuracy. In Fort Myers and Framingham, where domain shift and mixed satellite image dates degrade the overhead signal, landmarks addition-ally drove faster and more accurate localization. WAG+OSM, 11 
+
+Fig. 7. Probability mass within r = 50 m and r = 100 m of the true location for all evaluation environments. Shaded regions show 95% CI for the mean (using standard error of the mean). Across all environments but Veluwe, on average with high confidence LOCI places more probability mass closer to the true location faster than other approaches. This demonstrates that VLM-extracted semantic landmarks and MSMs can generally improve cross-view localization across very different test environments. TABLE V EXPECTED DISTANCE TO CONVERGENCE (M) AND FINAL LOCALIZATION ERROR (M) ACROSS ENVIRONMENTS . V ALUES SHOWN AS MEAN ± 1.96 · SEM (NORMAL -APPROXIMATION 95% CI FOR THE MEAN ). BOLD INDICATES THE BEST METHOD . E VALUATION TRAJECTORIES WERE 3 KM FOR ALL SELF -COLLECTED AND MAPILLARY TRAJECTORIES , AND 5 KM FOR NEW YORK .Mean EDC 100 (m) ↓ Mean Final Error (m) ↓
+
+WAG WAG+OSM LOCI-EF LOCI WAG WAG+OSM LOCI-EF LOCI New York 718.5 ±7.0 606.3 ±8.0 691.4 ±6.8 184.5 ±3.5 9.2 ±0.1 9.6 ±0.2 9.1 ±0.1 11.2 ±0.2 San Francisco 428.3 ±9.4 371.2 ±7.2 436.7 ±9.8 39.9 ±1.1 10.6 ±0.5 9.2 ±0.2 10.4 ±0.5 11.0 ±0.4 Boston Snowy 706.8 ±22.1 588.3 ±16.2 566.1 ±17.3 92.3 ±4.8 32.8 ±1.6 33.2 ±2.2 27.6 ±1.1 22.0 ±0.9 
+
+Boston Night 519.4 ±16.3 363.2 ±11.0 468.4 ±14.0 160.4 ±5.6 23.7 ±0.9 22.9 ±0.8 23.2 ±0.9 24.6 ±1.2 Middletown 717.2 ±10.5 674.4 ±13.0 674.7 ±10.4 443.7 ±10.4 17.7 ±0.5 20.6 ±0.6 17.0 ±0.5 24.6 ±0.6 Framingham 1272.0 ±28.4 1393.3 ±39.5 1143.4 ±27.4 418.7 ±12.4 19.9 ±0.8 26.5 ±0.9 18.1 ±0.7 15.4 ±0.7 
+
+Fram. Mix-Sat 3007.2 ±0.3 3006.8 ±0.3 3006.9 ±0.3 2146.3 ±36.1 3393.9 ±41.9 3095.3 ±38.4 3360.5 ±41.6 1349.7 ±111.2 
+
+Fort Myers 1070.1 ±36.5 1929.3 ±46.9 1022.2 ±37.6 642.6 ±24.9 96.8 ±21.2 960.5 ±170.3 89.0 ±18.7 33.2 ±2.9 
+
+Noordoostp. 1937.2 ±52.5 2916.3 ±12.5 1969.2 ±50.5 1202.3 ±43.9 2727.2 ±274.5 7983.5 ±291.2 2302.4 ±259.9 128.3 ±12.3 
+
+Veluwe 2137.9 ±37.4 2883.0 ±18.5 2319.0 ±34.2 2387.3 ±40.0 858.2 ±104.4 5845.1 ±284.7 1263.9 ±216.1 2617.3 ±270.5 
+
+which retains only coarse semantic classes through rasteri-zation, offered limited benefit and was actively harmful in Fort Myers, Noordoostpolder, and Veluwe, where the raster-ized priors did not survive the appearance shift or the self-similarity in landmark-sparse settings. This contrast supports that instance-level semantics like street names, house numbers, and named landmarks (rather than coarse category maps) can disambiguate self-similar regions and resist visual domain shift more effectively in many environments. Finally, LOCI-EF’s failure to match LOCI across most environments indicates that access to both modalities is not sufficient; how landmark and image observations are represented and combined affects whether the filter generalizes beyond its training distribution. VI. R ELATED WORK 
+
+The problem of image-based cross-view localization has seen significant progress as datasets like CVUSA [25], VIGOR [14], and CV-Cities [26] have enabled deep learning ap-proaches. Early methods leveraged convolutional neural net-works [27] and siamese architectures [28] to learn correspon-dences between overhead satellite images and egocentric ob-servations, while more recent work has adopted transformers [29], [30] to improve cross-view matching. Relevant to our work, WAG [9] uses a siamese network to learn embeddings for ego panoramas and satellite images, using the learned similarity as an observation likelihood in a particle filter. WAG demonstrates convergence to the correct position starting from a city-scale location prior after approximately 20 km of travel. Though modern DINOv3 features greatly improve WAG’s speed of convergence to a kilometer or two, image-based cross-view localization approaches miss out on readily available, and often highly discriminative semantic informa-tion that is not captured in satellite imagery, like business or street names, because of the perspective transform. Metric-Semantic maps like OpenStreetMap (OSM) capture this kind of data, and provide cross-view localization ap-proaches with a way to leverage this otherwise lost semantic information. Samano et al. [31] match rasterized OSM maps 12 
+
+with egocentric panoramas by learning a shared embedding space. OrienterNet [4] learns to project egocentric images into a bird’s-eye-view (BEV) representation, which is then aligned with an encoding of OSM data; however, it assumes a position prior. Zhou et al. [22] integrate OSM maps and egocentric panoramas into a particle-filter-based localization framework. Hu et al. [32] extend this line of work by fusing both satellite imagery and OSM data for the overhead rep-resentation, demonstrating improved robustness over single-modality approaches. A limitation shared by these methods is that they rasterize OSM data, discarding much of the rich semantic information available, such as landmark descriptions and place types. These approaches also do not explicitly extract semantic information from the egocentric images. CrossText2Loc [13] extracts semantic descriptions from egocentric images using a VLM. However, CrossText2Loc retrieves against satellite imagery or OSM data independently rather than fusing both modalities. Though CrossText2Loc still rasterizes its OSM data, it includes the names of some busi-nesses in that raster, allowing it to match egocentric semantics with overhead semantics. It also assumes a tight location prior, matching against only the 100 nearest overhead candidates to the true location, whereas our approach assumes only a city-scale location prior spanning hundreds of square kilometers. Furthermore, CrossText2Loc discards the egocentric image after extracting semantics from it, provides the VLM with privileged information during landmark extraction, and does not focus on sequential localization. In LOCI, we leverage satellite data, OSM data, egocentric panoramas, and semantics extracted from those panoramas. We richly encode the seman-tic content in both OSM data and egocentric observations and provide no privileged information. Other works outside of cross-view localization have in-vestigated using text observed by the robot as an invariant feature for simultaneous localization and mapping [33]. Text extraction “in the wild” poses challenges that other works address jointly with place recognition [34]. In [35], the authors match egocentric images and extracted text to “places of interest” from an OSM database. These approaches do not address the same cross-view localization problem as LOCI. VII. L IMITATIONS AND FUTURE WORK 
+
+One key opportunity for improvement we encountered with LOCI in Veluwe is better handling of landmark visibility. Though prompted to only extract proximate landmarks, fre-quently VLMs would return notable but distant semantic land-marks, such as the name of a nearby town on a highway sign, a church a few hundred meters away, or a notable skyscraper like Willis Tower on the Chicago horizon. Proper identification and integration of these features into the observation model could greatly improve localization (e.g., a known bearing to Willis Tower would greatly narrow your belief). Another limitation we observed was the lack of calibrated uncertainty available from the VLM-extracted panorama se-mantic landmarks. This lack of uncertainty makes LOCI more vulnerable to hallucinations. One interesting direction of future work is the filtering of extracted landmarks over time before providing the set of landmarks to LOCI to calculate the up-dated observation likelihood. For example, if panoramas taken every few meters were each used for landmark extraction, corresponding landmarks could be inspected and vetted for robustness to approximate which properties of these landmarks are reliable and not. As an example, we often saw that street name and house number label extraction improved as the street sign got closer in the panorama. Finally, all of our localization results only exercise the cloud-hosted Gemini 3 Flash model, which would require network connectivity during deployment. It is unclear how well this approach transfers to the rapidly developing model families that are practical to run onboard. VIII. C ONCLUSION 
+
+In this work, we introduced LOCI , a cross-view localization framework that integrates information from OSM to improve localization accuracy and convergence speed. By leveraging both satellite imagery and rich semantic and textual anno-tations from OSM, our approach mitigates the challenges posed by drastic perspective differences between egocentric and overhead views. Through extensive evaluations on real-world data we demonstrate that incorporating richer OSM annotations significantly enhances localization performance, reducing the trajectory length required for accurate localization convergence when compared to previous approaches. Our experiments show that LOCI, trained only in Chicago and validated only in Seattle, generalizes well to new locations and weather conditions, and outperformed image-only and other OSM-based methods in most urban and rural environ-ments. LOCI provides a step towards rapid localization against prior spatial information, enabling robots to operate with richer context in GPS-denied environments. ACKNOWLEDGMENTS 
+
+This work was supported in part by ARL under Grants W911NF-21-2-0150 and W911NF-17-2-0181. The views and conclusions contained in this document are those of the authors and should not be interpreted as representing the official policies, either expressed or implied, of the Army Research Office or the U.S. Government. The U.S. Government is authorized to reproduce and distribute reprints for Government purposes notwithstanding any copyright notation herein. The authors gratefully acknowledge Lambda Labs and Tensorpool for providing computational resources for this work. REFERENCES [1] OpenStreetMap contributors, “Planet dump retrieved from https://planet.osm.org,” https://www.openstreetmap.org, 2026, data retrieved via GeoFabrik historical extracts. [2] A. Durgam, S. Paheding, V. Dhiman, and V. Devabhaktuni, “Cross-view geo-localization: a survey,” IEEE Access , 2024. [3] P. Lindenberger, P.-E. Sarlin, J. Hosang, M. Balice, M. Pollefeys, S. Lynen, and E. Trulls, “Scaling image geo-localization to continent level,” in NeurIPS , 2025. [4] P.-E. Sarlin, D. DeTone, T.-Y. Yang, A. Avetisyan, J. Straub, T. Mal-isiewicz, S. R. Bulo, R. Newcombe, P. Kontschieder, and V. Balntas, “OrienterNet: Visual Localization in 2D Public Maps with Neural Matching,” in CVPR , 2023. [5] Z. Zhou, Z. Qi, L. Cheng, and G. Xiong, “Seglocnet: Multimodal localization network for autonomous driving via bird’s-eye-view seg-mentation,” arXiv preprint arXiv:2502.20077 , 2025. 13 
+
+[6] X. Guo, H. Peng, J. Hu, H. Bao, and G. Zhang, “From Satellite to Ground: Satellite Assisted Visual Localization with Cross-view Semantic Matching,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , May 2024, pp. 3977–3983. [Online]. Available: https://ieeexplore.ieee.org/document/10611658/?arnumber=10611658 [7] R. Peeters, A. Steiner, and C. Bizer, “Entity matching using large language models,” in Proc. 28th Int. Conf. Extending Database Technol. (EDBT) . Barcelona, Spain: OpenProceedings.org, 2025, pp. 529–541. [8] S. Thrun, W. Burgard, Wolfram, and D. Fox, Probabilistic Robotics .Cambridge, MA, USA: The MIT Press, 2005. [9] L. M. Downes, D.-K. Kim, T. J. Steiner, and J. P. How, “City-wide Street-to-Satellite Image Geolocalization of a Mobile Ground Agent,” in 2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , Oct. 2022, pp. 11 102–11 108. [Online]. Available: https://ieeexplore.ieee.org/document/9981996/?arnumber=9981996 [10] G. E. Hinton, “Training Products of Experts by Minimizing Contrastive Divergence,” Neural Computation , vol. 14, no. 8, pp. 1771–1800, Aug. 2002. [Online]. Available: https://ieeexplore.ieee.org/abstract/document/ 6789337 [11] H. W. Kuhn, “The Hungarian method for the assignment problem,” 
+
+Naval Research Logistics Quarterly , vol. 2, no. 1-2, pp. 83–97, 1955, _-eprint: https://onlinelibrary.wiley.com/doi/pdf/10.1002/nav.3800020109. [Online]. Available: https://onlinelibrary.wiley.com/doi/abs/10.1002/nav. 3800020109 [12] P.-E. Sarlin, D. DeTone, T. Malisiewicz, and A. Rabinovich, “Superglue: Learning feature matching with graph neural networks,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,2020, pp. 4938–4947. [13] J. Ye, H. Lin, L. Ou, D. Chen, Z. Wang, C. He, and W. Li, “Where am i? cross-view geo-localization with natural language descriptions,” in ICCV , 2025. [14] S. Zhu, T. Yang, and C. Chen, “VIGOR: Cross-View Image Geo-localization beyond One-to-one Retrieval,” in 2021 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) .Nashville, TN, USA: IEEE, Jun. 2021, pp. 5316–5325. [Online]. Available: https://ieeexplore.ieee.org/document/9578740/ [15] Mapillary, “Mapillary street-level imagery platform and map,” https: //mapillary.com, 2026, accessed: 2026-06-18. [16] MassGIS (Bureau of Geographic Information), “MassGIS data: 2025 aerial imagery,” https://www.mass.gov/info-details/ massgis-data-2025-aerial-imagery, Commonwealth of Massachusetts, Executive Office of Technology Services and Security, 2026. [17] Connecticut State GIS Office, “2023 aerial imagery,” https://maps. cteco.uconn.edu/data/flight2023/, State of Connecticut, distributed via Connecticut Environmental Conditions Online (CT ECO), 2023. [18] Esri, “World imagery wayback,” Digital map / tile layer, 2026. [Online]. Available: https://livingatlas.arcgis.com/wayback/ [19] Google, “Gemini 3 Flash,” 2025, vision language model. [Online]. Available: https://ai.google.dev/gemini-api/docs/models/ gemini-3-flash-preview [20] J. Cohen, “A Coefficient of Agreement for Nominal Scales,” Educational and Psychological Measurement , vol. 20, no. 1, pp. 37–46, Apr. 1960. [Online]. Available: https://doi.org/10.1177/001316446002000104 [21] O. Siméoni, H. V. Vo, M. Seitzer, F. Baldassarre, M. Oquab, C. Jose, V. Khalidov, M. Szafraniec, S. Yi, M. Ramamonjisoa et al. , “DINOv3,” 2025. [22] M. Zhou, X. Chen, N. Samano, C. Stachniss, and A. Calway, “Efficient Localisation Using Images and OpenStreetMaps,” in 
+
+2021 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , Sep. 2021, pp. 5507–5513. [Online]. Available: https://ieeexplore.ieee.org/document/9635972/?arnumber=9635972 [23] A. v. d. Oord, Y. Li, and O. Vinyals, “Representation learning with contrastive predictive coding,” arXiv preprint arXiv:1807.03748 , 2018. [24] Gemma Team, “Gemma 3 technical report,” arXiv preprint arXiv:2503.19786 , 2025. [Online]. Available: https://arxiv.org/abs/ 2503.19786 [25] S. Workman, R. Souvenir, and N. Jacobs, “Wide-area image geolocal-ization with aerial reference imagery,” in IEEE International Conference on Computer Vision (ICCV) , 2015, pp. 1–9. [26] G. Huang, Y. Zhou, L. Zhao, and W. Gan, “Cv-cities: Advancing cross-view geo-localization in global cities,” IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing , vol. 18, pp. 1592– 1606, 2025. [27] Y. Tian, C. Chen, and M. Shah, “Cross-view image matching for geo-localization in urban environments,” in Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 2017, pp. 3608–3616. [28] S. Hu and G. H. Lee, “Image-based geo-localization using satellite imagery,” International Journal of Computer Vision , vol. 128, no. 5, pp. 1205–1219, 2020. [29] S. Zhu, M. Shah, and C. Chen, “Transgeo: Transformer is all you need for cross-view image geo-localization,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2022, pp. 1162–1171. [30] D. Yuan, F. Maire, and F. Dayoub, “Cross-Attention Between Satellite and Ground Views for Enhanced Fine-Grained Robot Geo-Localization,” in 2024 IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) . Waikoloa, HI, USA: IEEE, Jan. 2024, pp. 1238–1245. [Online]. Available: https://ieeexplore.ieee.org/document/10483962/ [31] N. Samano, M. Zhou, and A. Calway, “You are here: Geolocation by embedding maps and images,” in Computer Vision–ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part XXIII 16 . Springer, 2020, pp. 502–518. [32] Y. Hu, Y. Liu, and B. Hui, “Combining openstreetmap with satellite imagery to enhance cross-view geo-localization,” Sensors , vol. 25, no. 1, p. 44, 2024. [33] B. Li, D. Zou, Y. Huang, X. Niu, L. Pei, and W. Yu, “Textslam: Visual slam with semantic planar text features,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 46, no. 1, pp. 593–610, 2023. [34] Z. Raisi and J. Zelek, “Text detection & recognition in the wild for robot localization,” arXiv preprint arXiv:2205.08565 , 2022. [35] D. Hettiarachchi, Y. Tian, H. Yu, and S. Kamijo, “Text spotting towards perceptually aliased urban place recognition,” Multimodal Technologies and Interaction , vol. 6, no. 11, 2022. [Online]. Available: https://www.mdpi.com/2414-4088/6/11/102

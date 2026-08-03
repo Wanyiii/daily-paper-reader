@@ -1,0 +1,505 @@
+Title: A versatile generalized digital twin for Electron Microscopy
+
+URL Source: https://arxiv.org/pdf/2607.29411v1
+
+Published Time: Mon, 03 Aug 2026 01:05:47 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+## A versatile generalized digital twin for Electron Microscopy 
+
+Thomas W. Pfeifer, ∗ Andrew R. Lupini, † and Eric R. Hoglund ‡
+
+Center for Nanophase Materials Sciences, Oak Ridge National Laboratory, Oak Ridge, Tennessee 37830, USA 
+
+(Dated: August 3, 2026) Development of specialized imaging and spectroscopy states in transmission electron microscopy is needed for novel applications, such as flexible momentum-resolved high energy-resolution spec-troscopy. This task is complicated by the need to align and configure many different lenses, and by ambiguity as to the locations of various imaging and diffraction planes, which are often not well documented. Here we develop a versatile digital twin for simulating the electron beam tra-jectory throughout an electron microscope. Our code package contains simple tools for modeling the microscope column, and we present multiple procedures for dialing in precise lens locations and calibrating lens models. This enables use of the model as a predictive tool, allowing the user to quickly and easily determine the correct lens values for setting up new condenser or projector modes. Automatic procedures to change lens settings and measure the resulting changes can be used to close the loop. With the accelerating development of machine learning and artificial intelligence tools, we also believe a physically-informed model of the microscope can serve as a valuable tool for automated microscopy and AI/ML integration. 
+
+INTRODUCTION 
+
+Due to the complexity of alignment and configuration of the many lenses inside the electron microscope, the development of new imaging and spectrometer modes re-mains out of reach for many users. A lack of clarity re-garding the optical configuration of the microscope poses a challenge for new and experienced microscopists alike. Similarly, key parameters such as the calibrations of cam-era lengths or collection angles are critical for accurate quantitative analysis of data, and the ability to freely configure these values and subsequently record the mi-croscope’s true state is essential. Furthermore, the abil-ity to set up an arbitrary microscope state can enable new and better experimentation. To address these concerns, we have developed a dig-ital twin for simulating the electron beam trajectory throughout the column. Ray optics are used to sim-ulate the electron trajectory from gun to detectors, with a realistic treatment of elements including round lenses, quadrapoles, dipoles, apertures, and prisms. Lens strengths can be read from various sources (e.g., from the microscope itself via APIs if the microscope manufacturer allows, or from microscope configuration files). We also develop a road map for the calibrations for lens strengths (e.g. to convert electrical current readings or values given in terms of percentages of a maximum strength to focal lengths). This is done either through sweeps of lens pa-rameters (with beam sizes, rotation, and total intensity recorded from the Ronchigram camera or other detec-tor) or based on values read across multiple microscope configurations. Similarly, only approximate knowledge of the physical position of elements is required, as fitting procedures allow for fine-tuning of guessed positions. Live updating of the digital twin from values read via the microscope’s API allows for constant visualization of lens and crossovers as the microscope configuration is changed. Similarly, fitting algorithms can be applied to the digital twin, e.g. for determination of lens parameters for arbitrary camera length, or optimization of lens pa-rameters for stability. Assuming the manufacturer’s API also allows the setting of lens strengths, the digital twin can then be used to set the microscope configuration, and arbitrary control over the microscope configuration can be achieved. Finally, the recorded microscope state can be automat-ically recorded, allowing reconstruction of the microscope during data analysis, as opposed to relying on nominal or previously-calibrated values recorded by the user. 
+
+METHODOLOGY Developing a toy microscope model 
+
+We begin by developing a toy model for beam propa-gation within a microscope. Critically, calibration of the model is required to create a fully functional digital twin, however the uncalibrated toy model may still be useful for visualization and demonstration purposes. Calibra-tion will be discussed in a later section. The beam trajectory though the microscope is simu-lated with ray optics and the transfer matrix method, where the effect of each optical element on the beam is calculated based on the matrix representation of the ele-ment. An individual ray is minimally tracked by its po-sitions ( x,y) and angles ( θ corresponding to the angle in 
+
+x and ϕ corresponding to the angle in y). Our code also tracks additional terms in the matrix such as beam cur-rent I in order to account for current-reducing apertures, position z along the length of the beam, beam rotation angle R at each point, and the energy of a given ray E
+
+in order to allow dispersing of the beam based on energy (via a prism element). In this work we will focus on round arXiv:2607.29411v1 [cond-mat.mtrl-sci] 31 Jul 2026 2lenses and apertures however, as these primarily deter-mine the imaging states available. Propagation through an element (given by a matrix M ) is found via matrix multiplication: |x2, θ 2, y 2, ϕ 2| = M × | x1, θ 1, y 1, ϕ 1|. This method has been used extensively [1–4], so we will only briefly discuss the specific matrix operations for the most common elements. Our matrix representation of each element is based on that given by Brown [2]. We will only use the first-order approximation, but we note that it still captures advanced phenomena such as the rotation of the elec-tron beam within a solenoid. In this model, definitions are also based on field strength K as opposed to focal lengths f .For a round lens or solenoid, focusing and rotation of the electron beam uses the following matrix: 
+
+S =
+
+C2 1 
+
+> K
+
+S C S C 1 
+
+> K
+
+S2
+
+−K S C C2 −K S 2 S C 
+
+−S C − 1 
+
+> K
+
+S2 C2 1 
+
+> K
+
+S C K S 2 −S C −K S C C2
+
+(1) where K is the field strength, C = cos (K L ) for a lens of length L, and S = sin (K L ). We highlight the fact that for small K L , the small-angle approximation applies: 
+
+cos (K L ) ≈ 1 and sin (K L ) ≈ K L . Focusing can then be approximated as f −1 ≈ K2 L. This approximation has been explored [5], and we include additional analysis and discussion in the Supplemental Material. This ap-proximation also simplifies calibration of lenses (i.e., re-lating K to physical parameters in the microscope such as lens length and electrical current), as will be discussed in a later section. This also reduces the above expression to the more common single-axis definition for a round lens with no beam rotation: 
+
+x2
+
+θ2
+
+= 1 0
+
+− 1 
+
+> f
+
+1
+
+x1
+
+θ1
+
+(2) 
+
+S can also be separated into rotating and focusing terms: Stotal = Srot × S f ocus , shown below: 
+
+Srot ×S f ocus =
+
+C 0 S 00 C 0 S
+
+−S 0 C 00 −S 0 C
+
+C 1 
+
+> K
+
+S 0 0
+
+−K S C 0 00 0 C 1 
+
+> K
+
+S
+
+0 0 −K S C
+
+(3) where a round lens rotates the beam simply by an angle of θ = −K L . In our model, we use this latter definition, as it enables the use a rotating reference frame to simplify the analysis. If beam rotation is tracked separately, rays within the rotating reference frame are simply focused via Sf ocus .A drift segment for free-space propagation is modeled via the following matrix: 
+
+D = 1 L
+
+0 1 (4) for propagation length L.There is no convenient matrix representation of an aperture, however the key behaviors of an aperture can be captured via a custom propagation function. An aper-ture limits the size of the beam, so we simply rescale the 
+
+x, y, θ and ϕ values of all rays. An aperture also changes the total beam current by masking out a portion of the beam, so we track the total beam intensity before and af-ter each element, and update the intensity based on the rescaling performed. To construct a toy microscope model from individual components, we begin with the condenser round lenses, the Virtual Objective Aperture (VOA), a pair of objec-tive round lenses, projector round lenses, and Ronchi-gram detector (a plane in z along the beam path where image and diffraction planes, beam sizes, etc, will be recorded). This is simply defined as a series of element matrices (drift, lens, drift, and so on). The starting rays are defined by initial positions and angles x, y, θ, ϕ , and the resulting rays at various points can be calculated. While a physical microscope typically has more dipoles than round lenses, these are primarily used for steering the beam as required for alignment through lenses. We have therefore neglected dipoles from our initial model, as dipoles will not affect the positioning (along the length of the column) and magnification of the various image and diffraction planes. This is equivalent to using a laterally-varying reference frame, where the origin follows the center of the beam. Similarly, while quadrupoles and hexapoles are used for aberration correction or to reduce astigmatism [6], the first-order matrix representations of beam optics used here do not capture aberrations, so these are neglected. Optical assemblies (such as a probe corrector) which meaningfully affect the focusing of the beam are reduced to a single round lens with an effective focal length and effective position, or neglected in certain cases. Critical outputs from the model may include lens rota-tion, the locations of crossovers, and locations and mag-nification of various image planes and diffraction planes. Rotation is tracked by summing each lens’ contribution, and crossovers can be found by calculating the extent of the farthest (radially) ray. Image planes and diffraction planes can be inferred based on starting ray positions and angles: two rays emitted from the same point will cross at an image plane, and two rays emitted at the same angle will cross at a diffraction plane. 
+
+> Calibrating the model as a digital microscope twin
+
+While the modeling discussed above may yield a toy model useful for visualization and educational purposes [4], the calibration of lenses is required to create a phys-ically meaningful digital twin. In other words, nominal values read from the microscope (often in terms of elec-3trical current ( I) or shown as a percentage of the lens’s maximum magnitude) must be mapped to field strengths 
+
+K used by the ray tracing model. Furthermore, the func-tional relationship between I and K may not be known. While it should theoretically be linear, it may not be so across the full range of lens values: electronics may be-have nonlinearly, or lens component materials may reach magnetic saturation. Similarly, lens positions and thick-nesses ( L) must be found. Various strategies for calibra-tion of the microscope model are outlined below, with additional details available in the Supplemental Mate-rial. We will focus on the alignment of the projector lens system for each of the examples to follow. 
+
+> Inference of focal lengths as a function of lens strength
+
+To calibrate the nominal lens strengths to focal lengths, it may seem intuitive to simply sweep each lens individually, recording parameters such as beam diam-eter on the Ronchigram camera. This may hint at the functional relationship between lens strength and focal length, however it will not adequately find the correct scaling factors (e.g. K = C ∗ I) if more than one lens is active. An example of this is shown in the Supplemen-tal Material, where it can be shown that for two lenses, the proportionality for beam diameter vs. first lens focal length depends on the focusing of the second lens. This can also be understood analytically via the equations rep-resenting the effective focal length f1,2 for a two-lens sys-tem, which depend on each individual lens focal lengths 
+
+f1 and f2 and the distance between lenses d2 [7]: 1
+
+f1,2
+
+= 1
+
+f1
+
++ 1
+
+f2
+
++ d2
+
+f1f2
+
+(5) The measurement of the varying beam diameter under perturbation of a single lens f1 or f2 therefore depends on the focal length of other lenses in the system. 2D lens sweeps provide more information, however the scaling will again depend on the behavior of subsequent lenses. An example 2D sweep is shown in Fig. 1.a, show-ing the beam diameter (heatmap intensity) as a function of the strength of projection lenses 1 and 3. Relevant ray paths are also shown in Fig. 1.b,c for the scenarios discussed below. During normal operation, the objective lens forms a diffraction plane prior to the first projection lens. When sweeping the pair of projector lenses, two arcs of local minima can be observed, passing through two regimes. At low current for both lenses (Fig. 1.a, solid white, and Fig. 1.b, solid black curves), the focused STEM probe is refocused onto the detector. This defines an image plane. As both lens currents are increased, this plane is brought closer, a second diffraction plane appears, and a second image plane appears as well (Fig. 1.a,b, dashed white and dashed black curves respectively). Understanding these           
+
+> Figure 1. (a) Beam diameter is measured (shown as heatmap intensity) as a function of two projector lens strengths ( P1and P3). low- and high-current bands of minima (traced in white), correspond to focusing of the real-space probe to the CCD (ray diagram shown in (b)). Each lens has a critical current (vertical blue, horizontal green lines) where the beam diameter is insensitive to the other lens strength. These cor-respond to lens 1 ( I1,3critical ) placing a crossover at lens 3 (a,d, blue), or lens 3 ( I3,1critical ) projecting the CCD plane back to lens 1 (a,b, green). In both cases, Eq. 6 allow calcu-lation of electrical lens current Ito the lens strength K
+
+regimes is helpful for course calibration: if a given com-bination of lens values (e.g., a manufacturer-defined pro-jection lens setting) yields an image plane or diffraction plane at the detector, it may not be clear in which regime this occurs. Sweeping up or down to explore where the next plane occurs may lend insight. A surface fitting scheme may be able to replicate gen-eral features (arcs of minimum diameter, in approxi-mately the correct locations) while obtaining incorrect calibration values however. One may also find discrepan-cies between fitted calibrations from sweeps of different lenses (1 vs 2, 1 vs 3, and so on). Instead, we note the vertical and horizontal lines of uni-form intensity (uniform beam diameter) on the heatmaps (Fig. 1.a, blue and green). In the scenario where lens 1 places a crossover at the plane of lens 3 (in this example), the beam diameter will be insensitive to the strength of lens 3 (Fig 1.a, vertical blue). Stated mathematically:  
+
+> d diameter d I 3
+
+= 0 if and only if lens 1 focuses to Z3, i.e, at a critical value of I1. In the context of Eq. 5, the effective focal length of the lens pair is insensitive to f2
+
+(i.e. d f 1,2 
+
+> d f 2
+
+= 0) only when lens 2 is placed at the im-age plane of lens 1 [7]. We thus define I1,3 critical to be the value of I1 at which d diameter d I 3 = 0. Note that the value of I1,3 critical will depend on the angle at which rays are entering lens 1 (or the location of the initial image plane). To construct an analytical representation of the lenses (allowing one to solve a system of equations for many configurations of multiple lenses), we define a vir-tual beam point source at z0, where the axial rays leaving 
+
+z0 pass through the first lens ( z1 in this case) and refo-cus to the second ( z3). The ray diagram for I1,3 critical 
+
+is shown in blue in Fig 1.c. Understanding that these critical values occur when the second lens is placed at the first lens’s image plane, we can simplify the analytical expression to the single-4lens formula: 1
+
+f = 1
+
+d1
+
++ 1
+
+d2
+
+(6) 
+
+f is the focal length, and d1 and d2 are the distances from the object (or initial crossover) to lens, and lens to image plane (subsequent crossover), respectively. This can also be derived from the simplified drift and lens expressions from Eq. 2 and 4. In the case of an already-convergent beam entering the lens, there is still a virtual source posi-tioned after the lens, d1 is negative, and the same expres-sion holds. Focusing the beam from any lens i at position 
+
+zi to the plane of a given subsequent lens j at position 
+
+zj thus follows the expression: f −1 = ∆ z−1 
+
+> virtual,i
+
++ ∆ z−1
+
+> i,j
+
+(where d1 and d2 in Eq. 6 are replaced by the differences in positions, ∆ z). We can also consider the inverse case, where the later lens j is set such that the beam diameter is insensi-tive to a given preceding len i, i.e. d diameter d I i = 0 at a critical lens j current Ij,i critical (Fig. 1.a, horizontal green). The intuitive explanation for this relies on the back-propagation of rays from the Ronchigram detector, i.e. a ray traced from the center of the detector out-wards, and focused back by lens 3 to the plane of lens 1. The ray diagram for I3,1 critical is shown in green in Fig 1.c. These rays should thus follow the same relationship 
+
+f −1 = ∆ Z−1 
+
+> i,j
+
++ ∆ z−1 
+
+> j,detector
+
+. Alternatively, one can think in terms of the projection of image planes: an image plane at lens i is projected via lens j onto the Ronchi-gram detector (and adjusting the strength of lens i affects only the angles, not the positions, at the plane of lens i). A similar argument is made for apertures: when the size of an aperture is found to be insensitive to the following lens strength, this is indicative that the aperture plane is projected to the detector (or subsequent virtual crossover 
+
+zvirtual ), i.e., f −1 = ∆ Z−1 
+
+> aperture,i
+
++ ∆ z−1 
+
+> i,detector
+
+.For a beam passing through an aperture, calibration of focal lengths to lens strengths can be done by fitting the beam current (or integrated intensity across the de-tector) as a function of lens strength. As the diameter of the beam entering the aperture expands, the beam current is reduced by the square of the ratio of beam diameter vs. aperture diameter (Eqs. 7,8). Fitting the beam current vs. lens current curve can therefore deter-mine the focal strength at which the lens focused to the aperture plane, along with the aperture diameter relative to the initial beam diameter. The analytical expressions for these curves are shown below, derived from the sim-plified lens and drift matrices in Eq. 2 and Eq. 4, for the beam entering the lens at position x1 and angle θ1.Raw and fitted data are shown in Fig 2.a, and example curves for a range of aperture sizes are shown in Fig 2.b. We use this analysis in our calibration of our condenser lenses (elements ordered C1/VOA/C2/C3).    
+
+> Figure 2. (a) crossovers through apertures can be found by measuring the total beam current while sweeping a preceeding lens, with the beam current vs C1 strength shown. (b) The trends seen in (a) are universal to any beam passing through an aperture, following the analytical expressions from Eqs. 7 and 8 for a range of aperture diameters. An asymptote exists at low current, approaching the zero lens strength current. at high-K, the focal position is brought in front of the aperture, and continuing to increase Kwill continue to decrease the beam current.
+
+x2 = x1 + L (θ1 − x1
+
+f ) (7) 
+
+Ibeam =
+
+(
+
+(x2/r aperture )2 if x2 > r aperture 
+
+1 else (8) In all cases, a single measurement of a single Icritical 
+
+value provides one analytical lens equation (Eq. 6). Pro-vided enough measurements, the system of equations can be solved for all unknowns (lens calibrations between electrical current I and field strength K, lens positions, and so on). Calculated positions of virtual image planes also means the beam angles entering or exiting the given section will be found, i.e. the “effective” position of the gun, required divergence/convergence from a gun lens, the position of pre-objective lens crossovers, and the beam divergence/convergence entering the projector section. In our Nion microscopes, we find a nearly-linear K =
+
+C ∗I relationship in all cases (within the regimes at which lenses are typically driven). For now, we maintain the 
+
+f −1 ≈ K2 L approximation with an assumed lens length 
+
+L. If the length length in the model is adjusted later (as in the following section), the calibration between I and 
+
+K can be updated to maintain the expected focal lengths 
+
+f .Both upstream and downstream Icritical strengths can also be found without the need for the full 2D lens sweeps. This is done by wobbling lenses, e.g. apply perturbations to lens 2 and find the strength for lens 1 at which the beam does not change diameter, finding I1,2 critical .Finally, we note that the calculation of the positions of diffraction planes is highly sensitive to the precise posi-tion and focal length of the objective lens. Calibration of 
+
+P 1-P 4 using the above procedure will find the position 5of the image plane produced by the second half of the objective lens ( O2) (assuming a fixed sample position), however the position of the first diffraction plane follows ∆zO2,dif f = ∆ zsample,O 2 + f . Unknown position and calibration of the objective lens may thus yield the cor-rect image plane, but incorrect diffraction plane (which therefore affects the accuracy of all subsequent diffraction planes). To calibrate the strength and precise position of 
+
+O2, the same procedure used before can be applied to the second objective lens: adjusting O2 while wobbling P 1-
+
+P 4 to find several O2 currents with known focal lengths. Alternatively, if two or more microscope states are known to have correctly-focused diffraction planes with a dif-fering number of crossovers, then the position and focal length of O2 in the model can be adjusted until both known states yield a diffraction plane in identical po-sition, while maintaining the position of the OL image plane at z0.
+
+> Measuring lens rotation
+
+The aforementioned procedures should reasonably characterize the focal length, however the relation to lens strength also depends on lens length: f −1 ≈ K2 L. Crit-ically, the rotation of the beam depends linearly on both lens strength and length: θ = K L , meaning measure-ment of lens rotation is critical for differentiating between the effects of field strength and lens length, and for the ability to predict lens rotation at arbitrary lens combi-nations. If a pure beam shift can be applied at each point in the 1D or 2D sweeps, then the movement of the beam on the detector can also be measured (e.g., changing cen-ter of mass). This can be done at the sample plane (via the scan coils, with descan turned off), or prior (via any pair of dipoles, such as those following the objective lens or even within the condenser section). In theory, there should be zero beam motion when a diffraction plane is placed on the Ronchigram detector, and the distance of motion should determine the magnification for an image plane. Similarly, the direction of motion should serve as a measurement of the rotation angle induced by the projector lenses. In practice, data obtained in this man-ner was usually too noisy to be of use. Small shifts may not yield large enough shifts on the Ronchigram to accu-rately quantify, and large shifts may introduce comatic aberration through the round lenses, complicating the measurement of the center-of-mass. Alternatively, the beam can be intentionally stigmated upstream, leading to ellipticity of the VOA, and the angle of the ellipse can be measured. This method yields ac-ceptable data, however we have developed an additional technique below which appears to be slightly more ro-bust. Our preferred method for measuring beam rotation 
+
+> Figure 3. (a) Ronchigram images of lacy carbon at two lens strengths can be used to measure the relative rotation of the lens between these strengths
+
+involves acquiring a Ronchigram image of a defocused sample. For example, when our calibration sample (gold nanoparticles on a lacy carbon grid) is imaged at large de-focus, the lacy pattern can be seen rotating as the round lenses are adjusted. Justifying the images to measure ro-tation is done by fitting the ellipse of the VOA, recenter-ing (in case imperfect alignment results in movement of the VOA as each lens is adjusted), anisotropically scaling until the VOA is round (in case slight astigmatism yields ellipticity of the VOA), and then rotating until multiple Ronchigram images are aligned (quantified via the mean-squared deviation between images). As expected, the ro-tation is linear with strength, however an abrupt flip of 180 ◦is seen where the beam passes through a crossover (image is inverted, or mirrored in both x and y). While this method is significantly more complex, it appears to be slightly more robost (a comparison between rotations found using the rotation of the ellipse vs. the rotation of the defocused Ronchigram image is available in the Supplemental Material). Using the focal lengths found above, and beam rota-tions found here, the calibration for both strength and length can be found. 
+
+> EXAMPLE USE CASES
+
+Once calibration parameters are found (translating nominal lens current I to lens strength K in the model, and fine-tuning lens positions and lengths), fitting can 6be performed to find the optimal lens configuration for a given set of requirements. In the condenser section, the lens current can be pre-dicted based on the beam diameter through the VOA, the focus at the sample plane is determined by the position of the pre- objective lens crossover, and the convergence angle is determined by the diameter of the beam enter-ing the objective lens. To achieve a desired convergence angle, at a desired beam current, any minimization al-gorithm can be used to calculate IC1, IC2 and IC3 to adjust beam current and convergence angle while main-taining focus. For the projector section, we truncate the model, ini-tializing the rays at the sample plane. This avoids prop-agation of error through the condenser section, and the initialized rays can contain both axial and field rays for calculating the position of diffraction and image planes respectively. Magnification of a real-space image plane is calculated by the ratio of ray’s starting and final po-sition in x or y, and the magnification of the diffraction plane based on the starting ray angle departing the sam-ple plane and final position (this is also referred to as “camera length”, where the position of a diffracted beam is x = θ ∗ l on the detector, for scattering angle θ, after length l). The positions of image or diffraction planes along the length of the column is crucial for proper fo-cusing of diffraction images, and coupling into a spec-trometer. Finally, rotation between objective lens and a detector may also be of interest, in order to rotationally align diffraction images. Before developing new projection modes, existing modes and their coupling to the spectrometer must first be understood. Interestingly, our reference setting does not show a diffraction plane at the CCD, and the loca-tions of post-projector diffraction planes are inconsistent between various pre-existing settings. While focus of the diffraction plane can be determined based the apparent sharpness of the VOA, it may be easier to symmetrically wobble the objective lenses (over and under focus) and observe the changes in the size of the Bragg disks. When the size of the Bragg disks changes symmetrically, the diffraction plane is focused to the detector. First, we must recognize that the zero-loss beam in the spectrometer is an image plane along the energy-dispersive axis i.e., the zero-loss beam is focused to a point, capturing all electrons within the cone of the STEM probe, and diffracted STEM probes at all angles. All fixed lenses following the projector section therefore serve to project a post-projector image plane, and the location of this image plane is critical for coupling into the spectrometer. Slight defocus of the diffraction plane on the CCD may also only negligibly affect results. At points aside from a mathematically-ideal diffraction plane, diffracted disks may still appear. slight defocus (blurry edges of disks) may not be immediately apparent, and apertures applied at these planes might still effectively select the desired scattering angles. While the ideal scenario is projection of a diffraction plane onto the entrance aperture, this may not always be achievable. Loosening the criteria of a fixed post-projector diffraction plane position may al-low greater apparent magnification or better control over diffraction pattern rotation in conjunction with magnifi-cation. Finally, we note that results may depend on the choice of minimization algorithm used. Basic gradient descent algorithms may have difficulty when moving between regimes, i.e. microscope states with additional or fewer crossovers than present in the guessed or initial config-uration. This can be understood in the context of Fig. 1.b. If one seeks to place a crossover at the CCD plane, the closest crossover may need to be moved farther be-fore the next crossover appears. A pre-computed grid across many combinations of the lenses of interest (con-denser lenses or projector lenses) may therefore be useful for finding the initial guesses to pass to a minimizer. 
+
+> non-overlapping Bragg disks
+
+We begin with a basic example involving the condenser section. For a range of 4D-STEM experiments, it may be desirable to find the largest convergence angle which yields non-overlapping Bragg disks. This will maximize the spatial resolution attainable while still allowing mea-surement of things like strain and orientation mapping. Beginning from our 30 mrad reference setting, we re-quest a new convergence angle from the model, and push the raw fitted lens strengths to the microscope. Due to slight error in the calibration of the lenses, there may be deviation between nominal and actual resultant conver-gence angle, and the sample may be slightly out of focus. We measure the error in focus by adjusting the objective lens focus control to refocus the sample, avoiding possi-ble hysteresis of the motion stage. We then return the objective lens focus to it’s original value, and make mi-nor adjustments to IC3 to return the sample to focus, recording the correct (as opposed to nominal) lens value. Slight misalignment of the beam through the condenser lenses may also mean coupling into the probe corrector has changed, so we adjust this using the standard proce-dure (e.g. wobbling the probe corrector’s last quadrupole and adjusting dipoles). Finally, we measure the conver-gence angle via the Ronchigram. We tabulate the error in focus, the nominal and actual values for IC3 (indica-tive of the accuracy of our lens calibration), and nominal vs. actual convergence angles, in Table I below, for a few convergence angles. Lens calibrations appear to be accurate, with higher deviations ( ∼ 1%) at higher lens strengths (far from the regime where the lenses were cal-ibrated). Small error in calibration leads to large defocus (e.g. 0.4% error yielding 245 nm in defocus) due to the 7 
+
+> Figure 4. Ronchigram images and modeled microscope states for three convergence angles. These correspond to the lens pa-rameters tabulated in Table I. Using the microscope model, arbitrary new states can be found: focus is controlled by the position of the post-C3 crossover ( zc), and we use the beam diameter entering the objective lens ( xo) as a proxy for the convergence angle (with proportionality dependent on OL strength).
+
+high strength of the objective lens and small distance between objective lens and focal position within the pole piece. 
+
+> Understanding nano-beam and TEM modes
+
+The microscope model also aides in our understand-ing the lower limits of convergence angle and the various regimes available. To set the focus of a STEM probe, we maintain the position of the crossover after lens C3, meaning we may try to minimize the size of the beam entering C3 via C1 and/or C2, and use C3 to maintain the position of the crossover. In contrast, a TEM mode would position the crossover much closer to the objective lens. Both cases are shown modeled in Figure 5. In the case of the STEM modes in which C2 places a crossover immediately before C3 (Fig. 5.a,c), the lower limit for convergence angle depends on the maximum strength for 
+
+C3 (minimum focal length, or maximum incoming con-vergence angle allowed) and the precision of how closely one can place the crossover to C3. Using lenses farther away ( C1 and C2 instead of C2 and C3) to achieve the post-C3 crossover therefore yields a smaller convergence angle before reaching the limits of lens strengths. 
+
+> Arbitrary control over projection modes
+
+With a calibrated model of the projection system lenses, we can calculate and set arbitrary (within the limits of the lenses) camera lengths and Ronchigram ro-tation. As in our example exploring convergence angles previously, we request a new camera length and rotation          
+
+> Figure 5. Various microscope states are modeled. (a,b,c) show low-, medium-, and high-current STEM modes: C1 is adjusted to control current through the aperture, while C2and C3 are adjusted to maintain the position of the post-
+> C3 crossover. The additional crossover between C2 and C3(shown in a,c, absent in b) may or may not be required de-pending on the incident angle resulting from C1. TEM modes (d,e) are obtained by positioning the crossover immediately before the objective lens.
+
+from the model, and push the raw fitted lens strengths to the microscope. If the correct post-objective diffraction plane is known, any setting which maintains the position of this plane should maintain focus, and we found very lit-tle deviation in diffraction plane focus (within the range which could be ascertained through small wobbles to the objective lens). Positions of Bragg disks are measured however, allowing measurement of the rotation and mag-nification of the diffraction image. In general, since our rotations were measured accurately and the rotational calibration was applied following lens calibration, the ro-tational accuracy of the model is quite good (within a few degrees). Compounding error through multiple lenses or post-specimen aberrations [8, 9] may lead to moderate error in the predicted camera length however (up to 30% in extreme cases). These results are tabulated in Table II below. Rotation and deviation in magnification are calculated relative to our re-focused reference setting. In some cases, a 180 ◦ inversion is expected, in cases where an additional beam crossover occurs. The upper limit on camera length depends on the ability to maintain focus of the diffraction plane to the detector or aperture plane, and on the maximum lens currents available. 
+
+> Momentum-resolved EELS
+
+In a momentum-resolved EELS experiment, a slot aperture is used, installed with the length perpendicular to the dispersion axis of the spectrometer. A diffraction plane is placed at the aperture plane (meaning data is collected in momentum along the slit direction), and the beam is focused and dispersed in energy in the perpen-dicular direction. The extent of data collected in momen-8
+
+C1 C2 C3 (nominal) C3 (actual) ∆ C3 % ∆ focus (nm) mrad (modeled) mrad (actual) ∆ mrad (%) a 0 758.222 856.682 856.682 - - 30.947 30.947 -b 0 509.436 907.197 910.817 0.40 % 245.55 14.096 14.592 0.34% c 0 298.779 1096.938 1108.888 1.08 % 809.28 4.277 4.453 3.95% Table I. When the microscope is set to fitted lens values ( C3 nominal), slight defocus may result, which can be corrected through minor adjustments to condenser lenses ( C3 actual). The model predicts the convergence angle (mrad modeled) which is compared to that measured from the Ronchigram. row (a) is used as the reference, with the actual values for focus and convergence angle based on deviations from the reference. 
+
+P 1 P 2 P 3 P 4 θ (modeled) ( ◦) θ (actual) ( ◦) ∆ θ (◦) l (modeled) (mm) l (actual) (mm) ∆ l (%) a 451.0 0. 0. 560.5 - - - 20 - -b 370.750 387.238 0.0 547.517 -17.3 -18.8 1.5 11.76 9.19 28 c 541.665 1075.68 547.74 563.9 75.1 71.7 3.4 29.8 31.8 6.3 d 551.264 999.999 180.706 610.204 98.1 96.5 1.6 45.0 53.6 16.0 Table II. When the microscope is set to fitted lens values ( P 1 − P 4), the expected and measured rotation angle and camera length may differ. Measurements are taken based on Ronchigram images collected for each microscope state. Each of these states is shown in Fig. 6. row (a) is used as the reference, with the actual values for rotation and camera length based on deviations from the reference. Note that a 180 ◦ inversion occurs for (c) and (d). 
+
+Figure 6. The projector section states tabulated in table II are shown. Common Bragg disks are circled, to enable visu-alization of camera length and rotation. 
+
+tum thus depends on the magnification of the diffraction image at the aperture plane (or camera length), and the magnification required to collect out to, for example, 1 Brillouin zone may differ depending on the sample. The momentum direction also depends on the rotation of the diffraction image relative to the slit. The collection angle in the dispersive direction (width of the slit, relative to the Bragg disk diameter) also partially determines the energy resolution, so it is considered ideal to match the Bragg disk diameter to the slit width. Finally, depend-ing on the level of monochromation, beam current may 
+
+Figure 7. Momentum resolved EELS requires simultaneously adjusting the magnification of the diffraction image (camera length), rotation to align the reciprocal directions of interest with the aperture, while maintaining position of the image plane within the microscope. These steps are performed the ray-tracing model and fitting to identify and set the appro-priate lens parameters. 
+
+be low and acquisition times long, meaning the highest beam current possible through the VOA is desired. Our criteria for the condenser section are therefore: low convergence angle set to approximately match the Bragg disk diameter to slot aperture width, beam cur-rent maximized, with focus maintained at the sample plane. Our criteria for the projector section are: diffrac-tion plane positioned at the aperture plane, diffraction plane magnification (or camera length) set to scale the distance to the first Bragg disks to the aperture length, and diffraction plane rotated such that the first Bragg disks are along the slit direction. A step-by-step iterative procedure is demonstrated in Figure 7, however with suf-ficiently accurate calibration and sufficiently robust fit-9ting algorithms, this would be performed automatically. 
+
+> CONCLUSION
+
+In this work, we have developed a simple physics-informed digital twin to model the behavior of a STEM microscope. The model is broken down into simplified and verifiable sections (e.g., condenser, objective, and projector sections), which are universally applicable to a variety of microscopes from any manufacturer. We also offer robust procedures for calibration, allowing in-ference of the positions of lenses, and translation between lens current to focal length. Optical elements are simu-lated as simple matrix operations, meaning calculations are fast and easily extensible to higher-order to account for aberrations. While a toy microscope model is use-ful for visualization and educational purposes, calibra-tion of said model offers predictive power, offering the ability to calculate arbitrary (within the limits of maxi-mum lens strengths) microscope configuration, which can enable better measurements. Finally, we believe our real-istic physics-informed model can help with AI integration to electron microscopy. AI-driven workflows could yield semi- or fully-automated data acquisition across a range of microscope configurations, and AI-integration could simplify troubleshooting and assist in training. 
+
+> ACKNOWLEDGMENTS
+
+T.W.P, E.R.H, & J.A.H. acknowledge the support of the U.S. Department of Energy, Office of Basic Energy Sciences (DOE-BES), Division of Materials Sciences and Engineering under contract ERKCS89. Microscopy performed using instrumentation within ORNL’s Materials Characterization Core provided by UT-Battelle, LLC, under Contract No. DE-AC05-00OR22725 with the DOE and sponsored by the Lab-oratory Directed Research and Development Program of Oak Ridge National Laboratory, managed by UT-Battelle, LLC, for the U.S. Department of Energy. This research used resources of the Compute and Data Environment for Science (CADES) at the Oak Ridge Na-tional Laboratory, which is supported by the Office of Sci-ence of the U.S. Department of Energy under Contract No. DE-AC05-00OR22725. Notice: This manuscript has been authored by UT-Battelle, LLC, under contract DE-AC05-00OR22725 with the US Department of Energy (DOE). The US gov-ernment retains and the publisher, by accepting the arti-cle for publication, acknowledges that the US government retains a nonexclusive, paid-up, irrevocable, worldwide li-cense to publish or reproduce the published form of this manuscript, or allow others to do so, for US government purposes. DOE will provide public access to these results of federally sponsored research in accordance with the DOE Public Access Plan (https://www.energy.gov/doe-public-access-plan).                          
+
+> ∗pfeifertw@ornl.gov
+> †arl1000@ornl.gov
+> ‡hoglunder@ornl.gov [1] Willem Brouwer. Matrix Methods in Optical Instrument Design . 1964. [2] K. L. Brown, F. Rothacker, D. C. Carey, and Ch. Iselin. Transport: A computer program for designing charged particle beam transport systems (rev. 2). Technical report, SLAC National Accelerator Laboratory (SLAC), Menlo Park, CA (United States), 05 1983. [3] P.W. Hawkes and E Kasper. Principles of Electron Optics .1989. [4] David Landers, Ian Clancy, Dieter Weber, Rafal E. Dunin-Borkowski, and Andrew Stewart. Temgym basic: trans-mission electron microscopy simulation software for teach-ing and training of microscope operation. Journal of Ap-plied Crystallography , 56(4):1267–1276, 2023. [5] J.R. Pierce. Theory and Design of Electron Beams . Bell Telephone Laboratories series. Van Nostrand Company, 1949. [6] Maximilian Haider, Herald Rose, Stephan Uhlemann, Bernd Kabius, and Knut Urban. Towards 0.1 nm res-olution with the first spherically corrected transmission electron microscope. Journal of Electron Microscopy ,47(5):395–405, 01 1998. [7] Brent Fultz and James Howe. Transmission Electron Mi-croscopy and Diffractometry of Materials . Springer Berlin Heidelberg, 2013. [8] Eric R. Hoglund and Andrew R. Lupini. Multidimen-sional images and aberrations in stem. Chinese Physics B, 33(9):096807, sep 2024. [9] Andrew R Lupini, Miaofang Chi, and Eric R Hoglund. Post sample aberrations in stem. Microscopy and Micro-analysis , 31:ozaf048.071, 07 2025.
+
+JRN/123-ABC 
+
+# Development of a versatile generalized digital twin for TEM and 1
+
+# STEM - Supplemental Material 2
+
+## Thomas W. Pfeifer, ∗ Andrew R. Lupini, † and Eric R. Hoglund ‡
+
+> 3
+
+## Center for Nanophase Materials Sciences, 4
+
+## Oak Ridge National Laboratory, Oak Ridge, Tennessee 37830, USA 5
+
+(Dated: August 3, 2026) 6   
+
+> ∗pfeifertw@ornl.gov
+> †arl1000@ornl.gov
+> ‡hoglunder@ornl.gov
+
+## 1I. SUPPLEMENTAL MATERIAL 7
+
+A. Code availability 8
+
+## Our ray-tracing code package is available at https://github.com/sea-ecosystem/rayTEM. 9
+
+## A microscope is modeled via a “Microscope” object, containing a series of “MicroscopeSec-10 
+
+## tion” objects, each of which contain a series of “Element” objects. Starting rays are either 11 
+
+## provided, or generated from a “Source” object. Rays are propagated through the appropriate 12 
+
+## element types, such as “Drift”, “Lens”, “Aperture”, and so on. Convenience functionality 13 
+
+## is also available, e.g. movement of lenses by automatically adjusting the length of preceding 14 
+
+## and subsequent drift elements, calculation of image and diffraction planes, and pre-defined 15 
+
+## error functions for use in a minimization/fitting scheme. 16 
+
+## While the code repository contains uncalibrated and calibrated models of our instruments, 17 
+
+## these may not be directly transferrable to other systems. One should know approximate lens 18 
+
+## positions, and calibration should be performed using the procedures outlined in the main 19 
+
+## manuscript. For other instruments of the same type (e.g. another 100 keV Nion instrument), 20 
+
+## our models may serve as reasonable starting points, however fixed crossover positions (e.g. 21 
+
+## pre-OL crossover determining focus at the sample, and the location of the post-OL image 22 
+
+## plane) may require further adjustment. 23 
+
+B. Basic example of the inadequacy of 1D lens sweeps 24 
+
+## In the main manuscript, we suggested that 1D sweeps of individual lenses, with measure-25 
+
+## ments of parameters such as beam diameter on the ronchigram, are inadequate. This is due 26 
+
+## to the unknown scaling of any subsequent or prior lenses, which should be apparent from 27 
+
+## the two-lens focusing equation: 28 
+
+## 1
+
+## f1,2
+
+## = 1
+
+## f1
+
+## + 1
+
+## f2
+
+## + d2
+
+## f1f2
+
+## (S1) or can be shown visually: 29 
+
+## 2Figure S1. ... 
+
+C. Assessing the accuracy of the f −1 ≈ K2L assumption 30 
+
+## In the main manuscript, we use the small angle approximation: if K L is small, then 31 
+
+## sin (K L ) ≈ K L , cos (K L ) ≈ 1, and f −1 ≈ K2L. This approximation offers a significant 32 
+
+## simplification to the analysis, and allows the easy use of expressions such as f −1 = d−11 + d−1233 
+
+## in systems of equations to solve for lens current calibration factors to go between lens current 34 
+
+## I and field strength K as appearing in the matrix expressions for round lenses. Here, we 35 
+
+## evaluate the accuracy of this assumption. 36 
+
+## Considering in 2D for simplicity (or one axis in the rotating reference frame), we have 37 
+
+## the simplified lens matrix: 38 
+
+## x2
+
+## θ2
+
+## = C 1 
+
+> K
+
+## S
+
+## −K S C
+
+## x1
+
+## θ1
+
+## (S2) where C = cos (K L l) and S = sin (K L l), for lens strength K and lens length Ll. For 39 
+
+## parallel starting rays at position x1 and θ1 = 0, we seek to focus this ray to x3 = 0 via a 40 
+
+## subsequent drift segment: 41 
+
+## x3
+
+## θ3
+
+## = 1 Ld
+
+## 0 1
+
+## x2
+
+## θ2
+
+## (S3) for a drift of length Ld. The combined matrix is: 42 
+
+## 3x3
+
+## θ3
+
+## = 1 Ld
+
+## 0 1
+
+## C 1 
+
+> K
+
+## S
+
+## −K S C
+
+## x1
+
+## θ1
+
+## = C − Ld K S 1 
+
+> K
+
+## S + Ld C
+
+## −K S C
+
+## x1
+
+## θ1
+
+## (S4) and we seek x3 = 0, or: 43 
+
+## C − Ld K S = cos (K L l) − Ld K sin (K L l) = 0 (S5) Recall for a thin enough lens where C = 1 and S = K L , this reduces to 1 − Ld K2Ll = 0, 44 
+
+## which satisfied our approximation: f −1 = L−1 
+
+> d
+
+## = K2 L. For moderate Ll however, Ld =45 
+
+## C S −1 K−1, and the focal length (including the forwards propagation of the beam through 46 
+
+## the thickness of the lens, length L) if factual = C S −1 K−1 + L. In order to represent 47 
+
+## arbitrary K, f , L, we have plotted the percent deviation between fapproximate = K−2L−1 and 48 
+
+## factual = C S −1 K−1 + L (percent deviation = ( factual − fapproximate )/f actual ) as a function of 49 
+
+## the ratio of lens length to focal distance ( L/f actual ). The error in the approximation exceeds 50 
+
+## 5% when L/f reaches 7.5%. When high lens rotation is observed, thick lenses are expected, 51 
+
+## and the approximation should not be used for large lens strengths where focal lengths will 52 
+
+## be smaller. 53 
+
+D. Measuring rotation via a defocused ronchigram image vs ellipse rotation 54 
+
+## In the main manuscript, we discussed two methods for measuring the beam rotation 55 
+
+## imparted by the projector lenses. While we do not claim one method is objectively better 56 
+
+## than the other, we do find slightly increased noise in our measured rotation when using the 57 
+
+## ellipse angle. The introduction of arbitrary 90 ◦ changes in angle (due to the ambiguity 58 
+
+## in ellipse orientation) also affects the analysis, whereas the image matching algorithm is 59 
+
+## significantly more complicated. 60 
+
+## 4Figure S2. Deviation between the true focal length and the approximated focal length ( f −1 ≈ K2L,based on the small angle approximation) is plotted 
+
+## 5Figure S3. 
+
+## 6
