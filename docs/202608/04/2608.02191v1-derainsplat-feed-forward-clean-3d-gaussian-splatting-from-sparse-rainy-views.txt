@@ -1,0 +1,499 @@
+Title: DerainSplat: Feed-Forward Clean 3D Gaussian Splatting from Sparse Rainy Views
+
+URL Source: https://arxiv.org/pdf/2608.02191v1
+
+Published Time: Tue, 04 Aug 2026 02:24:10 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# DerainSplat: Feed-Forward Clean 3D Gaussian Splatting from Sparse Rainy Views 
+
+## Fuzhen Jiang 1∗, Changyue Shi 2∗, Chuxiao Yang 1, Xinyuan Hu 1, Wenjie Ye 1, Minghao Chen 1†
+
+> 1
+
+Hangzhou Dianzi University 
+
+> 2
+
+School of AI for Science, Peking University 
+
+Abstract 
+
+Although image deraining has advanced substantially, existing methods mainly focus on 2D image restoration. As spatial in-telligence applications such as embodied AI and autonomous driving continue to emerge, reconstructing clean 3D scenes from sparse rainy views in a feed-forward manner becomes increasingly important. Existing feed-forward 3D Gaussian Splatting (3DGS) methods often assume clean inputs and col-lapse under rainy conditions. To this end, we present Derain-Splat , a feed-forward framework that reconstructs clean 3D scenes from only a few rainy views. To support this task, we build a large-scale multi-view derain dataset through a four-stage synthesis pipeline that sequentially models overcast il-lumination, depth-dependent haze, rain streaks, and lens rain-drops, producing privileged weather factors. We introduce a weather net that predicts the weather factors from rainy context and yields two support maps. Scene support modulates cross-view cost-volume matching, while radiance support drives depth-aligned appearance fusion to fill corrupted pixels. The derived geometry evidence further attenuates Gaussian opac-ity to reduce spurious structures. A rainy cycle consistency re-renders clean views using the predicted factors and aligns them with rainy inputs. Extensive experiments show that Derain-Splat outperforms existing methods on various datasets, in-cluding RealEstate10K, ACID, Mip-NeRF360, and real-world rainy scenes, with strong cross-dataset generalization. 
+
+## 1 Introduction 
+
+Image deraining has advanced substantially in recent years, evolving from supervised deep networks (Zamir et al. 2021, 2022) to unsupervised restoration with stronger real-world generalization (Dong et al. 2025), and from single-image deraining to joint rain-haze modeling (Hu et al. 2021). How-ever, these methods focus primarily on 2D image restoration, whereas applications such as embodied AI (Huang et al. 2023) and autonomous driving (Tian et al. 2025) ultimately require a clean 3D scene reconstruction for reliable down-stream perception and decision-making. This raises an un-derexplored problem: reconstructing clean 3D scenes from sparse rainy views in a feed-forward manner. Building on 3D Gaussian Splatting (3DGS)(Kerbl et al. 2023), feed-forward methods have emerged as a promising paradigm for efficient 3D perception, predicting Gaussian scene representations from sparse multi-view images with-out per-scene optimization (Charatan et al. 2024; Chen et al. 
+
+> ∗
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. 
+
+2024c; Zhang et al. 2025). However, these methods are devel-oped for clean inputs and rely heavily on reliable cross-view appearance and geometric cues for depth inference. Once the inputs are degraded by rain and haze, the quality of multi-view matching and subsequent reconstruction deteriorates significantly, leaving a gap between the clean-input assump-tion and the rainy conditions faced in practice. A natural remedy is a two-stage pipeline that first derains each rainy input view and then reconstructs the scene with a feed-forward 3DGS model. As shown in Fig.2, a repre-sentative CSUD(Dong et al. 2025) + MVSplat (Chen et al. 2024c) pipeline adopts this strategy, but the independently derained views often lack cross-view consistency. Existing feed-forward 3DGS methods are not equipped to recon-cile such inconsistent observations, often producing overly smooth reconstructions to accommodate the mismatched in-puts across views. These limitations suggest that rainy-to-clean 3D reconstruction should be learned directly in a multi-view, weather-aware setting rather than decomposed into in-dependent per-view deraining followed by reconstruction. A central bottleneck is the lack of training data that pro-vides multi-view clean-rain supervision for feed-forward 3D reconstruction. We build a large-scale multi-view de-rain dataset suite from public multi-view datasets, primarily RealEstate10K (Zhou et al. 2018) and ACID (Liu et al. 2021), and further build a rainy Mip-NeRF360 (Barron et al. 2022) split for evaluation and real-world rainy scenes (Liu et al. 2024) for qualitative generalization. Starting from clean im-ages, we synthesize rainy observations through a structured four-stage pipeline that sequentially models global overcast illumination, depth-dependent haze, rain streaks, and lens-attached raindrops. Besides clean-rain image pairs and cam-era parameters, the dataset provides privileged weather fac-tors (transmission, airlight, rain streak layer, rain streak mask, and lens-affected mask). These factors serve as direct super-vision for the disentangled weather decomposition. Built on this dataset, we propose DerainSplat , a weather-aware feed-forward framework that directly reconstructs clean 3D Gaussian scenes from sparse rainy views. A com-pact weather net first predicts disentangled weather factors from each rainy context view, supervised by the privileged factors described above. These factors are converted into two support maps: a scene support that softly down-weights de-graded regions to modulate cross-view cost-volume match-arXiv:2608.02191v1 [cs.CV] 3 Aug 2026 Sparse Rainy Inputs Clean 3D Scene 
+
+> A Single Run!
+
+# …
+
+(a) A Feed -Forward Derain 3DGS (b) A Large -Scale Derain Dataset     
+
+> Large Scale Realistic Rain Multi -View Images
+> GT MVSplat TranSplat PixelSplat DerainSplat Rainy Inputs
+
+Figure 1: (a) Given each rainy context view, DerainSplat predicts a clean 3D Gaussian scene in a single forward pass. (b) We build a large-scale multi-view derain dataset with paired clean–rain images and privileged weather factors. DerainSplat renders cleaner novel views than existing feed-forward baselines, with fewer rain/haze artifacts and stronger structural fidelity. Rainy Input CSUD Restore  
+
+> MVSplat Ours
+
+Figure 2: Failure of a two-stage strategy. Individually plau-sible restored views lack cross-view consistency. ing, and a radiance support that drives depth-aligned appear-ance fusion to fill corrupted pixels with reliable cross-view observations. The resulting geometry evidence further at-tenuates Gaussian opacity at unreliable locations, reducing spurious structures without discarding valid scene content. The clean reconstruction loss and weather supervision alone do not enforce that the rendered clean view and pre-dicted factors jointly explain the observed rainy input. We therefore introduce a rainy cycle consistency regularization that re-renders the clean context view with the predicted fac-tors and aligns it with the rainy input. Lens-affected pixels cannot be replayed by this differentiable image-formation model and are excluded via a learned censor mask, which is annealed from the ground-truth mask to the predicted one during early training. This encourages the model to separate stable scene content from transient weather corruption. Our contributions are summarized as follows: 
+
+• A Large-Scale Derain Dataset. We construct a large-scale multi-view derain dataset suite through a unified four-stage synthesis pipeline, providing paired clean-rain images and privileged weather factors for supervision. 
+
+• A Novel Framework. We propose DerainSplat , the first feed-forward framework that reconstructs clean 3D Gaus-sian scenes from sparse rainy views by disentangling weather factors into support maps that jointly guide cross-view geometry matching and appearance fusion. 
+
+• Robust Performance. Extensive experiments on various datasets demonstrate that DerainSplat outperforms exist-ing methods, with strong cross-dataset generalization. 
+
+## 2 Related Work 
+
+2.1 2D Image Deraining 
+
+Single-image deraining has progressed from model-driven methods exploiting rain formation cues and sparse pri-ors (Garg and Nayar 2007; Kang, Lin, and Fu 2012; Luo, Xu, and Ji 2015), to deep networks trained on paired data (Fu et al. 2017; Yang et al. 2017; Zhang and Patel 2018; Ren et al. 2019), and recently to stronger restoration backbones (Zamir et al. 2021, 2022) and unsupervised deraining with better real-world generalization (Dong et al. 2025). A rainy image is physically the superposition of a clean background and a rain streak layer, while atmospheric scattering further intro-duces depth-dependent haze (Narasimhan and Nayar 2002). Recent works jointly model rain and haze to better reflect this formation process (Hu et al. 2021; Wang et al. 2020). However, these methods target 2D restoration and overlook cross-view geometric consistency. 
+
+2.2 Rainy Image Datasets 
+
+Early deraining benchmarks are mostly synthetic single-image datasets that overlay rain streaks on clean images (Fu et al. 2017; Yang et al. 2017; Zhang and Patel 2018); SPANet points out that their rain shape, direction, and intensity lack realism (Wang et al. 2019). Later datasets improve realism: RainCityscapes jointly models rain streaks and depth-related haze (Hu et al. 2021), SPA-Data and GT-RAIN are built from real rainy videos or controlled captures (Wang et al. 2019; Ba et al. 2022), and LHP-Rain and GTAV-NightRain further ex-pand scale and photometric realism (Chen et al. 2024a; Yang et al. 2022). However, datasets above target single-image restoration and provide neither synchronized multi-view ob-servations, cross-view aligned clean–rain pairs, camera cal-ibration, nor interpretable weather factors. 
+
+2.3 3D Reconstruction under Adverse Weather 
+
+NeRF (Mildenhall et al. 2020) and 3DGS (Kerbl et al. 2023) have advanced sparse-view 3D reconstruction, but existing methods assume clean inputs and degrade when rain and haze corrupt cross-view matching. A line of work optimizes a clean scene representation from degraded inputs per scene: Dehazing-NeRF (Chen et al. 2023) and ScatterNeRF (Ra-mazzina et al. 2023) handle fog, while WeatherGS (Qian et al. 2025), DeRainGS (Liu et al. 2024), RainyScape (Chen et al. 2024b), and REVR-GSNet (Chen et al. 2025) target rain; all require per-scene optimization and do not generalize across scenes. Feed-forward 3DGS methods such as Pixel-Splat (Charatan et al. 2024), MVSplat (Chen et al. 2024c), MVSplat360 (Chen et al. 2024d), and TranSplat (Zhang et al. 2025) predict Gaussian representations in a single forward pass, but are developed and evaluated under clean-image settings. DerainSplat is the first feed-forward framework tai-lored for rainy sparse inputs and is accompanied by a large-scale multi-view derain dataset suite. 
+
+## 3 Framework of DerainSplat 
+
+In this section, we present DerainSplat , a weather-aware feed-forward framework for rainy–to–clean 3D reconstruc-tion. We first build a multi-view derain dataset in Sec. 3.1. A weather net then predicts disentangled weather factors and converts them into support maps. Based on these support maps, our proposed pipeline suppresses degraded pixels for geometry, fills them with depth-aligned neighbors for ap-pearance, and attenuates their Gaussian opacity (Sec. 3.2). 
+
+3.1 Derain Dataset Synthesis 
+
+To support rainy–to–clean feed-forward 3D reconstruction, we synthesize a multi-view derain dataset by decomposing rainy image formation into four sequential stages: 1) a global overcast transformation, 2) a depth-dependent haze layer, 3) a rain streak layer, and 4) a lens raindrop layer. Fig. 3 visualizes the result of each stage. Given a clean image Ic ∈
+
+[0 , 1] H×W ×3, the synthesis follows: 
+
+Ic → Io → Ih → Irs → Ird ,
+
+where Io, Ih, Irs , and Ird are the outputs of the overcast, haze, rain streak, and lens raindrop stages, respectively. The complete procedure is summarized in Alg. 1. 
+
+Global Overcast. Real rainy scenes exhibit scene-wide dim-ming and desaturation. We quantify this with a scene-level sunny score γ ∈ [0 , 1] , estimated from the mean luminance and the bright-pixel ratio of the clean views (Alg. 1); a larger 
+
+γ indicates a brighter, more sunlit scene. We convert Ic to Overcast Clean Haze Rain Streak Raindrops 
+
+Figure 3: Stage-wise visualizations of the derain dataset syn-thesis process. Starting from clean images, we sequentially synthesize overcast appearance, depth-dependent haze, rain streaks, and lens raindrops to obtain final rainy observations. HSV space and scale its saturation and brightness by γ, so brighter scenes are dimmed and desaturated more aggres-sively: Io = T (Ic; γ). The sunny score is shared across all views of a scene to keep weather consistent. 
+
+Depth-dependent Haze. We obtain the hazy image Ih using atmospheric scattering model (Narasimhan and Nayar 2002): 
+
+Ih = Io ⊙ t + A ⊙ (1 − t), (1) where A ∈ [0 , 1] 3 is an airlight color and t ∈ [0 , 1] H×W
+
+is a pixel-wise transmission map. We estimate a multi-view depth D with Depth Anything 3 (DA3) (Lin et al. 2025), normalize it to ˜d ∈ [0 , 1] , and set t = exp( −β ˜d). Both γ
+
+and the depth normalization range are shared across views of a scene, so the same 3D point receives consistent haze. 
+
+Rain Streaks. We then overlay transient rain streaks layer on 
+
+Ih to obtain Irs via screen blending: 
+
+Irs = 1 − (1 − Ih) ⊙ (1 − S). (2) As detailed in Alg. 1 (Stage III), the streak layer S ∈
+
+[0 , 1] H×W ×3 is built by convolving a sparse seed map with three scales of tapered, near-vertical motion kernels, then scaled by the local luminance of Ih so streaks are more visible against bright backgrounds. We further derive a rain streak mask from S to mark pixels covered by visible streaks. 
+
+Lens Raindrops. Lens-attached water drops introduce re-fraction, blur, and specular highlights that the atmospheric model cannot capture. Rather than additive noise, drops replace the underlying pixels via a coverage mask (Qian et al. 2018), with refractive displacement coming from a height–normal–flow field (Porav, Bruls, and Newman 2019). We perturb the cap boundary for irregular shapes (Roser, Kurz, and Geiger 2010), add a mild defocus (Alletto et al. 2019), and a directional dark rim (You et al. 2017). As drops stay fixed on the lens over short windows (You et al. 2013), we generate one scene-consistent lens state 
+
+L = {α, f , σ, Hspec , Hcau , mrd } per scene, where α ∈
+
+[0 , 1] H×W is a per-pixel droplet coverage map, f a refractive flow field, σ a spatially-varying blur map, and Hspec , Hcau 
+
+highlight layers. For each view we render the droplets by warping and blurring Irs with f and σ, blending via α, and compositing the highlights: 
+
+Ird = (1 −α)⊙Irs +α⊙WarpBlur( Irs , f , σ)+ Hspec +Hcau .
+
+(3) Clean 3DGS          
+
+> Weather -Aware  NetWork
+> GS -Head  Depth -Head  𝒕 ",𝑨 %,𝑺 ',𝒎 𝒓𝒔 ),𝒎 𝒓 𝒅 *
+> 𝒕 ,𝑨 ,𝑺 ,𝒎 𝒓𝒔 ,𝒎 𝒓𝒅
+> Lweather
+> Render
+> Image
+> Re -Rain
+> RGB render
+> Lclean
+> Lrain
+> RGB re -rain
+
+Support Maps 
+
+𝑺 𝒈𝒆𝒐 
+
+𝑺 𝒓𝒂𝒅 
+
+> Cost
+> Volume
+> Appearance
+> Fusion
+
+Rainy Observations 
+
+> Image Encoder
+> : GT from our dataset (Sec. 3.1)
+
+# 📷 Figure 4: Overview of DerainSplat . Rainy context views are processed by the weather net to estimate weather factors 
+
+(ˆ t, ˆA, ˆS, ˆmrs , ˆmrs ) and support maps that guide cost-volume matching, apearance fusion, and opacity, yielding clean 3DGS. Final Rain Transmission Rain Streaks Raindrops Union Mask 
+
+Figure 5: Visualization of weather factor. 
+
+Algorithm 1: Procedure for Synthetic Derain Dataset 
+
+Require: Clean multi-view scenes {(Ics , Cs)}Ms=1 , Ics =
+
+{Ics,v }Ns 
+
+> v=1
+
+and Cs = {(Ks,v , T s,v )}Ns
+
+> v=1
+
+; depth estimator E
+
+(DA3); tone operator T (·); airlight color A ∈ [0 , 1] 3.
+
+Output: {(Ics,v , I rd s,v , t s,v , A, S s,v , m rs s,v , m rd s,v , K s,v , T s,v )}.1: for s = 1 to M do 
+
+2: γs ← Mean v
+
+ SunnyScore( Ics,v )
+
+3: {Ds,v }Ns 
+
+> v=1
+
+← E ({Ics,v }Ns
+
+> v=1
+
+)
+
+4: ˜ds,v ← Norm( Ds,v )
+
+5: βs ← 0.5 + 0 .8γs, ts,v ← exp( −βs ˜ds,v )
+
+6: Ls ← LensState( H, W )
+
+7: for v = 1 to Ns do Stage I: Global Overcast 
+
+8: Ios,v ← T (Ics,v ; γs)
+
+Stage II: Depth-Dependent Haze 
+
+9: Ihs,v ← Ios,v ⊙ ts,v + A ⊙ (1 − ts,v )
+
+Stage III: Rain Streak 
+
+10: Ss,v ← 0 ∈ [0 , 1] H×W ×3
+
+11: for g ∈ { fine , medium , coarse } do 
+
+12: θ0 ∼ U(−8◦, 8◦), δ ∼ N (0 , σ g ), σg ∈{1.3◦, 2.2◦, 3.0◦}
+
+13: ks,v,g ← MotionKernel( θ0 + δ)
+
+14: ns,v ← SparseSeed( H, W )
+
+15: Ss,v ← 1 − (1 − Ss,v ) ⊙ (1 − Conv( ns,v , k s,v,g )) 
+
+16: end for 
+
+17: Ss,v ← Ss,v ⊙ LumScale( Ihs,v )
+
+18: Irs s,v ← 1 − (1 − Ihs,v ) ⊙ (1 − Ss,v )
+
+19: mrs s,v ← I(max c Ss,v,c > 0) 
+
+Stage IV: Lens Raindrop 
+
+20: Ird s,v ← (1 −αs)⊙Irs s,v +αs ⊙WarpBlur( Irs s,v , fs, σs)
+
+21: Ird s,v ← Ird s,v + Hspec  
+
+> s
+
++ Hcau 
+
+> s
+
+22: mrd s,v ← mrd s
+
+23: Save  Ics,v , I rd s,v , t s,v , A, S s,v , m rs s,v , m rd s,v , K s,v , T s,v 
+
+
+
+24: end for 
+
+25: end for Encoder 
+
+> Bottleneck  Block
+> Decoder
+> ·· ·
+> ·· ·
+
+Figure 6: The architecture of the weather net. 
+
+For training stably, we further introduce a lens-affected mask 
+
+mrd marks pixels corrupted by droplet refraction or blur. 
+
+Final Dataset Contents. The dataset stores clean–rain pairs 
+
+(Ic, Ird ), camera parameters, and privileged weather fac-tors (t, A, S, mrs , mrd ), which supervise the disentangled weather decomposition in Sec. 3.2. Intermediate images 
+
+Io, Ih and variables γ, D, ˜d, β, θ are used only during gen-eration. Visualization exmaple is shown in Fig. 5. 
+
+3.2 Weather-Aware Feed-Forward 3DGS 
+
+Weather Factor Prediction. A compact encoder-decoder weather net (Fig. 6) maps rainy context views to disentangled weather factors. The shared trunk has three encoder blocks, a bottleneck, and two decoder blocks with skip connections; each block stacks two 3×3 convolutions with GroupNorm and SiLU. A 1×1 head outputs pixel-wise factors—transmission 
+
+ˆt, rain streak layer ˆS, streak mask ˆmrs , and lens-affected mask ˆmrd —while a global branch regresses airlight ˆA and a low-frequency color transform (ˆ s, ˆb). These factors are converted into two support maps that guide the stages below. 
+
+Support-Aware Cost Volume. Pixels occluded by rain or attenuated by haze yield cross-view errors. We define a scene support that softly down-weights degraded regions: 
+
+sgeo = h(ˆ t) ⊙ (1 − ˆmrs ) ⊙ (1 − ˆmrd ), (4) Haze attenuates visibility gradually and is modeled by h(ˆ t),which retains a minimum support so distant regions still contribute geometry. Rain is transient and directly suppress support via the masks. Projecting sgeo along epipolar lines yields a per-depth-candidate support volume that modulates the matching cost, shaping the depth posterior p. We summa-rize per-pixel geometric reliability by a geometry evidence 
+
+e = Ep[sgeo ] ⊙  η + (1 − η) c, (5) where c is the matching confidence and η = 0 .1 is a floor to avoid over-suppression. 
+
+Depth-Aligned Appearance Fusion. The reference view is itself locally corrupted by weather, and naive multi-view av-eraging mixes clean and degraded pixels. Using the predicted depth, we warp source pixels into the reference view to obtain depth-aligned cross-view observations. A radiance support 
+
+srad = 1 − ˆmrd controls a soft fusion: the reference color is retained where it is reliable, and the depth-aligned source color fills the unsupported fraction. The fused appearance feeds the color and covariance heads. 
+
+Geometry Evidence and Gaussian Prediction. The geom-etry evidence e gently attenuates Gaussian opacity via 
+
+α = 1 − λ(1 − e), (6) with λ = 0 .1, reducing spurious Gaussians at unreliable locations without discarding structure. Based on the depth-aligned appearance and depth features, a Gaussian head re-gresses position, covariance, and spherical-harmonic coeffi-cients, lifted to world space via camera. The clean 3D Gaus-sians are rendered to novel viewpoints (Kerbl et al. 2023): 
+
+ˆIc = R(G; K, T). (7) 
+
+3.3 Losses and Regularization 
+
+We jointly optimize the weather net and the feed-forward 3DGS network with a weighted sum of three terms: 
+
+L = Lclean + λwLweather + λrLrain , (8) where λw and λr are balancing weights. 
+
+Clean reconstruction loss. For each target view q ∈ T , we render ˆIcq = R(G; Kq , Tq ) and supervise it with the clean ground view Icq :
+
+Lclean = X
+
+> q∈T
+
+ˆIcq − Icq
+
+> 22
+
++⊮[s ≥ sp] λp
+
+X
+
+> q∈T
+
+LPIPS 
+
+ˆIcq , Icq
+
+
+
+,
+
+(9) where s is the training step and sp = 5000 . The LPIPS term is disabled early to avoid destabilizing geometry before depth has converged. This term forces the reconstructed 3D Gaus-sians to represent the underlying clean scene appearance. 
+
+Weather supervision. The privileged weather factors 
+
+(t, A, S, mrs , mrd ) provide direct supervision for the pre-dicted factors:                    
+
+> Lweather =ˆt−t1+ˆS−S1+λaˆA−A1
+> + BCE( ˆ mrs ,mrs ) + Llens ( ˆ mrd ,mrd ),
+
+(10) The rain-streak mask mrs is supervised with binary cross-entropy. The lens-affected mask mrd is sparse, so we combine three terms to prevent it from collapsing to all zeros:                
+
+> Llens = BCE w( ˆ mrd ,mrd ) + λd(1 −Dice( ˆ mrd ,mrd )) + λgReLU  ¯mrd −¯mrd gt −δ2,
+
+(11) where BCE w re-weights positive pixels by the negative-to-positive ratio λd, λg. The area slack δ guard penalizes over-prediction, keeping the mask conservative. This supervision regularizes factor estimation and reliable support maps. 
+
+Rainy cycle consistency. The Lclean and Lweather do not enforce that the rendered clean view and predicted factors jointly explain the rainy input. We map the rendered ˆIcc back to the rainy domain with the predicted factors. First, a low-frequency color transform absorbs the global overcast shift: 
+
+ˆIct  
+
+> c
+
+= clip 
+
+
+
+ˆsc ⊙ ˆIcc + ˆbc, 0, 1
+
+
+
+, (12) We then apply haze and screen-blend the rain streak layer: 
+
+˜Irc = 1 −
+
+
+
+1 −
+
+ˆIct  
+
+> c
+
+⊙ ˆtc + ˆAc ⊙ (1 − ˆtc)
+
+ 
+
+⊙ (1 − ˆSc).
+
+(13) Lens refraction and blur cannot be replayed by this differ-entiable model, so lens-affected pixels are excluded from the loss. We align the re-rained image with the observed rainy input Irc using a robust Charbonnier penalty:              
+
+> Lrain =X
+> c∈C
+> P
+> (i,j )ρ
+> ˜Irc, (i,j )−Irc, (i,j )
+> 
+> wc, (i,j )
+> P
+> (i,j )wc, (i,j )+ϵ,ρ(x) = px2+ϵ2,
+
+(14) where wc = 1 − uc is the validity weight and uc is the lens censor mask. The Charbonnier penalty is robust to local outliers caused by streak occlusions. 
+
+Training stability. The lens censor mask is annealed from the ground truth to the predicted over initial sc = 5000 steps, 
+
+uc = αs mrd  
+
+> c
+
++ (1 − αs) ˆ mrd  
+
+> c
+
+, αs = max(0 , 1 − s/s c) ,
+
+(15) so that the cycle loss is not disabled prematurely while the lens head is still learning. During the same window we also anneal the scene support used by the geometry path from the ground-truth-derived support toward the predicted support, 
+
+sgeo  
+
+> c
+
+= αs sgeo,gt  
+
+> c
+
++ (1 − αs) sgeo,pred  
+
+> c
+
+, (16) handing control of cross-view matching to the weather net as it becomes reliable. Finally, the support is detached from the weather net before entering the geometry path; the weather net is trained only by Lweather and Lrain . This prevents the lens head from reducing the task loss by predicting an all-zero mask that retains the raw rainy reference pixels. 
+
+## 4 Experiment 
+
+4.1 Settings 
+
+Baselines. We compare DerainSplat against represen-tative feed-forward 3DGS methods, including Pixel-Splat (Charatan et al. 2024), MVSplat (Chen et al. 2024c), and TranSplat (Zhang et al. 2025), using their official pre-trained weights for direct inference on rainy inputs. We fur-ther compare against per-scene optimized methods, including 3DGS (Kerbl et al. 2023) and WeatherGS (Qian et al. 2025). To ensure a fair comparison, we also retrain the feed-forward baselines from scratch on our synthetic rainy benchmarks under the same configuration as DerainSplat. 
+
+Benchmarks. All synthetic benchmarks are generated by the proposed four-stage synthesis pipeline, preserving the orig-inal camera parameters and clean targets. We report PSNR, SSIM, and LPIPS for all baselines in the following sections. Real-world rainy scenes lack aligned clean targets and are used for qualitative evaluation only. Table 1: Overall quantitative results on synthetic rainy benchmarks. Feed-forward methods are evaluated on Rainy RE10K and Rainy ACID using either official weights or models finetuned on synthetic rainy data. Per-scene optimized methods are evaluated on Rainy Mip-NeRF360. All methods are evaluated on clean target views. Bold /underline denote the best/second best.                                                              
+
+> Feed-Forward Rainy RE10K (Official) Rainy ACID (Official) Rainy RE10K (Finetuned) Per-Scene Optimization Mip-NeRF360
+> PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓
+> PixelSplat (Charatan et al. 2024) 17.19 0.662 0.318 18.80 0.718 0.335 17.62 0.683 0.303 3DGS (Kerbl et al. 2023) 16.81 0.233 0.459 MVSplat (Chen et al. 2024c) 17.24 0.670 0.312 18.74 0.717 0.342 18.44 0.682 0.308 WeatherGS (Qian et al. 2025) 15.46 0.252 0.505 TranSplat (Zhang et al. 2025) 17.29 0.672 0.311 18.75 0.718 0.341 19.04 0.692 0.319 Ours 19.38 0.524 0.395 Ours 22.77 0.773 0.188 23.54 0.786 0.167 22.77 0.773 0.188
+
+Rainy Input GT PixelSplat MVSplat Tra nSplat Ours 
+
+Figure 7: Qualitative comparison of novel views on rainy RealEstate10K and ACID datasets. Compared with feed-forward baselines, DerainSplat yields cleaner novel views with fewer rain/haze artifacts and clearer scene structures. Inputs 
+
+GT 
+
+PixelSplat MVSplat 
+
+TransSplat Ours 
+
+Figure 8: Finetuned qualitative comparison on rainy RE10K. 
+
+1) Rainy RE10K (Zhou et al. 2018) contains 13,768/1,455 (train/test) rainy outdoor scenes and serves as the primary benchmark for training and in-domain evaluation. 2) Rainy ACID (Liu et al. 2021) contains approximately 11K/1.5K (train/test) rainy outdoor scenes and serves as a second large-scale in-domain benchmark. 3) Rainy Mip-NeRF360 (Barron et al. 2022) evaluates cross-dataset generalization and per-scene optimized methods. 4) HydroViews (Liu et al. 2024) provides real-world rainy scenes without aligned clean views for qualitative evaluation. 
+
+Implementation Details. We implement DerainSplat in Py-Torch. Following MVSplat, both training and inference adopt a two-view setting. Each model is trained under the default rain intensity configuration. Training is conducted uses with a batch size of 10 across 5 NVIDIA RTX 4090 GPUs using the Adam optimizer (Kingma 2014) for 300k steps. Bicycle  Stump   
+
+> 3DGS WeatherGS Ours
+
+Figure 9: Qualitative comparison on rainy Mip-NeRF360. 
+
+4.2 Main Results 
+
+Comparison with Feed-Forward Methods. Tab. 1(left) shows that DerainSplat outperforms all feed-forward base-lines on both Rainy RE10K and Rainy ACID, ranking first in all metrics with a PSNR gain of over 4 dB. Finetuned base-lines on the same rainy data closes little of the gap, attribut-ing the advantage to the method design rather than training resources. Fig. 7 and Fig. 8 further show that existing meth-ods retain rain/haze and blur structures, while DerainSplat renders cleaner novel views and more coherent structures, validating the effectiveness of weather-aware design. 
+
+Comparison with Per-Scene Optimized Methods. We further evaluate DerainSplat against per-scene optimized methods on Rainy Mip-NeRF360. Qualitative results are shown in Fig. 9 and and quantitative results are reported in Tab. 1 (right). Compared to per-scene optimized methods, DerainSplat not only achieves competitive performance but Table 2: Analysis on two-stage derain strategy.                                       
+
+> Feed-Forward RealEstate10K Per-Scene Optimization Mip-NeRF360
+> PSNR ↑SSIM ↑LPIPS ↓Time ↓PSNR ↑SSIM ↑LPIPS ↓Time ↓
+> MVSplat 17.24 0.670 0.312 0.42 s 3DGS 16.81 0.233 0.459 ≈400 sCSUD+MVSplat 17.35 0.668 0.328 0.59 s CSUD+3DGS 16.78 0.243 0.458 ≈405 s
+> Ours 22.77 0.773 0.188 0.47 s Ours 19.38 0.524 0.395 0.47 s
+
+Table 3: Rain-streak geometry comparison. Real streaks are predicted, while synthetic sreaks are generated from pipeline.                            
+
+> Metric Real rainy (pred) Synthetic (GT) Overlap ↑
+> Angle (◦)88 .0±6.489 .8±6.30.832
+> Length (px) 7.7±5.39.4±6.00.842
+> Width (px) 2.59 ±1.68 2.24 ±1.49 0.843 Rainy GT
+> Color
+
+Figure 10: Qualitative results on real-world rainy scenes. 
+
+also enables real-time reconstruction. 
+
+4.3 Other Results 
+
+Real-rainy Scenes Generalization. We evaluate Derain-Splat on real rainy scenes from HydroViews (Liu et al. 2024) without any fine-tuning. Since real rainy captures lack aligned clean target, we only provide qualitative results in Fig. 10. We further validate the realism of our synthetic rain pipeline, decomposing the predicted rain-streak mask on real scenes and measuring the principal-axis angle, length, and width of each streak. Comparison against predictions on syn-thetic scenes is shown in Tab. 3, indicating that the synthetic streak geometry is physically consistent with real rainfall. 
+
+Quantitative Results on Two-stage Strategy. We further evaluate representative two-stage strategies that first de-rains individual view with CSUD (Dong et al. 2025) and then reconstructs with MVSplat (Chen et al. 2024c) or 3DGS (Kerbl et al. 2023). Tab. 2 demonstrates that Derain-Splat jointly models weather and geometry, outperforming two-stage strategy in both quality and real-time inference. 
+
+4.4 Ablation Study 
+
+We conduct a ablation study of DerainSplat on Rainy RealEstate10K, retaining the same weather-factor prediction. 
+
+Core components of DerainSplat. Geometry Support guides depth-candidate matching and Gaussian opacity Table 4: Ablation study on rainy RealEstate10K. 
+
+Geo. Support Radi. Support PSNR ↑ SSIM ↑ LPIPS ↓
+
+✗ ✗ 19.73 0.726 0.304 
+
+✓ ✗ 21.58 0.757 0.215 
+
+✓ ✓ 22.77 0.773 0.188 
+
+w/o rainy-cycle consistency 21.62 0.746 0.223 Rainy GT  
+
+> Clean GT
+> (a )(b)
+
+Figure 11: Comparison of rainy-cycle consistency. The upper and lower rows are produced without and with the cycle loss, respectively; (a) and (b) trained 1K and 10K steps. with scene reliability, suppressing weather-induced spuri-ous Gaussian. Radiance Support denotes support-weighted depth-aligned apearance fusion, restoring corrupted refer-ence colors before Gaussian prediction. The experimental results are summarized in Tab. 4, demonstrating the pivotal roles of these modules in rainy–to–clean reconstruction. 
+
+Importance of Rainy-cycle Consistency. Rainy-cycle con-sistency re-applies the predicted factors to clean context ren-derings and aligns them with the rainy inputs. Removing this constraint degrades reconstruction quality, as shown in Tab. 4 (row 4). Fig. 11 further shows that removing the cycle ratains weather artifacts and slows convergence. 
+
+## 5 Conclusion 
+
+In this paper, we propose DerainSplat , a weather-aware feed-forward framework for reconstructing clean 3D scenes from sparse rainy views. Our method initially constructs a large-scale multi-view derain dataset synthesized through a four-stage weather formation pipeline, providing paired clean-rain images and privileged factors. Rather than deraining indi-vidual view, DerainSplat disentangles it into explicit factors that jointly guide cross-view geometry matching and depth-aligned appearance fusion within the feed-forward 3DGS pipeline. Extensive experiments on multiple rainy datasets demonstrate that DerainSplat outperforms existing methods. References 
+
+Alletto, S.; Abati, D.; Calderara, S.; and Cucchiara, R. 2019. Adherent Raindrop Removal with Self-Supervised Atten-tion Maps and Spatio-Temporal Generative Adversarial Net-works. In Proceedings of the IEEE/CVF International Con-ference on Computer Vision Workshops (ICCVW) .Ba, Y.; Zhang, H.; Yang, E.; Suzuki, A.; Pfahnl, A.; Chan-drappa, C. C.; de Melo, C. M.; You, S.; Soatto, S.; Wong, A.; and Kadambi, A. 2022. Not Just Streaks: Towards Ground Truth for Single Image Deraining. In European Conference on Computer Vision (ECCV) .Barron, J. T.; Mildenhall, B.; Verbin, D.; Srinivasan, P. P.; and Hedman, P. 2022. Mip-Nerf 360: Unbounded anti-aliased neural radiance fields. In Proceedings of the IEEE/CVF con-ference on computer vision and pattern recognition , 5470– 5479. Charatan, D.; Li, S. L.; Tagliasacchi, A.; and Sitzmann, V. 2024. pixelsplat: 3d gaussian splats from image pairs for scalable generalizable 3d reconstruction. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 19457–19467. Chen, H.; Li, J.; Liu, J.; Guo, X.; and Ren, J. S. 2024a. From Sky to the Ground: A Large-scale Benchmark and Simple Baseline Towards Real Rain Removal. IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) .Chen, H.; Xu, Q.; Li, M.; and Yang, Q. 2024b. RainyScape: Unsupervised Rainy Scene Reconstruction using Decoupled Neural Rendering. arXiv preprint arXiv:2404.11401 .Chen, W.-T.; Wang, Y.; Kuo, S.-Y.; and Wetzstein, G. 2023. DehazeNeRF: Multiple Image Haze Removal and 3D Shape Reconstruction using Neural Radiance Fields. arXiv ,abs/2303.11364. Chen, X.; Li, P.; Guan, Q.; Jin, G.; and Jin, J. 2025. Rethinking Rainy 3D Scene Reconstruction via Perspec-tive Transforming and Brightness Tuning. arXiv preprint arXiv:2511.06734 .Chen, Y.; Xu, H.; Zheng, C.; Zhuang, B.; Pollefeys, M.; Geiger, A.; Cham, T.-J.; and Cai, J. 2024c. Mvsplat: Efficient 3d gaussian splatting from sparse multi-view images. In Eu-ropean Conference on Computer Vision , 370–386. Springer. Chen, Y.; Zheng, C.; Xu, H.; Zhuang, B.; Vedaldi, A.; Cham, T.-J.; and Cai, J. 2024d. Mvsplat360: Feed-forward 360 scene synthesis from sparse views. Advances in Neural Information Processing Systems , 37: 107064–107086. Dong, G.; Zheng, T.; Cao, Y.; Qing, L.; and Ren, C. 2025. Channel Consistency Prior and Self-Reconstruction Strategy Based Unsupervised Image Deraining. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 7469–7479. Fu, X.; Huang, J.; Ding, X.; Liao, Y.; and Paisley, J. 2017. Clearing the Skies: A Deep Network Architecture for Single-Image Rain Removal. IEEE Transactions on Image Process-ing , 26(6): 2944–2956. Garg, K.; and Nayar, S. K. 2007. Vision and Rain. Interna-tional Journal of Computer Vision , 75: 3–27. Hu, X.; Zhu, L.; Wang, T.; Fu, C.-W.; and Heng, P.-A. 2021. Single-Image Real-Time Rain Removal Based on Depth-Guided Non-Local Features. IEEE Transactions on Image Processing , 30: 1759–1770. Huang, C.; Mees, O.; Zeng, A.; and Burgard, W. 2023. Vi-sual language maps for robot navigation. In 2023 IEEE In-ternational Conference on Robotics and Automation (ICRA) ,10608–10615. IEEE. Kang, L.-W.; Lin, C.-W.; and Fu, Y.-H. 2012. Automatic Single-Image-Based Rain Streaks Removal via Image De-composition. IEEE Transactions on Image Processing ,21(4): 1742–1755. Kerbl, B.; Kopanas, G.; Leimkühler, T.; and Drettakis, G. 2023. 3D Gaussian Splatting for Real-Time Radiance Field Rendering. ACM Transactions on Graphics , 42(4). Kingma, D. P. 2014. Adam: A method for stochastic opti-mization. arXiv preprint arXiv:1412.6980 .Lin, H.; Chen, S.; Liew, J.; Chen, D. Y.; Li, Z.; Shi, G.; Feng, J.; and Kang, B. 2025. Depth anything 3: Recovering the vi-sual space from any views. arXiv preprint arXiv:2511.10647 .Liu, A.; Tucker, R.; Jampani, V.; Makadia, A.; Snavely, N.; and Kanazawa, A. 2021. Infinite nature: Perpetual view gen-eration of natural scenes from a single image. In Proceedings of the IEEE/CVF International Conference on Computer Vi-sion , 14458–14467. Liu, S.; Chen, X.; Chen, H.; Xu, Q.; and Li, M. 2024. DeRainGS: Gaussian Splatting for Enhanced Scene Re-construction in Rainy Environments. arXiv preprint arXiv:2408.11540 .Luo, Y.; Xu, Y.; and Ji, H. 2015. Removing Rain from a Sin-gle Image via Discriminative Sparse Coding. In Proceedings of the IEEE International Conference on Computer Vision (ICCV) , 3397–3405. Mildenhall, B.; Srinivasan, P. P.; Tancik, M.; Barron, J. T.; Ramamoorthi, R.; and Ng, R. 2020. NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis. In 
+
+European Conference on Computer Vision (ECCV) .Narasimhan, S. G.; and Nayar, S. K. 2002. Vision and the At-mosphere. International Journal of Computer Vision , 48(3): 233–254. Porav, H.; Bruls, T.; and Newman, P. 2019. Real-Time Adher-ent Raindrop Modelling and Removal for Automotive Cam-eras. In Proceedings of the IEEE International Conference on Robotics and Automation (ICRA) , 5842–5848. Qian, C.; Guo, Y.; Li, W.; and Markkula, G. 2025. Weathergs: 3d scene reconstruction in adverse weather conditions via gaussian splatting. In 2025 IEEE International Conference on Robotics and Automation (ICRA) , 185–191. IEEE. Qian, R.; Tan, R. T.; Yang, W.; Su, J.; and Liu, J. 2018. Atten-tive Generative Adversarial Network for Raindrop Removal From a Single Image. In Proceedings of the IEEE Confer-ence on Computer Vision and Pattern Recognition (CVPR) ,2482–2491. Ramazzina, A.; Bijelic, M.; Walz, S.; Sanvito, A.; Scheuble, D.; and Heide, F. 2023. ScatterNeRF: Seeing Through Fog with Physically-Based Inverse Neural Rendering. arXiv ,abs/2305.02103. Ren, D.; Zuo, W.; Hu, Q.; Zhu, P.; and Meng, D. 2019. Pro-gressive Image Deraining Networks: A Better and Simpler Baseline. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 3937– 3946. Roser, M.; Kurz, L.; and Geiger, A. 2010. Realistic Modeling of Water Droplets for Monocular Adherent Raindrop Recog-nition. In Proceedings of the Asian Conference on Computer Vision Workshops (ACCVW) .Tian, Q.; Tan, X.; Xie, Y.; and Ma, L. 2025. Drivingforward: Feed-forward 3d gaussian splatting for driving scene recon-struction from flexible surround-view input. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, 7374–7382. Wang, T.; Yang, X.; Xu, K.; Chen, S.; Zhang, Q.; and Lau, R. W. H. 2019. Spatial Attentive Single-Image Deraining with a High Quality Real Rain Dataset. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 12270–12279. Wang, Y.; Chen, Y.; Liu, X.; and Zhao, D. 2020. Rethink-ing Image Deraining via Rain Streaks and Vapors. IEEE Transactions on Image Processing , 29: 4170–4183. Yang, W.; Liu, J.; Guo, X.; Zong, W.; Li, M.; Ren, J. S.; and Lin, L. 2022. GTAV-NightRain: Photometric Realistic Large-scale Dataset for Night-time Rain Streak Removal. In 
+
+AAAI Conference on Artificial Intelligence .Yang, W.; Tan, R. T.; Feng, J.; Liu, J.; Guo, Z.; and Yan, S. 2017. Deep Joint Rain Detection and Removal From a Single Image. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 1357–1366. You, S.; Tan, R. T.; Kawakami, R.; Mukaigawa, Y.; and Ikeuchi, K. 2013. Adherent Raindrop Detection and Re-moval in Video. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 1043– 1050. You, S.; Tan, R. T.; Kawakami, R.; Mukaigawa, Y.; and Ikeuchi, K. 2017. Waterdrop Stereo. IEEE Transactions on Pattern Analysis and Machine Intelligence , 39(3): 539–553. Zamir, S. W.; Arora, A.; Khan, S.; Hayat, M.; Khan, F. S.; and Yang, M.-H. 2022. Restormer: Efficient Transformer for High-Resolution Image Restoration. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 5728–5739. Zamir, S. W.; Arora, A.; Khan, S.; Hayat, M.; Khan, F. S.; Yang, M.-H.; and Shao, L. 2021. Multi-Stage Progressive Image Restoration. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition (CVPR) ,14821–14831. Zhang, C.; Zou, Y.; Li, Z.; Yi, M.; and Wang, H. 2025. Transplat: Generalizable 3d gaussian splatting from sparse multi-view images with transformers. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, 9869–9877. Zhang, H.; and Patel, V. M. 2018. Density-Aware Single Image De-Raining Using a Multi-Stream Dense Network. In 
+
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 695–704. Zhou, T.; Tucker, R.; Flynn, J.; Fyffe, G.; and Snavely, N. 2018. Stereo magnification: Learning view synthesis using multiplane images. arXiv preprint arXiv:1805.09817 .

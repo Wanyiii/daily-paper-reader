@@ -1,0 +1,305 @@
+Title: LOCUS-DT: Localization via Observation-Conditioned Uncertainty Scoring with Digital Twins
+
+URL Source: https://arxiv.org/pdf/2608.00406v1
+
+Published Time: Tue, 04 Aug 2026 00:22:48 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# LOCUS-DT: Localization via Observation-Conditioned Uncertainty Scoring with Digital Twins 
+
+Haozhe Lei ∗1, Roberto Bomfin 2, Marwa Chafii 1,2, and Sundeep Rangan 1
+
+> 1
+
+NYU WIRELESS, Tandon School of Engineering, New York University, Brooklyn, NY 11201, USA 
+
+> 2
+
+Engineering Division, New York University Abu Dhabi, 129188, UAE hl4155@nyu.edu; roberto.bomfin@nyu.edu; marwa.chafii@nyu.edu; srangan@nyu.edu 
+
+Abstract —Accurate indoor localization is essential for emerg-ing applications in robotic navigation and search and rescue. While classical methods typically focus on single-point estimates, complex indoor environments with heavy blockage and multipath propagation often lead to multimodal likelihood surfaces where a single estimate is insufficient. This paper proposes LOCUS-DT (Localization via Observation-Conditioned Uncertainty Scoring with Digital Twins), a framework that treats snapshot local-ization as posterior inference over the transmitter location. By leveraging a ray-tracing-based digital twin (DT) of the known environment, LOCUS-DT generates synthetic multipath profiles for candidate locations and compares them against the measured channel profile. Central to our approach is a novel learned scoring function designed to compare a fixed number of dominant specular paths, providing robustness against errors in both the DT environment model and the physical channel estimation. Importantly, LOCUS-DT is trained over an ensemble of environments to ensure generalization to unseen layouts. We evaluate the system using a Sionna-based ray-tracing backend, demonstrating that LOCUS-DT captures the sharp, multimodal posterior structures inherent in indoor settings more accurately than standard Gaussian or Gaussian-mixture benchmarks. 
+
+Index Terms —Wireless localization, RF sensing and position-ing, digital twins, ray tracing, posterior inference, uncertainty quantification. 
+
+I. I NTRODUCTION 
+
+Wireless localization from a transmitted signal is a core capability in modern sensing and communication systems [1], [2]. It is also a key sensing function in emerging inte-grated sensing and communication systems. Classical local-ization methods typically return a single point estimate for a transmitter’s location. Indoor upper-mid-band measurements report rich angular dispersion [3] and frequency-dependent delay spread [4], illustrating the multipath that makes single-snapshot localization ambiguous. A wide range of downstream tasks, such as robotic navigation and search, require a more complete spatial map of the relative likelihood of each possible transmitter location. Probabilistically, this problem can be seen as estimating a posterior distribution on the transmitter’s location given the measurements [5], [6]. At the same time, many data-driven indoor localization methods remain closely tied to the environments and radio-frequency (RF) patterns 
+
+> This work is supported in part by NSF grants 1952180, 2133662, 2236097, 2148293, and 1925079, the DARPA Prowess program, the NTIA and indus-trial affiliates of NYU Wireless.
+> ∗Corresponding author: Haozhe Lei (email: hl4155@nyu.edu).
+
+observed during training, which can limit robustness when the layout-dependent propagation structure changes [7], [8]. In this work, we propose LOCUS-DT (Localization via Observation-Conditioned Uncertainty Scoring with Digital Twins ), which casts indoor snapshot localization as posterior inference over the transmitter location given the measure-ments. A conceptual figure is shown in Fig. 1. The method assumes that the room layout and receiver (RX) pose are known. Under this assumption, the multipath profile from any candidate transmitter (TX) location can be estimated via a ray-tracing-based digital twin (DT). At the same time, the measured multipath profile can be estimated from the received signal. By comparing the DT-generated and measured multipath profiles, each candidate location can be scored to obtain a posterior distribution over all candidate locations. 
+
+A. Our Contributions 
+
+The main contributions of this work are as follows. 
+
+DT-conditioned posterior formulation for indoor local-ization. We formulate single-snapshot indoor localization as posterior inference over the TX location given the layout and measurements. The layout is incorporated implicitly through the ray-tracing DT to obtain multipath channel estimates for each candidate location. These multipath channel estimates can be compared with the measured channel profile to score the likelihood of each candidate location. 
+
+Learned scoring function. We propose a novel learned scor-ing function that can compare the top K paths of the candidate and measured multipath profiles. Importantly, training can be performed over an ensemble of environments, so the method can be evaluated on environments not included in the training set. Errors in either the DT or channel estimation can be incorporated during training for robustness. 
+
+Validation with realistic ray tracing. We instantiate LOCUS-DT using a standard maximum-likelihood estimator of the specular components and a Sionna-based ray-tracing DT backend, and benchmark it against Gaussian and Gaussian-mixture posterior models. The experiments show that explicit candidate-wise DT matching better captures the sharp, mul-timodal, and layout-dependent posterior structure induced by indoor multipath. arXiv:2608.00406v1 [eess.SP] 1 Aug 2026 Fig. 1. Concept of LOCUS-DT. From a real indoor scene, the receiver acquires one measurement snapshot. An offline wireless digital twin (WIRELESS-DT) module constructs a candidate library over feasible transmitter locations and generates the corresponding candidate-side multipath signatures. The orange markers in the WIRELESS-DT panel denote candidate search locations; larger markers are used only to visually emphasize candidates with more salient DT-predicted multipath signatures. In parallel, an online RF-Observation module extracts a compact ranked multipath representation from the received signal, such as path-wise angle, delay, and strength features. LOCUS-DT then matches the observed multipath signature against the candidate-side DT signatures and outputs a posterior uncertainty heatmap over transmitter locations. 
+
+B. Prior Work 
+
+Most RF localization methods are designed to produce point estimates, while the full spatial distribution over fea-sible transmitter locations is much less commonly modeled. Classical analyses such as the Cram´ er–Rao bound characterize estimation limits under assumed signal models [9], and several recent works quantify uncertainty only through restricted summaries, such as output error scales, ranging uncertainty, or uncertainty in anchor and channel information [10]–[12]. These approaches provide useful uncertainty characterizations, but they do not formulate indoor localization as posterior in-ference over a structured set of layout-conditioned transmitter hypotheses. The work here builds on [6], which estimates the posterior from a single dominant path. Specifically, the current work augments [6] by introducing a DT to compute a full multipath profile from each candidate location and then comparing the DT multipath profile with an estimated or measured multipath profile. At a broader level, our work is related to conditional density estimation, where a distribution is obtained by normalizing learned scores over a discretized output space [13]–[16]. It is also related to recent efforts toward full-posterior wireless localization [6]. The present paper differs in its emphasis on layout-aware indoor inference: the normalized scores are not generic class logits, but candidate-wise compatibility scores between a measured multipath observation and a DT-predicted multipath signature. Finally, significant prior work has studied wireless digi-tal twins and their ray-tracing calibration and environment reconstruction [17]–[19], and has used ray tracing, digital twins, and physics-informed learning for sensing, localization, navigation, and downstream wireless decision-making [20]– [24]. Our use of the DT is different in emphasis. Rather than using the DT only as a forward simulator or deterministic matching tool, we use it to generate a library of candidate-indexed multipath hypotheses and cast localization as posterior generation from candidate scores. II. LOCUS-DT P ROBLEM FORMULATION AND 
+
+POSTERIOR MODEL 
+
+A. Localization Setting 
+
+The TX is located at an unknown position Xt ∈ Rd in a global coordinate system. For simplicity, we take d = 2 , so the problem is two-dimensional (2D) localization. To estimate the TX location, the RX is given 
+
+(L, p) , p = ( xr , ϕ r ), (1) where L is a known room layout and p is the receiver pose. Since d = 2 , the pose is described by an RX position xr ∈ R2 and orientation ϕr ∈ [−π, π ). At runtime, the RX attempts to listen for the signal from the TX and collects an observation y. Typically, the measurement y is an array of in-phase/quadrature (IQ) samples from the RX antennas; see the observation model in Section II-C. A point estimate would be a single vector bxt. In contrast, the inference objective is to estimate the posterior distribution 
+
+p xt | L , p, y , (2) representing the relative likelihood of all potential TX loca-tions xt given the observation, room layout, and receiver pose. 
+
+B. DT Multipath Estimator 
+
+The key structural assumption in LOCUS-DT is the avail-ability of a DT that predicts the multipath signature generated by a hypothetical TX location under a known room layout and receiver pose. Formally, we describe each path as a tuple 
+
+ψ = ( θ, τ, α, γ ) ∈ S , (3) where θ is the angle of arrival (AoA), τ is the relative delay, 
+
+α ∈ C is the complex path gain, and γ = |α|2/σ 2 is its real-valued path SNR for receiver-noise variance σ2. The set S
+
+contains such tuples. The DT can then be modeled abstractly as a function: 
+
+Ψ( L, p, xt) = {ψDT  
+
+> k
+
+, k = 1 , . . . , K } ∈ S K , (4) that maps each candidate location xt to a predicted set of K
+
+paths. In our simulations below, K is fixed to a small value, and the DT produces the top K paths. These quantities are retained for K paths, sorted from strongest to weakest. The abstraction is intentionally backend-agnostic. Any DT method can be used to instantiate Ψ( L, p, xt) as long as it produces the same ranked tuple representation in the common space S.
+
+C. Observation Interface 
+
+The TX is assumed to periodically transmit a known waveform. To search for the TX, the RX captures a snapshot of IQ samples, which we denote by 
+
+y ∈ CN ×Nrx , (5) where N is the number of samples and Nrx is the number of RX antennas. We then model the multipath estimator as a function: 
+
+bΨ : CN ×Nrx → S K (6) which produces the estimated multipath profile 
+
+bΨ ( y) = {ψobs  
+
+> k
+
+, k = 1 , . . . , K } ∈ S K . (7) There is a large body of multipath estimators for path ex-traction from array measurements. In this work, we use the iterative Levenberg–Marquardt (LM) algorithm [25]. 
+
+D. Score Function and Posterior 
+
+The core modeling problem is to construct a logit function that captures the compatibility between the DT signature of a candidate location and the multipath structure extracted from the real signal. We formalize this process as finding a score function: 
+
+gω (xt, L, p, y) = Gω
+
+{ψDT  
+
+> k
+
+(xt)}, {ψobs  
+
+> k
+
+} , (8) where {ψDT  
+
+> k
+
+(xt)} are the multipath components estimated by the DT in (4) for the candidate TX location xt, and {ψobs  
+
+> k
+
+}
+
+is the observed multipath profile. The vector ω collects all trainable weights and biases of the neural network realizing the score function Gω .We next assume a prior distribution p0(xt), which is typically uniform over a region of interest. We then assume the posterior distribution is given by: 
+
+ˆpω
+
+ xt | L , p, y = egω (xt,L,p,y) p0(xt)
+
+Zω (y; L, p) , (9) where Zω (·) is the normalizing constant: 
+
+Zω (y; L, p) = 
+
+Z
+
+egω (xt,L,p,y) p0(xt) dxt. (10) 
+
+E. Sampled Cross-Entropy Loss 
+
+The score function Gω [·] can now be trained similarly to the earlier work [6], which does not use a DT. As described in [6], the key challenge in training a posterior of the form (9) is that the partition function Zω (·) in (10) has no closed-form expression and involves numerical integration. The partition function is instead replaced by a Monte Carlo estimate. Specifically, we assume we are given a data set 
+
+D =   Lm, pm, Cm, ym, xtm
+
+ Mm=1 , (11) where M is the number of training samples. For each training sample, we are given a finite set of candidate TX locations: 
+
+Cm = {¯xtmj }Nm 
+
+> j=1
+
+⊂ Rd. (12) The true TX location satisfies xtm ∈ C m. Equivalently, there exists a unique candidate index c⋆m ∈ { 1, . . . , N m} such that 
+
+xtm = ¯ xtmc ⋆m . (13) For each instance m, we evaluate the score function over the entire candidate set Cm and define 
+
+gmj = gω (¯ xtmj , Lm, pm, ym), j = 1 , . . . , N m. (14) The ideal cross-entropy objective associated with (9) is 
+
+LCE (ω) = − 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+log ˆ pω
+
+ xtm | L m, pm, ym
+
+ . (15) In LOCUS-DT, we replace the integral partition function (10) with the sampled candidate-set normalization 
+
+ˆZω (ym; Lm, pm) = 
+
+> Nm
+
+X
+
+> j=1
+
+egmj . (16) Fig. 2. LOCUS-DT visualization for three tasks on distinct random indoor layouts. In each row (Task 1–3), the first panel shows the underlying Sionna room geometry, including the outer wall and interior obstacles, and the six panels to its right show posterior heatmaps for six corresponding TX/RX configurations on that same layout. The red five-point star marks the true TX location, the blue RX marker and arrow indicate the receiver position and orientation, and the outlined boxes indicate obstacles inside the room. Brighter colors correspond to larger relative log posterior values and therefore higher candidate likelihood. 
+
+We then drop the additive constant induced by the uniform prior on Cm. Substituting this sampled normalization into (15) and using (13), (14), and (16), we can approximate the loss function (15) as 
+
+L(ω) = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+−gmc ⋆m + log 
+
+
+
+> Nm
+
+X
+
+> j=1
+
+egmj 
+
+ . (17) The loss in (17) is the candidate-set analogue of the sampled cross-entropy criterion in energy-based learning. 
+
+F. Pairwise Neural Realization of the Score Function 
+
+The score function Gω [·] is realized as a transformation followed by a simple multilayer perceptron. In the simulations, we retain K = 6 paths from each DT and observation profile. Synchronization is unavailable and the system is narrowband, so we discard the delay. Each AoA θ is encoded as (cos θ, sin θ), while the SNR γ is converted to dB and scaled to [0 , 1] over a 60 dB range. The resulting 12 paths yield 
+
+3 × 12 = 36 features, which are fed into a two-layer neural network. This architecture provides an extremely compact, easily trainable scoring function with a limited number of parameters. III. E XPERIMENTAL INSTANTIATION OF LOCUS-DT 
+
+A. Synthetic Environment Generation 
+
+To validate the methodology, we create random synthetic environments with varying obstacles. Importantly, the method is not site-specific. It can be tested on a completely random environment different from those used for training. Each random environment for training or testing is a 100 m ×100 m 
+
+region. Each scene contains the outer room boundary together with three randomly generated interior obstacles drawn from rectangular, T-shaped, and L-shaped primitives. The NVIDIA Sionna ray-tracing backend [26] is then used to simulate the true channel and the Nm = 500 candidate channels. Fig. 2 shows examples of these synthetic environments, where the leftmost panel in each row gives a concrete room layout. The carrier frequency is 12 GHz and the signal bandwidth is 200 MHz . We use a noise figure of 7 dB , a synchronization window of 4 μs, and a transmit power of 0 dBm . The trans-mitter uses one vertically polarized isotropic element, while the receiver uses a 1 × 8 vertically polarized half-wavelength array with a 3GPP TR 38.901 element pattern [27]. The ray tracer returns up to 16 valid paths per channel; LOCUS-DT retains the K = 6 strongest paths from each DT candidate profile. For the online observation, the standard maximum-likelihood (SML) estimator uses a 128 -point matched filter to estimate (θ, τ, α ), derives γ, and retains the K = 6 strongest scorer pairs (θ, γ ).The training split therefore spans 8000 distinct room lay-outs, each with 500 candidate transmitter locations and 10 
+
+observation realizations, for a total of 80 ,000 snapshots. The test split spans 2000 additional layouts with the same 500 -candidate structure, yielding 20 ,000 snapshots. For the final benchmark comparison, we report two harder evaluation sets: Eval Random uses 2000 held-out groups with 1000 feasible random candidates per group, while Eval Grid uses the cor-responding held-out layouts but starts from a regular 31 × 31 
+
+raw grid and keeps 696 layout-feasible candidate positions after pruning invalid points. 
+
+B. Maximum-Likelihood Observation Estimator 
+
+For channel estimation, we instantiate the online estimator 
+
+bΨ using an implementation of (23) based on the iterative LM algorithm [25], which is known to be efficient at high SNR. Let bF(·) and bR(·) be the frequency- and spatial-domain basis functions 
+
+bF(τ ) =  e−j2πf 0τ ·mMF−1 
+
+> m=0
+
+, (18) 
+
+bR(θ) =  e−jπ sin θ·mMR−1 
+
+> m=0
+
+, (19) Fig. 3. Qualitative comparison for the same three tasks and TX/RX configurations as in Fig. 2. The visualization conventions are unchanged: the red five-point star marks the true TX, the blue marker and arrow indicate the RX pose, interior boxes indicate obstacles, and brighter colors correspond to larger relative log posterior values. TABLE I ADJUSTED LOSS L AND DERIVED METRICS G AND R ON THE INDOOR RF SCENARIO . E VAL GRID AND EVAL RANDOM USE 696 AND 1000 CANDIDATES ,                                         
+
+> RESPECTIVELY .Scenario Evaluation Set LOCUS-DT Gauss-Cart Gauss-Polar GMM-Cart
+> LGRLGRLGRLGR
+> Indoor RF Eval Grid −2.7224 15 .22 41.59% −0.0594 1.06 0.91% −0.3030 1.35 4.63% −0.3778 1.46 5.77% Eval Random −3.3798 29 .37 48.93% −0.1190 1.13 1.72% −0.2650 1.30 3.84% −0.5078 1.66 7.35%
+
+where MF is the number of subcarriers, f0 is the subcarrier spacing, and MR is the number of half-wavelength-spaced receive-ULA elements. The frequency-space channel response over K paths is 
+
+s(Ψ) = 
+
+> K
+
+X
+
+> k=1
+
+bR(θk) ⊗ bF(τk)αk. (20) Assuming equal-power pilots across subcarriers, the channel observation can be modeled as 
+
+ym = s(Ψ) + wm, (21) where wm is an additive white Gaussian noise (AWGN) vector whose entries have variance σ2. Given the likelihood under AWGN 
+
+p(ym | Ψ) ∝ e− (ym−s(Ψ)) H (ym−s(Ψ))  
+
+> σ2
+
+, (22) the maximum-likelihood estimate bΨ is defined as 
+
+bΨ = arg max 
+
+> Ψ
+
+p(ym | Ψ) . (23) 
+
+C. Comparison Benchmarks 
+
+We compare against three other benchmarks. These base-lines are visualized alongside LOCUS-DT in Fig. 3. Gauss-Cart is a Gaussian posterior distribution with the transmitter location xt in Cartesian coordinates. In this baseline, the score function is realized through a mean μ ∈ Rd and covariance matrix Q ∈ Rd×d, both of which are functions of the same full inputs as the LOCUS-DT estimator. Gauss-Polar is the identical estimator, but with the posterior in polar coordinates. Finally, GMM-Cart uses a mixture with k = 3 Gaussian components. 
+
+D. Training and Evaluation Protocol 
+
+All trainable models are optimized with AdamW for 2000 
+
+epochs with weight decay 10 −4 and hidden-layer dimensions 
+
+(64 , 16) . LOCUS-DT uses the pairwise feature construction whereas the Gaussian benchmarks use candidate-independent conditioning on the receiver pose and IQ observation. We use a learning rate of 5×10 −3 for LOCUS-DT and 2×10 −3 for the Gaussian baselines. All training runs are performed on a single NVIDIA A100 GPU. LOCUS-DT requires approximately 
+
+2.5 GPU-hours, Gauss-Cart 1.5 GPU-hours, Gauss-Polar 1.5GPU-hours, and GMM-Cart 2.0 GPU-hours, for a total of approximately 7.5 GPU-hours for the full benchmark suite. Besides the training cross-entropy in (17), we report the adjusted loss 
+
+L = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+ − log ˆ pmc ⋆m − log Nm
+
+ , (24) which measures gain relative to uniform random guessing over the candidate set. We further report the derived quantities 
+
+G = e−L , R = − L
+
+log Ncand 
+
+, (25) where Ncand is the split-specific candidate count. Lower L and higher G and R indicate better performance; Tab. I reports the comparison. 
+
+E. Qualitative Comparison on Shared Tasks 
+
+Fig. 2 shows LOCUS-DT on three distinct random layouts; each row pairs a Sionna room with posterior heatmaps for six TX/RX configurations. Fig. 3 compares LOCUS-DT with Gauss-Cart, Gauss-Polar, and GMM-Cart on the same tasks and geometries. LOCUS-DT yields the most localized and geometry-consistent posteriors, with high-probability regions aligned with the true TX and wall- and reflection-induced structure. Gauss-Cart and Gauss-Polar produce smooth single-mode fields that miss sharp spatial discontinuities and multi-modal ambiguity. GMM-Cart captures limited multimodality, but its peaks remain broader and less aligned because it lacks candidate-wise DT matching. Tab. I confirms that LOCUS-DT outperforms all Gaussian baselines on both evaluation sets. IV. C ONCLUSIONS 
+
+We presented LOCUS-DT for posterior transmitter localiza-tion via DT-conditioned multipath matching. In simulation, it captures reflection-induced multimodal ambiguity, outper-forms Gaussian and Gaussian-mixture baselines, and general-izes to unseen layouts. Future work will evaluate greater DT mismatch and measured rooms reconstructed using SLAM. REFERENCES [1] 3GPP, “Study on expanded and improved NR positioning,” 3rd Gen-eration Partnership Project (3GPP), 3GPP Technical Report 38.859 V18.1.0, Jul. 2024, release 18. [2] H.-S. Cha, G. Lee, A. Ghosh, M. Baker, S. Kelley, and J. Hofmann, “5G NR positioning enhancements in 3GPP release-18,” IEEE Commun. Standards Mag. , vol. 9, no. 1, pp. 22–27, Mar. 2025. [3] D. Shakya, M. Ying, and T. S. Rappaport, “Angular spread statistics for 6.75 GHz FR1(C) and 16.95 GHz FR3 Mid-Band frequencies in an indoor hotspot environment,” in Proc. IEEE Wireless Commun. Netw. Conf. (WCNC) , Milan, Italy, Mar. 2025, pp. 1–6. [4] M. Ying, D. Shakya, T. S. Rappaport, P. Ma, Y. Wang, I. Al-Wazani, Y. Wu, and H. Poddar, “Upper Mid-Band channel measurements and characterization at 6.75 GHz FR1(C) and 16.95 GHz FR3 in an indoor factory scenario,” in Proc. IEEE Int. Conf. Commun. (ICC) , Montreal, QC, Canada, Jun. 2025, pp. 3303–3308. [5] S. Wang, W. Dai, J. Sun, Z. Xu, and G. Y. Li, “Uncertainty awareness in wireless communications and sensing,” IEEE Commun. Mag. , vol. 64, no. 2, pp. 30–38, Feb. 2026. [6] H. Lei, H. Guo, T. Svensson, and S. Rangan, “Beyond point es-timates: Likelihood-based full-posterior wireless localization,” 2025, arXiv:2509.25719. [7] S. He and S.-H. G. Chan, “Wi-Fi fingerprint-based indoor positioning: Recent advances and comparisons,” IEEE Communications Surveys & Tutorials , vol. 18, no. 1, pp. 466–490, 2016. [8] X. Wang, L. Gao, S. Mao, and S. Pandey, “DeepFi: Deep learning for indoor fingerprinting using channel state information,” in Proc. IEEE WCNC , 2015, pp. 1666–1671. [9] H. Godrich, A. M. Haimovich, and R. S. Blum, “Cram´ er–Rao bound on target localization estimation in MIMO radar systems,” in Proc. IEEE Conf. Inf. Sci. Syst. (CISS) , Princeton, NJ, USA, Mar. 2008, pp. 134– 139. [10] T. Zhang, D. Zhang, G. Wang, Y. Li, Y. Hu, Q. Sun, and Y. Chen, “RLoc: Towards robust indoor localization by quantifying uncertainty,” 
+
+Proc. ACM Interact. Mob. Wearable Ubiquitous Technol. , vol. 7, no. 4, pp. 200:1–200:28, Dec. 2023. [11] F. Shamsfakhr, A. Antonucci, L. Palopoli, D. Macii, and D. Fontanelli, “Indoor localization uncertainty control based on wireless ranging for robots path planning,” IEEE Trans. Instrum. Meas. , vol. 71, pp. 1–11, Jan. 2022, art. no. 8501011. [12] L. S. Muppirisetty, T. Svensson, and H. Wymeersch, “Spatial wireless channel prediction under location uncertainty,” IEEE Trans. Wireless Commun. , vol. 15, no. 2, pp. 1031–1044, Feb. 2016. [13] B. W. Silverman, Density Estimation for Statistics and Data Analysis .Routledge, 2018. [14] P. Hall, R. C. L. Wolff, and Q. Yao, “Methods for estimating aconditional distribution function,” J. Amer. Stat. Assoc. , vol. 94, no. 445, pp. 154–163, Mar. 1999. [15] J. K. Lindsey, “Comparison of probability distributions,” J. R. Stat. Soc. B (Methodol.) , vol. 36, no. 1, pp. 38–47, Sep. 1974. [16] Z. Gao and T. Hastie, “LinCDE: Conditional density estimation via Lindsey’s method,” J. Mach. Learn. Res. , vol. 23, no. 52, pp. 1–55, Feb. 2022. [17] L. U. Khan, Z. Han, W. Saad, E. Hossain, M. Guizani, and C. S. Hong, “Digital twin of wireless systems: Overview, taxonomy, challenges, and opportunities,” IEEE Communications Surveys & Tutorials , vol. 24, no. 4, pp. 2230–2254, 2022. [18] M. Ying, D. Shakya, P. Ma, G. Qian, and T. S. Rappaport, “Site-specific location calibration and validation of ray-tracing simulator NYURay at upper mid-band frequencies,” npj Wireless Technol. , vol. 2, Mar. 2026, art. no. 8. [19] M. Ying, G. Qian, X. Wang, P. Ma, D. Shakya, and T. S. Rappaport, “HoRAMA: Holistic reconstruction with automated material assignment for ray tracing using NYURay,” in Proc. IEEE Int. Conf. Commun. (ICC) , Glasgow, UK, Jun. 2026, pp. 1–7. [20] A. Bazzi, M. Ying, O. Kanhere, T. S. Rappaport, and M. Chafii, “ISAC imaging by channel state information using ray tracing for next generation 6G,” IEEE J. Sel. Topics Electromagn. Antennas Propag. ,vol. 1, no. 1, pp. 135–149, Sep. 2025. [21] M. Yin, T. Li, H. Lei, Y. Hu, S. Rangan, and Q. Zhu, “Zero-shot wireless indoor navigation through physics-informed reinforcement learning,” in 
+
+Proc. IEEE Int. Conf. Robot. Autom. (ICRA) , Yokohama, Japan, 2024, pp. 5111–5118. [22] R. Chen, H. Lei, H. Guo, M. Mezzavilla, H. Poddar, T. Yoshimura, and S. Rangan, “Transformer-based rate prediction for multi-band cellular handsets,” in Proc. IEEE Int. Conf. Commun. Workshops (ICC Workshops) , Glasgow, UK, Jun. 2026, pp. 1–6. [23] T. Li, H. Lei, H. Guo, M. Yin, Y. Hu, Q. Zhu, and S. Rangan, “Digital twin-enhanced wireless indoor navigation: Achieving efficient environment sensing with zero-shot reinforcement learning,” IEEE Open J. Commun. Soc. , vol. 6, pp. 2356–2372, Mar. 2025. [24] T. Li, H. Lei, M. Yin, and Y. Hu, “Reinforcement learning with physics-informed symbolic program priors for zero-shot wireless indoor navigation,” in Inductive Biases in Reinforcement Learning (IBRL) Workshop at RLC , Edmonton, AB, Canada, 2025. [Online]. Available: https://openreview.net/forum?id=w1Lg5cxCCU [25] R. Bomfin, A. Rasteh, A. Bazzi, H. Guo, H. Lee, M. Mezzavilla, S. Rangan, J. Choi, and M. Chafii, “Multi-Band channel sensing in the upper Mid-Band (FR3),” in Proc. IEEE Global Commun. Conf. (GLOBECOM) , Taipei, Taiwan, Dec. 2025, pp. 5127–5132. [26] J. Hoydis, S. Cammerer, F. A¨ ıt Aoudia, M. Nimier-David, L. Maggi, G. Marcus, A. Vem, and A. Keller. (2022) Sionna. Software package, ver. 1.2.1. [27] 3GPP, “Study on channel model for frequencies from 0.5 to 100 GHz (release 18),” 3rd Generation Partnership Project (3GPP), 3GPP Technical Report 38.901 V18.0.0, May 2024, release 18.

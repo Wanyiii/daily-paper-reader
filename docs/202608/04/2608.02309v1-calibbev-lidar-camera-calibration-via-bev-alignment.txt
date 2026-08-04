@@ -1,0 +1,334 @@
+Title: CalibBEV: LiDAR-Camera Calibration via BEV Alignment
+
+URL Source: https://arxiv.org/pdf/2608.02309v1
+
+Published Time: Tue, 04 Aug 2026 02:51:37 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# CalibBEV: LiDAR-Camera Calibration via BEV Alignment 
+
+## Filippo D’Addeo * † 
+
+filippo.daddeo2@unibo.it 
+
+## Lorenzo Cipelli * ‡ 
+
+lorenzo.cipelli@unipr.it 
+
+## Adriano Cardace §
+
+cardace@stanford.edu 
+
+## Emanuele Ghelfi ¶
+
+eghelfi@ambarella.com 
+
+## Andrea Zinelli ¶
+
+azinelli@ambarella.com 
+
+## Massimo Bertozzi ‡
+
+massimo.bertozzi@unipr.it 
+
+## Abstract 
+
+We present CalibBEV , a novel Bird’s Eye View (BEV) alignment approach for LiDAR-camera calibration. Our method unifies LiDAR and camera data into a shared 3D spatial representation, enabling accurate and robust cross-modal calibration. CalibBEV extracts sensor-wise BEV fea-tures from each modality using domain-specific architec-tures and estimates the calibration matrix through a two-step alignment process. First, we perform an implicit align-ment by regressing a coarse calibration matrix directly from the BEV features. To ease this alignment, we enforce seman-tic consistency between BEV representations across modal-ities using a contrastive loss inspired by CLIP, guiding both networks toward a unified feature space. In the second step, we leverage our BEV formulation to explicitly align the features of one modality with the other, refining the ini-tial coarse estimate into a final, more accurate calibration matrix. CalibBEV significantly outperforms prior point-to-pixel matching methods, achieving state-of-the-art calibra-tion accuracy. On the KITTI and nuScenes benchmarks, our method reduces the Relative Rotation Error (RRE) by 51% and 68%, and the Relative Translation Error (RTE) by 80% and 91%, respectively, compared to previous methods. 
+
+## 1. Introduction 
+
+Image-to-Point Cloud registration is crucial for applica-tions in autonomous driving, 3D computer vision, aug-mented/virtual reality, and various robotics domains. The goal is to estimate the rigid transformation, including trans-lation and rotation, that accurately aligns the projection of a LiDAR point cloud with a reference image. Early works [18, 31] focus on extracting 2D and 3D fea-tures from RGB images and point clouds to establish 2D-    
+
+> *Equal contribution.
+> †University of Bologna, Department of Industrial Engineering, Italy.
+> ‡University of Parma, Department of Engineering and Architecture, Italy.
+> §Stanford University, USA.
+> ¶VisLab srl, an Ambarella Inc. company, Italy. BEV Projection
+> XZY
+> XZY
+> BEV Alignment
+> XZY
+> ZY
+
+Figure 1. BEV alignment. Domain-specific features are com-puted independently and projected into 3D BEV representations. Then, our BEV alignment module estimates the calibration matrix between the two sensors. 
+
+3D correspondences. However, these methods often strug-gle with matching image and point cloud features, as differ-ent modalities and architectures do not inherently produce a shared feature space for seamless feature matching. To ad-dress this challenge, several attempts have been made: [42] introduces a new voxel-based branch to learn more similar representations, [2] uses virtual point cloud to match cor-responding representations of points, and [20] introduces correspondence queries to extract keypoints. In this work, we address the problem of Image-to-Point Cloud registration from a novel perspective, formulating it as a Bird’s Eye View (BEV) alignment task inspired by ob-ject detection literature [7, 15, 21, 27, 38, 39]. As illustrated in Fig. 1, we aim to generate two BEV feature representa-tions of the same scene, one from a sparse LiDAR point cloud and the other from an RGB image, while leveraging modality-specific architectures without imposing any archi-tectural constraints. Although the two BEV representations are derived from different modalities, they capture seman-tically similar scene structures, and we can frame Image-to-Point Cloud registration as the problem of aligning these BEV features. The BEV alignment task is achieved with a two-step algorithm, referred to as implicit and explicit arXiv:2608.02309v1 [cs.CV] 3 Aug 2026 alignment. First, in the implicit alignment, we consider the height dimension of the two BEVs as the channels of two top views, and feed them to a CNN-based decoder which is trained together with a rotation and a translation heads to predict a coarse rigid transformation. Noticeably, we do not explicitly align the two BEVs. Instead, we let the decoder implicitly learn the registration parameters from the mis-aligned BEV feature maps by supervising the decoder and the prediction heads with the ground-truth rigid transforma-tions. We argue that this is feasible due to the large receptive field of CNNs, which enables a global understanding of the BEV feature maps and allows the network to reason about the geometry of the two views for accurate calibration. Although this strategy seems to be already effective as proven by our experiments reported in Sec. 4.4, a key im-provement can be done by reasoning on the modality gap: the two BEV representations are generated by different net-works and thus reside in distinct feature spaces. Simply feeding them into the same decoder results in suboptimal performance, as the decoder must simultaneously handle both alignment and feature discrepancies. To address this, inspired by recent multi-modal alignment techniques [30], we adopt a CLIP loss that guides point features to be similar to their corresponding re-projected pixel features and vice-versa, leveraging known point-to-pixel correspon-dences during training. This encourages modality-specific networks to learn a unified feature space representation. As a result, the BEV feature maps become more compatible, simplifying the Implicit Alignment task for the decoder and improving overall registration performance. In the second step, we leverage our BEV formulation to perform an explicit alignment. Specifically, we use the coarse transformation matrix from the previous step to warp the LiDAR BEV features, reducing the misalignment with respect to the RGB BEV features. The aligned feature maps are then fed into a final decoder, which refines the calibra-tion estimate to produce a final registration matrix. Finally, unlike previous methods [2, 20, 23, 42], we take one final step further by easily extending our model to lever-age a multi-camera setup, in order to have a BEV represen-tation with richer and denser RGB information. To summarize, our contributions are: • We propose CalibBEV , a framework that for the first time frames the problem of Image-to-Point Cloud regis-tration as a BEV alignment problem. • Leveraging our unique BEV formulation, we propose a two-step alignment algorithm, where the first step per-forms an implicit alignment to estimate a coarse calibra-tion, which is exploited in the explicit alignment step to obtain the final and refined calibration. • We demonstrate that CalibBEV is easily extendable to support multi-camera setups, leading to better registration performances. • CalibBEV achieves state-of-the-art-performance in both KITTI and nuScenes, surpassing previous methods by a significant margin while being more robust. 
+
+## 2. Related Work 
+
+2.1. Image-to-Point Cloud Registration 
+
+The LiDAR-Camera extrinsic calibration problem has been extensively studied, with early solutions relying on classi-cal target-based and target-less methods. Target-based ap-proaches [5, 33, 35] use predefined objects and optimiza-tion techniques to align sensor perceptions. In contrast, target-less methods [17, 26] exploit environmental features or statistical models, resulting in more versatile approaches. Moreover, differently from the target-based, the target-less approaches can also be employed in online applications. Our approach falls into the target-less category. Latest state-of-the-art correspondence-based, target-less methods [10, 14, 40] achieve remarkable registration performance. However, they typically involve heavy pre-processing, nu-merous frames accumulation, and accurate parameter fine tuning for each scene, resulting unsuitable for driving sce-nario, where scenes might drastically change in few sec-onds and fast inference is required. In contrast, CalibBEV 
+
+doesn’t require any particular pre-processing or accumula-tion technique. 
+
+2.2. Projection-based Methods 
+
+Projection-based methods estimate sensor calibration by projecting the LiDAR point cloud onto the image plane, generating a sparse depth map, and training a neural net-work to regress calibration parameters. RegNet [32] em-ploys two separate backbones to extract features from the RGB image and sparse depth map, which are then fused for calibration estimation. Similarly, CalibNet [11] enforces geometric consistency by ensuring that the projected sparse depth map, transformed with predicted extrinsics, aligns with the ground-truth sparse depth. Building on these foun-dations, later methods introduced more advanced architec-tures: LCCNet [24] incorporates a feature matching layer to correlate RGB and depth features, while CalibFormer [37] leverages attention mechanisms for feature fusion. Despite their effectiveness, projection-based methods have a key limitation: when there are no correspondences between the sparse depth projection and RGB, registration becomes im-possible. In contrast, our approach directly processes RGB images and point clouds, accommodating uncalibrated sen-sors with rotations up to ±360 ◦.
+
+2.3. Point-based Methods 
+
+Unlike projection-based methods, point-based algorithms operate directly in the 3D domain, processing point clouds instead of 2D sparse depth maps. DeepI2P [18] is one of Explicit Alignment    
+
+> X
+> ZY
+> Z
+> Decoder
+> Avg Pool
+> Rotation Head
+> Translation Head
+> N
+> RGB
+> Backbone  H
+> W
+> Conv 1x1
+> Decoder
+> Avg Pool
+> Rotation Head
+> X
+> ZY
+> Z
+> Translation Head
+> Linear
+> 3D
+> Backbone
+> Implicit Alignment
+> 3D Warping
+> X
+> ZY
+
+Figure 2. Overview of our framework . We process RGB images and point clouds independently, and adopt a CLIP loss between point and pixels features to encourage the networks to learn similar representations for corresponding pixel-point pairs. The extracted features are then lifted into two BEV representations, from which a decoder and prediction heads directly regress an initial coarse calibration matrix 
+
+Tcoarse (Implicit Alignment ). In the Explicit Alignment step, all previous network components are frozen, and the coarse calibration matrix is applied to warp the LiDAR BEV features toward the RGB BEV reference using a feature warping operator. Both the decoder and prediction heads are initialized from the previous step, and fine-tuned on the aligned features to produce the final calibration matrix T .
+
+the first methods to leverage 3D architectures [19, 29] to di-rectly extract features from the point cloud. In its first stage, DeepI2P classifies whether each point lies within the cam-era frustum, or not. The second stage addresses the inverse camera projection problem by coarsely classifying points into corresponding image patches. Finally, a RANSAC-based PnP algorithm is applied to the grid classification out-put. Similarly, CorrI2P [31] proposes an early classification stage to detect the overlapping region between the RGB and the point cloud while introducing cross-attention into the framework. In the second stage, the camera pose can be ob-tained by applying EPnP [16] within RANSAC on the dense correspondences between 2D and 3D features. These meth-ods often struggle with matching image and point cloud features, as different modalities and architectures (CNNs for images and MLPs for point clouds) do not inherently produce a shared feature space for seamless feature match-ing. To address this challenge, VP2P-Match [42] introduces voxel-based representations into the framework exploiting an additional backbone. The voxel branch captures spa-tially local patterns, akin to the image branch, ensuring that pixels and voxels share similar feature structures. Finally, a differentiable probabilistic PnP solver [4] estimates the camera pose, making the network fully end-to-end differen-tiable. Later, CurrI2P [23] improves both VP2P-Match and CorrI2P through the curriculum learning technique. How-ever, these methods tend to be slow due to iterative nature of the outlier filtering methods such as RANSAC and the use of differentiable solvers, while also heavily relying on the classification of which points fall into the camera frus-tum. For this reason, GraphI2P [2] focuses on the feature consistency by estimating the camera pose given the Li-DAR point cloud and a virtual cloud, obtained via depth estimation [1], and by leveraging a point sampling on an unified spherical representation to build consistent features patterns, facilitating both the feature fusion and the graph-based correspondence selection phase. Finally, ICLM [20] introduces a set of learnable correspondence queries spe-cialized as 2D and 3D keypoints detectors for estimating the final pose. Similarly to previous approaches, we oper-ate in a setting where features from the 2D and 3D domains are extracted from two independent networks and we adopt the same benchmark of point-based methods, consisting of a random vertical axis rotation in the range ±360 ◦ and a random forward-backward and left-right axis translation in the range ±10m. 
+
+## 3. Method 
+
+3.1. Background 
+
+As illustrated in Fig. 2 (left), our network takes as input both an image I ∈ RH×W ×3 and a point cloud P ∈ RN ×3
+
+collected by an RGB camera and a LiDAR, respectively, where H and W are the height and the width of the im-ages and N is the number of points in the cloud. Fol-lowing previous works [7, 20, 42], we adopt two state-of-the-art 2D and 3D branches to independently encode the input modalities, opting for this approach over more com-plex multi-modal fusion architectures to achieve a lighter and faster network. Building on [7], we first encode im-ages with a ResNet-50 [8] and then we bilinearly upsam-ple the features C4 of dimensions H/ 16 × W/ 16 × C4, to 
+
+H/ 8 × W/ 8 × C4. These upsampled features are concate-nated with the ResNet features C3 and finally encoded with a two-layer convolutional neural network (CNN), with in-stance normalization and ReLU activations, building the fi-nal 2D feature Frgb of size H/ 8 × W/ 8 × Crgb . In parallel, as in [42], we encode the point cloud using a Point Trans-former [41], which consists of a downsampling and an up-sampling module. Specifically, the downsampling applies a sequence of set abstraction layers [28] with a self-attention mechanism in order to obtain a global feature with dimen-sions 1 × C′
+
+> pts
+
+, while the upsampling employs a set of fea-ture propagation modules [28] computing the 3D point-wise features Fpts ∈ RN ×Cpts . We refer to the supplementary material for a detailed graphical representation of both the backbones. Subsequently, to ensure the same features di-mensionality C for both the RGB and point features, we en-code the Frgb and Fpts with a 1 × 1 convolutional layer and a single linear layer, respectively. Then, we lift and project the 2D RGB and the 3D point cloud features into two 3D Bird’s Eye View (BEV) spaces, and an Implicit Alignment module is introduced to estimate a coarse calibration matrix 
+
+Tcoarse (see Sec. 3.2) directly from the mis-registered BEVs features. Finally, the coarse transformation is employed to explicitly align the BEV features of the 3D branch with the one from the RGB, and predict the final registration matrix (see Sec. 3.3). 
+
+3.2. Implicit Alignment 
+
+The majority of the existing approaches handle the Image-to-Point Cloud registration as a classification task followed by a correspondence-matching phase, which enables esti-mating the mis-registration pose between the camera and the 3D sensor. In order to have a flexible architecture, we choose to formulate the Image-to-Point Cloud registration as a BEV alignment task. Indeed, we aim to obtain two BEV representations of the same scene: one from the RGB image and the other from the sparse LiDAR point cloud. For this reason, inspired by object detection literature [7], we first define a volume of 3D coordinates G ∈ RX×Y ×Z×3,and a zero-initialized 3D space 3D Frgb ∈ RX×Y ×Z×C ,representing the 3D coordinates and 3D feature space ob-tained from images surrounding the vehicle. We employ a East-Down-North (EDN) coordinate system, centering the volume with the camera frame origin. Then, in order to sample and lift the 2D features from Frgb to 3D Frgb ,the 3D coordinates G are projected from the camera EDN frame {c} onto the image plane with the intrinsics matrix K
+
+through Eq. (1) to get the corresponding 2D coordinates: 
+
+u v dT = K · g, ∀g = cx cy czT ∈ G,  (1) and we sample features given the 2D coordinates to fill the corresponding cell in 3D Frgb .Similarly, we define a zero-initialized 3D space  
+
+> 3D
+
+Fpts ∈ RX×Y ×Z×C . The mis-aligned point cloud is then projected onto this three-dimensional space and the features Fpts are scattered into 3D Fpts accordingly to the corresponding projection cells. Afterward, we flatten the Y
+
+and C axes both in 3D Frgb and 3D Fpts , obtaining BEV fea-ture maps with dimensions X × Z × (Y · C). We then con-catenate the two BEVs along the channel dimension, and feed them to a single 3×3 convolutional layer φ(·) followed by instance normalization and a non-linearity for fusing the two modalities:  
+
+> 3D
+
+Ff used = φ  3D Frgb ⊕3D Fpts 
+
+ , (2) with ⊕ being the concatenation. Finally, the fused features are processed by a convolutional decoder which, thanks to its large receptive field, can reason globally about the geometry and misalignment between the two BEVs, producing high-level features that benefit the rotation and translation heads. It is important to note that although the two BEVs are not explicitly aligned, we empirically found that the decoder is sufficiently powerful to extract the neces-sary features to solve the calibration task, as demonstrated by our experiments. To this end, we adopt a ResNet-18 [8] architecture as the decoder, where the average-pooled C5 features serve as input to the translation and rotation predic-tion heads. Both heads are implemented as two-layer MLPs with ReLU non-linearity. We refer to the supplementary material for further implementation details. For the trans-lation component, we directly predict the translation vector 
+
+t = x y zT . Conversely, for the rotation component, we estimate the sine and cosine values of the rotation angles along each axis. From these predictions, we construct the corresponding rotation matrices Rz (ψ), Ry (ϕ), and Rx(θ),which are then combined to decode the coarse calibration matrix as: 
+
+Tcoarse =
+
+Rz (ψ) · Ry (ϕ) · Rx(θ) t
+
+0 1
+
+
+
+. (3) As discussed in Sec. 1 and demonstrated by our experi-ments (see Sec. 4), the decoder effectively aligns the con-catenated feature maps 3D Ff used , yielding accurate cali-bration matrix estimates. Nonetheless, we propose to fur-ther boost performance by adopting a CLIP-based [30] loss function that encourages 3D Frgb and 3D Fpts to reside in a unified feature space. In particular, we aim at guiding the two backbones to learn similar features for corresponding pixel-point pairs. This alignment facilitates the decoder’s task, allowing it to focus solely on spatial alignment rather than compensating for modality-specific feature discrepan-cies. During training, feature maps from the 2D and 3D branches are first normalized row-wise obtaining the nor-malized features ˜F as follows: 
+
+˜F = D−1 · F, F ∈ { Frgb , F pts }, (4) with D being a square diagonal matrix with Dii = ∥fi∥2
+
+and i indicating the i-th row. Then, the similarity matrix 
+
+S ∈ R(H/ 8×W/ 8) ×N between ˜Frgb and ˜Fpts is computed as follows: 
+
+S = eγ  ˜Frgb · ˜F Tpts 
+
+
+
+, (5) where γ is a learnable temperature parameter. In order to build the target one-hot 2D-3D correspon-dences matrix ˆS ∈ R(H/ 8×W/ 8) ×N , we rely on the known ground truth registration matrix  ˆR ˆt at training time to correctly transform the point cloud into camera coordinates and project it into the image plane to find the corresponding pixel-point pairs: 
+
+u v dT = K
+
+ ˆR p + ˆ t
+
+
+
+∀p ∈ P.  (6) Following CLIP [30], we compute the average symmet-ric cross-entropy loss in both directions: 
+
+Lclip = LCE (σ(S), ˆS) + LCE (σ(ST ), ˆST )
+
+2 , (7) with σ being the Softmax operator. At the same time, we supervise the rotation and trans-lation heads. To this end, we employ an L1 loss Lr for supervising the sine and the cosine rotation values along each axis, while we minimize the L2 norm difference Lt be-tween the predicted and the ground truth translation vectors to compute the translation error. The overall optimization function is: 
+
+L = α Lclip + Lr + Lt, (8) where α is the CLIP loss weighting factor. 
+
+3.3. Explicit Alignment 
+
+Peculiar to our BEV formulation, we can exploit the coarse transformation matrix from the Implicit Alignment step to explicitly align 3D Fpts with 3D Frgb , as depicted in Fig. 2 (right), and provide partially aligned feature maps to the decoder and the prediction heads, leading to a better esti-mate of the calibration matrix. Specifically, in the second step, we freeze the Implicit Alignment module and we em-ploy Tcoarse , to pre-align the 3D points features, 3D Fpts ,with the RGB features 3D Frgb obtaining 3D F ′
+
+> pts
+
+. We do this by applying a differentiable sampling mechanism [12] in which each feature vector at location g in 3D F ′ 
+
+> pts
+
+is sam-pled from a position ¯g = Tcoarse (g) in 3D Fpts in the fol-lowing way:  
+
+> 3D
+
+F ′
+
+> pts
+
+(g) = X 
+
+> gi∈N (¯ g)
+
+wgi 
+
+> 3D
+
+Fpts (gi), (9) where wgi and N are the bi-linear kernel weights ob-tained from Tcoarse and the set of neighboring pixels, re-spectively. Hence, Eq. (9) can be considered as a backward warping, where the new features in 3D F ′ 
+
+> pts
+
+are obtained by warping 3D Fpts according to Tcoarse . Finally, 3D Frgb and  
+
+> 3D
+
+F ′ 
+
+> pts
+
+are fused following Eq. (2), and a new decoder with the corresponding prediction heads is employed to predict the fine calibration matrix Tf ine .The final transformation matrix T is obtained by com-bining the coarse and fine calibration matrix: 
+
+T = Tf ine · Tcoarse . (10) Notably, both the decoder and prediction heads of the Explicit Alignment module adopt the same architecture as in the previous stage. We initialize their weights from the previous step for faster convergence, employing the same loss functions to supervise the final transformation matrix 
+
+T as before. 
+
+## 4. Experiments 
+
+4.1. Datasets and Metrics 
+
+We use the public KITTI [6] and nuScenes [3] datasets for training and evaluating our network. Regarding the KITTI dataset, we use the odometry benchmark which consists of 22 stereo sequences containing the images collected by two RGB stereo cameras facing forward the vehicle and the point cloud acquired by a LiDAR mounted on top of the vehicle. Following previous works, we use the sequences from 00 to 08 for training and the sequences 09 and 10 for testing. In addition, we employ the images acquired by both the RGB stereo cameras both for training and testing. The nuScenes dataset consists of 1000 different scenes contain-ing the images collected by 6 different cameras returning a 
+
+360 ◦ Field Of View (FOV) of the scene around the vehicle and the point clouds acquired by 5 radars and a LiDAR. Fol-lowing previous works, we use the official 700 sequences in the train split and the 150 scenes in the evaluation split for training, while we use the remaining 150 scenes of the test split for testing. We use only the images acquired by the front camera and the point cloud acquired by the LiDAR for both training and testing. As evaluation metrics, we follow previous works [2, 20, 42], and we evaluate the registration performance with the average Relative Translation Error (RTE) and the average Relative Rotation Error (RRE) [25]. Moreover, for a com-plete comparison with other works, we also report the regis-tration accuracy (Acc.) [42] which corresponds to the pro-portions of registrations achieving RTE < 2m and RRE 
+
+< 5◦, even if it does not properly asses the fine-grained quality of predicted registrations. Finally, we report the RTE and RRE standard deviations, computed by aggregat-ing all the RTE and RRE values for each test sample. 
+
+4.2. Implementation Details 
+
+As done in [2, 20, 23], for the KITTI dataset, we set the in-put RGB images dimensions to be 160 × 512 . These are ob-tained by removing the top-50 rows, applying a 0.5 down-sample factor, and randomly cropping the resulting images to match the desired dimensions. Afterward, we downsam-ple the point cloud size to N = 40960 . Similarly, for KITTI nuScenes Method RTE(m) ↓ RRE( ◦)↓ Acc. ↑ RTE(m) ↓ RRE( ◦)↓ Acc. ↑                                                                                                                                                       
+
+> Grid Cls. + PnP [18] 3.64 ±3.46 19.19 ±28.96 11.22 3.02 ±2.40 12.66 ±21.01 2.45 DeepI2P (3D) [18] 4.06 ±3.54 24.73 ±31.69 3.77 2.88 ±2.12 20.65 ±12.24 2.26 DeepI2P(2D) [18] 3.59 ±3.21 11.66 ±18.16 25.95 2.78 ±1.99 4.80 ±6.21 38.10 CorrI2P [31] 3.78 ±65.16 5.89 ±20.34 72.42 3.04 ±60.76 3.73 ±9.03 49.00 CurrI2P (CorrI2P) [23] 1.55 ±7.99 3.61 ±10.88 -2.16 ±4.20 2.98 ±5.35 -VP2P-Match [42] 0.75 ±1.13 3.29 ±7.99 83.04 0.89 ±1.44 2.15 ±7.03 88.33 CurrI2P (VP2P-Match) [23] 0.53 ±1.00 2.11 ±9.48 -1.04 ±1.64 2.67 ±8.61 -RelaI2P [9] 0.72 ±1.45 2.92 ±6.67 85.60 ---ICLM [20] 0.20 ±0.21 1.24 ±2.34 97.49 0.63 ±0.44 2.13 ±3.75 90.94 GraphI2P [2] 0.32 ±0.81 1.65 ±1.32 99.61 0.49 ±1.22 1.73 ±1.63 99.48
+> CalibBEV (ours) 0.04 ±0.10 0.61 ±0.52 99.96 0.04 ±0.08 0.54 ±0.45 99.98
+
+Table 1. Registration results on the KITTI odometry and nuScenes datasets. Lower is better for both RTE and RRE, while higher is better for accuracy. Values are from original papers and ’-’ due to missing results and training code. 
+
+nuScenes dataset, we set images to be of size 160 × 320 .These are obtained by removing the top-100 rows, applying a 0.2 downsample factor, and randomly cropping the result-ing images to the desired dimensions. In regard to the 3D branch, we set the point cloud dimension N = 40960 by accumulating from the past frames, since a single LiDAR sweep in nuScenes contains roughly 36k points. However, this is not a required step for CalibBEV . Hence, we refer to the supplementary material for a further analysis. In the alignment modules, we set X, Y, and Z to 200, 8 and 200, respectively, spanning a 3D metric space of ±25 m in both the forward-backward and left-right directions and of ±5min up-bottom directions, with features dimension C to 128. We set the batch size to 8 in all our experiments and train for 260k iterations using Adam [13] as optimizer. We use 
+
+1 × 10 −4 as initial learning rate, which is decayed by a 
+
+0.5 factor every 51k iterations. Moreover, following [30], we initialize the learnable temperature parameter γ defined in Sec. 3.2 to log(1 /0.07) . Finally, we set the Lclip weight-ing factor α to 0.5.As regards the Explicit Alignment module, after com-pletely training the Implicit Alignment, both the new de-coder and the prediction heads are initialized with the weights of their corresponding components from the pre-vious step and both the backbones are frozen, as well as the Implicit Alignment decoder and prediction heads, leav-ing only the Explicit Alignment module parameters to be learnable. Hence, we train the Explicit Alignment module for an additional 120k iterations, setting the learning rate to 
+
+1 × 10 −5 for all the learnable parameters and decayed, once again, by a 0.5 factor every 51k iterations. For all remaining hyper-parameters, we keep them as stated above. 
+
+4.3. Comparison with State-of-the-Art 
+
+In Tab. 1, we compare the performance of CalibBEV with the latest state-of-the-art methods according to the standard benchmark, which consists in sampling a random rotation 
+
+Figure 3. 2D-3D feature similarity heatmap. For a given 3D point projected into the image plane (right), we highlight the most similar pixels in features space (left). 
+
+along the vertical axis in the range ±360 ◦ and a random translation along the forward-backward and left-right direc-tions in the range ±10m. We also follow [2, 20, 42] and do not remove the samples with large errors before computing the metrics, which would result in an unsuitable way to re-port the real performance. We refer to the supplementary material for this specific evaluation. On the KITTI dataset, 
+
+CalibBEV outperforms ICLM, which is to the best of our knowledge the current state-of-the-art model on the KITTI dataset, by 0.16m on the average RTE, by 0.63 ◦ on the av-erage RRE and by 2.47% on the registration accuracy. We also highlight CalibBEV is more robust compared to all previous works. Indeed, our proposal results in a reduc-tion in the standard deviation of 0.11m and 1.82 ◦ on the RTE and RRE, respectively. Similarly, on the nuScenes dataset, CalibBEV outperforms the current state-of-the-art model GraphI2P by 0.45m, 1.19 ◦, and 0.5% on the RTE, RRE, and registration accuracy, respectively. Once again, 
+
+CalibBEV demonstrates superior robustness compared to all prior works, as it is able to reduce the standard deviation by 0.45m and by 1.18 ◦ on the RTE and RRE, respectively. 
+
+4.4. Ablation Studies 
+
+In this section, we conduct ablation studies to highlight how different parameters and architectural choices reflect on the registration task. We report the effectiveness of each contribution of our work in Tab. 2. Inspired by [18], we test a baseline architecture just composed by the modality-specific backbones, recovering one single global feature Input VP2P-Match CurrI2P (VP2P-Match) CalibBEV (ours) Ground Truth 
+
+> RTE(m) / RRE(°) RTE(m) / RRE(°) RTE(m) / RRE(°)
+
+Figure 4. Qualitative comparison of Image-to-Point Cloud registration results on the KITTI dataset. From left to right: mis-aligned point cloud and image inputs, VP2P-Match calibration result, our model calibration result, and the ground truth camera-LiDAR alignment.                          
+
+> KITTI nuScenes Implicit Lclip Explicit RTE(m) ↓RRE( ◦)↓RTE(m) ↓RRE( ◦)↓
+> 1.07 13.73 0.71 10.83
+> ✓0.04 1.61 0.07 1.48
+> ✓✓0.05 1.17 0.04 1.16
+> ✓✓✓0.04 0.61 0.04 0.54
+
+Table 2. Ablation studies of each component. Implicit: Implicit Alignment module, Lclip : effect of CLIP loss between corre-sponding point-pixels pairs, Explicit: Explicit Alignment module. 
+
+from the RGB and one from the point cloud, directly re-gressing the calibration from their concatenation. This ar-chitecture suffers from a large error in both rotation and translation, caused by the lack of spatial information, serv-ing only as a reference with respect to further methods. Then, we ablate the effect of the Implicit Alignment mod-ule (second row of Tab. 2) to gain spatial information by leveraging two BEV representations from both the RGB image and the LiDAR point cloud. We highlight that our first contribution already achieves comparable results to the state-of-the-art model on KITTI, while outperforming other methods on nuScenes. This result endorses our choice to leverage the geometry of the BEV representation as core for the calibration estimation. Next, by adding a CLIP-like loss to encourage the sim-ilarity between RGB features and corresponding point fea-tures and vice versa, we are able to reduce the RRE by 0.44 ◦
+
+and 0.32 ◦ on KITTI and nuScenes respectively (third row of Tab. 2). We argue that this result shows the effectiveness of a well-established loss function in enhancing the similar-ity between cross-domain features, leading to a positive im-pact on the CalibBEV performance by simplifying the de-coder task. We further illustrate the effect of Lclip in Fig. 3, where a selected 3D point (circled in red, bottom figure) is projected onto the image plane for visualization. The most similar pixels in feature space are highlighted on the im-age (top figure). As shown, for a 3D point belonging to the car on the right side, the highest-scoring pixels consistently KITTI Train Test RTE(m) ↓ RRE( ◦)↓ Acc. ↑                
+
+> L+R R0.04 ±0.10 0.61 ±0.52 99.96 LR0.03 ±0.02 0.72 ±0.61 99.89
+
+Table 3. Analysis on CalibBEV generalization ability when trained on left camera images and tested on right ones.                       
+
+> nuScenes Method Num. Cams. RTE(m) ↓RRE( o)↓Acc. ↑
+> CalibBEV (ours) 10.04 ±0.08 0.54 ±0.45 99.98
+> CalibBEV (ours) 60.04 ±0.03 0.28 ±0.22 100.0
+
+Table 4. Multi-camera contribution analysis. 
+
+lie within the car region, demonstrating that both modality-specific networks learn semantically consistent features for corresponding objects across modalities. Lastly, we test our Explicit Alignment module, where we explicitly align the BEV geometries from the RGB and the point cloud as explained in Sec. 3.3. This contribution leads to an RRE reduction of 0.56 ◦ and 0.62 ◦ on KITTI and nuScenes, respectively (last row of Tab. 2), supporting our choice to exploit the realignment of features at spatial level through the BEV representation. 
+
+Generalization Analysis. In zero-shot generalization, different scenes or sensors inter-calibrations may weaken the registration performance if the model training leaned towards overfitting a particular sensor suite. On account of this problem, we decided to investigate the CalibBEV 
+
+generalization ability when trained solely on the left camera images and evaluated on the right camera ones on the KITTI dataset. In Tab. 3, we show how CalibBEV is comfortably able to generalize, even when the camera position changes between training and testing. Indeed, the registration performance doesn’t get undermined when the model is trained solely on the left camera images and evaluated on the right camera ones, compared to the CalibBEV trained KITTI Method RTE(m) ↓ RRE( ◦)↓ Acc. ↑                             
+
+> CorrI2P [31] 0.96 ±3.10 2.87 ±4.58 85.76 Calibnet [11] 5.88 ±2.80 10.92 ±6.09 3.03 LCCNet [24] 0.40 ±0.29 4.27 ±3.70 75.75
+> CalibBEV (ours) 0.10 ±0.06 1.13 ±0.62 99.96
+
+Table 5. 6DoF registration analysis. For each axis sample a rota-tion between ±20 ◦ and a translation between ±1.5m.                                         
+
+> KITTI BEV Range(m) Cell(m) RTE(m) ↓RRE( ◦)↓Acc. ↑
+> 200 ×200 ±100 1.0 0.11 2.08 93.05 200 ×200 ±75 0.75 0.10 1.82 96.61 200 ×200 ±50 0.50 0.07 1.18 99.55 200 ×200 ±25 0.25 0.04 0.61 99.96
+> 400 ×400 ±50 0.25 0.06 0.78 99.76
+
+Table 6. BEV hyperparameters analysis. 
+
+on both the cameras images and evaluated on the right ones. 
+
+Multi-camera Analysis. In Tab. 4, we explore the contri-bution for multi-camera configurations. Indeed, real-world applications and modern datasets such as [3, 22, 34, 36] are typically characterized by multi-camera setups, re-turning a 360 ◦ FOV of the scene surrounding the vehicle. Differently from previous works [2, 20, 42], CalibBEV 
+
+is easily extendable to multi-camera configurations by simply adding few lines of modifications in the RGB to BEV projection. Specifically, the RGB backbone encodes each input image obtaining 2D features Frgb of size 
+
+N C × H/ 8 × W/ 8 × Crgb , with NC being the number of cameras. Subsequently, for each camera, these features are sampled and lifted from Frgb to 3D Frgb as described in Sec. 3.2. Finally, following [7] we apply a weighted-sum for fusing the different volumes computed for each camera, taking into account for intersection between adjacent cam-era frustums by averaging the features projected in these regions. In this way, when dealing with multiple cameras, 
+
+CalibBEV demonstrates better calibration performances, outperforming by 0.48% in RRE the single camera setup, while being more robust in all the metrics, highlighting a 100% registration accuracy. 
+
+6DoF Registration Analysis. Although this is not the standard benchmark for point-based methods, in Tab. 5 we show CalibBEV registration performances in a Six Degrees of Freedom (6DoF) scenario, where variations for the three spatial coordinates and rotation angles are involved. Following [24], for each axis we sample both a random rotation and translation in range ±20 ◦ and ±1.5m, respectively. CalibBEV outperforms the latest state-of-the-art point-based approach with publicly available training code CorrI2P [31] by 0.86m , 1.74 ◦, and 14.2% on the RTE, RRE, registration accuracy, respectively, also demonstrating the CalibBEV ability to estimate the height by encoding it into the channels dimension. For a fair and complete analysis, we also compare CalibBEV 
+
+against Calibnet [11] and LCCNet [24], two state-of-the-art projection-based approaches. We outperform Calibnet by 5.78m, 9.79 ◦, and 96.93% on the RTE, RRE, registration accuracy, respectively, while we surpass LCCNet by 0.30m, 3.14 ◦, and 24.21% on the RTE, RRE, registration accuracy, respectively. Once again, CalibBEV shows to be more robust compared to all previous works that have been tested. 
+
+BEV Resolution Analysis. In Tab. 6 we compare different 3D grid resolutions. We found an optimal setup by setting the cell dimension to 0.25m along the forward-backward and left-right directions. Specifically, we limit the BEV dimensions to 400 × 400, since higher resolutions would sacrifice the inference time. 
+
+Qualitative Analysis. A qualitative analysis on the KITTI dataset is shown in Fig. 4. For visualization, we first ap-ply the predicted alignment transformation matrix to the point cloud, which is then projected onto the image plane through the known camera intrinsics parameters. We com-pare CalibBEV (fourth column from left) against the state-of-the-art models CurrI2P and VP2P-Match, and the ground truth (last column from left), reporting the RTE and RRE for each prediction. Instead, in the first column, we show the mis-registered image and point cloud inputs. Notably, we highlight the CalibBEV ability to achieve better alignment performance compared to CurrI2P in complex scenarios, in which the network might struggle to extract distinctive visual features. Indeed, by leveraging BEV features, our model demonstrates to have a better understanding of the geometrical relationships in the surrounding environment. Finally, we refer to the supplementary material for a further analysis on the nuScenes dataset and the failure cases. 
+
+## 5. Conclusion 
+
+In this paper we introduced CalibBEV , the first framework to cast the LiDAR-camera calibration problem as a BEV alignment task. Our key insight is to extract 3D BEV rep-resentations from both modalities and directly estimate the calibration matrix by aligning these representations through an Implicit Alignment module. Leveraging our unique BEV formulation, we further proposed an Explicit Align-ment step, where the initial coarse estimate is used to warp the BEV features and refine the calibration matrix. Exten-sive experiments demonstrate that our approach achieves state-of-the-art performance, surpassing previous methods by a significant margin in terms of accuracy and robustness. Future works may include developing an end-to-end training pipeline to simultaneously optimize both the Im-plicit and Explicit Alignments, avoiding a two-step strategy. References 
+
+[1] Shariq Farooq Bhat, Reiner Birkl, Diana Wofk, Peter Wonka, and Matthias M¨ uller. Zoedepth: Zero-shot transfer by com-bining relative and metric depth, 2023. 3 [2] Lin Bie, Shouan Pan, Siqi Li, Yining Zhao, and Yue Gao. Graphi2p: Image-to-point cloud registration with exploring pattern of correspondence via graph learning. In Proceedings of the Computer Vision and Pattern Recognition Conference ,pages 22161–22171, 2025. 1, 2, 3, 5, 6, 8 [3] Holger Caesar, Varun Bankiti, Alex H Lang, Sourabh Vora, Venice Erin Liong, Qiang Xu, Anush Krishnan, Yu Pan, Gi-ancarlo Baldan, and Oscar Beijbom. nuscenes: A multi-modal dataset for autonomous driving. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 11621–11631, 2020. 5, 8 [4] Hansheng Chen, Pichao Wang, Fan Wang, Wei Tian, Lu Xiong, and Hao Li. Epro-pnp: Generalized end-to-end prob-abilistic perspective-n-points for monocular object pose esti-mation, 2022. 3 [5] Lei Cheng, Arindam Sengupta, and Siyang Cao. 3d radar and camera co-calibration: A flexible and accurate method for target-based extrinsic calibration, 2023. 2 [6] Andreas Geiger, Philip Lenz, and Raquel Urtasun. Are we ready for autonomous driving? the kitti vision benchmark suite. In 2012 IEEE conference on computer vision and pat-tern recognition , pages 3354–3361. IEEE, 2012. 5 [7] Adam W. Harley, Zhaoyuan Fang, Jie Li, Rares Ambrus, and Katerina Fragkiadaki. Simple-BEV: What really matters for multi-sensor bev perception? In IEEE International Con-ference on Robotics and Automation (ICRA) , 2023. 1, 3, 4, 8[8] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In Proceed-ings of the IEEE conference on computer vision and pattern recognition , pages 770–778, 2016. 3, 4 [9] Minghui Hou, Gang Wang, Zhiyang Wang, and Baorui Ma. Relai2p: Relational learning for image-to-point cloud regis-tration. In ICASSP 2025-2025 IEEE International Confer-ence on Acoustics, Speech and Signal Processing (ICASSP) ,pages 1–5. IEEE, 2025. 6 [10] Zhiwei Huang, Yikang Zhang, Qijun Chen, and Rui Fan. On-line, target-free lidar-camera extrinsic calibration via cross-modal mask matching. IEEE Transactions on Intelligent Ve-hicles , 2024. 2 [11] Ganesh Iyer, R. Karnik Ram, J. Krishna Murthy, and K. Madhava Krishna. Calibnet: Geometrically supervised extrinsic calibration using 3d spatial transformer networks. In 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . IEEE, 2018. 2, 8 [12] Max Jaderberg, Karen Simonyan, Andrew Zisserman, et al. Spatial transformer networks. Advances in neural informa-tion processing systems , 28, 2015. 5 [13] Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980 ,2014. 6 [14] Kenji Koide, Shuji Oishi, Masashi Yokozuka, and Atsuhiko Banno. General, single-shot, target-less, and automatic lidar-camera extrinsic calibration toolbox. In 2023 IEEE Inter-national Conference on Robotics and Automation (ICRA) ,pages 11301–11307. IEEE, 2023. 2 [15] Alex H Lang, Sourabh Vora, Holger Caesar, Lubing Zhou, Jiong Yang, and Oscar Beijbom. Pointpillars: Fast encoders for object detection from point clouds. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 12697–12705, 2019. 1 [16] Vincent Lepetit, Francesc Moreno-Noguer, and Pascal Fua. Epnp: An accurate o(n) solution to the pnp problem, 2009. 3 [17] Jesse Levinson and Sebastian Thrun. Automatic online cal-ibration of cameras and lasers. In Robotics: Science and Systems , 2013. 2 [18] Jiaxin Li and Gim Hee Lee. Deepi2p: Image-to-point cloud registration via deep classification. In 2021 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , page 15955–15964. IEEE, 2021. 1, 2, 6 [19] Jiaxin Li, Ben M. Chen, and Gim Hee Lee. So-net: Self-organizing network for point cloud analysis, 2018. 3 [20] Xinjun Li, Wenfei Yang, Jiacheng Deng, Zhixin Cheng, Xu Zhou, and Tianzhu Zhang. Implicit correspondence learning for image-to-point cloud registration. In Proceedings of the Computer Vision and Pattern Recognition Conference , pages 16922–16931, 2025. 1, 2, 3, 5, 6, 8 [21] Zhiqi Li, Wenhai Wang, Hongyang Li, Enze Xie, Chong-hao Sima, Tong Lu, Qiao Yu, and Jifeng Dai. Bevformer: learning bird’s-eye-view representation from lidar-camera via spatiotemporal transformers. IEEE Transactions on Pat-tern Analysis and Machine Intelligence , 2024. 1 [22] Yiyi Liao, Jun Xie, and Andreas Geiger. Kitti-360: A novel dataset and benchmarks for urban scene understanding in 2d and 3d. IEEE Transactions on Pattern Analysis and Machine Intelligence , 45(3):3292–3310, 2022. 8 [23] Liwei Lin, Chunyu Lin, Lang Nie, Shujuan Huang, and Yao Zhao. Curri2p: inter-and intra-modality similarity curricu-lum learning for image-to-point cloud registration. The Vi-sual Computer , pages 1–14, 2025. 2, 3, 5, 6 [24] Xudong Lv, Boya Wang, Dong Ye, and Shuo Wang. Lc-cnet: Lidar and camera self-calibration using cost volume network, 2021. 2, 8 [25] Yanxin Ma, Yulan Guo, Jian Zhao, Min Lu, Jun Zhang, and Jianwei Wan. Fast and accurate registration of structured point clouds with small overlaps. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recog-nition Workshops , pages 1–9, 2016. 5 [26] Gaurav Pandey, James McBride, Silvio Savarese, and Ryan Eustice. Automatic targetless extrinsic calibration of a 3d li-dar and camera by maximizing mutual information. Twenty-Sixth AAAI Conference on Artificial Intelligence , 26, 2012. 2[27] Jonah Philion and Sanja Fidler. Lift, splat, shoot: Encoding images from arbitrary camera rigs by implicitly unproject-ing to 3d. In Computer Vision–ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceed-ings, Part XIV 16 , pages 194–210. Springer, 2020. 1 [28] Charles Ruizhongtai Qi, Li Yi, Hao Su, and Leonidas J Guibas. Pointnet++: Deep hierarchical feature learning on point sets in a metric space. Advances in neural information processing systems , 30, 2017. 3, 4 [29] Charles R. Qi, Li Yi, Hao Su, and Leonidas J. Guibas. Point-net++: Deep hierarchical feature learning on point sets in a metric space, 2017. 3 [30] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervi-sion. In International conference on machine learning , pages 8748–8763. PMLR, 2021. 2, 4, 5, 6 [31] Siyu Ren, Yiming Zeng, Junhui Hou, and Xiaodong Chen. Corri2p: Deep image-to-point cloud registration via dense correspondence. IEEE Transactions on Circuits and Systems for Video Technology , 33(3):1198–1208, 2023. 1, 3, 6, 8 [32] Nick Schneider, Florian Piewak, Christoph Stiller, and Uwe Franke. Regnet: Multimodal sensor registration using deep neural networks, 2017. 2 [33] S. Sugimoto, H. Tateda, H. Takahashi, and M. Okutomi. Ob-stacle detection using millimeter-wave radar and its visual-ization on image sequence. In Proceedings of the 17th In-ternational Conference on Pattern Recognition, 2004. ICPR 2004. , pages 342–345 Vol.3, 2004. 2 [34] Pei Sun, Henrik Kretzschmar, Xerxes Dotiwalla, Aurelien Chouard, Vijaysai Patnaik, Paul Tsui, James Guo, Yin Zhou, Yuning Chai, Benjamin Caine, et al. Scalability in perception for autonomous driving: Waymo open dataset. In Proceed-ings of the IEEE/CVF conference on computer vision and pattern recognition , pages 2446–2454, 2020. 8 [35] Tao Wang, Nanning Zheng, Jingmin Xin, and Zheng Ma. Integrating millimeter wave radar with a monocular vision sensor for on-road obstacle detection applications. Sensors ,11(9):8992–9008, 2011. 2 [36] Benjamin Wilson, William Qi, Tanmay Agarwal, John Lam-bert, Jagjeet Singh, Siddhesh Khandelwal, Bowen Pan, Rat-nesh Kumar, Andrew Hartnett, Jhony Kaesemodel Pontes, Deva Ramanan, Peter Carr, and James Hays. Argoverse 2: Next generation datasets for self-driving perception and fore-casting. In Proceedings of the Neural Information Process-ing Systems Track on Datasets and Benchmarks (NeurIPS Datasets and Benchmarks 2021) , 2021. 8 [37] Yuxuan Xiao, Yao Li, Chengzhen Meng, Xingchen Li, Jian-min Ji, and Yanyong Zhang. Calibformer: A transformer-based automatic lidar-camera calibration network, 2024. 2 [38] Chenyu Yang, Yuntao Chen, Hao Tian, Chenxin Tao, Xizhou Zhu, Zhaoxiang Zhang, Gao Huang, Hongyang Li, Yu Qiao, Lewei Lu, et al. Bevformer v2: Adapting modern image backbones to bird’s-eye-view recognition via perspective su-pervision. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 17830– 17839, 2023. 1 [39] Tianwei Yin, Xingyi Zhou, and Philipp Krahenbuhl. Center-based 3d object detection and tracking. In 2021 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) . IEEE, 2021. 1 [40] Chongjian Yuan, Xiyuan Liu, Xiaoping Hong, and Fu Zhang. Pixel-level extrinsic self calibration of high resolution lidar and camera in targetless environments. IEEE Robotics and Automation Letters , 6(4):7517–7524, 2021. 2 [41] Hengshuang Zhao, Li Jiang, Jiaya Jia, Philip HS Torr, and Vladlen Koltun. Point transformer. In Proceedings of the IEEE/CVF international conference on computer vision ,pages 16259–16268, 2021. 3 [42] Junsheng Zhou, Baorui Ma, Wenyuan Zhang, Yi Fang, Yu-Shen Liu, and Zhizhong Han. Differentiable registration of images and lidar point clouds with voxelpoint-to-pixel matching. In Advances in Neural Information Processing Systems (NeurIPS) , 2023. 1, 2, 3, 5, 6, 8

@@ -1,0 +1,428 @@
+Title: GeoArbiter: Verifiability-Guided Grounding for Remote-Sensing Multimodal LLMs
+
+URL Source: https://arxiv.org/pdf/2608.00877v1
+
+Published Time: Tue, 04 Aug 2026 00:55:56 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# GeoArbiter: Verifiability-Guided Grounding for Remote-Sensing Multimodal LLMs 
+
+Xuechen Li 
+
+University of Minnesota, Twin Cities 
+
+li003487@umn.edu 
+
+Abstract 
+
+Remote-sensing multimodal large language models (MLLMs) often assert facts that im-agery cannot establish, such as a facility’s iden-tity or function. Coordinate-keyed geographic retrieval can supply this missing knowledge, improving fMoW land-use accuracy by 12.06– 17.19 points across three open MLLMs. How-ever, retrieved records can also contradict vis-ible evidence, and we find that models fre-quently follow the records even when the im-age is decisive. We argue that source trust should therefore depend on cross-modal ver-ifiability : geographic records are most useful for attributes the image cannot verify and most dangerous when they dispute visually verifi-able attributes. We introduce GeoArbiter, a training-free pipeline that operationalizes this principle by injecting only image-unverifiable geographic facts. Unlike arbitration prompts, which leak across attribute types and bias yes/no responses, content-level filtering pre-serves 84.69–87.15% of the full-retrieval ac-curacy gain, reduces claim-level hallucination by 9.58–26.34% under a source-blinded judge, and improves robustness to conflicting records across all three models. These results identify verifiability-guided content selection as a sim-ple, effective mechanism for grounding remote-sensing MLLMs in fallible geographic knowl-edge. 
+
+1 Introduction 
+
+Multimodal large language models adapted to remote-sensing (RS) imagery can describe satel-lite scenes and answer open-ended questions flu-ently (Qwen Team, 2025; Zhu et al., 2025; Li et al., 2024). Yet many consequential errors are not perceptual: a model may misname a facility, invent its institutional role, or fabricate adminis-trative context that pixels cannot establish. We call these knowledge hallucinations , distinguishing them from errors about visible content (Li et al., 60 65 70 75 80 85     
+
+> land-use QA accuracy (%) →more useful
+> 40
+> 50
+> 60
+> 70
+> 80
+> 90
+> con fl ict robustness (%)  → more trustworthy  Qwen2.5-VL
+> (76.8, 93.2)
+> (79.3, 72.0)
+> InternVL3
+> (73.5, 90.5)
+> (76.2, 62.2)
+> LLaVA-OV
+> (81.0, 91.2)
+> (82.6, 36.8)
+> prior retrieval baselines (accuracy only)
+> RS-RAG GeoNames Wiki
+> no knowledge
+> full injection (inject-all RAG)
+> GeoArbiter (ours)
+
+Figure 1: GeoArbiter preserves accuracy and ro-bustness. Full OSM injection improves land-use QA but becomes brittle to a wrong record; verifiability-stratified injection remains in the top-right across all three MLLMs. 
+
+2023; Yin et al., 2023). They persist across RS model families (Zhou et al., 2026; Liu et al., 2026) and undermine applications in which an incorrect facility identity can be more costly than a missed object. Geographic retrieval appears to offer a natu-ral remedy. Every RS image has coordinates, which provide an exact key into resources such as OpenStreetMap (OSM; Haklay and Weber, 2008), GeoNames, and land-cover maps. Prior work, how-ever, mainly uses these resources during training (Wang et al., 2024; Muhtar et al., 2024; Ailuro et al., 2026; Bai et al., 2025; Anderson et al., 2025). Inference-time RS retrieval instead relies on vi-sual similarity to landmark descriptions (Wen et al., 2025), which poorly covers ordinary schools, sub-stations, and depots; coordinate-keyed text systems (Manvi et al., 2024; Yu et al., 2025; Feng et al., 2025) do not face conflicts between records and an image. Such conflicts make grounding a source-arXiv:2608.00877v1 [cs.LG] 1 Aug 2026 selection problem. Geographic databases are in-complete, stale, and potentially corrupted (Han et al., 2026); a record can supply an invisible func-tion but can also claim that a visibly absent runway exists. Prior conflict studies examine perception, context, and parametric memory (Jia et al., 2025; Liu et al., 2024; Carragher et al., 2025; Ortu et al., 2025; Lietzow et al., 2026), typically through syn-thetic contradictions and instruction- or decoding-level remedies (Liu et al., 2024; Shi et al., 2023). They do not ask which attributes each modality is qualified to resolve. We propose cross-modal verifiability as that cri-terion: records should dominate for attributes that an image cannot verify (e.g., function or name), whereas the image should dominate when a record disputes visible structure. GeoArbiter enforces this policy in the retrieved content rather than asking a frozen model to follow it. A key-level filter re-tains function and identity records and withholds physical-structure records before prompting (Fig-ure 2). We make three contributions. First, coordinate-keyed structured retrieval improves land-use QA by 12.06–17.19 points on all 28,087 functional fMoW validation images. Second, retrieval’s benefit and risk separate by verifiability: it reduces unsup-ported function and name claims, whereas fabri-cated visible-feature records cause 13.50–51.00-point losses; none of six arbitration prompts re-covers the image-only baseline. Third, GeoArbiter preserves 84.69–87.15% of the retrieval gain, cuts claim-level hallucination by 9.58–26.34% under a source-blinded judge (19.28–45.19% with the stan-dard judge), and outperforms every prompt-level alternative. Historical OSM analysis further shows that apparent map–image age gaps mostly reflect mapping completion, not physical change. 
+
+2 Related Work 
+
+Hallucination in general and RS MLLMs. Ob-ject hallucination in general-domain MLLMs is well documented (Li et al., 2023), and post-hoc sys-tems such as Woodpecker verify generated claims after decoding (Yin et al., 2023). RS-specific stud-ies broaden the taxonomy beyond object presence: RSHallu characterizes domain-specific knowledge errors (Zhou et al., 2026), while RADAR separates factual and logical failures and steers attention dur-ing decoding (Liu et al., 2026). These methods improve how a model uses its existing visual and parametric evidence, but cannot supply a facility name or institutional function that the model never learned. Our setting targets precisely this missing-knowledge regime, while also measuring the new failure mode created when external knowledge con-tradicts perception. 
+
+Retrieval augmentation for remote sensing. 
+
+RS-RAG retrieves encyclopedia entries through cross-modal embedding similarity and improves captioning and VQA for recognizable landmarks (Wen et al., 2025). Other systems retrieve ex-emplars for SAR imagery (Ramirez et al., 2026), image-derived context for aerial scenes (Xue et al., 2026), or compose Earth-observation tools at in-ference time (Zhao et al., 2026); CrisiSense-RAG combines reports and post-event imagery across evidence streams (Xiao et al., 2026). These ap-proaches establish the value of inference-time con-text, but visual-similarity retrieval favors distinc-tive, documented sites and may return the wrong in-stance of an ordinary-looking facility. GeoArbiter instead uses coordinates as an exact retrieval key and evaluates ordinary function-defined locations at full fMoW scale. More importantly, we treat retrieval as a trust problem: the retrieved block is fallible evidence, not an oracle. 
+
+OSM in vision–language learning. OSM has been distilled into RS captions (Wang et al., 2024), instruction data and multimodal alignment cor-pora (Muhtar et al., 2024; Bai et al., 2025), map-based pre-training data (Anderson et al., 2025), and rendered-tile domain adaptation (Ailuro et al., 2026). All primarily consume OSM before deploy-ment. SkyScript is especially related because it classifies tags by whether overhead imagery can visually ground them, retaining groundable tags to improve caption fidelity (Wang et al., 2024). We use the complementary inference-time selection: image-verifiable records are the dangerous ones when incorrect, so GeoArbiter withholds them and injects facts the image cannot adjudicate. Text-only coordinate-grounded systems (Manvi et al., 2024; Yu et al., 2025; Feng et al., 2025) do not observe an image and therefore do not face this source conflict. 
+
+Knowledge conflict and adaptive retrieval. 
+
+Multimodal conflict benchmarks construct contra-dictions among context, images, and parametric memory (Jia et al., 2025; Carragher et al., 2025); mechanistic studies further identify modality-specific preference patterns (Ortu et al., 2025; Li-Figure 2: GeoArbiter pipeline. Image coordinates retrieve nearby OSM features, which may be stale or incomplete. A deterministic verifiability filter withholds physical-structure keys that the image can check (red) and textualizes image-unverifiable functional records (blue) into a knowledge block. The frozen MLLM answers from the image, question, and filtered knowledge. 
+
+etzow et al., 2026). Focus-on-vision prompting is often insufficient (Liu et al., 2024), and injected text can override visual evidence (Khayatan et al., 2026). In text RAG, incorrect or outdated passages harm generation (Ouyang et al., 2025), motivat-ing retrieval-quality estimation, query-complexity routing, reflection, and answer-attribution filter-ing (Asai et al., 2024; Yan et al., 2024; Jeong et al., 2024; Chen et al., 2026). Those methods ask whether retrieval is needed, relevant, or re-liable. Verifiability is a different axis: an OSM record may be relevant and usually correct, yet still be the wrong evidence to expose when the image can directly settle the disputed attribute. To our knowledge, prior work has not used this property to select multimodal context or directly compared content-level with instruction-level arbitration. 
+
+3 GeoArbiter 
+
+3.1 Task formulation 
+
+Given an RS image I, coordinates (ϕ, λ ), footprint radius r, and instruction q, a frozen MLLM pre-dicts ˆy = arg max y pθ(y | I, q, K ). The knowl-edge block K = τ (S) deterministically textualizes retrieved records S. Because no parameters are updated, the central design choice is which records to expose to the model. 
+
+3.2 Coordinate-keyed retrieval 
+
+Let c(f ) be the centroid of OSM feature f and 
+
+κ(f ) its primary tag key. We retrieve every feature within ¯r = clamp( r, 300 , 1500) m of (ϕ, λ ), form-ing R; full injection uses S = R. Dated Geofabrik extracts and a spatial grid index make retrieval re-producible without live API calls. On 461 images available through both routes, local and API fea-ture counts correlate at 0.97 . Ablations add the nearest GeoNames toponym and dominant ESA WorldCover class (Zanaga et al., 2022). Unlike embedding retrieval, coordinates identify ordinary as well as landmark locations and cannot return a visually similar but geographically unrelated site. 
+
+3.3 Cross-modal verifiability and stratified injection 
+
+The pivotal property of a fact is whether the im-age could in principle confirm or refute it. We as-sign each OSM key a binary label v: keys express-ing function or identity ( amenity , shop , tourism ,
+
+military , office ) take v = 0 , whereas keys ex-pressing physical structure ( building , highway ,
+
+aeroway , natural , landuse ) take v = 1 ; Ap-pendix D gives the complete map and textualiza-tion. Verifiability belongs to the attribute, not the object: a building may be visible while its institu-tional role is not. For attribute class a, let G(a) be the accuracy change from injecting K instead of no knowledge. We test two predictions: 
+
+E[G | v=0] > E[G | v=1] ,G(a | v=1 , conflict) < 0. (1) Thus, correct records may still provide a useful prior for visible attributes, but their marginal value should be smaller; when such a record conflicts with the image, its effect should be negative. A pol-icy conditioned on v should therefore outperform a fixed preference for either source. Verifiability is distinct from both relevance and source reliability. A nearby runway record is rele-vant to a runway question, and OSM may be highly accurate on average, but a false runway record should not override an image in which the structure is visibly absent. Conversely, a school-function record cannot be confirmed from roof geometry even when the building itself is clear. We define v
+
+by whether an attribute is in principle recoverable at the image’s modality and scale, not by whether a particular model happens to answer it correctly. This makes the policy model-agnostic and prevents weak visual competence from being mistaken for inherent unverifiability. 
+
+Stratified injection enforces this policy on con-tent, replacing S with the image-unverifiable subset 
+
+S− = f ∈ R : v(κ(f )) = 0 , (2) which retains 11.1% of features. Records are tex-tualized into a salience-ordered, 1,200-character block (named features, then tag counts). The filter requires no detector, extra model call, or per-image classifier. The key-level map is intentionally conservative and auditable. It preserves OSM keys whose val-ues primarily encode use, ownership, service, or identity and removes keys whose values primarily encode visible geometry, surface, or transport struc-ture. It does not attempt to judge individual record correctness. This separation lets us test whether controlling exposure alone can outperform asking the same frozen model to reason about source trust after seeing every record.              
+
+> Policy summary.
+> Class Representative OSM keys Policy
+> v= 0 amenity ,shop ,tourism ,military ,
+> office ,name
+> inject
+> v= 1 building ,highway ,aeroway ,
+> natural ,landuse
+> withhold Function and identity are retained; visible structure is withheld. Boundary cases are analyzed in §5.5.
+
+3.4 Instruction-level arbitration (contrast arm) 
+
+The natural alternative leaves all records in the prompt and states the policy in language. We test image-first (“if records conflict with what you see, trust the image”), database-first , stratified (im-age for visible structure; records for functions and names), a question-keyed rewrite, and two semantic-preserving paraphrases of the stratified instruction (Appendix B). If frozen MLLMs can ap-ply attribute-conditional trust, at least one of these six variants should reproduce Eq. 2; none does (§5.4). 
+
+3.5 Implementation 
+
+Retrieval, textualization, and caching run on CPU. Warm-cache assembly takes 4.9 ms per image (p95 12.6 ms); injection adds 413 prompt tokens and 0.56 s mean generation latency on Qwen2.5-VL-7B. 
+
+4 Experimental setup 
+
+Data. Our main corpus is the complete fMoW functional validation split (Christie et al., 2018): 28,087 images in 32 function-defined categories, with WGS84 coordinates and 2002–2017 acquisi-tion times. We avoid OSM-derived QA and cap-tions because evaluating OSM-grounded genera-tion against OSM-derived labels would be circular. fMoW and our CORINE-derived external labels are independent of the injected knowledge. 
+
+Models. Three open MLLMs spanning archi-tecture families: Qwen2.5-VL-7B-Instruct (Qwen Team, 2025), InternVL3-8B (Zhu et al., 2025), and LLaVA-OneVision-7B (Li et al., 2024), all frozen, greedy decoding. 
+
+Conditions. none (image only); coords (plus raw coordinates); rag (full OSM, S = R); and rag-filtered (GeoArbiter, S = S−). Additional com-parisons include the six arbitration instructions, Wikipedia geosearch, GeoNames, WorldCover, all sources, and a reproduction of RS-RAG retrieval. 
+
+Land-use QA and description. Land-use QA is four-way fMoW classification. Distractors are sampled with a fixed per-image seed, so all models and conditions receive identical options; we report accuracy with paired bootstrap tests (10k resam-ples). For open generation, models produce 3–5 sentence descriptions on a seeded 3,000-image sub-set. A frozen Qwen2.5-7B-Instruct judge decom-Land-use QA acc. (%) ↑ Hallucination rate (%) ↓ Conflict-cell acc. (%) ↑                                             
+
+> Condition Qwen InternVL LLaVA Qwen InternVL LLaVA Qwen InternVL LLaVA none 62.78 58.97 70.53 4.89 4.22 6.07 88.75 75.75 87.75 coords 64.07 60.63 71.27 ——————rag 79.30 76.16 82.59 2.36 3.21 4.64 72.00 62.25 36.75 rag-filtered 76.77 73.55 81.04 2.68 3.30 4.90 93.25 90.50 91.25
+
+Table 1: Core results across three open MLLMs. Left: land-use QA accuracy on the full fMoW functional validation split ( n=28 ,087 per cell). Middle: claim-level hallucination rate ( CONTRADICTED share) on 3,000 scene descriptions ( ≈8.5–9 claims each). Right: existence-probe conflict-cell accuracy, where a fabricated record is injected and ground truth is no (n=1 ,069 ; full per-cell probe in Table 2). Full injection ( rag ) is nominally best on the clean tasks but collapses once a record is wrong (Qwen 79 .30 QA yet 72 .00 conflict; LLaVA down to 36 .75 ); stratified injection ( rag-filtered ) keeps 85% of the QA gain and, by withholding image-verifiable records, is the only condition robust in conflict, exceeding even the no-knowledge cell. coords (image plus raw latitude/longitude) is a QA-only baseline. All rag −none and filtered −rag differences are significant ( p< 0.001 paired bootstrap for QA; 
+
+p< 10 −4 for hallucination and the conflict cell). Per-model and per-type breakdowns are in Appendix F. 
+
+poses each output into atomic claims (8.5–9 per description on average), assigns a type ( FUNCTION ,
+
+> NAME
+
+, physical CONTEXT , or other), and labels it SUPPORTED , CONTRADICTED , or UNVERIFI - 
+
+> ABLE
+
+against the image label and retrieved ref-erence. Hallucination rate is the CONTRADICTED 
+
+share; prompts and the judge template are in Ap-pendices C and E, and human validation is in §5.6. 
+
+Verifiable-existence probe. To isolate the regime in which the image should dominate, we build 1,069 yes/no items from 400 images. The conflict cell adds a fabricated record for a manually verified absent, visually distinctive feature. Control-absent asks about the same absence without fabrication, while control-present 
+
+asks about a manually verified present feature. The former separates susceptibility to injected records from ordinary false positives; the latter reveals instructions that improve conflict accuracy merely by shifting the response prior toward no .Historical and current OSM snapshots ensure that each selected feature’s map status is persistent, but ground truth comes from image inspection rather than OSM absence. 
+
+Derived metrics. The retained gain ρ = ( afilt −
+
+a∅)/(arag − a∅) measures how much full-retrieval QA gain survives filtering. Because instructions can shift the yes/no prior, we also report probe balanced accuracy BA = 12 (aconf + apres ) rather than interpreting the conflict cell alone. 
+
+External benchmark. We construct 2,000 four-way land-cover questions from a pan-European BigEarthNet subset (Sumbul et al., 2019) via GEO-Bench (Lacoste et al., 2023), preserving patch co-ordinates. RSHBench (Liu et al., 2026) and RSHal-luEval (Zhou et al., 2026) were unreleased at sub-mission time and are used only as qualitative con-text. 
+
+5 Results 
+
+5.1 Structured retrieval lifts land-use QA, and content is what matters 
+
+Coordinate-keyed OSM injection raised accu-racy by +16 .52 , +17 .19 , and +12 .06 points for Qwen2.5-VL, InternVL3, and LLaVA-OneVision (Table 1; all p< 0.001 ). Raw coordinates added at most +1 .66 points; retrieval’s gain was 10.36– 16.30 × larger, ruling out location disclosure. Three controls further localize the gain: an image-blind OSM-tag decoder tops out at 70.6%, and blank-ing the image or pairing it with a different im-age’s knowledge drops accuracy back toward none ,so the gain needs coordinate-matched knowledge bound to the image, not tag leakage (Appendix H); at a matched record budget, verifiability-selected injection also retains far more of it than random, fre-quency, or inverted filtering (Appendix G). LLaVA-OneVision, the strongest baseline, gained least, as expected if retrieval fills a knowledge gap rather than adding a generic prior. 
+
+5.2 Injection reduces claim-level hallucination where verifiability predicts 
+
+Full injection cut claim-level hallucination by 51.74%, 23.93%, and 23.56% (Table 1), with stable claim counts. Reductions concentrated on image-unverifiable content (Figure 3; all models: Ta-ble F.2). For Qwen2.5-VL, FUNCTION fell from 15.01% to 7.63%, and NAME from 10 .29% to 
+
+2.59% despite 2–5 × more naming claims; physical- 
+
+> CONTEXT
+
+began at 1.01% and changed little. The 0 5 10 15 
+
+> claim-level hallucination rate (%)
+> function
+> name
+> context
+> −49%
+> −75%
+> −40%
+> image-unveri fi able veri fi able
+> 3,000 descriptions (Qwen2.5-VL)
+> no knowledge
+> after injection
+
+Figure 3: Injection helps most on image-unverifiable claims. Claim-level hallucination rates over 3,000 Qwen2.5-VL descriptions before retrieval (hollow) and after full OSM injection (filled). Arrows report relative reductions: function and name claims show the largest absolute gains, while visually verifiable context starts near the floor.  
+
+> UNVERIFIABLE
+
+share also fell from 51.76% to 32.71%, indicating more checkable rather than merely shorter descriptions. These rates use a judge that sees the injected records; under a source-blinded judge the none →filtered reduction is 9.58– 26.34% (vs. 19.28–45.19%) and absolute rates roughly double, so we treat injected-reference val-ues as a lower bound and report the blinded figure (Appendix I). 
+
+5.3 Retrieval changes many answers, and the database usually wins on merit 
+
+Injection changed 27%, 28%, and 18% of model an-swers. An answer change is a superset of a genuine image–database conflict—it also captures cases where the database merely supplies information the image cannot show—so we read it as a retrieval-induced answer change rather than a verified nat-ural conflict. Among these changes, records cor-rected the image-only answer 72–77% of the time and misled it 10–11%. The most frequently rescued classes—places of worship, emergency services, gas stations, and schools—are defined by functions that are invisible from orbit (Figure 4a). Natural function conflicts therefore favor the database; the controlled existence probe tests the complementary, visually verifiable regime. 
+
+5.4 The verifiable side: fabricated records fool every model, and instructions cannot fix it 
+
+Fabricated records cut conflict-cell accuracy from 88.75% to 72.00% for Qwen2.5-VL, 75.75% to 62.25% for InternVL3, and 87.75% to 36.75% for LLaVA-OneVision (all p< 10 −4): losses of 13.50– 51.00 points. This is the multimodal counterpart of context over-reliance in text RAG (Ouyang et al., 2025; Khayatan et al., 2026). Arbitration prompts partially mitigated conflict but had two systematic defects. First, leakage : ev-ery image-trust instruction reduced all-function QA by 0.50–3.25 points on Qwen2.5-VL; the bootstrap probability of a decrease exceeded 0.999 for the worst variant. Only database-first helped ( +1 .50 ,
+
+p=0 .049 ). Second, response bias : instructions shifted the yes/no prior toward no , improving con-flict scores while reducing control-present accu-racy. Consequently, no instruction recovered the no-knowledge balanced accuracy (Table 2; full grid: Table F.1). Frozen models do not reliably execute attribute-conditional trust from language alone. 
+
+5.5 Stratified injection wins both sides 
+
+Content-level filtering discarded 88.9% of features yet retained 84.69–87.15% of QA gain and 81.82– 91.09% of hallucination reduction, with at most a 0.32-point cost (Table 1). Probe conflict accuracy reached 93.25%, 90.50%, and 91.25%; balanced accuracy was 80.08%, 80.54%, and 82.02%, above the no-knowledge baseline for every model (Ta-ble 2). Figure 4b–c shows GeoArbiter withholding fabricated and structural records while retaining function records. The diagnostic exception is vis-ible amenity=parking , which survives the filter and fools models in 83–92% of cases. Robustness comes from withholding records, not model-side arbitration: at a matched record budget, keeping the image-verifiable records instead (inverted filter) drops conflict accuracy to 20.5–52.8%, below full injection, whereas random selection stays robust— the direction of selection, not the reduced context, is the lever (Appendix G). 
+
+5.6 Measurement validity: human agreement 
+
+Two annotators assessed a stratified 198-claim sam-ple (balanced across judge labels, models, and con-ditions), blind to the judge. Initial agreement was 78.3% ( κ=0 .39 ); most of the 43 disagreements concerned two underspecified cases (hedged wrong guesses; claims restating a reference category). Af-ter clarifying that hedging does not excuse asserted content and that a correct restatement is not a con-tradiction, the annotators resolved 28 cases and excluded 15 perceptual ones. Against the 183 adju-dicated labels the judge reached 84.2% agreement acc. (%) ↑ Qwen2.5-VL InternVL3 LLaVA-OV Condition conf abs pres conf abs pres conf abs pres no knowledge 88.75 87.66 61.40 75.75 76.83 70.22 87.75 89.67 68.38 rag (fabricated) 72.00 96.22 61.76 62.25 92.44 70.59 36.75 94.46 75.00 + image-first 76.25 96.73 62.50 70.00 93.45 65.81 42.50 94.96 73.53 + database-first 81.00 96.98 57.35 71.25 93.95 62.13 41.00 95.21 73.16 + stratified 75.50 96.98 62.87 75.00 94.96 62.50 43.50 95.21 72.06 + question-keyed 73.00 95.97 65.07 70.00 94.46 64.71 43.25 94.71 73.53 stratified injection 93.25 94.71 66.91 90.50 91.44 70.59 91.25 92.95 72.79 
+
+Table 2: Existence probe, per-cell accuracy in percent (conf: conflict, GT no ; abs: control-absent, GT no ; pres: control-present, GT yes ; n=1 ,069 ). Balanced accuracy is 12 (conf +pres). Fabricated records cost the conflict cell; no instruction restores it, and stratified injection exceeds the no-knowledge conflict cell for every model. invisible function → injection helps                                         
+
+> Q: Main facility?
+> truth: police station
+> aFunction: image cannot verify
+> retrieved records
+> 'Guardia Civil' police (amenity)
+> 'Biblioteca Municipal' library (amenity)
+> 'Escuela de Música' music_school (amenity)
+> image only stadium ✗
+> + injection police station ✓
+> + strati fi ed police station ✓
+> fabricated record →fi lter rescues
+> Q: Is there a helipad here?
+> truth: no helipad
+> bExistence: image can verify
+> retrieved records
+> 'North Field' helipad (aeroway)
+> 'Burger King' fast food (amenity)
+> 'IMO Car Wash' car wash (amenity)
+> image only No ✓
+> + injection Yes ✗
+> + strati fi ed No ✓
+> keeps function, drops geometry
+> Q: Main facility?
+> truth: gas station
+> cFilter: what is withheld
+> retrieved records
+> 'Posto o Cupim' fuel (amenity)
+> 'Restaurante CEPE' restaurant (amenity)
+> highway ×41, building ×2 geometry
+> image only substation ✗
+> + injection gas station ✓
+> + strati fi ed gas station ✓
+> injected withheld by fi lter fabricated record ✓correct answer ✗wrong answer
+
+Figure 4: Three cases (unedited Qwen2.5-VL-7B outputs). a, Function is invisible from orbit: the model guesses 
+
+stadium ; a retrieved police record (‘Guardia Civil’) settles it, and stratified injection keeps that record. b, Existence is visible: a planted helipad record flips the answer to yes , and withholding the image-verifiable record restores no .
+
+c, The filter drops the bulk road and building geometry while injecting the two function records that identify the site. 
+
+(κ=0 .61 , recall 0.88, precision 0.60), so we treat absolute rates as conservative upper bounds and emphasize paired differences. The modest initial agreement remains a limitation (§7). 
+
+5.7 Baselines and source ablations 
+
+On a seeded 3,000-image subset (full ta-ble in Appendix F, Table F.3), structured OSM (ours) reaches 80.57/76.50/83.33% vs. 69.13/65.40/73.43% for Wikipedia GeoSearch (MediaWiki, 2026), 65.83/62.77/72.53% for GeoN-ames (GeoNames, 2026), and 58.50/60.07/70.43% for a faithful RS-RAG reproduction (Wen et al., 2025) over its released 14,820-landmark base (Haklay and Weber, 2008). RS-RAG was neu-tral to harmful on ordinary scenes ( −5.30 points for Qwen): retrieved landmarks looked similar (0.90 ±0.03 ) but had the wrong identity. Wikipedia GeoSearch added 2.96–7.17 points; OSM gains were 2.55–4.34 × larger. GeoNames added 2.03– 4.54 points and WorldCover (Zanaga et al., 2022) 1.43–5.30, while combining them with OSM changed accuracy by only −0.63 to +0 .76 points. 
+
+5.8 External validity and cost 
+
+On BigEarthNet land-cover QA, injection im-proved all three models by 7.95, 4.25, and 4.10 points (Table F.4). These smaller gains are con-sistent with Eq. 1: land cover is largely image-verifiable, leaving less missing knowledge to sup-ply. Deployment overhead is 4.9 ms warm-cache assembly, 413 prompt tokens, and 0.56 s mean gen-eration latency on Qwen2.5-VL-7B. 
+
+6 Analysis: why the axis is verifiability, not time 
+
+6.1 Why content-level arbitration succeeds 
+
+The two task families expose an incompatibility no global source preference can solve. Function-defined fMoW questions favor the records because the decisive attribute is usually invisible, so image-first language removes useful evidence and low-ers accuracy; existence questions under conflict favor the image because the disputed structure is directly observable, so database-first behavior pro-duces false positives. A correct policy must switch at the attribute level, not the image, question, or database level. The instruction experiments show why stat-ing this switch is insufficient: even the stratified and question-keyed prompts leave the conflicting record in context and require the frozen model to identify the disputed attribute, classify its verifia-bility, and inhibit a salient textual assertion. Their leakage on function QA shows the instruction acts partly as a global image-trust prior; the drop on control-present items shows an added no -response bias. Balanced accuracy exposes both, which re-porting the conflict cell alone would obscure. GeoArbiter instead compiles the policy into the input: an image-verifiable attribute’s record is ab-sent and cannot compete with perception, while an unverifiable one remains available without a weak-ening instruction. This explains the otherwise strik-ing combination—retaining only 11.1% of records preserves 84.69–87.15% of the land-use gain, while conflict balanced accuracy exceeds the image-only baseline for every model. The filter does not make the MLLM a better arbiter; it removes the need for arbitration. 
+
+6.2 What the controlled conflict establishes 
+
+The fabricated-record probe is not meant to esti-mate the prevalence of OSM errors; it is a con-trolled intervention on the evidence channel, hold-ing image and question fixed while the asserted record is added or removed. The control-absent cell estimates the model’s ordinary false-positive tendency, and control-present measures whether an intervention shifts the response prior. The large conflict-only loss under full injection thus identifies exposure to the contradictory record as the mecha-nism, not image difficulty or a general yes tendency. Retrieval-induced answer changes give the comple-mentary ecological result—when disagreements concern function, records usually help—so the two analyses locate the boundary of useful grounding rather than merely showing retrieval can help or hurt. 
+
+6.3 Temporal mismatch does not explain the gap 
+
+Archival imagery (2002–2017) paired with a cur-rent map suggests temporal staleness as a rival ex-planation. Reconstructing acquisition-time OSM, we compute the map–image divergence ∆ =1 − (|Ft ∩ F0| − | C|/2) /|Ft ∪ F0| (Ft/F0: his-torical/current features; C: shared features with changed tags). Retrieval gain was flat across ∆
+
+quantiles for both pilot models ( −0.01 to −0.06 ,
+
+p≥0.61 ), and current maps outperformed sparser time-matched snapshots; a blinded audit explains why: 93.9% of features mapped after acquisition were already visible in the older image, and only about 1 in 22 scenes showed new construction. On this corpus the OSM–image delta therefore pri-marily measures mapping completion, not physical change; the audit is modest and we do not claim this generalizes beyond it. 
+
+6.4 Where the filter still costs 
+
+Key-level stratification drops useful evidence ex-pressed through otherwise verifiable keys, such as hangars under aeroway and offices under 
+
+building , accounting for the 12.85–15.31% loss in retained gain; categories with strong amenity 
+
+evidence lose nothing. The natural refinement is an attribute-level policy over tag values or question– attribute pairs—recovering functional evidence un-der building /aeroway while withholding visibly checkable values such as amenity=parking —still within a deterministic, training-free schema map. 
+
+7 Conclusion 
+
+Coordinate-keyed geographic knowledge improves RS MLLMs but harms when it contradicts image-verifiable attributes. Cross-modal verifiability pre-dicts this boundary, which frozen models cannot en-force from instructions; GeoArbiter instead filters content, keeping 84.69–87.15% of the QA gain and 81.82–91.09% of the hallucination reduction while staying robust to fabricated records. Verifiability-guided selection is a strong, training-free baseline for grounding VLMs in fallible structured knowl-edge. Limitations 
+
+Our verifiability map is a key-level approxima-tion: a parking lot is an amenity but plainly visi-ble, while some useful functional evidence appears under structural keys. The automatic hallucina-tion judge has only moderate agreement with ad-judicated human labels ( κ=0 .61 ), and initial hu-man agreement was also modest ( κ=0 .39 ); abso-lute rates should therefore be read as conservative upper bounds, although all comparisons use the same judge. Probe conflicts are constructed rather than naturally observed, so they measure suscep-tibility under controlled contradictions rather than prevalence in deployed OSM. Results cover fMoW, BigEarthNet, English prompts, and three 7–8B open models; RS-tuned or larger models may fol-low different source priors. Two unreleased RS hallucination benchmarks limit comparison. 
+
+Ethical Considerations 
+
+This work uses public datasets, open-weight mod-els, and geographic records under their respective licenses. Imagery comes from fMoW and BigEarth-Net under their released research terms, and we use SkyScript images only (not its OSM-derived cap-tions). Structured knowledge comes from Open-StreetMap (ODbL 1.0), GeoNames (CC-BY 4.0), and ESA WorldCover (CC-BY 4.0). Because ODbL is an attribution and share-alike licence, any OSM-derived caches we release carry the Open-StreetMap attribution and the same licence, and we redistribute derived features rather than raw third-party imagery. Retrieval operates only on co-ordinates already distributed with the benchmarks and describes public infrastructure rather than in-dividuals. Nevertheless, joining overhead imagery to precise geographic records can support surveil-lance as well as civilian land-use analysis; deploy-ments should therefore apply access controls and purpose-specific review. Two project members performed the claim and existence checks. Because the task labels model outputs rather than studying the annotators, it is not human-subjects research and required no ethics ap-proval; the annotators participated voluntarily, with informed consent, and were uncompensated. They viewed no sensitive content. The annotation items and guidelines accompany the submission; gener-ated descriptions were used only for verification and are not redistributed as ground truth. 
+
+References                                             
+
+> Stefan Maria Ailuro, Mario Markov, Mohammad Mahdi, et al. 2026. Osmda: Openstreetmap-based do-main adaptation for remote sensing vlms. Preprint ,arXiv:2603.11804. Madeline Anderson, Miriam Cha, William T. Freeman, et al. 2025. Measuring and mitigating hallucinations in vision-language dataset generation for remote sens-ing. Preprint , arXiv:2501.14905. Akari Asai, Zeqiu Wu, Yizhong Wang, Avirup Sil, and Hannaneh Hajishirzi. 2024. Self-rag: Learning to retrieve, generate, and critique through self-reflection. In ICLR .Lubian Bai, Xiuyuan Zhang, Siqi Zhang, et al. 2025. Geolink: Empowering remote sensing foun-dation model with openstreetmap data. Preprint ,arXiv:2509.26016. NeurIPS 2025. Peter Carragher, Nikitha Rao, Abhinand Jha, et al. 2025. Segsub: Evaluating robustness to knowledge con-flicts and hallucinations in vision-language models.
+> Preprint , arXiv:2502.14908. MisD Workshop 2025. Guanhua Chen, Chuyue Huang, Yutong Yao, et al. 2026. From scenes to elements: Multi-granularity evidence retrieval for verifiable multimodal rag. Preprint ,arXiv:2605.15019. Gordon Christie, Neil Fendley, James Wilson, and Ryan Mukherjee. 2018. Functional map of the world. In
+> IEEE/CVF Conference on Computer Vision and Pat-tern Recognition (CVPR) .Jie Feng, Yuwei Du, Tianhui Liu, et al. 2025. Georag: A geographic retrieval augmented gener-ation framework based on urban spatio-temporal knowledge graph. In Springer (CCIS/LNCS) .Springer. Doi:10.1007/978-981-95-4788-3_12. GeoNames. 2026. GeoNames Geographical Database. Accessed 28 July 2026. Mordechai Haklay and Patrick Weber. 2008. Open-streetmap: User-generated street maps. IEEE Perva-sive Computing , 7(4):12–18. Jiaju Han, Chao Li, Chengyin Hu, et al. 2026. From clouds to hallucinations: Atmospheric retrieval hijacking in remote sensing vision-language rag.
+> Preprint , arXiv:2605.07273. Soyeong Jeong, Jinheon Baek, Sukmin Cho, Sung Ju Hwang, and Jong C. Park. 2024. Adaptive-rag: Learning to adapt retrieval-augmented large language models through question complexity. In NAACL .Yifan Jia, Kailin Jiang, Yuyang Liang, et al. 2025. Benchmarking multimodal knowledge con-flict for large multimodal models. Preprint ,arXiv:2505.19509.
+
+Pegah Khayatan, Jayneel Parekh, Arnaud Dapogny, et al. 2026. When prompts override vision: Prompt-induced hallucinations in lvlms. Preprint ,arXiv:2604.21911. Alexandre Lacoste, Nils Lehmann, Pau Rodriguez, et al. 2023. Geo-bench: Toward foundation models for earth monitoring. In NeurIPS Datasets and Bench-marks .Bo Li, Yuanhan Zhang, Dong Guo, et al. 2024. Llava-onevision: Easy visual task transfer. Preprint ,arXiv:2408.03326. Yifan Li, Yifan Du, Kun Zhou, Jinpeng Wang, Wayne Xin Zhao, and Ji-Rong Wen. 2023. Eval-uating object hallucination in large vision-language models. In EMNLP .Niclas Lietzow, Danielle Bitterman, Carsten Eick-hoff, et al. 2026. Vision-default, prior-override: Causal mechanisms of perception-knowledge conflict in vision-language models. Preprint ,arXiv:2606.28273. Xiaoyuan Liu, Wenxuan Wang, Youliang Yuan, et al. 2024. Insight over sight: Exploring the vision-knowledge conflicts in multimodal llms. Preprint ,arXiv:2410.08145. ACL 2025. Yi Liu, Jing Zhang, Di Wang, et al. 2026. Seeing clearly without training: Mitigating hallucinations in multimodal llms for remote sensing. Preprint ,arXiv:2603.02754. Rohin Manvi, Samar Khanna, Gengchen Mai, Marshall Burke, David Lobell, and Stefano Ermon. 2024. Ge-ollm: Extracting geospatial knowledge from large language models. In International Conference on Learning Representations (ICLR) .MediaWiki. 2026. API:Geosearch. Accessed 28 July 2026. Dilxat Muhtar, Zhenshi Li, Feng Gu, Xueliang Zhang, and Pengfeng Xiao. 2024. Lhrs-bot: Empowering remote sensing with vgi-enhanced large multimodal language model. In European Conference on Com-puter Vision (ECCV) .Francesco Ortu, Zhijing Jin, Diego Doimo, et al. 2025. When seeing overrides knowing: Disentan-gling knowledge conflicts in vision-language models. 
+
+Preprint , arXiv:2507.13868. ACL 2026. Jie Ouyang et al. 2025. Hoh: A dynamic benchmark for evaluating the impact of outdated information on retrieval-augmented generation. In ACL .Qwen Team. 2025. Qwen2.5-vl technical report. 
+
+Preprint , arXiv:2502.13923. David F. Ramirez, Tim Overman, Kristen Jaskie, et al. 2026. Sar-rag: Atr visual question answering by semantic search, retrieval, and mllm genera-tion. Preprint , arXiv:2602.04712. SPIE DCS ATR XXXVI 2026. Weijia Shi, Xiaochuang Han, Mike Lewis, Yulia Tsvetkov, Luke Zettlemoyer, and Scott Wen-tau Yih. 2023. Trusting your evidence: Halluci-nate less with context-aware decoding. Preprint ,arXiv:2305.14739. Gencer Sumbul, Marcela Charfuelan, Begüm Demir, and Volker Markl. 2019. Bigearthnet: A large-scale benchmark archive for remote sensing image under-standing. In IEEE International Geoscience and Remote Sensing Symposium (IGARSS) .Zhecheng Wang, Rajanie Prabha, Tianyuan Huang, Ji-ajun Wu, and Ram Rajagopal. 2024. Skyscript: A large and semantically diverse vision-language dataset for remote sensing. In Proceedings of the AAAI Conference on Artificial Intelligence .Congcong Wen, Yiting Lin, Xiaokang Qu, et al. 2025. Remote sensing retrieval-augmented gener-ation: Bridging remote sensing imagery and com-prehensive knowledge with a multi-modal dataset and retrieval-augmented generation model. Preprint ,arXiv:2504.04988. Yiming Xiao, Kai Yin, and Ali Mostafavi. 2026. Crisisense-rag: Crisis sensing multimodal retrieval-augmented generation for rapid disaster impact as-sessment. Preprint , arXiv:2602.13239. Junxiao Xue, Quan Deng, Tingqi Hu, et al. 2026. Aerorag: Structured multimodal retrieval-augmented llm for fine-grained aerial visual reasoning. Preprint ,arXiv:2604.17889. Shi-Qi Yan, Jia-Chen Gu, Yun Zhu, and Zhen-Hua Ling. 2024. Corrective retrieval augmented generation. 
+
+Preprint , arXiv:2401.15884. Shukang Yin, Chaoyou Fu, Sirui Zhao, et al. 2023. Woodpecker: Hallucination correction for multimodal large language models. Preprint ,arXiv:2310.16045. Dazhou Yu, Riyang Bao, Ruiyu Ning, et al. 2025. Spatial-rag: Spatial retrieval augmented genera-tion for real-world geospatial reasoning questions. 
+
+Preprint , arXiv:2502.18470. Daniele Zanaga, Ruben Van De Kerchove, Dirk Daems, et al. 2022. ESA WorldCover 10 m 2021 v200. Zen-odo. Doi:10.5281/zenodo.7254221. Sijie Zhao, Feng Liu, Xueliang Zhang, et al. 2026. Openearth-agent: From tool calling to tool creation for open-environment earth observation. Preprint ,arXiv:2603.22148. Zihui Zhou, Yong Feng, Yanying Chen, et al. 2026. Rshallu: Dual-mode hallucination evaluation for remote-sensing multimodal large language mod-els with domain-tailored mitigation. Preprint ,arXiv:2602.10799. Jinguo Zhu, Weiyun Wang, Zhe Chen, et al. 2025. Internvl3: Exploring advanced training and test-time recipes for open-source multimodal models. 
+
+Preprint , arXiv:2504.10479. A Reproducibility details 
+
+All prompts (task instructions, the six arbitration wordings of Appendix B, judge template), the knowledge textualization format, per-image caches, and Slurm run scripts are released. Local OSM extraction uses dated Geofabrik continental ex-tracts (2026-07-25) with centroid-in-bbox seman-tics matching the ohsome centroid endpoint used in the pilot; validation against 461 API-fetched images gives count correlation 0.97 (median lo-cal/API ratio 0.92; relations are skipped). The RS-RAG reproduction and its documented devi-ations (unreleased monthly-knowledge and image-description chunks) are detailed in the released notes. Table A.1 lists the remaining settings needed to reproduce every number.                                              
+
+> Component Setting Backbones (HF rev.) Qwen2.5-VL-7B-Instruct (cc59489 ), InternVL3-8B (853e3a7 ), llava-onevision-qwen2-7b-ov-hf ( 0d50680 )Judge Qwen2.5-7B-Instruct ( a09a354 )Decoding greedy (do_sample=False );
+> max_new_tokens 256 (judge 512); single pass Image preproc. Qwen 256 –1280 ×28 2px; InternVL
+> 448 px dynamic tiling ( ≤6); LLaVA de-fault processor; all RGB Answer parsing first A–Dletter in the response; un-parsable counts wrong Retrieval centroid within
+> ¯r=clamp( r, 300 ,1500) m; knowl-edge block ≤1,200 chars (App. D) OSM snapshot Geofabrik 2026-07-25; ohsome acquisition-time snapshots for the temporal probe CIs location-clustered (category_LOC )block bootstrap, 10 ,000 resamples, seed 0; QA paired by image Seeds QA options seeded per image id; existence-probe construction seed 42 Released code, configs, per-image caches, judged outputs, Slurm scripts
+
+Table A.1: Reproducibility settings (companion to the released code and caches). 
+
+B Arbitration instruction wordings 
+
+The instruction-level arbitration arm (§3.4) ap-pends one of six trust instructions to the knowl-edge block, listed verbatim below. Instructions 1–2 name a global winner; instruction 3 states the ver-ifiability rule keyed on object class, and instruc-tions 4–5 are two paraphrases of it that control for wording; instruction 6 (question-keyed) conditions on the disputed attribute rather than the object class. The results in §5.4 hold across all six. 1. Image-first. “If the database records conflict with what you see in the image, trust the im-age.” 2. Database-first. “If the database records con-flict with what you see in the image, trust the database records.” 3. Stratified (object-keyed). “If the database records conflict with what you see, decide by the type of information: for physically visible things (buildings, roads, water, runways), trust the image; for functions and names that cannot be verified visually (e.g. whether a building is a school or an office, place names), trust the database records.” 4. Stratified, paraphrase 1. “When sources dis-agree, apply this rule: believe the image for physically observable features such as build-ings, roads, water bodies and runways; believe the database for attributes the image cannot verify, such as a building’s function or a place name.” 5. Stratified, paraphrase 2. “Resolve conflicts by information type: visual evidence wins for anything directly observable (structures, roads, water, runways); database records win for visually unverifiable facts (facility func-tions, names).” 6. Question-keyed. “If the database records con-flict with what you see, decide by what is in dispute: if the question is whether something exists or how it is laid out (a runway, a pool, a building being there), trust the image; if the question is what a facility is for or what it is called (school vs office, place names), trust the database records.” 
+
+C Prompt templates 
+
+Braced placeholders are filled per image; the six arbitration wordings are in Appendix B. 
+
+Land-use QA. “Look at the satellite image and answer the question. Question: What is the primary land use or function of the main facility shown in this image? Options: {options} Answer with the letter of the single best option.” 
+
+Scene description. “Describe this satellite image in 3–5 sentences: the main facility or land use, no-table objects, and spatial layout. Only state what you can support; if the location or a name is uncer-tain, say so.” 
+
+Knowledge preamble (prepended for rag ). “Ge-ographic database records for this image’s location (may be outdated or incomplete): {knowledge}” 
+
+Coordinate preamble (for coords ). “This image was taken at latitude {lat}, longitude {lon}.” 
+
+D Verifiability keys and textualization 
+
+Verifiability map. A retrieved feature is image-un verifiable (v=0 , injected) when its primary OSM key is one of amenity , shop ,
+
+tourism , military , office , healthcare ,
+
+craft , religion , operator , brand . All other keys ( building , highway , aeroway , natural ,
+
+landuse , railway , man_made , leisure , power ,
+
+waterway , sport , . . . ) are image-verifiable ( v=1 )and withheld by stratified injection, which retains 11.1% of retrieved features on our data. 
+
+Textualization. Records are serialized into a character-budgeted block ( ≤ 1,200 chars) in salience order: an optional land-cover line (World-Cover) and nearest-toponym line (GeoNames), then named features, then per-type feature counts. Features are ordered by key: aeroway , amenity ,
+
+railway , military , man_made , leisure ,
+
+tourism , shop , power , waterway , natural ,
+
+landuse , highway , building , sport .
+
+E Hallucination judging protocol 
+
+A frozen Qwen2.5-7B-Instruct judge decomposes each description into atomic claims and labels each with a type and verdict: “You are auditing a satellite-image description for factual errors. Reference facts: the image shows a facility of category {category}; {knowledge block}. [description]. List every distinct factual claim; for each output one line CLAIM: . . . | TYPE: FUNCTION/NAME/CONTEXT/OTHER | VERDICT: SUPPORTED/CONTRADICTED/UNVERIFIABLE .Judge strictly against the reference facts; use  
+
+> UNVERIFIABLE
+
+when the reference is silent.” The hallucination rate is the CONTRADICTED share of all claims; human validation of the judge is in §5.6. 
+
+F Extended results 
+
+All tables are recomputed from the released per-image outputs.                 
+
+> Instruction Qwen2.5-VL InternVL3 no instruction 81.00 76.25 image-first 80.50 ( −0.50 )74.50 ( −1.75 )database-first 82.50 ( +1 .50 )74.75 ( −1.50 )stratified 77.75 ( −3.25 )75.25 ( −1.00 )paraphrase 1 78.25 ( −2.75 )75.25 ( −1.00 )paraphrase 2 79.50 ( −1.50 )75.50 ( −0.75 )question-keyed 79.25 ( −1.75 )74.25 ( −2.00 )
+
+Table F.1: Instruction-level arbitration accuracy (%) on the all-function QA pilot ( n=400 ); parenthesized differ-ences are percentage-point changes from no-instruction rag. Every image-trust instruction hurts; only database-first helps. LLaVA-OV was not run in the pilot sweep.                          
+
+> Hallucination rate (%) ↓
+> Model FUNC .NAME CTX .Qwen2.5-VL none 15.01 10.29 1.01 rag 7.63 2.59 0.57 InternVL3 none 14.55 8.01 0.73 rag 11.58 6.75 0.58 LLaVA-OV none 18.36 6.46 1.40 rag 16.16 5.00 1.01
+
+Table F.2: Claim-level hallucination rate by knowledge type ( CONTRADICTED share of that type’s claims). In-jection helps most on the least verifiable types; Figure 3 plots Qwen.                 
+
+> Accuracy (%) ↑
+> Model none RS-RAG Wiki WC GN OSM all Qwen 63.80 58.50 69.13 65.23 65.83 80.57 81.33
+> InternVL 58.23 60.07 65.40 63.53 62.77 76.50 76.23 LLaVA 70.47 70.43 73.43 72.43 72.53 83.33 82.70
+
+Table F.3: Retrieval baselines and single-source abla-tions (3,000-image subset; full version of the baselines in §5.7). WC: WorldCover-only; GN: GeoNames-only; OSM: coordinate-keyed structured OSM (ours); all: OSM +GN +WC. Structured OSM dominates; adding GeoNames and WorldCover changes little.              
+
+> Model none rag ∆(points) Qwen2.5-VL 43.85 51.80 +7 .95
+> InternVL3 50.45 54.70 +4 .25
+> LLaVA-OV 47.50 51.60 +4 .10
+
+Table F.4: External BigEarthNet land-cover QA accu-racy (%; n=2 ,000 ). Gains are smaller than on fMoW, consistent with Eq. 1: land-cover classes are largely image-verifiable. 
+
+G Verifiability vs. retrieval budget 
+
+To separate what is injected from how much , we compare the verifiability filter against three con-trols that keep the same number of records per image (11.4% of the retrieved set, matched to the record): random keeps a random subset; freq 
+
+keeps the commonest tag-key records; inverted keeps image-verifiable records (the complement of our rule). Table G.1 scores all of them. On QA accuracy the filter retains ≈85% of the full-injection gain while the budget-matched controls retain only 28–43%; on the conflict probe the fil-ter and random stay robust but inverted collapses below full injection , because at identical budget it keeps the fabricated image-verifiable record (fab-rication survival: filter ∼0/400 , random 83 /400 ,inverted 388 /400 ). Selection by verifiability, not context size, is the lever on both sides. A rule-based OSM-tag →label decoder that never sees the image (generous keyword matching) tops out at 70.6% on the same four-way QA, below every model’s rag 
+
+accuracy, so the gain is not the tags spelling out the label. All confidence intervals in Tables 1 and G.1 are location-clustered block bootstrap (resampling whole category_LOC groups); every headline gap survives clustering at p< 10 −4.                                           
+
+> QA acc (%) conflict (%) condition Qw In Lv Qw In Lv none 62.8 59.0 70.5 88.8 75.8 87.8 full injection 79.3 76.2 82.6 72.0 62.3 36.8 random (matched) 69.9 68.3 76.1 90.5 84.0 83.8 freq (matched) 67.4 66.3 74.4 –––inverted (matched) 67.5 66.4 74.6 48.2 52.8 20.5 filtered (ours) 76.8 73.5 81.0 93.2 90.5 91.2
+
+Table G.1: Budget-matched control filters (Qw: Qwen2.5-VL, In: InternVL3, Lv: LLaVA-OV). All non-none /full rows keep the same 11.4% record budget. Conflict is the existence-probe conflict cell ( n=1 ,069 ); 
+
+freq was not run on the probe. Full injection is best on clean QA but collapses in conflict; the verifiability filter is the only budget-respecting condition strong on both. 
+
+H Modality isolation 
+
+Table H.1 isolates the image’s contribution. knowl-edge only replaces the image with a blank frame; 
+
+shuffle image pairs each real image with a different 
+
+image’s retrieved knowledge. Text alone carries signal ( knowledge only > none ), but the real-image condition beats it, and shuffle image collapses back to the no-knowledge baseline: the gain requires coordinate-matched knowledge bound to the image, not free-floating text, ruling out pure label-leakage from the tags. Permuting the coordinates likewise left accuracy at the none level (InternVL3 60 .3).                  
+
+> QA accuracy (%) ↑
+> condition Qwen InternVL LLaVA none 62.8 59.0 70.5 knowledge only 68.2 71.0 76.4 shuffle image 63.7 62.3 70.8
+> rag (matched) 79.3 76.2 82.6
+
+Table H.1: Modality-isolation ablations on the full split (n=28 ,087 ). Cross-modal binding, not text leakage: mismatched knowledge ( shuffle image ) returns to none ,while matched rag exceeds both. 
+
+I Source-blinded hallucination 
+
+The judge in Table 1 sees the injected records in its reference, which can mark a claim SUPPORTED 
+
+merely because judge and model saw the same record. Table I.1 re-runs the judge with the injected knowledge hidden (category-only reference). The 
+
+none →filtered reduction persists under blinding but shrinks: the 19.28–45.19% reported with the standard judge becomes 9.58–26.34%, and abso-lute rates roughly double once the judge cannot lean on the injected text. Under blinding, full and filtered injection are within 0.3 points, so the filter’s advantage is in conflict robustness and retained ac-curacy (Appendix G) rather than a lower hallucina-tion rate; we therefore report the blinded reduction in the main text.                         
+
+> blinded halluc. (%) ↓reduction Model none full filt. blind / raw Qwen2.5-VL 11.68 8.43 8.60 −26 .3/−43 .8
+> InternVL3 10.67 9.20 9.45 −11 .4/−21 .2
+> LLaVA-OV 13.41 11.79 12.13 −9.6/−20 .3
+
+Table I.1: Source-blinded claim-level hallucination (CONTRADICTED share, 3,000 descriptions/model), judge reference = fMoW category only. Reduction (%) is none →filtered under the blinded / standard judge.

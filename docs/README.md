@@ -41,7 +41,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-03</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-04</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 41 篇</strong>
@@ -51,7 +51,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>28</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-03 22:21:36 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-04 22:41:18 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日处理41篇论文，其中28篇深度精读，重点聚焦多模态融合与识别。</p>
-<p>最值得关注的是满分工作《DoubleHelix》，用LLM实现音视频语音识别跨模态融合，以及9分的多模态目标重识别研究。</p>
-<p>建议优先关注跨模态融合与统一表征方向，可显著提升多模态任务效果。</p>
+<p>今日精读28篇、速读13篇，跨视角地理定位与3DGS预测双双满分领跑。最值得关注：稀疏混合专家模型实现高效多尺度交叉视图定位，以及解耦几何与外观的神经渲染新范式。普通读者可从3D场景生成与卫星立体匹配的速读论文入手，快速感受AI三维视觉的落地潜力。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -76,9 +74,9 @@
     <strong class="dpr-home-dashboard-count">28 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="DoubleHelix: Structured Cross-Modal Fusion for Audio-Visual Speech Recognition with LLMs">DoubleHelix: Structured Cross-Modal Fusion for Audio-Visual Speech Recognition with LLMs</span></li><li><span class="dpr-home-dashboard-paper-title" title="Multi-Modal Object Re-Identification with Prompt-S6 and Semantic-Aware Knowledge Guidance">Multi-Modal Object Re-Identification with Prompt-S6 and Semantic-Aware Knowledge Guidance</span></li><li><span class="dpr-home-dashboard-paper-title" title="Token-Region Guided Cross-Attention Fusion for Multimodal Affect Interpretation">Token-Region Guided Cross-Attention Fusion for Multimodal Affect Interpretation</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="One Query, Many Scales: Sparse Mixture-of-Experts for Efficient Hierarchical Cross-View Geo-Localization">One Query, Many Scales: Sparse Mixture-of-Experts for Efficient Hierarchical Cross-View Geo-Localization</span></li><li><span class="dpr-home-dashboard-paper-title" title="QuerySplat: Decoupling Geometry and Appearance Representations in 3DGS Prediction">QuerySplat: Decoupling Geometry and Appearance Representations in 3DGS Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Spatio-Temporal Conditional Denoising Transformer for Modality-Missing RGBT Tracking">Spatio-Temporal Conditional Denoising Transformer for Modality-Missing RGBT Tracking</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>14</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>10</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>15</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>10</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>3</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -89,9 +87,9 @@
     <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Twins: Learn to Predict Unified Representations with Focal Loss">Twins: Learn to Predict Unified Representations with Focal Loss</span></li><li><span class="dpr-home-dashboard-paper-title" title="Contrastive Parameter Disentanglement for Multi-modal Remote Sensing Image Generation">Contrastive Parameter Disentanglement for Multi-modal Remote Sensing Image Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="DAP-Pose: Deep Temporal Alignment and Physics-aware Cross-modal Sensor Fusion for Robust Pose Estimation">DAP-Pose: Deep Temporal Alignment and Physics-aware Cross-modal Sensor Fusion for Robust Pose Estimation</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Genie Sim PanoWorld: An Infinite Indoor 3D World Generation Pipeline via Panoramic Scene Modeling and Simulation">Genie Sim PanoWorld: An Infinite Indoor 3D World Generation Pipeline via Panoramic Scene Modeling and Simulation</span></li><li><span class="dpr-home-dashboard-paper-title" title="SeasonStereo: Robust Dense Stereo Matching for Multi-Date Satellite Imagery via Generative AI">SeasonStereo: Robust Dense Stereo Matching for Multi-Date Satellite Imagery via Generative AI</span></li><li><span class="dpr-home-dashboard-paper-title" title="VidMap: Exploiting Temporal Structure for Video-Based Structure-from-Motion">VidMap: Exploiting Temporal Structure for Video-Based Structure-from-Motion</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">multimodal <strong>8</strong></span><span class="dpr-home-dashboard-tag">d-vision <strong>5</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>8</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>4</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
 </section>
 </div>
 

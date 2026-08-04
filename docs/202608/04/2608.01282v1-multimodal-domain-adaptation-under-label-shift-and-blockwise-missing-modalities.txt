@@ -1,0 +1,3800 @@
+Title: Multimodal domain adaptation under label shift and blockwise missing modalities
+
+URL Source: https://arxiv.org/pdf/2608.01282v1
+
+Published Time: Tue, 04 Aug 2026 01:24:19 GMT
+
+Number of Pages: 49
+
+Markdown Content:
+# Multimodal domain adaptation under label shift and blockwise missing modalities 
+
+Zebin Wang 1, Ziang Dou 2, Molei Liu 2, and Tianxi Cai 1
+
+> 1
+
+Department of Biostatistics, Harvard University, Boston, MA 02115, USA 
+
+> 2
+
+Department of Biostatistics, Peking University Health Science Center, Beijing 100083, China 
+
+Abstract 
+
+Multimodal domain adaptation uses labeled source datasets to predict outcomes in an unlabeled target population. Here, different sources may observe different subsets of modalities and have distribution shifts from the target. In this scenario, the cross-modal patterns used for alignment depend on the outcome distribution, so aligning unadjusted source data can misrepresent the target. Nevertheless, the distribution shift of the outcome cannot be measured directly when labels are unavailable in the target sample and the missing modality blocks prevent simple pooling. We propose a reference-anchored domain adaptation method. A reference modality observed in every source and the target is used to estimate the target outcome distribution and reweight source observations before alignment. The auxiliary modalities are then mapped to a common, target-defined representation obtained by canonical correlation analysis (CCA) in the target and reproduced in each source by ridge-regression maps. Outcome information is transferred through density-ratio models on the aligned representation. When gold-standard source labels are sparse, a surrogate-label-assisted approach is developed to enable robust domain adaptation. We establish a unified-rotation match-up result for the target CCA and source ridge maps and consistency of the target conditional outcome distribution. Simulations and a renal cell carcinoma (RCC) application show improved calibration and stable prediction under distributional shift and blockwise missing modalities. 
+
+Keywords: Blockwise missingness; Domain adaptation; Label shift; Multimodal data fusion; Data align-ment; Surrogate variables. 
+
+# 1 Introduction 
+
+1.1 Background 
+
+Multimodal biomedical studies increasingly combine structured electronic health records (EHRs), clinical text, radiology reports, medical images, and molecular measurements [Lahat et al., 2015, Baltruˇ saitis et al., 2019]. In practice, however, these data are often assembled across hospitals, cohorts, or calendar periods rather than collected under a common protocol. One hospital may collect imaging but not molecular data, while another may provide only structured records and clinical text. Within one hospital, new modalities may also become available only in later periods. Missingness therefore often occurs by entire modality blocks and differs systematically across data sources. At the same time, gold-standard outcomes, such as disease recurrence, may require a specialist review and prolonged follow-up. Such outcomes may be observed in some external or historical source cohorts, but they are not available in the target population where prediction is needed. This naturally leads to a multimodal domain-adaptation problem: using labeled, partially observed source data to predict outcomes in an unlabeled target population. 1arXiv:2608.01282v1 [stat.ME] 2 Aug 2026 A further complication is the distributional shift. Disease prevalence, patient composition, and referral patterns may differ across institutions or over time. We focus on label shift, under which the outcome distribution differs between the source and target populations, while the class-conditional feature distribution is stable [Lipton et al., 2018, Garg et al., 2020]. For multivariate outcomes, this may involve changes in both individual outcome frequencies and their dependence. Even when the distribution of the measurements conditional on the outcome is stable, differences in the outcome mix change the marginal feature distributions and the associations between modalities. Consequently, direct pooling of source data may produce poorly calibrated target predictions. The central challenge is that label shift and blockwise missingness cannot be addressed separately. Auxiliary modalities cannot be directly combined because different sources observe different blocks and may represent the same underlying information in different coordinates. However, aligning these modalities using unadjusted source data can also be misleading because the cross-modal patterns in each source reflect its own outcome distribution rather than that of the target. Thus, the source-to-target shift must be taken into account before learning a target-relevant alignment, but the target labels needed for direct adjustment are not available. We study this problem when one reference modality (e.g., the codified and structured EHR features) is observed across all domains, auxiliary modalities are observed only in subsets of domains, and source gold-standard labels may be sparse. 
+
+1.2 Related Literature 
+
+Our work lies at the intersection of domain adaptation and data integration with blockwise missing covari-ates. Much of the statistical literature on domain adaptation begins with a covariate vector whose coordinates have the same meaning and are observed in both the source and target populations. Under covariate shift, importance-weighted likelihood and augmented estimating equations account for changes in the covariate distribution while retaining a stable conditional outcome model [Shimodaira, 2000, Liu et al., 2023]. More recent semiparametric work develops efficient and multiply robust estimators of target risks in broader forms of distributional shift [Qiu et al., 2024]. Under label shift, the outcome distribution changes across populations while the covariate distribution conditional on the outcome remains stable. Lee et al. [2025a] developed doubly flexible estimation of target parameters under this condition, and Lee et al. [2025b] studied semiparametrically efficient inference based on the source-to-target outcome density ratio. Classification methods for label shift estimate target class proportions through expectation–maximization, moment match-ing, or likelihood-based calibration [Saerens et al., 2002, Lipton et al., 2018, Garg et al., 2020]. Multi-source methods have also combined label-shift correction with representation or distribution alignment. Redko et al. [2019] jointly estimate target class proportions and optimal-transport couplings, while Li et al. [2019] address target shift during adversarial representation learning and extend their construction to multiple do-mains. Shui et al. [2021] aggregate multiple target-shifted sources according to similarities between their semantic conditional distributions. Xu et al. [2025] develop robust multi-source label-shift adaptation under source contamination. These works show that label-shift correction need not be a post hoc calibration step after fixing a representation. Their setups nevertheless presume a common observed input or representation space across domains; they do not address source-specific absence of entire modality blocks or the resulting need to align incomparable auxiliary coordinates. A separate statistical literature studies data integration with blockwise missing covariates. Structured matrix completion and integrative factor methods recover low-dimensional signals from overlapping data blocks [Cai et al., 2016, Zhu et al., 2020, Zhou et al., 2023]. Other methods construct prediction or in-ference procedures directly from observed blocks, using sparse prediction, multiple imputation, estimating equations, projections, or influence-function decompositions [Yu et al., 2020, Xue and Qu, 2021, Song et al., 2024, Berrett, 2024, Li et al., 2024]. Recent work further accommodates heterogeneous sources through multi-task learning or source-adaptive representation retrieval [Sui et al., 2026, Xu and Qu, 2025]. 2Recent representation-learning methods for blockwise missing data include Liu et al. [2026], whose anchor-based principal component method aligns group-specific subspaces under blockwise missingness and signal heterogeneity, and Yu et al. [2026], whose MOSAIC framework learns shared and modality-specific rep-resentations, borrows across overlapping missingness patterns, and calibrates the resulting predictor using labeled subjects from the focal pattern. These works address representation recovery or pattern-specific supervised prediction rather than adaptation to an unlabeled target population under label shift. In particular, they do not use a target outcome mixture inferred from unlabeled target data to reweight the cross-modal alignment. Under label shift, a source cross-modal association averages over the source outcome distribution and can therefore differ from the corresponding target association. An alignment learned before correcting this difference may consequently emphasize source-specific rather than target-relevant relationships. Multi-source multimodal domain adaptation itself has been studied by Zhao et al. [2025], who jointly align modalities and domains under covariate shift. Their formulation places every domain in the same multimodal input space and does not allow whole modalities to be absent by source. Fan et al. [2023] learn a common latent representation from incomplete views before estimating label-shift weights and fine-tuning the reweighted classifier; their formulation does not address source-specific absence of entire modality blocks or incomparable auxiliary coordinates across sources. Sui et al. [2026] impute data-source blocks missing for an entire task and learn shared and task-specific feature–response mappings from observed task responses. Their supervised multi-task objective does not include an unlabeled target outcome mixture or target-mixture weighting before cross-modal alignment. We study the simultaneous combination of an unlabeled target under label shift, source-specific absence of entire modality blocks, and alignment of incomparable auxiliary coordinates after reweighting source observations to the target outcome mixture. A reference modality shared across domains identifies the target outcome mixture and supports the target-directed alignment. The framework does not require either a shared multimodal input space or a single common latent representation. 
+
+1.3 Contribution 
+
+We develop a reference-anchored framework for multimodal domain adaptation under label shift and block-wise missing modalities. In this framework, a reference modality observed in every domain identifies a target-defined anchor. This reference modality is not required to be the most predictive data block. Its role is instead to provide the common observable structure needed to identify the target outcome distribution and to connect auxiliary modalities that cannot be compared directly across sources. Our contribution is threefold. First, we introduce a target-directed identification strategy for cross-modal alignment. A reference modality observed in every domain provides an observable anchor, avoiding the requirement that all modal-ities share a single latent representation. Crucially, source observations are reweighted to the target outcome distribution before alignment because the label shift changes the marginal cross-modal associations used to construct the representation. This “weight before alignment” principle distinguishes our setting from methods that either correct label shift in a common input space or align incomplete modalities without using the target outcome mixture. Second, we establish identification and consistency for the resulting target predictor. Although dimension-reduction and alignment matrices depend on arbitrary coordinate choices, we show that all target and source aligned features are recovered up to one common rotation. This removes the representation ambiguity; together with a separate aligned likelihood-ratio identification condition, it yields the target conditional outcome model. Third, we extend the framework to settings with sparse gold-standard source labels by using surrogate variables for calibration and alignment, without replacing the gold-standard outcome as the estimand. Simulations and the renal-cell-carcinoma application demonstrate the benefits of target calibration and reference-anchored alignment under simultaneous label shift and blockwise modality availability. 32 Model setup and notation 
+
+Suppose there is one target domain, indexed by 𝑚 = 0, and 𝑀 source domains, indexed by 𝑚 = 1, . . . , 𝑀 .Domain 𝑚 contains subjects 𝑖 = 1, . . . , 𝑛 𝑚 . There are 𝐾 modalities, with modality 1 used as the reference modality and modalities 2 , . . . , 𝐾 used as auxiliary modalities. Let A𝑚 ⊆ { 1, . . . , 𝐾 } be the modalities observed in domain 𝑚 , with 1 ∈ A 𝑚 for all 𝑚 . For the main formulation, the target domain observes the modalities under analysis, so A0 = {1, . . . , 𝐾 } after restricting to the selected modality set. Masked analyses are interpreted relative to this selected set. In this paper, bold lowercase symbols denote subject-level column vectors, and bold uppercase symbols denote their row-stacked matrices. For subject 𝑖 in domain 𝑚 , the observed feature vector for modality 𝑘 ∈ A 𝑚 is x(𝑚 ) 
+
+> 𝑘,𝑖
+
+∈ R𝑑 𝑘 , and the corresponding data matrix is X(𝑚 ) 
+
+> 𝑘
+
+= (x(𝑚 ) 
+
+> 𝑘, 1
+
+, . . . , x(𝑚 ) 
+
+> 𝑘,𝑛 𝑚
+
+)T. The gold-standard outcome is y(𝑚 ) 
+
+> 𝑖
+
+∈ Y = {0, 1}𝑑 .Source gold-standard outcomes are observed for subjects in I𝑚 ⊆ { 1, . . . , 𝑛 𝑚 }, whereas I0 = ∅ during fitting. Surrogate evidence, when available, is denoted by s(𝑚 ) 
+
+> 𝑖
+
+. Throughout, O( 𝑞 ) is the group of 𝑞 × 𝑞 orthogonal matrices, and ∥ · ∥ 2 and ∥ · ∥ F denote Euclidean and Frobenius norms. In domain 𝑚 , the gold-standard outcome has distribution y(𝑚 ) ∼ 𝜌 𝑦 (· ; θ(𝑚 ) ) on the finite state space Y.A working example is the Ising model [Wainwright and Jordan, 2008]: 
+
+𝜌 𝑦 (y; θ(𝑚 ) ) = 1
+
+𝐶 (θ(𝑚 ) ) exp 
+
+(∑︁ 
+
+> 1≤𝑎<𝑏 ≤𝑑
+
+𝜃 (𝑚 ) 
+
+> 𝑎𝑏
+
+(2𝑦 𝑎 − 1)( 2𝑦 𝑏 − 1) + 
+
+> 𝑑
+
+∑︁ 
+
+> 𝑎 =1
+
+𝜃 (𝑚 ) 
+
+> 𝑎𝑎
+
+(2𝑦 𝑎 − 1)
+
+)
+
+. (1) The parameter θ(𝑚 ) may vary across domains. We use label shift for this variation in the distribution. For 
+
+𝑑 = 1 this is ordinary class-prior shift; for 𝑑 > 1 it allows changes in both marginal outcome prevalence and dependence among outcome components. Domain-specific modality loadings and missing modality blocks are not called label shift; they are handled by the representation and alignment components. The working representation contains a latent reference factor eu(𝑚 ) 
+
+> 𝑖
+
+∈ Rℎ and a latent auxiliary factor 
+
+ev(𝑚 ) 
+
+> 𝑖
+
+∈ Rℎ. Conditional on the outcome, 
+
+eu(𝑚 ) 
+
+> 𝑖
+
+= 𝜓 𝑢 (y(𝑚 ) 
+
+> 𝑖
+
+) + ξ(𝑚 ) 
+
+> 𝑢,𝑖
+
+, ev(𝑚 ) 
+
+> 𝑖
+
+= 𝜓 𝑣 (y(𝑚 ) 
+
+> 𝑖
+
+) + ξ(𝑚 ) 
+
+> 𝑣,𝑖
+
+,
+
+with noise independent of y(𝑚 ) 
+
+> 𝑖
+
+. Auxiliary modality 𝑘 ≥ 2 observes only coordinates in H𝑘 ⊆ { 1, . . . , ℎ },and ev(𝑚 ) 
+
+> 𝑘,𝑖
+
+= ev(𝑚 ) 
+
+> 𝑖, H𝑘
+
+∈ Rℓ𝑘 , where ℓ𝑘 = |H 𝑘 |. The observed features satisfy 
+
+x(𝑚 ) 
+
+> 1,𝑖
+
+= L1eu(𝑚 ) 
+
+> 𝑖
+
++ ζ (𝑚 ) 
+
+> 1,𝑖
+
+, x(𝑚 ) 
+
+> 𝑘,𝑖
+
+= L(𝑚 ) 
+
+> 𝑘
+
+ev(𝑚 ) 
+
+> 𝑘,𝑖
+
++ ζ (𝑚 ) 
+
+> 𝑘,𝑖
+
+, 𝑘 = 2, . . . , 𝐾, 
+
+where LT
+
+> 1
+
+L1 = Iℎ and {L(𝑚 ) 
+
+> 𝑘
+
+}TL(𝑚 ) 
+
+> 𝑘
+
+= Iℓ𝑘 . The reference loading is shared across domains, whereas auxiliary loadings may be domain-specific; this is the loading heterogeneity addressed by the match-up component. Surrogate variables are treated as evidence about the gold-standard outcome. When they are used, the working bridge condition is 
+
+s(𝑚 ) 
+
+> 𝑖
+
+⊥⊥ { x(𝑚 ) 
+
+> 𝑘,𝑖
+
+: 𝑘 ∈ A 𝑚 } | y(𝑚 ) 
+
+> 𝑖
+
+. (2) The prediction target is the target-domain conditional distribution of the unobserved gold-standard outcome. The theory below studies this distribution conditional on the retained aligned representation. It coincides with the full-feature risk 𝑃 {y(0) 
+
+> 𝑖
+
+= y | x(0) 
+
+> 𝑘,𝑖
+
+, 𝑘 ∈ A 0, s(0) 
+
+> 𝑖
+
+} when that representation is sufficient for the outcome. Target gold-standard outcomes, if present for validation, are masked during fitting and used only for final evaluation. 4Source Domains  𝒎 = 𝟏 , … , 𝑴                      
+
+> …
+> Source 1
+> …
+> Source 2
+> ……
+> Source 𝑀
+> Reference 𝑋 1Auxiliaries 𝑋 𝑘
+> Gold labels 𝑌 (observed)
+> Gold labels 𝑌 (unobserved)
+> Target Domain 𝒎 =𝟎
+> …
+> All gold labels are unobserved
+> Representation
+
+1  
+
+> …
+> Domains
+> Label Shift Reweighting
+
+2        
+
+> …
+> Source label
+> distribution
+> 𝑆 1
+> 𝑆 2
+> 𝑆 𝑀
+> ෝ𝑤 1
+> ෝ𝑤 2
+> ෝ𝑤 𝑀
+> …
+> Target label
+> distribution
+> Alignment up to reweight
+
+3 
+
+> …
+> Auxiliaries’
+> representation
+> Aligned
+> 𝑉
+> Reference
+> Anchor
+> …
+> Outcome Transfer
+
+4                                
+
+> …
+> Conditional
+> model
+> ෢LR comb 𝑈 ,𝑉 𝑌
+> …
+> Sources Target  Outcome
+> distribution
+> Ƹ
+> 𝑝 𝑌
+> (0)
+> risk model
+> Ƹ
+> 𝑝 𝑖 (𝑌 )
+> ……
+> Step 2Weighting
+> Reference 𝑋 1Surrogate 𝑆
+> ෠𝑃 𝑌 𝑇 ,𝑆
+> Step 4Calibration
+> Reference 𝑋 1
+> ෠𝑃 𝑌 𝑈 ,𝑉 ,𝑆
+> Surrogate 𝑆 Auxiliaries 𝑋 𝑘
+> …
+> Surrogate Data
+> …
+> Surrogate in sources
+> 𝑆 1𝑆 2𝑆 𝑀
+> Allow gold labels
+> 𝑌 unobserved in
+> sources
+> Multimodal
+> Data
+> Main
+> Procedure
+> Optional
+> Surrogate
+> Pooled Separately
+
+Figure 1: Complete workflow of the proposed reference-anchored multimodal domain-adaptation procedure. 
+
+# 3 Methodology 
+
+3.1 Overview: representation, match-up and transfer 
+
+Our proposed procedure has four stages. First, a prespecified unsupervised representation-learning method is applied to each observed modality to obtain a low-dimensional score representation. Second, the reference scores observed in all domains are used to estimate the target outcome distribution and the corresponding label-shift weights. Third, these weights are incorporated before alignment: CCA fitted in the target domain defines a reference-side anchor, and weighted ridge regression maps the observed source auxiliary blocks into a common target-anchored coordinate system. Fourth, likelihood-ratio estimates obtained from the aligned coordinates are combined with the estimated target outcome distribution to estimate the target conditional outcome distribution. When gold-standard outcomes are sparsely observed or unavailable in the source domains, an optional surrogate component provides working outcome-state probabilities to construct alignment weights and estimate likelihood ratios. Target surrogate measurements, when available, may also be incorporated as additional outcome evidence. Figure 1 summarizes these four stages and the optional surrogate-assisted pathway. 
+
+3.2 Representation learning and reference calibration 
+
+In this section, we distinguish three stages of representation: raw backend scores bT, target-standardized scores (bR, bZ), and final aligned coordinates (bU, bV). This notation separates representation learning, target-weighted standardization, and cross-domain alignment. Each feature matrix is centered within its domain before representation learning. We then apply a prespecified unsupervised method to each observed modality to obtain a low-dimensional score representation. For the reference modality, we pool the centered matrices eX(0) 
+
+> 1
+
+, . . . , eX( 𝑀 ) 
+
+> 1
+
+by rows to estimate a common representation map. We then apply this map within each domain to obtain the raw reference-score matrices 5bT(𝑚 ) 
+
+> 1
+
+∈ R𝑛 𝑚 ×ℎ, 𝑚 = 0, . . . , 𝑀 . For each domain 𝑚 and auxiliary modality 𝑘 ∈ A 𝑚 \ { 1}, we fit a separate representation map and use it to obtain bT(𝑚 ) 
+
+> 𝑘
+
+∈ R𝑛 𝑚 ×ℓ𝑘 . We denote the 𝑖 th rows of bT(𝑚 ) 
+
+> 1
+
+and bT(𝑚 ) 
+
+> 𝑘
+
+as column vectors bt(𝑚 ) 
+
+> 1,𝑖
+
+and bt(𝑚 ) 
+
+> 𝑘,𝑖
+
+, respectively. Thus, the reference scores share a common coordinate system across domains, whereas the auxiliary scores may have domain-specific coordinate systems to be mapped into a common aligned coordinate system in subsequent procedures. Let 0 be the all-zero outcome vector. On the raw reference-score scale, we define the reference likelihood ratio LR ref (t | y) = 𝑝 (t | y)/ 𝑝 (t | 0), where y ∈ Y . The ratio LR ref (t | y) is estimated from pooled labeled source pairs (bt(𝑚 ) 
+
+> 1,𝑖
+
+, y(𝑚 ) 
+
+> 𝑖
+
+) : 𝑖 ∈ I 𝑚 , 𝑚 = 1, . . . , 𝑀 . A probabilistic multiclass classifier can be converted into these baseline-referenced ratios through Bayes’ rule, a standard classification-based route to density-ratio estimation [Sugiyama et al., 2012]. The target outcome-distribution parameter is initialized from the target reference scores by 
+
+bθ(0) 
+
+> init
+
+= arg max 
+
+> θ
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+log 
+
+∑︁ y∈ Y 
+
+𝜌 𝑦 (y; θ) cLR ref (bt(0) 
+
+> 1,𝑖
+
+| y)
+
+
+
+. (3) For each source domain, estimate bθ(𝑚 ) by maximizing Í𝑖 ∈ I 𝑚 log 𝜌 𝑦 (y(𝑚 ) 
+
+> 𝑖
+
+; θ). Define the estimated outcome-state ratio and its subject-level evaluation by 
+
+b𝜔 𝑚 (y) = 𝜌 𝑦 (y; bθ(0) 
+
+> init
+
+)
+
+𝜌 𝑦 (y; bθ(𝑚 ) ) , b𝑤 (𝑚 ) 
+
+> 𝑖
+
+= b𝜔 𝑚 (y(𝑚 ) 
+
+> 𝑖
+
+), 𝑖 ∈ I 𝑚 , 𝑚 = 1, . . . , 𝑀. (4) Thus 𝜔 𝑚 (·) denotes an outcome-state ratio, whereas 𝑤 (𝑚 ) 
+
+> 𝑖
+
+= 𝜔 𝑚 {y(𝑚 ) 
+
+> 𝑖
+
+} denotes its evaluation for subject 
+
+𝑖 ; hats indicate estimated quantities. We use L𝑚 for the alignment index set. For the target domain, set 
+
+b𝑤 (0) 
+
+> 𝑖
+
+= 1 and L0 = {1, . . . , 𝑛 0}. For 𝑚 ≥ 1, set L𝑚 = I𝑚 in the gold-label procedure; when surrogate-assisted weights are used, L𝑚 is enlarged to all subjects with the required modalities and surrogate information. 
+
+3.3 Target-calibrated reference-anchored match-up 
+
+For 𝑘 = 1 use bt(𝑚 ) 
+
+> 1,𝑖
+
+, and for 𝑘 ≥ 2 use bt(𝑚 ) 
+
+> 𝑘,𝑖
+
+. Define the target-weighted means and covariances 
+
+bμ(𝑚 ) 
+
+> 1
+
+=
+
+Í𝑖 ∈ L 𝑚 b𝑤 (𝑚 ) 
+
+> 𝑖
+
+bt(𝑚 )
+
+> 1,𝑖
+
+Í𝑖 ∈ L 𝑚 b𝑤 (𝑚 )
+
+> 𝑖
+
+, b𝚺 (𝑚 ) 
+
+> 1
+
+=
+
+Í𝑖 ∈ L 𝑚 b𝑤 (𝑚 ) 
+
+> 𝑖
+
+(bt(𝑚 ) 
+
+> 1,𝑖
+
+− bμ(𝑚 ) 
+
+> 1
+
+)( bt(𝑚 ) 
+
+> 1,𝑖
+
+− bμ(𝑚 ) 
+
+> 1
+
+)T
+
+Í𝑖 ∈ L 𝑚 b𝑤 (𝑚 )
+
+> 𝑖
+
+,
+
+bμ(𝑚 ) 
+
+> 𝑘
+
+=
+
+Í𝑖 ∈ L 𝑚 b𝑤 (𝑚 ) 
+
+> 𝑖
+
+bt(𝑚 )
+
+> 𝑘,𝑖
+
+Í𝑖 ∈ L 𝑚 b𝑤 (𝑚 )
+
+> 𝑖
+
+, b𝚺 (𝑚 ) 
+
+> 𝑘
+
+=
+
+Í𝑖 ∈ L 𝑚 b𝑤 (𝑚 ) 
+
+> 𝑖
+
+(bt(𝑚 ) 
+
+> 𝑘,𝑖
+
+− bμ(𝑚 ) 
+
+> 𝑘
+
+)( bt(𝑚 ) 
+
+> 𝑘,𝑖
+
+− bμ(𝑚 ) 
+
+> 𝑘
+
+)T
+
+Í𝑖 ∈ L 𝑚 b𝑤 (𝑚 )
+
+> 𝑖
+
+.
+
+The standardized pre-alignment scores are defined as 
+
+br(𝑚 ) 
+
+> 𝑖
+
+= (b𝚺 (𝑚 ) 
+
+> 1
+
+)−1/2 (bt(𝑚 ) 
+
+> 1,𝑖
+
+− bμ(𝑚 ) 
+
+> 1
+
+), bz(𝑚 ) 
+
+> 𝑘,𝑖
+
+= (b𝚺 (𝑚 ) 
+
+> 𝑘
+
+)−1/2 (bt(𝑚 ) 
+
+> 𝑘,𝑖
+
+− bμ(𝑚 ) 
+
+> 𝑘
+
+).
+
+The inverse square root is the spectral inverse on the retained score subspace. Let bR(𝑚 ) and bZ(𝑚 ) 
+
+> 𝑘
+
+be the corresponding row-stacked matrices. These are the empirical counterparts of the population pre-alignment scores R(𝑚 ) and Z(𝑚 ) 
+
+> 𝑘
+
+used in Section 4. On the target domain, concatenate bz(0) 
+
+> 𝑖
+
+= col bz(0) 
+
+> 2,𝑖
+
+, . . . , bz(0) 
+
+> 𝐾 ,𝑖
+
+∈ R𝑑 𝑧 , where 𝑑 𝑧 = Í𝐾 𝑘 =2 ℓ𝑘 . Let b𝚺 (0) 
+
+> 𝑟𝑟
+
+,
+
+b𝚺 (0) 
+
+> 𝑧𝑧
+
+and b𝚺 (0) 
+
+> 𝑟 𝑧
+
+be the empirical target covariance and cross-covariance matrices of br(0) 
+
+> 𝑖
+
+and bz(0) 
+
+> 𝑖
+
+. With 6regularization parameter 𝜆 𝑧 ≥ 0 and rank 𝑟 0 ≤ min (ℎ, 𝑑 𝑧 ), the target anchor is obtained from canonical correlation analysis (CCA) [Hotelling, 1936], which solves 
+
+(bA(0) , bB(0) ) = arg max 
+
+> A,B
+
+tr {AT b𝚺 (0) 
+
+> 𝑟 𝑧
+
+B}, (5) subject to AT b𝚺 (0) 
+
+> 𝑟𝑟
+
+A = I𝑟 0 and BT (b𝚺 (0) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑧 I𝑑 𝑧 )B = I𝑟 0 . Our CCA procedure is one-sided regularized , as the auxiliary-side ridge term 𝜆 𝑧 stabilizes the joint covariance when different auxiliary modalities contain overlapping, thus nearly redundant information [Hardoon et al., 2004, Tenenhaus and Tenenhaus, 2011]. Importantly, the paired left and right canonical bases are defined only up to one common rotation. For each source domain, the observed auxiliary blocks are mapped to the target reference-side anchor by weighted ridge regression. In particular, bG(𝑚 ) 
+
+> 𝑘
+
+: 𝑘 ∈ A 𝑚 \ { 1} are obtained by minimizing the following weighted ridge objective: ∑︁ 
+
+> 𝑖 ∈ L 𝑚
+
+b𝑤 (𝑚 )
+
+> 𝑖
+
+ bA(0) Tbr(𝑚 ) 
+
+> 𝑖
+
+−∑︁  
+
+> 𝑘 ∈ A 𝑚 \{ 1}
+
+GT
+
+> 𝑘
+
+bz(𝑚 )
+
+> 𝑘,𝑖
+> 22
+
++ 𝜆 𝑚  ∑︁ 
+
+> 𝑖 ∈ L 𝑚
+
+b𝑤 (𝑚 )
+
+> 𝑖
+
+!∑︁  
+
+> 𝑘 ∈ A 𝑚 \{ 1}
+
+∥G𝑘 ∥2F .
+
+The ridge penalty 𝜆 𝑚 is invariant to orthogonal changes of auxiliary score basis and keeps the stacked normal equations stable under collinearity or rank deficiency [Hastie, 2020]. In experiments, we select 
+
+𝜆 𝑚 from a fixed positive grid using only source or intermediate-domain validation. We denote bB(0) =
+
+col {bB(0) 
+
+> 2
+
+, . . . , bB(0) 
+
+> 𝐾
+
+}. The final aligned coordinates are 
+
+bu(𝑚 ) 
+
+> 𝑖
+
+= (bA(0) )Tbr(𝑚 ) 
+
+> 𝑖
+
+, bv(𝑚 ) 
+
+> 𝑘,𝑖
+
+= (bG(𝑚 ) 
+
+> 𝑘
+
+)Tbz(𝑚 ) 
+
+> 𝑘,𝑖
+
+, bv(0) 
+
+> 𝑘,𝑖
+
+= (bB(0) 
+
+> 𝑘
+
+)Tbz(0) 
+
+> 𝑘,𝑖
+
+. (6) The source ridge reconstruction uses the sum of the blockwise coordinates, whereas outcome transfer retains their ordered collection. If the empirical auxiliary score basis changes as bz(𝑚 ) 
+
+> 𝑘,𝑖
+
+↦ → Q(𝑚 )
+
+> 𝑧,𝑘
+> T
+
+bz(𝑚 ) 
+
+> 𝑘,𝑖
+
+and the common aligned basis is rotated by O ∈ O( 𝑟 0), then the equivalent coefficient representation is bG(𝑚 ) 
+
+> 𝑘
+
+↦ → Q(𝑚 ) 
+
+> 𝑧,𝑘
+> T
+
+bG(𝑚 ) 
+
+> 𝑘
+
+O,yielding a fitted coordinate rotated by OT. Thus, the entries of bG(𝑚 ) 
+
+> 𝑘
+
+depend on the nuisance score basis, whereas the fitted coordinate is preserved up to the common aligned-space rotation O. Under conditional transportability, the weights in (4) transport the source ridge normal equations to the target outcome mixture. The weighted ridge maps then match the observed source auxiliary blocks to the target CCA anchor. Thus, the core methodological contribution is the target-calibrated, reference-anchored match-up: calibration removes label-mixture bias before alignment, whereas match-up resolves the domain-specific auxiliary coordinate systems. 
+
+3.4 Outcome transfer and surrogate bridge 
+
+Density ratios are estimated from pooled labeled sources on the aligned scale in (6). For a generic aligned reference coordinate U and blockwise aligned auxiliary coordinate V𝑘 , we define the likelihood ratio LR U,Vk |Y (u, v | y) = 𝑝 (U = u, V𝑘 = v | y)
+
+𝑝 (U = u, V𝑘 = v | 0) , LR U (u | y) = 𝑝 (U = u | y)
+
+𝑝 (U = u | 0) . (7) We define cLR Vk |U,Y (v | u, y) = cLR U,Vk |Y (u, v | y)/ cLR U (u | y), where cLR U,Vk |Y and cLR U denote the estimators of the ratios in (7). For a domain with observed auxiliary set A𝑚 \ { 1}, the aligned likelihood-ratio evidence is combined as 
+
+cLR (𝑚 )
+
+> comb
+
+ u; {v𝑘 }𝑘 ∈ A 𝑚 \{ 1} | y = cLR U (u | y)
+
+Ö 
+
+> 𝑘 ∈ A 𝑚 \{ 1}
+
+cLR Vk |U,Y (v𝑘 | u, y). (8) 7The product corresponds to the joint conditional likelihood ratio when the aligned auxiliary blocks are conditionally independent given (U, Y). More generally, it represents a composite likelihood-ratio construction based on the transferable aligned blocks. The target outcome-distribution parameter is estimated by the profile criterion, the finite-state likelihood-ratio form used in maximum-likelihood label-shift estimation [Garg et al., 2020, Alexandari et al., 2020], 
+
+bθ(0) = arg max 
+
+> θ
+
+1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+log 
+
+∑︁ y∈ Y 
+
+𝜌 𝑦 (y; θ) cLR (0)
+
+> comb
+
+ bu(0) 
+
+> 𝑖
+
+;bv(0) 
+
+> 2,𝑖
+
+, . . . , bv(0) 
+
+> 𝐾 ,𝑖
+
+| y
+
+. (9) The estimated target conditional outcome distribution is 
+
+b𝑝 𝑖 (y) = 𝜌 𝑦 (y; bθ(0) ) cLR (0)
+
+> comb
+
+ bu(0) 
+
+> 𝑖
+
+;bv(0) 
+
+> 2,𝑖
+
+, . . . , bv(0) 
+
+> 𝐾 ,𝑖
+
+| yÍy′ ∈ Y 𝜌 𝑦 (y′; bθ(0) ) cLR (0)
+
+> comb
+
+ bu(0) 
+
+> 𝑖
+
+;bv(0) 
+
+> 2,𝑖
+
+, . . . , bv(0) 
+
+> 𝐾 ,𝑖
+
+| y′ . (10) Soft predictions are conditional means under b𝑝 𝑖 , and hard predictions use arg max y∈ Y b𝑝 𝑖 (y).We consider the source-only surrogate regime, in which gold-standard outcomes are unavailable in the source domains, surrogate outcomes s(𝑚 ) 
+
+> 𝑖
+
+are observed for 𝑚 = 1, . . . , 𝑀 , and s(0) 
+
+> 𝑖
+
+is unavailable. In addition to (2), assume that the conditional surrogate distribution 𝑝 𝑆 (s | y) is invariant across source domains and that the resulting surrogate bridge is identifiable. For a subject-level representation f, let cLR br ,𝑆 (f | y) denote a surrogate-bridge estimator of 𝑝 (f | y)/ 𝑝 (f | 0) estimated from source representations and surrogates. In the binary implementation, where 𝑌 ∈ { 0, 1} and 𝑆 ∈ R, the bridge regresses 𝑆 on f and combines the fitted mean with an identifiable two-component model for 𝑆 | 𝑌 . For reference calibration, we denote the raw reference score by f and denote the resulting ratio by cLR ref ,𝑆 . Replacing cLR ref by cLR ref ,𝑆 in (3) defines bθ(0) 
+
+> init ,𝑆
+
+.For match-up, we define 
+
+bf (𝑚 ) 
+
+> 𝑖, pre
+
+= col 
+
+nbt(𝑚 ) 
+
+> 1,𝑖
+
+,bt(𝑚 ) 
+
+> 𝑘,𝑖
+
+: 𝑘 ∈ A 𝑚 \ { 1}
+
+o
+
+,
+
+and let b𝑞 (𝑚 ) 
+
+> 𝑖, pre ,𝑆
+
+(y) denote the normalized working weight for the outcome state y obtained from (bf (𝑚 )
+
+> 𝑖, pre
+
+, s(𝑚 ) 
+
+> 𝑖
+
+),with Íy∈ Y b𝑞 (𝑚 ) 
+
+> 𝑖, pre ,𝑆
+
+(y) = 1. Because the auxiliary scores are not comparable before match-up, this bridge is fitted separately within each source domain. For 𝑚 = 1, . . . , 𝑀 , define 
+
+bθ(𝑚 ) 
+
+> 𝑆
+
+= arg max 
+
+> θ
+
+∑︁ 𝑖 ∈ L 𝑚 ∑︁ y∈ Y 
+
+b𝑞 (𝑚 ) 
+
+> 𝑖, pre ,𝑆
+
+(y) log 𝜌 𝑦 (y; θ), (11) 
+
+b𝑤 (𝑚 ) 
+
+> 𝑖,𝑆
+
+=∑︁ 
+
+> y∈ Y
+
+b𝑞 (𝑚 ) 
+
+> 𝑖, pre ,𝑆
+
+(y) 𝜌 𝑦 (y; bθ(0) 
+
+> init ,𝑆
+
+)
+
+𝜌 𝑦 (y; bθ(𝑚 ) 
+
+> 𝑆
+
+) , 𝑖 ∈ L 𝑚 . (12) The surrogate-based weight in (12) replaces the gold-label weight in (4), while the subsequent align-ment steps described in Section 3.3 remain unchanged. For each domain 𝑚 = 0, . . . , 𝑀 , we construct a common-dimensional representation for surrogate-based outcome transfer by averaging the aligned auxiliary coordinates observed in that domain: 
+
+bv(𝑚 ) 
+
+> agg ,𝑖
+
+= 1
+
+|A 𝑚 \ { 1}| ∑︁ 𝑘 ∈ A 𝑚 \{ 1}
+
+bv(𝑚 ) 
+
+> 𝑘,𝑖
+
+, bf (𝑚 ) 
+
+> 𝑖, al
+
+= col 
+
+nbu(𝑚 ) 
+
+> 𝑖
+
+,bv(𝑚 )
+
+> agg ,𝑖
+
+o
+
+.
+
+Let cLR comb ,𝑆 (f | y) denote the aligned surrogate-bridge ratio estimated from the pooled source pairs n bf (𝑚 ) 
+
+> 𝑖, al
+
+, s(𝑚 )
+
+> 𝑖
+
+ : 𝑖 ∈ L 𝑚 , 𝑚 = 1, . . . , 𝑀 
+
+o
+
+. Replacing the likelihood-ratio term in (9) with cLR comb ,𝑆 (bf (0) 
+
+> 𝑖, al
+
+| y)
+
+defines bθ(0) 
+
+> 𝑆
+
+. Using bθ(0) 
+
+> 𝑆
+
+and the same ratio in (10) gives the estimated target conditional outcome distribution. Surrogate information is used only to estimate source-side weights and likelihood ratios, while the estimand remains the conditional distribution of the target gold-standard outcome y(0) 
+
+> 𝑖
+
+.84 Theory 
+
+4.1 Population coordinates and identification target 
+
+In this section, we consider the setting where PCA [Jolliffe and Cadima, 2016] is used for representation learning and gold-standard outcome labels are observed for all source subjects, whereas target outcomes remain unobserved during model fitting. Throughout the section, T denotes raw backend scores, (R, Z)
+
+denote target-standardized scores, and (U, V) denote final aligned coordinates. We use unhatted symbols to denote population quantities and the hat symbol to denote their empirical counterparts. The domain samples are mutually independent, with independent subjects within each domain. For subject 𝑖 in domain 𝑚 , let 
+
+r(𝑚 ) 
+
+> 𝑖
+
+∈ Rℎ be the population standardized reference score and let z(𝑚 ) 
+
+> 𝑘,𝑖
+
+∈ Rℓ𝑘 be the population standardized score for auxiliary block 𝑘 ∈ A 𝑚 \ { 1}. We set z(𝑚 ) 
+
+> 𝑖
+
+= col z(𝑚 ) 
+
+> 𝑘,𝑖
+
+: 𝑘 ∈ A 𝑚 \ { 1} , and use R(𝑚 ) , Z(𝑚 ) 
+
+> 𝑘
+
+,and Z(𝑚 ) for the corresponding row-stacked matrices for r(𝑚 ) 
+
+> 𝑖
+
+, z(𝑚 ) 
+
+> 𝑘,𝑖
+
+∈ Rℓ𝑘 , and z(𝑚 ) 
+
+> 𝑖
+
+, respectively. Let 
+
+𝑃 𝑚 and 𝐸 𝑚 denote probability and expectation in domain 𝑚 , and define the population label-shift ratio 
+
+𝜔 𝑚 (y) = 𝜌 𝑦 (y; θ(0) )/ 𝜌 𝑦 (y; θ(𝑚 ) ), where 𝑚 = 1, . . . , 𝑀 .For a labeled source subject, we define the subject-specific weight 𝑤 (𝑚 ) 
+
+> 𝑖
+
+= 𝜔 𝑚 (y(𝑚 ) 
+
+> 𝑖
+
+). In the target domain, we set 𝑤 (0) 
+
+> 𝑖
+
+= 1. We reserve 𝜔 𝑚 (·) for the outcome-state ratio and 𝑤 (𝑚 ) 
+
+> 𝑖
+
+for its evaluation at a subject’s outcome. Let (A(0) , B(0) ) denote a paired population solution of the regularized target CCA problem corresponding to (5). For each source domain 𝑚 , define the population ridge alignment map as the optimizer of the penalized population objective 
+
+G(𝑚 ) = arg min 
+
+> G
+
+
+
+𝐸 𝑚 
+
+
+
+𝜔 𝑚 (y(𝑚 ) )  A(0) Tr(𝑚 ) − GTz(𝑚 ) 22
+
+
+
++ 𝜆 𝑚 ∥G∥2F
+
+
+
+.
+
+Define the auxiliary-score covariance 𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+and the auxiliary–reference cross-moment 𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+under the outcome-reweighted source distribution by 
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+= 𝐸 𝑚 
+
+𝜔 𝑚 (y(𝑚 ) )z(𝑚 ) z(𝑚 )T  , 𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+= 𝐸 𝑚 
+
+𝜔 𝑚 (y(𝑚 ) )z(𝑚 ) r(𝑚 )T  .
+
+Because 𝐸 𝑚 
+
+𝜔 𝑚 (y(𝑚 ) ) = 1, these are moments under the outcome-reweighted source distribution. For 
+
+𝜆 𝑚 > 0, 𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑚 I is positive definite, where I is the identity matrix of dimension dim (z(𝑚 ) ). Hence the penalized population optimizer is unique and satisfies 
+
+G(𝑚 ) =
+
+
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑚 I
+
+ −1
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+A(0) .
+
+Thus, G(𝑚 ) is the population counterpart of the empirical ridge alignment map bG(𝑚 ) subject to the same penalty parameter 𝜆 𝑚 . Positive ridge regularization ensures uniqueness and stability even when the stacked auxiliary scores are collinear or rank deficient [Hastie, 2020]. We then partition G(𝑚 ) = col G(𝑚 ) 
+
+> 𝑘
+
+: 𝑘 ∈A𝑚 \ { 1} and B(0) = col B(0) 
+
+> 2
+
+, . . . , B(0) 
+
+> 𝐾
+
+, where the population aligned coordinates are 
+
+u(𝑚 ) 
+
+> 𝑖
+
+= {A(0) }Tr(𝑚 ) 
+
+> 𝑖
+
+∈ R𝑟 0 , 𝑚 = 0, . . . , 𝑀, 
+
+v(0) 
+
+> 𝑘,𝑖
+
+= {B(0) 
+
+> 𝑘
+
+}Tz(0) 
+
+> 𝑘,𝑖
+
+∈ R𝑟 0 , 𝑘 = 2, . . . , 𝐾, 
+
+v(𝑚 ) 
+
+> 𝑘,𝑖
+
+= {G(𝑚 ) 
+
+> 𝑘
+
+}Tz(𝑚 ) 
+
+> 𝑘,𝑖
+
+∈ R𝑟 0 , 𝑘 ∈ A 𝑚 \ { 1}, 𝑚 ≥ 1.
+
+We use v(𝑚 ) 
+
+> 𝑖
+
+= col v(𝑚 ) 
+
+> 𝑘,𝑖
+
+: 𝑘 ∈ A 𝑚 \ { 1} for the ordered collection of the observed aligned auxiliary blocks in domain 𝑚 , and U(𝑚 ) , V(𝑚 ) 
+
+> 𝑘
+
+, and V(𝑚 ) for the corresponding row-stacked reference coordinates, auxiliary blocks, and ordered auxiliary collection, respectively. 9We distinguish two types of nuisance rotation of the score bases. We use Q𝑟 ∈ O( ℎ) to represent a change of basis for the common reference scores, and Q(𝑚 ) 
+
+> 𝑧,𝑘
+
+∈ O( ℓ𝑘 ) to represent a domain-modality-specific 
+
+change of basis for auxiliary modality 𝑘 in domain 𝑚 . In addition, O ∈ O( 𝑟 0) represents the single residual rotational symmetry of the common aligned space. If the subject-level score vectors are re-expressed as 
+
+r(𝑚 ) 
+
+> 𝑖
+
+↦ → QT 
+
+> 𝑟
+
+r(𝑚 ) 
+
+> 𝑖
+
+, z(𝑚 ) 
+
+> 𝑘,𝑖
+
+↦ →  Q(𝑚 )
+
+> 𝑧,𝑘
+
+Tz(𝑚 ) 
+
+> 𝑘,𝑖
+
+,
+
+then the equivalent coefficient representations under the common aligned-space rotation O are 
+
+A(0) ↦ → QT 
+
+> 𝑟
+
+A(0) O, B(0) 
+
+> 𝑘
+
+↦ →  Q(0)
+
+> 𝑧,𝑘
+
+TB(0) 
+
+> 𝑘
+
+O, G(𝑚 ) 
+
+> 𝑘
+
+↦ →  Q(𝑚 )
+
+> 𝑧,𝑘
+
+TG(𝑚 ) 
+
+> 𝑘
+
+O.
+
+Consequently, every fitted row-stacked block transforms as Z(𝑚 ) 
+
+> 𝑘
+
+G(𝑚 ) 
+
+> 𝑘
+
+↦ → Z(𝑚 ) 
+
+> 𝑘
+
+G(𝑚 ) 
+
+> 𝑘
+
+O, and the same O is applied to each observed aligned auxiliary block. For a row-stacked matrix H whose 𝑖 th row is hT 
+
+> 𝑖
+
+, we define the weighted matrix norm ∥H∥2F,𝑚 =      
+
+> Í𝑖 𝑤 (𝑚 )
+> 𝑖 ∥h𝑖 ∥22
+> Í𝑖 𝑤 (𝑚 )
+> 𝑖
+
+. We use a single deterministic sequence Δ𝑛 → 0 for the primitive standardized-score and second-moment errors. Target CCA, source ridge, and fitted-coordinate errors are derived from this sequence rather than included in its definition. For the PCA backend, the Supplementary Material gives an explicit Δ𝑛 obtained from the worst PCA eigenspace rate, the outcome-weight rate, and 𝑛 −1/2min sampling variation. 
+
+4.2 Assumptions 
+
+Assumption 1 is the standard label-shift and overlap condition: outcome prevalences may differ across domains, whereas the class-conditional distribution of the retained scores remains stable; it is used to express target moments as weighted source moments [Lipton et al., 2018, Garg et al., 2020]. 
+
+Assumption 1 (Label shift and overlap) . For every source domain 𝑚 and outcome state y,
+
+𝜌 𝑦 (y; θ(0) ) > 0 =⇒ 𝜌 𝑦 (y; θ(𝑚 ) ) > 0,
+
+(r(𝑚 ) , z(𝑚 ) ) | { y(𝑚 ) = y} 𝑑 
+
+= (r(0) , z(𝑚, 0) ) | { y(0) = y},
+
+where z(𝑚, 0) contains the target auxiliary blocks observed in source domain 𝑚 and expressed in the corre-sponding fixed population score orientation. The empirical score bases are related to these fixed population representatives through the rotations Q(𝑚 ) 
+
+> 𝑧,𝑘
+
+. Moreover, sup 𝑚, y 𝜔 𝑚 (y) < ∞, where the supremum is over states with positive target probability. Let 𝚪 (0) = {𝚺 (0) 
+
+> 𝑟𝑟
+
+}−1/2𝚺 (0) 
+
+> 𝑟 𝑧
+
+{𝚺 (0) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑧 I}−1/2 be the population regularized target CCA operator, and let 
+
+b𝚪 (0) be its empirical counterpart. Assumption 2 collects high-level conditions for covariance concentration, subspace recovery, and ridge stability. Standard references provide these individual ingredients [Koltchinskii and Lounici, 2017, Yu et al., 2015, Wedin, 1972, Hastie, 2020]; the Supplementary Material proves their method-specific assembly into one common rotation. 
+
+Assumption 2 (Stable regularized alignment) . The number of domains, modalities, and retained ranks is fixed. The relevant population second and fourth moments are bounded, and the covariance matrices used for standardization and regularized CCA have eigenvalues bounded away from zero on their retained subspaces. The target CCA operator satisfies 𝜎 𝑟 0 {𝚪 (0) } − 𝜎 𝑟 0+1{𝚪 (0) } ≥ 𝛿 CCA > 0. The source ridge parameters satisfy 0 < 𝜆 ≤ 𝜆 𝑚 ≤ 𝜆 < ∞. For suitable nuisance score rotations, the standardized-score errors, the three target CCA moment errors, and the source auxiliary covariance and auxiliary–reference cross-moment errors are uniformly 𝑂 𝑝 (Δ𝑛 ). Any tuning parameter selected from a finite candidate set satisfies these conditions uniformly. 10 The PCA-backend result in the Supplementary Material verifies Assumption 2 and propagates its explicit rate through CCA and ridge regression. A different representation backend may replace PCA by verifying the same primitive 𝑂 𝑝 (Δ𝑛 ) moment bounds. Let 0 denote the baseline outcome state and define the target aligned likelihood ratio LR (0) 
+
+> U,V|Y
+
+(u, v | y) = 𝑝 0 (u, v | y)
+
+𝑝 0 (u, v | 0) . (13) Bayes’ rule gives 
+
+𝑝 0 (y | u, v) = 𝜌 𝑦 (y; θ(0) )LR (0) 
+
+> U,V|Y
+
+(u, v | y)
+
+Íy′ ∈ Y 𝜌 𝑦 (y′; θ(0) )LR (0) 
+
+> U,V|Y
+
+(u, v | y′) . (14) Assumption 3 gives standard consistency and identification conditions for the aligned likelihood-ratio estimator and target profile criterion; after the common rotation is established, it yields consistency of the target outcome parameter and posterior by standard plug-in and argmax arguments [Sugiyama et al., 2012, Van der Vaart, 2000]. 
+
+Assumption 3 (Aligned ratio consistency and profile identification) . For every y ∈ Y with positive target probability, the conditional distribution of (u(0) , v(0) ) given y(0) = y is absolutely continuous with respect to its conditional distribution given y(0) = 0. After expressing the estimated coordinates in the common orientation of Lemma 2, we denote LR 𝑖 (y) = LR (0)
+
+> U,V|Y
+
+{u(0) 
+
+> 𝑖
+
+, v(0) 
+
+> 𝑖
+
+| y},
+
+and define the corresponding estimated ratio by 
+
+cLR 𝑖 (y) = cLR (0)
+
+> comb
+
+ bu(0) 
+
+> 𝑖
+
+;bv(0) 
+
+> 2,𝑖
+
+, . . . , bv(0) 
+
+> 𝐾 ,𝑖
+
+| y.
+
+The ratios are nonnegative and satisfy LR 𝑖 (0) = cLR 𝑖 (0) = 1. Let 𝜅 𝑛 → 0 denote the intrinsic likelihood-ratio estimation-and-transfer rate at the population aligned coordinates. After evaluation at the estimated coordinates, suppose 1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+max 
+
+> y∈ Y
+
+cLR 𝑖 (y) − LR 𝑖 (y) = 𝑂 𝑝 (𝜅 𝑛 + Δ𝑛 ), 1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+max 
+
+> y∈ Y
+
+n
+
+LR 𝑖 (y) + cLR 𝑖 (y)
+
+o
+
+= 𝑂 𝑝 (1). (15) The parameter space for θ is compact, 𝜌 𝑦 (y; θ) is continuous in θ uniformly over the finite outcome space 
+
+Y, and inf θ 𝜌 𝑦 (0; θ) > 0. The oracle profile criterion obtained from (9) by replacing cLR 𝑖 with LR 𝑖 
+
+converges uniformly to a deterministic population criterion whose unique maximizer is θ(0) . For the rate conclusion below, θ(0) is an interior point, 𝜌 𝑦 is twice continuously differentiable with bounded derivatives in a neighbourhood of θ(0) , the negative population profile Hessian is positive definite there, the oracle empirical Hessian converges uniformly to its population counterpart in that neighbourhood, and the oracle empirical score at θ(0) is 𝑂 𝑝 (𝑛 −1/20 ).
+
+4.3 Unified-rotation alignment and posterior consistency 
+
+Lemma 1 (Target-distribution transport) . Under Assumption 1, for every source domain 𝑚 and every square-integrable measurable 𝑓 ,
+
+𝐸 𝑚 
+
+𝜔 𝑚 {y(𝑚 ) } 𝑓 {r(𝑚 ) , z(𝑚 ) } = 𝐸 0
+
+ 𝑓 {r(0) , z(𝑚, 0) } . (16) 11 Lemma 2 (One-common-rotation recovery) . Under Assumptions 1 and 2, there exist nuisance basis rotations 
+
+Q𝑟 ∈ O( ℎ) and Q(𝑚 ) 
+
+> 𝑧,𝑘
+
+∈ O( ℓ𝑘 ) and one common O ∈ O( 𝑟 0) such that 
+
+bA(0) − QT 
+
+> 𝑟
+
+A(0) O F + max   
+
+> 2≤𝑘 ≤𝐾
+
+bB(0) 
+
+> 𝑘
+
+− { Q(0) 
+
+> 𝑧,𝑘
+
+}TB(0) 
+
+> 𝑘
+
+O F
+
++ max   
+
+> 1≤𝑚 ≤𝑀
+
+max  
+
+> 𝑘 ∈ A 𝑚 \{ 1}
+
+bG(𝑚 ) 
+
+> 𝑘
+
+− { Q(𝑚 ) 
+
+> 𝑧,𝑘
+
+}TG(𝑚 ) 
+
+> 𝑘
+
+O F = 𝑂 𝑝 (Δ𝑛 ),
+
+(17) 
+
+and 
+
+max  
+
+> 0≤𝑚 ≤𝑀
+
+bU(𝑚 ) − U(𝑚 ) O F,𝑚 +∑︁  
+
+> 𝑘 ∈ A 𝑚 \{ 1}
+
+bV(𝑚 ) 
+
+> 𝑘
+
+− V(𝑚 ) 
+
+> 𝑘
+
+O F,𝑚 
+
+
+
+= 𝑂 𝑝 (Δ𝑛 ). (18) 
+
+The same O appears in the target CCA pair, every source ridge block, and every fitted aligned coordinate. 
+
+Lemma 2 establishes recovery of each fitted coordinate relative to its own population map in one common orientation. It does not assert that the target CCA map B(0) equals a source ridge map G(𝑚 ) , nor does common orientation alone imply source-to-target likelihood-ratio transport. The latter is the separate nuisance condition in Assumption 3. The raw coefficient matrices G(𝑚 ) 
+
+> 𝑘
+
+depend on the nuisance score bases and are not intrinsically identifiable. In contrast, each fitted block and the ordered collection of aligned coordinates are identified up to the same common rotation. For generic subject-level aligned coordinates u and v𝑘 , let v = col {v2, . . . , v𝐾 }. The transformation 
+
+(u, col {v2, . . . , v𝐾 }) ↦ −→  OTu, col {OTv2, . . . , OTv𝐾 }
+
+is measurable and one-to-one, so the transformed coordinates generate the same sigma-field as (u, v). If 𝑝 O
+
+> 0
+
+denotes the conditional distribution expressed in the transformed coordinates, then 
+
+𝑝 O
+
+> 0
+
+ y | OTu, col {OTv2, . . . , OTv𝐾 } = 𝑝 0 (y | u, v) almost surely . (19) 
+
+Theorem 1 (Consistency and rate of the target conditional outcome distribution) . Suppose Assumptions 1, 2, and 3 hold. If the target profile criterion in (9) is maximized up to 𝑜 𝑝 (1), then 
+
+bθ(0) 𝑝 
+
+−→ θ(0)
+
+and 
+
+1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+∑︁ y∈ Y 
+
+b𝑝 𝑖 (y) − 𝑝 0
+
+ y | u(0) 
+
+> 𝑖
+
+, v(0)
+
+> 𝑖
+
+ 𝑝 
+
+−→ 0. (20) 
+
+If the local differentiability, interiority, and nonsingular-Hessian conditions in Assumption 3 hold and the fitted criterion satisfies its first-order condition, then 
+
+bθ(0) − θ(0) 
+
+> 2
+
++ 1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+∑︁ y∈ Y 
+
+b𝑝 𝑖 (y) − 𝑝 0
+
+ y | u(0) 
+
+> 𝑖
+
+, v(0)
+
+> 𝑖
+
+ = 𝑂 𝑝 
+
+ 𝑛 −1/20 + 𝜅 𝑛 + Δ𝑛 
+
+. (21) 
+
+A locally Lipschitz ratio-evaluation map with an integrable envelope is one sufficient route from intrinsic rate 𝜅 𝑛 and the coordinate rate Δ𝑛 to the assumed average ratio bound. Thus no additional error-rate symbol is required. 
+
+The theorem concerns the exact target likelihood ratio in (13). If the composite construction in (8) is not an exact joint ratio, the same argument gives consistency and the corresponding rate for its working conditional distribution rather than for the exact target posterior. 12 4.4 Proof sketch 
+
+The main nonstandard step is to show that a single rotation, rather than separate domain-specific rotations, aligns all estimated coordinates. The remaining transport identity, covariance concentration, singular-subspace perturbation, ridge perturbation, and profile-estimation arguments are standard procedures. We establish these steps, with appropriate adaptations, in the Supplementary Material. Standard perturbation of the symmetric dilation of b𝚪 (0) around 𝚪 (0) yields a single O ∈ O( 𝑟 0) for both the left and right target CCA bases, because the paired canonical vectors span a joint invariant subspace [Wedin, 1972, Yu et al., 2015]. The target reference coordinate therefore carries this same O into every source ridge problem. Orthogonal equivariance of the ridge normal equations then gives bG(𝑚 ) 
+
+> 𝑘
+
+= {Q(𝑚 ) 
+
+> 𝑧,𝑘
+
+}TG(𝑚 ) 
+
+> 𝑘
+
+O + 𝑂 𝑝 (Δ𝑛 ) for every observed source block. Multiplication by the estimated score matrices cancels the nuisance Q rotations, so bU(𝑚 ) = U(𝑚 ) O + 𝑂 𝑝 (Δ𝑛 ) and bV(𝑚 ) 
+
+> 𝑘
+
+= V(𝑚 ) 
+
+> 𝑘
+
+O + 𝑂 𝑝 (Δ𝑛 ) in every domain. Thus, blockwise differences in modality availability determine which aligned blocks are present but do not change their common orientation. Assumption 3 separately supplies the intrinsic likelihood-ratio rate 𝜅 𝑛 . A first-order expansion of the profile score then yields the parameter and posterior rate in (21); the Supplementary Material gives the explicit PCA-to-CCA-to-ridge contribution to Δ𝑛 .
+
+# 5 Simulation studies 
+
+The simulation studies evaluate the proposed method under three main research questions (RQs). RQ1 : Can target-distribution calibration together with target-anchored CCA and regularized source maps handle source– target label shift and blockwise modality heterogeneity? RQ2 : When gold-standard labels are sparse, can the surrogate bridge recover most of the accuracy of a full-label procedure, and does adding a small fraction of gold-standard labels accelerate convergence to the full-label oracle? RQ3 : Do the alignment and target-calibration components make complementary contributions, rather than one component compensating for instability introduced by the other? We therefore report a main multivariate simulation, a surrogate-assisted simulation, and an ablation study. 
+
+5.1 Simulation study settings 
+
+For the main multivariate simulation, each replication contained one unlabeled target domain and five source domains, with 400 subjects per domain. The target outcome was a three-dimensional binary vector generated from the Ising model in (1), with marginal prevalences (0.22 , 0.36 , 0.40 ) and pairwise interactions 
+
+(0.45 , 0.35 , 0.30 ). Source outcome distributions were perturbed away from the target distribution, while the conditional latent representation given the outcome was kept transportable. Each subject had one shared reference modality and four rank-deficient auxiliary modalities generated from an ℎ = 5 latent factor. We varied one stress factor at a time: the joint label-shift magnitude 𝛿 , auxiliary loading rotation 
+
+𝜀 rot , source gold-label missingness 𝑝 lab , and blockwise source-modality pattern index 𝑝 mod . The default values were 𝛿 = 0.24, 𝜀 rot = 0.50, 𝑝 lab = 0.35, and 𝑝 mod = 0. Target gold-standard outcomes were masked during fitting and used only for evaluation. We compared the proposed method with direct source transfer, orthogonal Procrustes transfer [Sch¨ onemann, 1966], RGCCA [Tenenhaus and Tenenhaus, 2011], BONMI [Zhou et al., 2023], target-only PCA–EM [Jolliffe and Cadima, 2016, Dempster et al., 1977], and two raw-feature learners: XGBoost with missing-block indicators [Chen and Guestrin, 2016], which can capture nonlinear feature effects and interactions, and LASSO [Tibshirani, 1996], which provides a sparse linear benchmark. Together, the two learners distinguish the performance available from flexible nonlinear prediction from that available under regularized linear prediction. Performance was averaged over 100 Monte Carlo replications and summarized by target macro-AUC and target mean squared error. 13 For the surrogate-assisted simulation, we used a binary version of the same domain-adaptation problem. The target prevalence was 0.22, the label-shift magnitude was fixed at 𝛿 = 0.24, and a continuous source-domain surrogate with signal level 𝑞 = 0.80 was observed. The per-domain sample size ranged from 25 to 6400. We compared the surrogate-assisted method with a reference-only surrogate learner, direct and orthogonal full-label transfer rules, the proposed full-label oracle using all source gold-standard labels, and a semi-supervised variant that additionally used 20% of the source gold-standard labels for calibration. For 
+
+RQ3 , we performed a crossed ablation at 𝜀 rot = 1, with the other perturbation parameters fixed at their defaults. The four variants crossed the target CCA/ridge alignment component with the stabilized target update. 
+
+5.2 Main simulation 
+
+To answer RQ1 , Figure 2 visualizes target macro-AUC and MSE over the four perturbation sweeps; detailed setting-level results are reported in the Supplementary Material. Averaged over all settings, the proposed method achieved macro-AUC 0.9269 and MSE 0.1003, corresponding to a 20.3% relative increase in macro-AUC and a 51.8% relative reduction in MSE compared with Raw-X XGBoost. Under the largest label shift, 𝛿 = 0.40, the corresponding improvements were 21.7% and 59.5%, while the proposed trajectories remained stable across rotation, source-label missingness and the nonnested modality-pattern configurations. These results answer RQ1 : target-distribution calibration addresses source–target outcome shift, and the target-anchor CCA/ridge match-up supplies a common coordinate system for heterogeneous auxiliary blocks. 
+
+5.3 Surrogate-assisted simulation 
+
+To answer RQ2 , Figure 3 visualizes target AUC and MSE as functions of the per-domain sample size. The surrogate bridge recovered most of the full-label benchmark. The principal comparison is among the surrogate-only proposed method, the semi-supervised variant, and the proposed full-label oracle: as the sample size increased, the first two trajectories rapidly approached the oracle in both ranking and probability accuracy. Beyond the smallest-sample regime, vanilla XGBoost and LASSO improved more slowly and remained clearly separated from the proposed trajectories, showing that generic nonlinear or sparse linear fitting does not replace target-calibrated multimodal transfer. At 𝑛 = 400 per domain, the surrogate-only method increased AUC by 20.4% and reduced MSE by 55.3% relative to reference-only surrogate learning; relative to direct full-label transfer, the corresponding improvements were 18.8% and 54.6%. As the sample size increased, the surrogate-only curve approached the full-label oracle, reaching within 0.3% of the oracle AUC at 𝑛 = 6400. The semi-supervised surrogate variant further narrowed the gap to the oracle, especially for probability accuracy: at 𝑛 = 6400, with 20% source gold-standard calibration, its MSE was 0.061, essentially the same as the full-label oracle value of 0.062. Thus, the surrogate alone provides most of the ranking information, while a small subset of gold-standard labels calibrates the scale and lets the procedure approach the full-label oracle more rapidly. These findings answer RQ2 : surrogate evidence is effective when it is incorporated into the same target-calibrated multimodal transfer pathway as gold-standard labels. 
+
+5.4 Ablation of alignment and calibration 
+
+To answer RQ3 , the crossed ablation separates the additional target-anchor CCA/ridge match-up from the stabilized target update; the preliminary outcome-reweighted alignment remains active when the CCA switch is off. Removing the target-anchor component produced the larger deterioration, decreasing macro-AUC from 0.9297 to 0.8635 and increasing MSE from 0.0983 to 0.1361. Relative to the no-update variant, the full method reduced MSE by 0.0069 but also had a small macro-AUC decrease of 0.0030. Removing both components gave the largest MSE and classification error. These trends answer RQ3 : the target-anchor 14 Figure 2: Main simulation. Panels A and B summarize performance across the four perturbation sweeps and overall, whereas Panels C and D display the full label-shift trajectory. Panels A and C report target macro-AUC, for which higher values are preferred; Panels B and D report target MSE, for which lower values are preferred. The radial scale in Panel B is reversed so that farther from the center indicates better performance in both radar plots. Robustness to increasing label shift is therefore read jointly as a high, flat trajectory in Panel C and a low, flat trajectory in Panel D. Results are Monte Carlo means over 100 replications. CCA/ridge maps provide the main discrimination gain under loading rotation, whereas the stabilized target update primarily refines the posterior probability scale. The two components therefore serve distinct and complementary roles. 
+
+# 6 Real-data analysis 
+
+6.1 Patient cohort and modalities 
+
+In this section, we evaluate the proposed method for predicting renal cell carcinoma (RCC) recurrence within 12 months after nephrectomy. The analysis assesses predictive performance under three prominent data challenges: (i) a temporal shift between the source and target cohorts, (ii) domain-specific heterogeneity in the availability of modalities, and (iii) limited availability of physician-adjudicated recurrence outcomes. In our evaluation, the cohort includes 7,713 patients diagnosed with RCC who underwent nephrectomy in the Mass General Brigham (MGB) healthcare system between 2000 and 2022, who had a recurrence event observed within 12 months after nephrectomy, or at least 12 months of follow-up records were available after nephrectomy [Hou et al., 2026]. The time of patient enrollment is defined as the calendar year of the initial ICD code mapped to PheCode 189.11 (malignant neoplasm of the kidney, except the renal pelvis ). Patients enrolled during 2000-2016 form the source cohort, whereas those enrolled during 2017-2022 form 15 Figure 3: Surrogate-assisted simulation. Panel A reports target AUC, for which higher values are preferred, and Panel B reports target MSE, for which lower values are preferred; sample size is measured per source domain. The key trajectories are Proposed (no 𝑌 ), Proposed (semi) , and Prop. full-𝑌 . The shrinking vertical gap between the first two curves and the full-label oracle as sample size increases shows how much oracle performance is recovered from surrogate information alone and from additionally using 20% of the source gold-standard labels. Vanilla XGBoost and LASSO provide nonlinear and sparse linear benchmarks without the proposed target adaptation. the target cohort. The primary analysis includes all 5,674 source patients, grouped according to their observed modality patterns, and 379 target patients with all modalities available. The remaining 1,660 target patients have one or more missing auxiliary modalities and are included in supplementary analyses. Among the 6,053 patients in the primary analysis, 196 have physician-adjudicated 12-month recurrence labels. For the remaining 5,857 patients, the recurrence status is represented by a surrogate label derived using LATTE (LAbel-efficienT incidenT phEnotyping) [Wen et al., 2024, Hou et al., 2026]. Our analysis uses physician-adjudicated recurrence labels when available and LATTE-derived surrogate labels otherwise. We collect data from five data modalities. (i) Modality 1 contains 𝑑 1 = 14 demographic and NICE-curated clinicopathologic attributes, including TNM stage, pathology-based grade, and histologic subtype [Hou et al., 2026]. (ii) Modality 2 contains 𝑑 2 = 87 healthcare-utilization and codified EHR count features, including PheCode , RxNorm , CCS/PCS , and standardized UMLS concept unique identifiers (CUIs) [Gronsbell et al., 2025]. The EHR codes relevant to RCC recurrence were selected using the ONCE feature-selection procedure[Xiong et al., 2023]. (iii) Modality 3 contains 𝑑 3 = 14 UMLS CUIs extracted from preoperative CT radiology reports and selected using NILE [Yu et al., 2013], focusing on anatomic characteristics of the tumor, including tumor encapsulation, lymph-node invasion, and necrosis. (iv) Modality 4 contains 𝑑 4 = 27 quantitative features obtained from raw CT images using nnU-Net for tumor segmentation [Isensee et al., 2021] and PyRadiomics for quantitative feature extraction [Van Griethuysen et al., 2017]. (v) Modality 5 
+
+contains 𝑑 5 = 56 residual image–text features intended to represent CT information not explained by the report-derived semantic embedding [Radford et al., 2021, Bannur et al., 2023]. Among these modalities, Modality 1 serves as the reference modality, while the other modalities are auxiliary. The patients enrolled during 2000-2016 are grouped into three source domains according to modality availability: 𝑛 1 = 265 patients with Modalities 1 and 2, 𝑛 2 = 4, 248 patients with Modalities 1, 2, and 3, and 𝑛 3 = 1, 161 patients with Modalities 1, 4, and 5. The 𝑛 0 = 379 patients enrolled during 2017-16 2022 with complete modalities form the target domain. Their recurrence labels for the target patients are masked throughout preprocessing, model fitting, tuning, and target adaptation and are revealed only for final evaluation. The patient cohort and modality composition are summarized in Table 1. Other real-data analysis configurations are examined in the Supplementary Material. Table 1: Patient cohort and modality composition in the primary MGB-RCC analysis. Events are defined using physician-adjudicated 12-month recurrence when available and the LATTE-derived surrogate other-wise.                                                                       
+
+> Domain Cohort years Observed modalities 𝑛 𝑚 𝑑 A𝑚 Events Gold labels Surrogate labels Source ,𝑚 =12000–2016 {1,2}265 101 56 5260
+> Source ,𝑚 =22000–2016 {1,2,3}4,248 115 805 130 4,118
+> Source ,𝑚 =32000–2016 {1,4,5}1,161 97 172 43 1,118
+> Target ,𝑚 =02017–2022 {1,2,3,4,5}379 198 100 18 361
+> Pooled source 2000–2016 Heterogeneous 5,674 –1,033 178 5,496
+> Total 2000–2022 –6,053 –1,133 196 5,857
+
+6.2 Tasks, baselines, and evaluation protocol 
+
+Task and Baseline Models. The primary task is to predict 12-month RCC recurrence in the complete late-target cohort using the heterogeneous source domains summarized in Table 1. This design evaluates transport across calendar time and modality patterns under limited physician-adjudicated supervision. The target CCA rank is fixed at 𝑟 0 = 10 before evaluation to prevent data leakage from the target labels. We compare our method with XGBoost, a nonlinear gradient-boosted tree model [Chen and Guestrin, 2016]; category-specific logistic LASSO, which fits a separate sparse linear model for each modality configuration [Tibshirani, 1996]; RGCCA, which learns regularized multiblock components [Tenenhaus and Tenenhaus, 2011]; and BONMI, which recovers a shared low-rank representation from blockwise-overlapping data [Zhou et al., 2023]. All comparators are trained using only the data from source domains with their corresponding recurrence labels and applied directly to the target data. 
+
+Evaluation Protocols. We use the Brier skill score (BSS) and the absolute calibration gap as our primary metrics. The BSS quantifies improvement in probabilistic prediction relative to the constant predictor equal to the target event prevalence [Brier, 1950, Mason, 2004]. Such a prevalence-based metric prevents a model from being favorable solely because it predicts the majority outcome. The absolute calibration gap measures the absolute difference between the mean predicted risk and the observed target event prevalence [Van Calster et al., 2016]. This metric is particularly informative under label shift because it directly evaluates whether the predicted risks recover the target event prevalence, whereas AUC measures ranking performance and may remain unchanged despite systematic miscalibration. We additionally report AUC and average precision (AP). We obtain the standard errors from 1,000 event-stratified patient-level bootstrap resamples of the fixed target predictions without model refitting, following prior work such as [Robin et al., 2011, Collins et al., 2016]. Additional details on hyperparameter tuning, bootstrap details, and ablation studies are provided in the Supplementary Material. 
+
+6.3 Results 
+
+We present the BSS, calibration gap, AUC, and AP results for our proposed method and the baselines in Table 2. We summarize the key observations below: (i) From the perspective of overall probabilistic accuracy, being the highest in BSS indicates that our method estimates patient-level recurrence probabilities 17 Table 2: BSS, calibration gap (Cal. gap), AUC and AP in the complete target cohort. Parentheses give standard errors from bootstrap resamples. Higher BSS, AUC and AP and lower calibration gap are preferred. The best results are shown in bold .                        
+
+> Method BSS Cal. gap AUC AP
+> Proposed 0.4194 (0.0485) 0.0015 (0.0070) 0.9027 (0.0153) 0.7057 (0.0465) XGBoost 0.3457 (0.0446) 0.0846 (0.0100) 0.9008 (0.0166) 0.7564 (0.0363)
+> Category-specific LASSO 0.3021 (0.0497) 0.0752 (0.0105) 0.8749 (0.0205) 0.6911 (0.0451) RGCCA 0.1419 (0.0339) 0.1064 (0.0071) 0.8619 (0.0181) 0.6048 (0.0430) BONMI -0.0347 (0.0098) 0.0860 (0.0021) 0.5329 (0.0348) 0.3030 (0.0296)
+
+more accurately than the baseline methods despite the label imbalance in the target cohort with 26 .39% prevalence. (ii) From the perspective of marginal calibration, having the smallest calibration gap shows that the average predicted risk of the proposed method most closely matches the observed target event rate under the temporal shift in recurrence prevalence from 18 .21% in the source cohort to 26 .39% in the target cohort. As we mentioned in Section 6.2, this aspect of performance is not measured by AUC. (iii) From the perspective of cross-metric consistency, our method ranks first among BSS, calibration gap, and AUC, while remaining competitive in AP. These metrics evaluate complementary aspects of model performance, indicating that our advantage is not confined to a single evaluation criterion. These findings support the proposed method as a robust approach to 12-month RCC recurrence prediction under temporal prevalence shift, heterogeneous modality availability, and limited physician-adjudicated supervision. 18 Supplementary material for “Multimodal domain adaptation under label shift and blockwise missing modalities” 
+
+Z. Wang, Z. Dou, M. Liu and T. Cai 
+
+Abstract 
+
+This supplement contains the proofs for one-common-rotation alignment and target conditional-outcome estimation, complete implementation and numerical details for the simulation studies, and the pre-specified protocol and supporting results for the renal-cell-carcinoma recurrence analysis. The theory uses one primitive representation rate and propagates it explicitly through PCA, target CCA, source ridge maps and fitted coordinates. Likelihood-ratio estimation and transfer remain a separate nuisance component; under local profile curvature, the two components yield an end-to-end posterior rate. The simulation appendix documents the main multivariate, surrogate-assisted and crossed-ablation experiments, including the raw-feature and vanilla XGBoost and LASSO benchmarks and the numerical summaries underlying Figures 2 and 3 of the main paper. The real-data appendix documents cohort and label composition, leakage controls, the primary complete-target analysis, additional late-target configurations, the complete-domain matched-modality sensitivity analysis, and the crossed CCA–target-EM ablation. 
+
+Keywords: Ablation study; Domain adaptation; Multimodal data fusion; Renal cell carcinoma; Supple-mentary proof; Surrogate outcomes. 
+
+# S1 Proofs for one-common-rotation alignment and target conditional-outcome consistency 
+
+S1.1 Proof roadmap and population notation 
+
+The proof has two branches. Its core representation result verifies one primitive rate Δ𝑛 , propagates it through target CCA and the source ridge maps, and recovers all fitted coordinates under one common rotation. The outcome branch combines this coordinate error with the intrinsic rate 𝜅 𝑛 of the final aligned likelihood-ratio learner. The dependency order is PCA + weights + sampling =⇒ Δ𝑛 =⇒ 𝛿 −1CCA Δ𝑛 (CCA) 
+
+=⇒ { 𝜆 −1 (1 + 𝛿 −1CCA ) + 𝜆 −2}Δ𝑛 (ridge) 
+
+=⇒ common-orientation fitted coordinates ,
+
+coordinate error + 𝜅 𝑛 =⇒ evaluated ratio error =⇒ bθ(0) − θ(0) =⇒ b𝑝 − 𝑝 0.
+
+At the high-level theorem, Δ𝑛 is one envelope for the pre-CCA score and moment events. For the PCA backend it is assembled from only four controllable inputs: outcome-weight error, reference-PCA error, auxiliary-PCA error and ordinary sampling fluctuation. Initial reference calibration enters only through the outcome-weight error; plug-in standardization and empirical moments are consequences of those four inputs and are not added again. The subsequent lemmas propagate the same envelope through CCA, ridge and the fitted coordinates. In contrast, 𝜅 𝑛 concerns the final likelihood-ratio learner when population aligned coordinates are available; stability to replacing them by fitted coordinates consumes Δ𝑛 once. No independence or relative ordering is assumed. The representation statements do not imply likelihood-ratio transport. In particular, common orientation does not make the target CCA map equal to a source ridge map. The separate ratio condition is therefore retained in Assumption 6. This separation also lets another representation backend replace PCA by verifying the same primitive 𝑂 𝑝 (Δ𝑛 ) score and moment events. 19 The target domain is indexed by 0 and sources by 𝑚 = 1, . . . , 𝑀 . Write 𝑛 𝑚 for a domain sample size, 
+
+𝑛 min = min 0≤𝑚 ≤ 𝑀 𝑛 𝑚 for the smallest domain sample size, 𝑁 𝑠 = Í𝑀 𝑚 =1 𝑛 𝑚 for the total source sample size, and 𝑁 = 𝑛 0 + 𝑁 𝑠 = Í𝑀 𝑚 =0 𝑛 𝑚 for the total sample size. The outcome takes values in finite Y. Before target-distribution standardization, let t(𝑚 ) 
+
+> 1
+
+∈ Rℎ be the population raw reference score and t(𝑚 ) 
+
+> 𝑘
+
+∈ Rℓ𝑘 the raw auxiliary score for 𝑘 ∈ A 𝑚 \ { 1}, and set t(𝑚 ) = col {t(𝑚 ) 
+
+> 𝑘
+
+: 𝑘 ∈ A 𝑚 \ { 1}} . Their empirical row-stacked matrices are bT(𝑚 ) 
+
+> 1
+
+and bT(𝑚 ) 
+
+> 𝑘
+
+, with population counterparts T(𝑚 ) 
+
+> 1
+
+and T(𝑚 ) 
+
+> 𝑘
+
+.Set 𝜔 0 (y) ≡ 1 and, for every domain, define the target-mixture expectation 
+
+𝐸 tar  
+
+> 𝑚
+
+{𝑎 } = 𝐸 𝑚 
+
+𝜔 𝑚 (y(𝑚 ) )𝑎  =∑︁ 
+
+> y∈ Y
+
+𝜌 𝑦 (y; θ(0) )𝐸 𝑚 (𝑎 | y(𝑚 ) = y) (S1.1) for 𝑚 ≥ 1, and let 𝐸 tar 0 = 𝐸 0. In particular, 𝐸 𝑚 {𝜔 𝑚 (y(𝑚 ) )} = 1. For every available score block, define target-distribution means and covariances 
+
+μ1,𝑚 = 𝐸 tar  
+
+> 𝑚
+
+(t(𝑚 ) 
+
+> 1
+
+), S1,𝑚 = 𝐸 tar  
+
+> 𝑚
+
+{( t(𝑚 ) 
+
+> 1
+
+− μ1,𝑚 )( t(𝑚 ) 
+
+> 1
+
+− μ1,𝑚 )T },
+
+μ𝑘,𝑚 = 𝐸 tar  
+
+> 𝑚
+
+(t(𝑚 ) 
+
+> 𝑘
+
+), S𝑘,𝑚 = 𝐸 tar  
+
+> 𝑚
+
+{( t(𝑚 ) 
+
+> 𝑘
+
+− μ𝑘,𝑚 )( t(𝑚 ) 
+
+> 𝑘
+
+− μ𝑘,𝑚 )T }.
+
+The population standardized scores are 
+
+r(𝑚 ) = S−1/21,𝑚 (t(𝑚 ) 
+
+> 1
+
+− μ1,𝑚 ), z(𝑚 ) 
+
+> 𝑘
+
+= S−1/2 
+
+> 𝑘,𝑚
+
+(t(𝑚 ) 
+
+> 𝑘
+
+− μ𝑘,𝑚 ),
+
+and z(𝑚 ) = col {z(𝑚 ) 
+
+> 𝑘
+
+: 𝑘 ∈ A 𝑚 \ { 1}} . Their row-stacked matrices are R(𝑚 ) and Z(𝑚 ) ; hats denote the plug-in standardized matrices. For the target, write 
+
+𝚺 (0) 
+
+> 𝑟𝑟
+
+= 𝐸 0 (r(0) r(0)T), 𝚺 (0) 
+
+> 𝑧𝑧
+
+= 𝐸 0 (z(0) z(0)T), 𝚺 (0) 
+
+> 𝑟 𝑧
+
+= 𝐸 0 (r(0) z(0)T).
+
+The population regularized CCA operator is 
+
+𝚪 (0) = {𝚺 (0) 
+
+> 𝑟𝑟
+
+}−1/2𝚺 (0) 
+
+> 𝑟 𝑧
+
+(𝚺 (0) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑧 I)−1/2 = P(0) 
+
+> Γ
+
+D(0) 
+
+> Γ
+
+{Q(0) 
+
+> Γ
+
+}T, (S1.2) where P(0) 
+
+> Γ
+
+and Q(0) 
+
+> Γ
+
+contain the first 𝑟 0 left and right singular vectors. The empirical operator b𝚪 (0) is obtained by replacing the three population covariance matrices with their empirical counterparts. Define 
+
+A(0) = {𝚺 (0) 
+
+> 𝑟𝑟
+
+}−1/2P(0) 
+
+> Γ
+
+, B(0) = (𝚺 (0) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑧 I)−1/2Q(0) 
+
+> Γ
+
+.
+
+Partition B(0) = col {B(0) 
+
+> 2
+
+, . . . , B(0) 
+
+> 𝐾
+
+}. For source 𝑚 , define the regularized population alignment map by the same penalized criterion used in the main paper, 
+
+G(𝑚 ) = arg min 
+
+> G
+
+
+
+𝐸 𝑚 
+
+
+
+𝜔 𝑚 (y(𝑚 ) ) {A(0) }Tr(𝑚 ) − GTz(𝑚 ) 22
+
+
+
++ 𝜆 𝑚 ∥G∥2F
+
+
+
+. (S1.3) Let 𝑑 𝑧,𝑚 = dim (z(𝑚 ) ) = Í𝑘 ∈ A 𝑚 \{ 1} ℓ𝑘 , and define 
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+= 𝐸 tar  
+
+> 𝑚
+
+{z(𝑚 ) z(𝑚 )T }, 𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+= 𝐸 tar  
+
+> 𝑚
+
+{z(𝑚 ) r(𝑚 )T }. (S1.4) The standardized scores have zero mean under 𝐸 tar  
+
+> 𝑚
+
+, so these are the auxiliary-score covariance and auxiliary– reference cross-moment under the outcome-reweighted source distribution. If 𝜆 𝑚 > 0, then 𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑚 I𝑑 𝑧,𝑚 
+
+is positive definite and the unique optimizer of (S1.3) is 
+
+G(𝑚 ) =
+
+n
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑚 I𝑑 𝑧,𝑚 
+
+o−1
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+A(0) . (S1.5) 20 Partition G(𝑚 ) = col {G(𝑚 ) 
+
+> 𝑘
+
+: 𝑘 ∈ A 𝑚 \ { 1}} .The aligned subject-level coordinates are 
+
+u(𝑚 ) 
+
+> 𝑖
+
+= {A(0) }Tr(𝑚 ) 
+
+> 𝑖
+
+∈ R𝑟 0 , 0 ≤ 𝑚 ≤ 𝑀, 
+
+v(0) 
+
+> 𝑘,𝑖
+
+= {B(0) 
+
+> 𝑘
+
+}Tz(0) 
+
+> 𝑘,𝑖
+
+∈ R𝑟 0 , 𝑘 = 2, . . . , 𝐾, 
+
+v(𝑚 ) 
+
+> 𝑘,𝑖
+
+= {G(𝑚 ) 
+
+> 𝑘
+
+}Tz(𝑚 ) 
+
+> 𝑘,𝑖
+
+∈ R𝑟 0 , 𝑘 ∈ A 𝑚 \ { 1}, 𝑚 ≥ 1.
+
+For each domain, let v(𝑚 ) 
+
+> 𝑖
+
+= col {v(𝑚 ) 
+
+> 𝑘,𝑖
+
+: 𝑘 ∈ A 𝑚 \ { 1}} in increasing modality order. We use U(𝑚 ) , V(𝑚 ) 
+
+> 𝑘
+
+, and 
+
+V(𝑚 ) for the row-stacked matrices whose 𝑖 th rows are u(𝑚 )T 
+
+> 𝑖
+
+, v(𝑚 )T 
+
+> 𝑘,𝑖
+
+, and v(𝑚 )T 
+
+> 𝑖
+
+, respectively. Set 𝑞 0 = 𝐾 − 1. For each source, write the observed auxiliary indices in increasing order as 𝑘 𝑚, 1 < · · · < 𝑘 𝑚,𝑞 𝑚 , where 
+
+𝑞 𝑚 = |A 𝑚 \ { 1}| . Their empirical row-stacked counterparts, used later in the perturbation bounds, are defined explicitly by 
+
+bU(𝑚 ) = bR(𝑚 ) bA(0) , 0 ≤ 𝑚 ≤ 𝑀, 
+
+bV(0) 
+
+> 𝑘
+
+= bZ(0) 
+
+> 𝑘
+
+bB(0) 
+
+> 𝑘
+
+, 𝑘 = 2, . . . , 𝐾, 
+
+bV(𝑚 ) 
+
+> 𝑘
+
+= bZ(𝑚 ) 
+
+> 𝑘
+
+bG(𝑚 ) 
+
+> 𝑘
+
+, 𝑘 ∈ A 𝑚 \ { 1}, 𝑚 ≥ 1,
+
+bV(0) = bZ(0) 
+
+> 2
+
+bB(0) 
+
+> 2
+
+· · · bZ(0) 
+
+> 𝐾
+
+bB(0)
+
+> 𝐾
+
+,
+
+bV(𝑚 ) = bZ(𝑚 )
+
+> 𝑘 𝑚, 1
+
+bG(𝑚 ) 
+
+> 𝑘 𝑚, 1
+
+· · · bZ(𝑚 )
+
+> 𝑘 𝑚,𝑞𝑚
+
+bG(𝑚 )
+
+> 𝑘 𝑚,𝑞𝑚
+
+, 𝑚 ≥ 1.
+
+(S1.6) The horizontal concatenation in the last two rows follows increasing modality order. Thus each subject-level 
+
+u(𝑚 ) 
+
+> 𝑖
+
+and v(𝑚 ) 
+
+> 𝑘,𝑖
+
+has dimension 𝑟 0, while U(𝑚 ) and V(𝑚 ) 
+
+> 𝑘
+
+are 𝑛 𝑚 × 𝑟 0 row-stacked matrices and V(𝑚 ) is an 
+
+𝑛 𝑚 × 𝑞 𝑚 𝑟 0 ordered block matrix; the source ridge reconstruction itself is the sum of the 𝑞 𝑚 fitted blocks. Let Q𝑟 ∈ O( ℎ) and Q(𝑚 ) 
+
+> 𝑧
+
+= blockdiag {Q(𝑚 ) 
+
+> 𝑧,𝑘
+
+: 𝑘 ∈ A 𝑚 \{ 1}} denote pre-alignment score-basis rotations. The common aligned-space rotation is O ∈ O( 𝑟 0). For a row-stacked matrix H, write 
+
+∥H∥2F,𝑚 =
+
+Í𝑖 ∈ L 𝑚 𝑤 (𝑚 ) 
+
+> 𝑖
+
+∥h𝑖 ∥22
+
+Í𝑗 ∈ L 𝑚 𝑤 (𝑚 )
+
+> 𝑗
+
+.
+
+Here 𝑤 (𝑚 ) 
+
+> 𝑖
+
+= 𝜔 𝑚 (y(𝑚 ) 
+
+> 𝑖
+
+) for a labeled source subject, while 𝑤 (0) 
+
+> 𝑖
+
+= 1 and L0 = {1, . . . , 𝑛 0}. Let 
+
+W𝑚 = diag {𝑤 (𝑚 ) 
+
+> 𝑖
+
+: 𝑖 ∈ L 𝑚 }
+
+Í𝑗 ∈ L 𝑚 𝑤 (𝑚 )
+
+> 𝑗
+
+, W0 = 𝑛 −10 I,
+
+and define cW𝑚 analogously from b𝑤 (𝑚 ) 
+
+> 𝑖
+
+. The empirical ridge moments are 
+
+b𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+= bZ(𝑚 )TcW𝑚 bZ(𝑚 ) , b𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+= bZ(𝑚 )TcW𝑚 bR(𝑚 ) .
+
+Dividing the empirical ridge objective in the main paper by Í𝑖 ∈ L 𝑚 b𝑤 (𝑚 ) 
+
+> 𝑖
+
+does not change its minimizer. The divided objective has the normalized moment matrices above and penalty 𝜆 𝑚 , so its normal equations are 
+
+bG(𝑚 ) = {b𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑚 I𝑑 𝑧,𝑚 }−1b𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+bA(0) .
+
+Thus the empirical and population maps have exactly the same penalty scale. A single sequence Δ𝑛 will control the initial weight, standardized-score and second-moment errors; CCA, ridge, and fitted-coordinate errors are derived from it. 
+
+Notation at a glance. Bold lower-case symbols denote subject-level column vectors and bold upper-case symbols denote row-stacked matrices; a hat always denotes an estimator. The operator col stacks subject-level blocks vertically, whereas square brackets in (S1.6) concatenate row-matrix blocks horizontally. 21 Symbol Role 
+
+T(𝑚 ) 
+
+> 1
+
+, T(𝑚 ) 
+
+> 𝑘
+
+Raw backend score matrices before target-distribution standardization. 
+
+R(𝑚 ) , Z(𝑚 ) Target-distribution standardized, pre-alignment reference and stacked auxil-iary scores. 
+
+A(0) , B(0) , G(𝑚 ) Population target CCA maps and the regularized source alignment map; G(𝑚 )
+
+> 𝑘
+
+is its block for modality 𝑘 .
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+, 𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+Outcome-reweighted auxiliary-score covariance and auxiliary–reference cross-moment defining the penalized population ridge target. 
+
+u(𝑚 ) 
+
+> 𝑖
+
+, v(𝑚 ) 
+
+> 𝑘,𝑖
+
+, v(𝑚 ) 
+
+> 𝑖
+
+Subject-level aligned reference vector, aligned auxiliary-block vector, and ordered auxiliary collection. 
+
+U(𝑚 ) , V(𝑚 ) 
+
+> 𝑘
+
+, V(𝑚 ) Corresponding row-stacked reference matrix, auxiliary-block matrix, and or-dered auxiliary matrix. 
+
+Q𝑟 , Q(𝑚 ) 
+
+> 𝑧,𝑘
+
+Arbitrary rotations of the raw score bases induced by PCA or another repre-sentation backend. 
+
+O One common aligned-space rotation. 
+
+𝜔 𝑚 (y), 𝑤 (𝑚 ) 
+
+> 𝑖
+
+Outcome-state ratio and its subject-level evaluation; hats denote their estima-tors. 
+
+𝑛 𝑚 , 𝑛 min , 𝑁 𝑠 , 𝑁 Domain size, smallest domain size, total source size and total size, respec-tively. LR (0) 
+
+> U,V|Y
+
+(u, v | y), cLR 𝑖 (y) Population target aligned likelihood ratio and its fitted-coordinate estimate; 
+
+cLR ◦ 
+
+> 𝑖
+
+denotes the counterfactual population-coordinate output. 
+
+Δ𝑛 Single envelope for the pre-CCA score and moment events; for PCA its four inputs are weight, reference-PCA, auxiliary-PCA and sampling errors in (S1.18). 
+
+𝜅 𝑛 Intrinsic rate of the final aligned likelihood-ratio learner at population coor-dinates; perturbing those coordinates is excluded. 
+
+Rate provenance and accounting. The following ledger distinguishes externally supplied inequalities, method-specific deductions and learner assumptions. It introduces no further rate sequence. 
+
+1. Inputs to Δ𝑛 . These are the maximum outcome-weight error, reference-PCA error, auxiliary-PCA error and 𝑛 −1/2min 
+
+sampling fluctuation. Initial reference calibration affects alignment only through the weight error. Garg et al. [2020, Theorem 3] bounds a likelihood-based label-shift estimate by a root-target-sample term plus calibration error; when the latter is also root-order, a smooth transformation gives a root-order weight error. Covariance concentration is supplied by Vershynin [2018, Theorem 4.7.1 and Exercise 4.7.3], and the population-gap Procrustes factor by Yu et al. [2015, Theorem 2]. 2. Verified from Δ𝑛 . Lemma S1.2 derives standardized-score recovery and the five moment events from those inputs, fixed retained dimensions and bounded overlap. They are not additional summands. 3. Derived alignment errors. Lemma S1.3 obtains 𝑂 𝑝 {( 1 + 𝛿 −1CCA )Δ𝑛 } by applying the cited subspace theorem to one symmetric dilation; the common rotation is the deduction made here. Lemma S1.4 then uses normal equations, a resolvent identity and product decompositions to control ridge maps and fitted coordinates without another rate input. 4. Learner assumptions. Assumption 6 assigns 𝜅 𝑛 to the population-coordinate likelihood-ratio learner and Δ𝑛 to stability of the complete fit-and-evaluation map under coordinate perturbation. Regular parametric 𝑀 -estimation gives a smooth finite-dimensional route [Van der Vaart, 2000, Chap. 5]. For boosted trees, both clauses remain assumed: Chen and Guestrin [2016] specifies the algorithm, not a statistical rate. 5. Derived target rate. Theorem S1.6 adds the oracle target-score term 𝑛 −1/20 and obtains 𝑂 𝑝 {𝑛 −1/20 + 𝜅 𝑛 + Δ𝑛 }.
+
+Thus Δ𝑛 is a common upper envelope, not a sum of its inputs, and neither Δ𝑛 nor 𝜅 𝑛 is charged twice later in the proof. 22 Throughout this proof section, all source gold-standard outcomes are observed, so L𝑚 = {1, . . . , 𝑛 𝑚 }
+
+for 𝑚 ≥ 1; L𝑚 denotes these subjects when forming the alignment moments. The optional surrogate bridge is not covered by the rate theorem below. 
+
+S1.2 Regularity conditions 
+
+Assumption 4 (Label shift and overlap) . For every source 𝑚 and outcome state y with positive target probability, there exist fixed orthonormal bases of the retained population score subspaces for which 
+
+(t(𝑚 ) 
+
+> 1
+
+, t(𝑚 ) ) | { y(𝑚 ) = y} 𝑑 
+
+= (t(0) 
+
+> 1
+
+, t(𝑚, 0) ) | { y(0) = y}, (S1.7) and 𝜔 𝑚 (y) = 𝜌 𝑦 (y; θ(0) )/ 𝜌 𝑦 (y; θ(𝑚 ) ) is uniformly bounded. Here t(𝑚, 0) denotes the target auxiliary latent-score representative restricted to the blocks observed in source 𝑚 and expressed in the corresponding fixed population orientation. This equality is a population transport assumption, not a claim that numerical sample PCA coordinates coincide across domains. The sample bases are matched to these representatives by the rotations in Lemma S1.2. By Lemma S1.1, the transported source means and covariances equal the target-mixture means and covariances, so the same equality holds after the deterministic population standardization defining (r, z).
+
+Assumption 5 (Stable score, CCA and ridge moments) . The number of domains, modality blocks and retained ranks is fixed. Relevant population second and fourth moments are bounded. The raw-score covariance eigenvalues retained for standardization are bounded below by 𝑐 0 > 0. Also 𝜆 min (𝚺 (0) 
+
+> 𝑟𝑟
+
+) ≥ 𝑐 0 and 
+
+𝜆 min (𝚺 (0) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑧 I) ≥ 𝑐 0. The singular-value gap of (S1.2) satisfies 𝜎 𝑟 0 (𝚪 (0) ) − 𝜎 𝑟 0+1 (𝚪 (0) ) ≥ 𝛿 CCA > 0. CCA and ridge tuning parameters are fixed, or selected from finite grids over which the bounds hold uniformly, and 0 < 𝜆 ≤ 𝜆 𝑚 ≤ 𝜆 < ∞.For a deterministic sequence Δ𝑛 → 0 and suitable score rotations, the following primitive errors are uniformly 𝑂 𝑝 (Δ𝑛 ):max  
+
+> 𝑚
+
+∥bR(𝑚 ) − R(𝑚 ) Q𝑟 ∥F,𝑚 + max  
+
+> 𝑚
+
+∥bZ(𝑚 ) − Z(𝑚 ) Q(𝑚 ) 
+
+> 𝑧
+
+∥F,𝑚 = 𝑂 𝑝 (Δ𝑛 ), (S1.8) 
+
+∥b𝚺 (0) 
+
+> 𝑟𝑟
+
+− QT 
+
+> 𝑟
+
+𝚺 (0) 
+
+> 𝑟𝑟
+
+Q𝑟 ∥op + ∥ b𝚺 (0) 
+
+> 𝑧𝑧
+
+− Q(0)T 
+
+> 𝑧
+
+𝚺 (0) 
+
+> 𝑧𝑧
+
+Q(0) 
+
+> 𝑧
+
+∥op = 𝑂 𝑝 (Δ𝑛 ), (S1.9) 
+
+∥b𝚺 (0) 
+
+> 𝑟 𝑧
+
+− QT 
+
+> 𝑟
+
+𝚺 (0) 
+
+> 𝑟 𝑧
+
+Q(0) 
+
+> 𝑧
+
+∥op = 𝑂 𝑝 (Δ𝑛 ). (S1.10) For the source ridge moments, max  
+
+> 𝑚
+
+∥b𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+− Q(𝑚 )T 
+
+> 𝑧
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+Q(𝑚 ) 
+
+> 𝑧
+
+∥op = 𝑂 𝑝 (Δ𝑛 ), (S1.11) max  
+
+> 𝑚
+
+∥b𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+− Q(𝑚 )T 
+
+> 𝑧
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+Q𝑟 ∥op = 𝑂 𝑝 (Δ𝑛 ). (S1.12) The target CCA, source ridge, and fitted-coordinate errors are not part of Δ𝑛 ; they are conclusions derived below. 
+
+Assumption 6 (Target ratio and profile criterion) . Let LR (0) 
+
+> U,V|Y
+
+(u, v | y) = 𝑝 0 (u, v | y)
+
+𝑝 0 (u, v | 0) .
+
+After expressing estimated coordinates in the common population orientation, write LR 𝑖 (y) = LR (0)
+
+> U,V|Y
+
+{u(0) 
+
+> 𝑖
+
+, v(0) 
+
+> 𝑖
+
+|
+
+y} and let cLR 𝑖 (y) denote the estimated ratio at the estimated target coordinates. To expose the two sources 23 of ratio error without introducing another rate, let cLR ◦ 
+
+> 𝑖
+
+(y) denote the counterfactual output of the same ratio-learning procedure when both its source training inputs and target evaluation inputs are the population aligned coordinates. All three ratios are nonnegative and normalized to one at 0. Let the deterministic sequence 𝜅 𝑛 → 0 denote the intrinsic estimation-and-transfer rate of this population-coordinate learner. It excludes the outcome-weight error already absorbed by Δ𝑛 and excludes all coordinate estimation. Suppose 1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+max  
+
+> y∈ Y
+
+| cLR ◦ 
+
+> 𝑖
+
+(y) − LR 𝑖 (y)| = 𝑂 𝑝 (𝜅 𝑛 ), (S1.13) 1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+max  
+
+> y∈ Y
+
+| cLR 𝑖 (y) − cLR ◦ 
+
+> 𝑖
+
+(y)| = 𝑂 𝑝 (Δ𝑛 ), (S1.14) 1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+max  
+
+> y∈ Y
+
+| cLR 𝑖 (y) − LR 𝑖 (y)| = 𝑂 𝑝 (𝜅 𝑛 + Δ𝑛 ), (S1.15) 1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+max  
+
+> y∈ Y
+
+{LR 𝑖 (y) + cLR 𝑖 (y)} = 𝑂 𝑝 (1). (S1.16) The third line follows from the first two by the triangle inequality and is displayed because it is the quantity consumed by the profile theorem. The first line is learner-specific. The second is a stability condition for the complete fit-and-evaluation map, not merely for target-point evaluation. The parameter space Θ is compact, 
+
+𝜌 𝑦 (y; θ) is continuous in θ uniformly over finite Y, and inf θ∈Θ 𝜌 𝑦 (0; θ) > 0. The oracle criterion class 
+
+ℓθ (u, v) = log 
+
+∑︁ y∈ Y 
+
+𝜌 𝑦 (y; θ)LR (0) 
+
+> U,V|Y
+
+(u, v | y)
+
+
+
+is Glivenko–Cantelli under 𝑃 0. Its population criterion 
+
+M ( θ) = 𝐸 0ℓθ (u(0) , v(0) ) (S1.17) has the unique maximizer θ(0) .For the rate conclusion, θ(0) is an interior point, 𝜌 𝑦 is twice continuously differentiable with bounded derivatives in a neighbourhood of θ(0) , the negative population profile Hessian is positive definite there, the oracle empirical Hessian converges uniformly to its population counterpart in that neighbourhood, the oracle empirical profile score at θ(0) is 𝑂 𝑝 (𝑛 −1/20 ), and the fitted criterion satisfies its first-order condition. For a smooth finite-dimensional ratio learner, local strong curvature and Lipschitz score contributions give one route from (S1.24) to (S1.14) by the usual 𝑀 -estimator perturbation argument [Van der Vaart, 2000, Chap. 5]. For a flexible boosted-tree learner, both its intrinsic rate in (S1.13) and this coordinate-stability property are retained as high-level conditions. 
+
+Remark (A primitive route to averaged ratio consistency). A sufficient route to (S1.15)–(S1.16) is a standard support-and-tail condition. After the common rotation, suppose there are sets S𝑛 with target probability tending to one such that the ratio estimator is uniformly consistent on a vanishing neighbourhood of S𝑛 , the population ratios are uniformly continuous and bounded there, and 1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+1{( u(0) 
+
+> 𝑖
+
+, v(0) 
+
+> 𝑖
+
+) ∉ S𝑛 } max  
+
+> y∈ Y
+
+{LR 𝑖 (y) + cLR 𝑖 (y)} = 𝑜 𝑝 (1).
+
+Together with the coordinate error in (S1.24), a modulus-of-continuity argument yields (S1.15); boundedness on S𝑛 and the displayed tail condition give (S1.16). 24 S1.3 Transport and PCA-backend verification 
+
+Lemma S1.1 (Target-moment transport). Under Assumption 4, for every square-integrable measurable 
+
+𝑓 ,
+
+𝐸 𝑚 
+
+h
+
+𝜔 𝑚 (y(𝑚 ) ) 𝑓 {t(𝑚 ) 
+
+> 1
+
+, t(𝑚 ) }
+
+i
+
+= 𝐸 0
+
+h
+
+𝑓 {t(0) 
+
+> 1
+
+, t(𝑚, 0) }
+
+i
+
+.
+
+The same identity holds for measurable functions of the standardized scores (r, z).Proof. Condition on the finite outcome state. The factor 𝜔 𝑚 (y) cancels the source outcome probability and replaces it with the target probability; then use (S1.7). This is the usual importance-weighting identity under label shift [Lipton et al., 2018, Garg et al., 2020]. □
+
+Lemma S1.2 (PCA-backend verification and primitive rate). For each domain and observed block, let the population-centred feature rows be independent and identically distributed. Uniformly over domains, blocks and deterministic vectors a, suppose 
+
+∥⟨ x, a⟩∥ 𝜓 2 ≤ 𝐶 sg {var (⟨ x, a⟩)} 1/2
+
+for a fixed 𝐶 sg , and suppose the covariance operator norms are uniformly bounded. Write 𝑑 1 and 𝑑 𝑘 for the raw reference- and auxiliary-block dimensions, and define 𝚺 (𝑚 ) 
+
+> 𝑥, 1
+
+= var (x(𝑚 ) 
+
+> 1
+
+) and 𝚺 (𝑚 ) 
+
+> 𝑥,𝑘
+
+= var (x(𝑚 ) 
+
+> 𝑘
+
+). Suppose 
+
+𝑛 𝑚 /𝑁 → 𝜋 𝑚 ∈ ( 0, 1). If b𝚺 (𝑚 ) 
+
+> 𝑥, 1
+
+denotes the within-domain sample covariance, set b𝚺 1 = Í𝑀 𝑚 =0 (𝑛 𝑚 /𝑁 )b𝚺 (𝑚 ) 
+
+> 𝑥, 1
+
+.For the pooled reference block define 𝚺 1 = Í𝑀 𝑚 =0 𝜋 𝑚 𝚺 (𝑚 ) 
+
+> 𝑥, 1
+
+, let D1 be a fixed orthonormal basis of its leading 
+
+ℎ-dimensional eigenspace, and suppose its eigengap at ℎ is 𝛿 1 > 0. For auxiliary block (𝑚, 𝑘 ), let D(𝑚 ) 
+
+> 𝑘
+
+be a fixed orthonormal basis of the leading ℓ𝑘 -dimensional eigenspace of 𝚺 (𝑚 ) 
+
+> 𝑥,𝑘
+
+and suppose the corresponding eigengap is 𝛿 𝑘,𝑚 > 0. The bases are chosen to represent the population score orientations in Assumption 4; changing those bases only changes the rotations below. Suppose the population standardization covariances have minimum eigenvalue at least 𝑐 0 > 0. Choose one deterministic Δ𝑛 → 0 such that 
+
+max   
+
+> 1≤𝑚 ≤𝑀
+
+max  
+
+> y∈ Y
+
+| b𝜔 𝑚 (y) − 𝜔 𝑚 (y)| = 𝑂 𝑝 (Δ𝑛 ),
+
+√ℎ𝛿 1
+
+"
+
+max  
+
+> 0≤𝑚 ≤𝑀
+
+(√︂ 
+
+𝑑 1
+
+𝑛 𝑚 
+
++ 𝑑 1
+
+𝑛 𝑚 
+
+)
+
++ max  
+
+> 0≤𝑚 ≤𝑀
+
+𝑛 𝑚 
+
+𝑁 − 𝜋 𝑚 
+
+#
+
+= 𝑂 (Δ𝑛 ),
+
+max   
+
+> 0≤𝑚 ≤𝑀
+
+max  
+
+> 𝑘 ∈ A 𝑚 \{ 1}
+
+√ℓ𝑘 
+
+𝛿 𝑘,𝑚 
+
+(√︂ 
+
+𝑑 𝑘 
+
+𝑛 𝑚 
+
++ 𝑑 𝑘 
+
+𝑛 𝑚 
+
+)
+
+= 𝑂 (Δ𝑛 ), 𝑛 −1/2min = 𝑂 (Δ𝑛 ). (S1.18) 
+
+Then there are a common reference rotation Q𝑟 and domain–block rotations Q(𝑚 ) 
+
+> 𝑧,𝑘
+
+such that 
+
+max  
+
+> 𝑚
+
+𝑛 −1/2 
+
+> 𝑚
+
+∥bT(𝑚 ) 
+
+> 1
+
+− T(𝑚 ) 
+
+> 1
+
+Q𝑟 ∥F + max  
+
+> 𝑚,𝑘
+
+𝑛 −1/2 
+
+> 𝑚
+
+∥bT(𝑚 ) 
+
+> 𝑘
+
+− T(𝑚 ) 
+
+> 𝑘
+
+Q(𝑚 ) 
+
+> 𝑧,𝑘
+
+∥F = 𝑂 𝑝 (Δ𝑛 ). (S1.19) 
+
+After plug-in target-mixture standardization, every primitive event (S1.8) –(S1.12) holds with the single rate 
+
+𝑂 𝑝 (Δ𝑛 ). Thus the PCA backend verifies the stochastic part of Assumption 5 whenever Δ𝑛 → 0. Equivalently, controllability requires the weight error to be 𝑜 𝑝 (1) and each deterministic PCA, domain-proportion and sampling expression in (S1.18) to vanish; no downstream lemma imposes another stochastic requirement on 
+
+Δ𝑛 .Proof. Within each domain, sub-Gaussian covariance concentration gives 
+
+∥b𝚺 𝑥 − 𝚺 𝑥 ∥op = 𝑂 𝑝 {√︁ 𝑑 /𝑛 + 𝑑 /𝑛 },
+
+25 by Vershynin [2018, Theorem 4.7.1 and Exercise 4.7.3]. Decomposing b𝚺 1 − 𝚺 1 adds the displayed domain-proportion term. The population-gap Procrustes bound in Yu et al. [2015, Theorem 2] then gives a basis error of order √ℎ/𝛿 1 times the pooled covariance error, and analogously gives √ℓ𝑘 /𝛿 𝑘,𝑚 times the auxiliary covariance error. For a population-centred feature matrix X𝑐 ,
+
+𝑛 −1 ∥X𝑐 (bD − DQ )∥ 2F = tr {( bD − DQ )T b𝚺 𝑥 (bD − DQ )} ,
+
+so the basis rate gives (S1.19); sample centering has the same or a smaller order. Bounded overlap makes each normalized source weight 𝑂 (𝑛 −1 
+
+> 𝑚
+
+). Because Y is finite, the first line of (S1.18) perturbs a normalized weighted first or second moment by 𝑂 𝑝 (Δ𝑛 ). Raw-score recovery and empirical fluctuation are also 𝑂 𝑝 (Δ𝑛 ) by the remaining lines; for the fixed retained score dimensions, bounded fourth moments give the unperturbed empirical first- and second-moment fluctuation 𝑂 𝑝 (𝑛 −1/2min ). If symmetric positive-definite C and eC have minimum eigenvalue at least 𝑐 > 0, matrix-square-root functional calculus gives 
+
+∥eC−1/2 − C−1/2 ∥op ≤ 12𝑐 3/2 ∥eC − C∥op ;this follows from the resolvent integral for the inverse square root; see Higham [2008, Chap. 6]. This applies with probability tending to one because the corresponding population eigenvalues are at least 𝑐 0. Expanding the standardized scores, target CCA moments and source matrices b𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+and b𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+therefore gives all five primitive events at rate 𝑂 𝑝 (Δ𝑛 ). Standardization and moment estimation have thus been verified, not added as new terms. This is a backend verification, not a new PCA theorem. □
+
+Remark (Scope of the backend rate). Lemma S1.2 gives sufficient backend conditions. A robust covariance estimator, an effective-rank covariance bound under its own distributional conditions [Koltchinskii and Lounici, 2017], or a non-PCA backend may instead verify the same 𝑂 𝑝 (Δ𝑛 ) events. The weight condition in (S1.18) is separate from PCA. In particular, the MLLS bound of Garg et al. [2020, Theorem 3] separates a root-target-sample term from calibration error. Under its curvature conditions, root-order calibration error, root-order estimation of the source outcome probabilities and a smooth transformation to 𝜔 𝑚 verify the weight row of (S1.18). The practical calibration study of Alexandari et al. [2020] motivates an implementation but is not used as a rate theorem. 
+
+S1.4 Paired CCA, source moments and ridge maps 
+
+Lemma S1.3 (Paired regularized-CCA perturbation). Under the structural conditions of Assumption 5 and the target moment events (S1.9) –(S1.10) , there is one O ∈ O( 𝑟 0) such that 
+
+∥bA(0) − QT 
+
+> 𝑟
+
+A(0) O∥F + ∥ bB(0) − Q(0)T 
+
+> 𝑧
+
+B(0) O∥F = 𝑂 𝑝 {( 1 + 𝛿 −1CCA )Δ𝑛 }. (S1.20) 
+
+Proof. The inverse-square-root perturbation bound [Higham, 2008] and (S1.9)–(S1.10) imply 
+
+∥b𝚪 (0) − QT 
+
+> 𝑟
+
+𝚪 (0) Q(0) 
+
+> 𝑧
+
+∥op = 𝑂 𝑝 (Δ𝑛 ).
+
+Apply the population-gap eigenspace bound of Yu et al. [2015, Theorem 2] to the symmetric dilation  0 𝚪 (0) 
+
+> 𝚪 (0)T0
+
+
+
+. Its leading positive eigenvectors are the stacked pairs 2 −1/2 col (p𝑗 , q𝑗 ), so the theorem supplies one Procrustes matrix O for the joint eigenspace and therefore the same O on both CCA sides. This common-rotation conclusion comes from applying the perturbation theorem to one dilation rather than perturbing the two singular subspaces separately. Transforming back through the inverse square roots gives (S1.20). Wedin’s 26 theorem provides the classical singular-subspace background [Wedin, 1972], but the common rotation used here is the joint-dilation deduction just given. □
+
+Lemma S1.4 (Ridge propagation of one common rotation). Under Assumptions 4 and 5, let O be the rotation in Lemma S1.3. The population ridge map is equivariant: 
+
+h
+
+Q(𝑚 )T 
+
+> 𝑧
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+Q(𝑚 ) 
+
+> 𝑧
+
++ 𝜆 𝑚 I𝑑 𝑧,𝑚 
+
+i −1
+
+Q(𝑚 )T 
+
+> 𝑧
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+A(0) O = Q(𝑚 )T 
+
+> 𝑧
+
+G(𝑚 ) O. (S1.21) 
+
+Moreover, uniformly over the fixed source collection, 
+
+max  
+
+> 𝑚
+
+∥ bG(𝑚 ) − Q(𝑚 )T 
+
+> 𝑧
+
+G(𝑚 ) O∥F = 𝑂 𝑝 
+
+ 𝜆 −1 (1 + 𝛿 −1CCA ) + 𝜆 −2 Δ𝑛 
+
+
+
+. (S1.22) 
+
+The same O satisfies 
+
+∥bA(0) − QT 
+
+> 𝑟
+
+A(0) O∥F + max    
+
+> 2≤𝑘 ≤𝐾
+
+∥bB(0) 
+
+> 𝑘
+
+− Q(0)T 
+
+> 𝑧,𝑘
+
+B(0) 
+
+> 𝑘
+
+O∥F
+
++ max  
+
+> 𝑚
+
+max   
+
+> 𝑘 ∈ A 𝑚 \{ 1}
+
+∥ bG(𝑚 ) 
+
+> 𝑘
+
+− Q(𝑚 )T 
+
+> 𝑧,𝑘
+
+G(𝑚 ) 
+
+> 𝑘
+
+O∥F = 𝑂 𝑝 (Δ𝑛 ), (S1.23) max  
+
+> 0≤𝑚 ≤𝑀
+
+
+
+∥bU(𝑚 ) − U(𝑚 ) O∥F,𝑚 +∑︁  
+
+> 𝑘 ∈ A 𝑚 \{ 1}
+
+∥bV(𝑚 ) 
+
+> 𝑘
+
+− V(𝑚 ) 
+
+> 𝑘
+
+O∥F,𝑚 
+
+
+
+= 𝑂 𝑝 (Δ𝑛 ). (S1.24) 
+
+Here and below, the simpler 𝑂 𝑝 (Δ𝑛 ) form uses the fixed positive CCA gap and fixed ridge lower bound in Assumption 5; equation (S1.22) shows their explicit contribution. Proof. Differentiating the population criterion in (S1.3) gives 
+
+{𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑚 I𝑑 𝑧,𝑚 }G(𝑚 ) = 𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+A(0) . (S1.25) Its Hessian is 2 I𝑟 0 ⊗ { 𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑚 I𝑑 𝑧,𝑚 }, whose smallest eigenvalue is at least 2 𝜆 . Hence the criterion is strictly convex and its unique minimizer is (S1.5). If the auxiliary scores are re-expressed through Q(𝑚 ) 
+
+> 𝑧
+
+and the target anchor through O, then the normal-equation moments become 
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+↦ → Q(𝑚 )T 
+
+> 𝑧
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+Q(𝑚 ) 
+
+> 𝑧
+
+, 𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+A(0) ↦ → Q(𝑚 )T 
+
+> 𝑧
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+A(0) O.
+
+Substituting these two expressions into the closed-form solution and using Q(𝑚 ) 
+
+> 𝑧
+
+Q(𝑚 )T 
+
+> 𝑧
+
+= I𝑑 𝑧,𝑚 gives 
+
+h
+
+Q(𝑚 )T 
+
+> 𝑧
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+Q(𝑚 ) 
+
+> 𝑧
+
++ 𝜆 𝑚 I𝑑 𝑧,𝑚 
+
+i −1
+
+Q(𝑚 )T 
+
+> 𝑧
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+A(0) O
+
+= Q(𝑚 )T 
+
+> 𝑧
+
+{𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑚 I𝑑 𝑧,𝑚 }−1𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+A(0) O = Q(𝑚 )T 
+
+> 𝑧
+
+G(𝑚 ) O,
+
+which proves (S1.21). Thus ridge regularization preserves, rather than creates, the common right rotation inherited from the target CCA anchor. For the empirical perturbation, set 
+
+bM = b𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑚 I𝑑 𝑧,𝑚 , M = Q(𝑚 )T 
+
+> 𝑧
+
+{𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
++ 𝜆 𝑚 I𝑑 𝑧,𝑚 }Q(𝑚 ) 
+
+> 𝑧
+
+,
+
+Both inverse operator norms are at most 𝜆 −1. By (S1.12) and Lemma S1.3, max 
+
+> 𝑚
+
+b𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+bA(0) − Q(𝑚 )T 
+
+> 𝑧
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+A(0) O F = 𝑂 𝑝 {( 1 + 𝛿 −1CCA )Δ𝑛 }. (S1.26) 27 Using (S1.21) and adding and subtracting the population right-hand side gives 
+
+bG(𝑚 ) − Q(𝑚 )T 
+
+> 𝑧
+
+G(𝑚 ) O = bM−1 nb𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+bA(0) − Q(𝑚 )T 
+
+> 𝑧
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+A(0) O
+
+o
+
++ ( bM−1 − M−1)Q(𝑚 )T 
+
+> 𝑧
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑟
+
+A(0) O. (S1.27) The resolvent identity bM−1 − M−1 = bM−1 (M − bM)M−1 gives 
+
+∥ bM−1 − M−1 ∥op ≤ 𝜆 −2 ∥b𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+− Q(𝑚 )T 
+
+> 𝑧
+
+𝚺 (𝑚 ) 
+
+> 𝑧𝑧
+
+Q(𝑚 ) 
+
+> 𝑧
+
+∥op . (S1.28) Equations (S1.26) and (S1.28), bounded population moments and the exact decomposition prove (S1.22). Taking row blocks gives the coefficient bound in (S1.23); the target blocks follow from Lemma S1.3. For fitted coordinates, the two relevant decompositions are 
+
+bU(𝑚 ) − U(𝑚 ) O = (bR(𝑚 ) − R(𝑚 ) Q𝑟 )bA(0) + R(𝑚 ) Q𝑟 (bA(0) − QT 
+
+> 𝑟
+
+A(0) O),
+
+bV(𝑚 ) 
+
+> 𝑘
+
+− V(𝑚 ) 
+
+> 𝑘
+
+O = (bZ(𝑚 ) 
+
+> 𝑘
+
+− Z(𝑚 ) 
+
+> 𝑘
+
+Q(𝑚 ) 
+
+> 𝑧,𝑘
+
+) bG(𝑚 ) 
+
+> 𝑘
+
++ Z(𝑚 ) 
+
+> 𝑘
+
+Q(𝑚 ) 
+
+> 𝑧,𝑘
+
+(bG(𝑚 ) 
+
+> 𝑘
+
+− Q(𝑚 )T 
+
+> 𝑧,𝑘
+
+G(𝑚 ) 
+
+> 𝑘
+
+O),
+
+with G(𝑚 ) 
+
+> 𝑘
+
+replaced by B(0) 
+
+> 𝑘
+
+for a target auxiliary block. The primitive score event, bounded second moments and the coefficient bounds make each term 𝑂 𝑝 (Δ𝑛 ) in ∥ · ∥ F,𝑚 . Summing over the fixed number of blocks proves (S1.24). The nuisance Q rotations cancel in the products, while the one right rotation O remains. The displayed resolvent identity is the only additional stability argument needed for ridge regression. □
+
+Remark (What common orientation does not prove). Equation (S1.24) compares each fitted block with the population block defined by its own map. It neither asserts B(0) 
+
+> 𝑘
+
+= G(𝑚 ) 
+
+> 𝑘
+
+nor transports a source class-conditional density to the target. That distributional step is the separate likelihood-ratio condition in Assumption 6. 
+
+Lemma S1.5 (Rotation invariance of the conditional distribution). For generic target subject-level coordinates, write c = col (u, v2, . . . , v𝐾 ) and define 
+
+cO = col (OTu, OTv2, . . . , OTv𝐾 ). (S1.29) 
+
+Then 
+
+𝜎 (c) = 𝜎 (cO), 𝑝 O 
+
+> 0
+
+(y | cO) = 𝑝 0 (y | c) almost surely , (S1.30) 
+
+where 𝑝 O 
+
+> 0
+
+denotes the same target law expressed in the rotated coordinates. If 𝑓 y and 𝑓 0 are target conditional Lebesgue densities of c given outcome states y and 0, respectively, then their rotated-coordinate likelihood ratio satisfies 
+
+LR (0),O 
+
+> U,V|Y
+
+(cO | y) = LR (0) 
+
+> U,V|Y
+
+(c | y). (S1.31) 
+
+Consequently, the population profile criterion and the target posterior are unchanged by the residual common rotation. Proof. Applying O blockwise is an invertible Borel map, so c and cO generate the same sigma-field. This proves (S1.30). Under a change of variables, the numerator and denominator densities in the likelihood ratio acquire the same Jacobian, which cancels and gives (S1.31). Substitution into the profile criterion and Bayes formula proves the final claim. □
+
+28 S1.5 Profile and target conditional-outcome consistency 
+
+Remark (A sufficient identification condition). Let 𝑓 y be the density of the target aligned coordinates conditional on outcome y. If 𝑓 0 > 0, the finite collection { 𝑓 y} is linearly independent up to null sets, and θ ↦ → { 𝜌 𝑦 (y; θ)} is injective, then the unique-maximizer clause in Assumption 6 holds. Indeed, with 
+
+𝑓 θ = Íy 𝜌 𝑦 (y; θ) 𝑓 y,
+
+M ( θ) − M ( θ(0) ) = − KL ( 𝑓 θ(0) , 𝑓 θ) ≤ 0,
+
+and equality identifies first the mixture probabilities and then θ(0) . Linear independence is sufficient, not necessary. Define 
+
+M0 
+
+> 𝑛
+
+(θ) = 1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+log 
+
+∑︁ y∈ Y 
+
+𝜌 𝑦 (y; θ)LR 𝑖 (y)
+
+
+
+,
+
+cM𝑛 (θ) = 1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+log 
+
+∑︁ y∈ Y 
+
+𝜌 𝑦 (y; θ) cLR 𝑖 (y)
+
+
+
+.
+
+Define the target conditional outcome distribution 
+
+𝑝 0 (y | u, v) = 𝜌 𝑦 (y; θ(0) )LR (0) 
+
+> U,V|Y
+
+(u, v | y)
+
+Íy′ ∈ Y 𝜌 𝑦 (y′; θ(0) )LR (0) 
+
+> U,V|Y
+
+(u, v | y′) .
+
+Theorem S1.6 (Target profile and conditional-outcome rate). Under Assumptions 4–6, if cM𝑛 is maxi-mized up to 𝑜 𝑝 (1), then bθ(0) →𝑝 θ(0) and 
+
+1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+∑︁ y∈ Y 
+
+b𝑝 𝑖 (y) − 𝑝 0{y | u(0) 
+
+> 𝑖
+
+, v(0) 
+
+> 𝑖
+
+} 𝑝 
+
+−→ 0. (S1.32) 
+
+Under the local rate conditions in Assumption 6, 
+
+∥ bθ(0) − θ(0) ∥2 + 1
+
+𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =1
+
+∑︁ y∈ Y 
+
+b𝑝 𝑖 (y) − 𝑝 0{y | u(0) 
+
+> 𝑖
+
+, v(0) 
+
+> 𝑖
+
+}
+
+= 𝑂 𝑝 {𝑛 −1/20 + 𝜅 𝑛 + Δ𝑛 }. (S1.33) 
+
+No relative ordering is required. If 𝜅 𝑛 = 𝑂 (Δ𝑛 ), alignment is the slower nuisance component; if Δ𝑛 = 𝑂 (𝜅 𝑛 ),likelihood-ratio learning is slower. The sum is retained to show provenance, but 𝜅 𝑛 + Δ𝑛 has the same order as max (𝜅 𝑛 , Δ𝑛 ). The benchmark is inverse square root: root-sample-size rates mean √𝑛 min Δ𝑛 = 𝑂 (1) and √𝑁 𝑠 𝜅 𝑛 = 𝑂 (1); divergence of either scaled sequence means slower convergence, whereas convergence to zero means faster convergence. For example, when 𝑑 𝑘 /𝑛 𝑚 → 0, the leading auxiliary-PCA term in (S1.18) 
+
+is √ℓ𝑘 𝑑 𝑘 /( 𝛿 𝑘,𝑚 
+
+√𝑛 𝑚 ), so growing dimension or a shrinking eigengap can make Δ𝑛 larger than 𝑛 −1/2 
+
+> 𝑚
+
+. For the PCA backend, the admissible Δ𝑛 is given explicitly by (S1.18) . In the fixed-dimensional case with fixed eigengaps, root-𝑛 min weight and domain-proportion rates give Δ𝑛 = 𝑂 (𝑛 −1/2min ); the weight-rate route is described after Lemma S1.2. If, in addition, a correctly specified smooth finite-dimensional ratio procedure has 𝜅 𝑛 = 𝑂 (𝑁 −1/2 
+
+> 𝑠
+
+) by regular parametric 𝑀 -estimation [Van der Vaart, 2000, Theorem 5.23], the rate in 
+
+(S1.33) becomes 
+
+𝑂 𝑝 {𝑛 −1/20 + 𝑁 −1/2 
+
+> 𝑠
+
++ 𝑛 −1/2min }. (S1.34) 29 Because 𝑛 min ≤ 𝑛 0 and 𝑛 min ≤ 𝑁 𝑠 , this is also 𝑂 𝑝 (𝑛 −1/2min ). Under the positive limiting domain proportions imposed in Lemma S1.2, 𝑛 min ≍ 𝑛 0 ≍ 𝑁 𝑠 ≍ 𝑁 , so the same specialization can be written 𝑂 𝑝 (𝑁 −1/2). This specialization is conditional and is not an XGBoost rate: for boosted trees, 𝜅 𝑛 and coordinate stability remain the two learner-specific clauses in Assumption 6. The displayed orders do not determine a numerical constant; that constant depends on covariance and sub-Gaussian scales, inverse eigengaps, the ridge lower bound, ratio envelopes and profile curvature. Proof. The baseline ratio equals one and its outcome probability is uniformly positive, so every mixture inside the logarithm is bounded away from zero. Hence (S1.15) implies sup 
+
+> θ∈Θ
+
+| cM𝑛 (θ) − M 0 
+
+> 𝑛
+
+(θ)| = 𝑂 𝑝 (𝜅 𝑛 + Δ𝑛 ) = 𝑜 𝑝 (1).
+
+The Glivenko–Cantelli and unique-maximizer clauses and the argmax theorem give parameter consistency [Van der Vaart, 2000, Theorem 5.7]. For the rate, bounded first and second derivatives of 𝜌 𝑦 make the profile score and Hessian locally Lipschitz in the finite ratio vector. Thus the fitted score at θ(0) is the oracle score plus 𝑂 𝑝 (𝜅 𝑛 + Δ𝑛 ). A Taylor expansion of the fitted first-order condition around θ(0) , together with the positive population curvature, yields 
+
+∥ bθ(0) − θ(0) ∥2 = 𝑂 𝑝 {𝑛 −1/20 + 𝜅 𝑛 + Δ𝑛 }.
+
+The finite-state Bayes normalization is also Lipschitz. Its average error is bounded by a constant times 
+
+∥ bθ(0) − θ(0) ∥2
+
+(
+
+1
+
+𝑛 0∑︁ 𝑖 
+
+max 
+
+> y∈ Y
+
+cLR 𝑖 (y)
+
+)
+
++ 1
+
+𝑛 0∑︁ 𝑖 
+
+max  
+
+> y∈ Y
+
+| cLR 𝑖 (y) − LR 𝑖 (y)| .
+
+Equations (S1.15)–(S1.16) prove (S1.33); consistency follows as a special case. Lemma S1.5 removes the common rotation. The final two specializations follow by substituting the displayed PCA and ratio rates. □
+
+Remark (Exact and working ratios). The theorem concerns the true target distribution given the aligned coordinates. If the tempered composite ratio used in practice is not the exact joint ratio, the identical proof yields consistency for the corresponding working conditional distribution. This distinction is stated explicitly so that a working composite model is not presented as an exact likelihood-ratio identity. 
+
+# S2 Additional simulation details and results 
+
+S2.1 Main multivariate simulation 
+
+Each replication contained one target domain, indexed by 0, and five source domains, indexed by 𝑚 = 1, . . . , 5, with 400 subjects per domain. The target observed all five modalities. Each source observed the shared reference modality and a prespecified subset of the four auxiliary modalities. Target gold-standard outcomes were hidden from all preprocessing, fitting and tuning steps and were merged back only after the predictions had been fixed. The target outcome was a three-dimensional binary vector. Its marginal probabilities were 
+
+π(0) = (0.22 , 0.36 , 0.40 )T,
+
+and the Ising pairwise interaction parameters were (0.45 , 0.35 , 0.30 ). For source 𝑚 , the marginal probabilities were 
+
+π(𝑚 ) = clip {π(0) + 𝛿 c𝑚 , 10 −4, 1 − 10 −4}, (S2.1) 30 where clipping was componentwise and 
+
+©«
+
+cT
+
+> 1
+
+cT
+
+> 2
+
+cT
+
+> 3
+
+cT
+
+> 4
+
+cT
+
+> 5
+
+ª®®®®®¬
+
+=
+
+©«
+
+0.60 0.48 0.36 0.80 0.64 0.48 1.00 0.80 0.60 1.20 0.96 0.72 1.40 1.12 0.84 
+
+ª®®®®®¬
+
+.
+
+For each source, the Ising main effects were solved numerically to attain the marginals in (S2.1), while the pairwise interactions were held fixed. Hence 𝛿 changed the joint source outcome distribution but not the conditional feature law given the outcome. Let ey = 2y − 1 and 
+
+q(y) = (𝑒 𝑦 1𝑒 𝑦 2, 𝑒 𝑦 1𝑒 𝑦 3, 𝑒 𝑦 2𝑒 𝑦 3)T .
+
+Independently generated matrices P, Q ∈ R5×3 with orthonormal columns were shared by the reference and auxiliary latent factors. State-specific Gaussian template matrices were rescaled across the eight outcome states to Frobenius norms 0.04 and 0.13. The conditional latent means were 
+
+ψ𝑢 (y) = P diag (0.48 , 0.43 , 0.39 )ey + Q diag (0.03 , 0.03 , 0.03 )q(y) + g𝑢 (y),
+
+ψ𝑣 (y) = P diag (1.34 , 1.20 , 1.07 )ey + Q diag (0.33 , 0.33 , 0.33 )q(y) + g𝑣 (y).
+
+Conditional on y, the two latent factors were independent: 
+
+eu = ψ𝑢 (y) + ξ𝑢 , ev = ψ𝑣 (y) + ξ𝑣 , ξ𝑢 , ξ𝑣 ∼ 𝑁 5 (0, 0.70 2I).
+
+The observed dimensions were (𝑑 1, . . . , 𝑑 5) = (180 , 150 , 150 , 130 , 130 ). Auxiliary modalities 2, 3, 4 and 5 retained latent coordinates {1, 2, 3}, {2, 3, 4}, {3, 4, 5} and {1, 4, 5}, respectively. With M𝑘 denoting the corresponding diagonal mask, 
+
+x(𝑚 ) 
+
+> 1
+
+= L1eu + ϵ(𝑚 ) 
+
+> 1
+
+, x(𝑚 ) 
+
+> 𝑘
+
+= L(𝑚 ) 
+
+> 𝑘
+
+M𝑘 ev + ϵ(𝑚 ) 
+
+> 𝑘
+
+, 𝑘 = 2, . . . , 5.
+
+The reference loading L1 was exactly shared across domains. The measurement-error standard deviations were 0.26 for the reference modality and 0.41 for each auxiliary modality. For auxiliary modality 𝑘 , let L𝑘 be a shared orthonormal loading and eL(𝑚 ) 
+
+> 𝑘
+
+an independently generated orthonormal loading. From a Gaussian matrix A(𝑚 ) 
+
+> 𝑘
+
+, define 
+
+R(𝑚 ) 
+
+> 𝑘
+
+(𝜀 rot ) = qf 
+
+
+
+I + 𝜀 rot 
+
+√5 (A(𝑚 ) 
+
+> 𝑘
+
+− A(𝑚 )T 
+
+> 𝑘
+
+)
+
+
+
+,
+
+and set 
+
+L(𝑚 ) 
+
+> 𝑘
+
+= qf 
+
+n
+
+0.5L𝑘 R(𝑚 ) 
+
+> 𝑘
+
+(𝜀 rot ) + 0.5eL(𝑚 )
+
+> 𝑘
+
+o
+
+.
+
+Here qf denotes the orthonormal factor from a QR decomposition. No loading signs were reversed. Thus 
+
+𝜀 rot controlled the rotation of the shared loading component, while the independent subspace component retained weight 0.5. For the label-shift, rotation and source-label sweeps, the source modality sets were 
+
+A1 = {1, 2}, A2 = {1, 3}, A3 = {1, 3, 4, 5}, A4 = {1, 2, 5}, A5 = {1, 4, 5}.
+
+A source gold-standard outcome was independently hidden with probability 𝑝 lab , with a deterministic repair only if a source otherwise contained no observed outcome. The quantity 𝑝 mod indexed the following five fixed source-pattern configurations rather than independent modality deletion: 31 𝑝 mod A1 A2 A3 A4 A5                                                                 
+
+> 0.0 {1,2}{1,3}{1,3,4,5}{1,2,5}{1,4,5}
+> 0.1 {1,2}{1,3}{1,3,4,5}{1,2,5}{1,4}
+> 0.2 {1,2}{1,3}{1,3,4,5}{1,2}{1,4,5}
+> 0.3 {1,2}{1,3}{1,3,4}{1,2,5}{1,4,5}
+> 0.4 {1,2}{1,3}{1,3,4}{1,2,5}{1,4}
+
+Because these configurations are nonnested, increasing 𝑝 mod does not necessarily remove more information monotonically. The four one-factor-at-a-time sweeps were 
+
+𝛿 ∈ { 0, 0.08 , 0.16 , 0.24 , 0.32 , 0.40 }, 𝜀 rot ∈ { 0, 0.2, 0.4, 0.6, 0.8, 1.0},𝑝 lab ∈ { 0, 0.1, 0.2, 0.3, 0.4, 0.5}, 𝑝 mod ∈ { 0, 0.1, 0.2, 0.3, 0.4}.
+
+The default values were 𝛿 = 0.24, 𝜀 rot = 0.50, 𝑝 lab = 0.35 and 𝑝 mod = 0. Only one quantity varied in each sweep. Within a setting, every method was evaluated on the same generated replication; the seed schedule was also matched across the settings of a sweep. The proposed implementation centered every feature block within domain, used rank-five pooled PCA for the reference modality and rank-three within-domain PCA for each auxiliary modality, and used the uncentered reference projection only in the initial target outcome-distribution calibration. After calibration, source observations were reweighted to the estimated target outcome distribution. The code then performed its outcome-reweighted blockwise alignment followed by a rank-five single-joint target CCA anchor and the corresponding source ridge regression maps. The CCA and source regression penalties were both 10 −4.Source-overlap augmentation was enabled: a source pattern A𝑚 could borrow records from a donor source whose observed pattern contained A𝑚 , after the donor record was restricted to the requested blocks. The reference density-ratio model used XGBoost with 200 trees, depth four, learning rate 0.05, row and column sampling fractions 0.9, and ridge penalty one [Chen and Guestrin, 2016]. The joint ratio model was multinomial logistic regression. Its penalty parameter was selected from {0.2, 0.5, 1, 2} by threefold group validation with source domains as folds. The auxiliary contribution was retained only if it improved validation log loss and was then multiplied by 0.5. The final target update used the likelihood-based label-shift formulation [Saerens et al., 2002, Alexandari et al., 2020, Garg et al., 2020]. It allowed at most 120 iterations, tolerance 10 −5 and initial damping 0.4, with damping reduced as far as 0.05 to preserve a nondecreasing profile likelihood. If the iteration failed to converge or moved the estimated target marginal probabilities by more than 0.15 in 𝐿 1 distance from the initial reference-based estimates, the final posterior was exponentially tilted back to those initial marginals. This target-outcome-free safeguard was activated in 94.8%, 94.2%, 96.0% and 95.0% of the replications in the label-shift, rotation, label-missingness and modality-pattern sweeps, respectively. The reported results therefore characterize the stabilized target update rather than unrestricted EM. The comparator set was as follows. 
+
+• Raw-X XGBoost pooled labeled source rows, concatenated the five raw modality blocks, represented an absent source block by missing values, and appended four block-availability indicators. It used 50 trees, depth three, learning rate 0.05, row and column sampling fractions 0.9, and ridge penalty one. It performed no source reweighting, alignment or target adaptation [Chen and Guestrin, 2016]. 
+
+• Raw-X LASSO used the same pooled labeled source rows and raw block layout. For each of the three binary outcomes, all-source-missing columns were removed, the remaining missing entries were median-imputed using source data with automatically generated missingness indicators, and the features were standardized. An 𝐿 1-penalized logistic model selected 𝐶 from 12 logarithmically spaced values between 10 −3 and 10 2 by up to fivefold stratified cross-validation using negative Brier score, followed 32 by SAGA fitting with 4000 maximum iterations and tolerance 10 −3. The three marginal probabilities were combined through their independent product to obtain the eight-state distribution. No target label or adaptation step was used [Tibshirani, 1996]. 
+
+• Direct transfer used local PCA scores, a pooled source outcome model and no cross-domain alignment or target update. Orthogonal transfer used local reference PCA and subset-unweighted Procrustes alignment on labeled source observations, without target calibration [Sch¨ onemann, 1966]. 
+
+• RGCCA used rank five, 𝜏 = 0.5 and ridge 10 −4 [Tenenhaus and Tenenhaus, 2011]; BONMI used rank 12 [Zhou et al., 2023]. Neither procedure used target outcomes or the proposed target update. 
+
+• Target-only PCA–EM fitted PCA in the target and separate two-component Gaussian mixtures to its first three principal-component scores [Jolliffe and Cadima, 2016, Dempster et al., 1977]. It used no source data and no target outcome. Macro-AUC was the average of the three componentwise AUCs. Target MSE was MSE = 13𝑛 0
+
+> 𝑛 0
+
+∑︁ 
+
+> 𝑖 =13
+
+∑︁ 
+
+> 𝑎 =1
+
+{ b𝑝 (0) 
+
+> 𝑖𝑎
+
+− 𝑦 (0) 
+
+> 𝑖𝑎
+
+}2.
+
+Higher macro-AUC and lower MSE were preferred. 
+
+S2.2 Main-simulation results 
+
+Across the 23 settings, the proposed method attained average macro-AUC 0.9269 and average MSE 0.1003. Relative to Raw-X XGBoost, this corresponds to a 20.3% increase in macro-AUC and a 51.8% reduction in MSE. Relative to Raw-X LASSO, the corresponding changes were 21.0% and 51.9%. Raw-X XGBoost and Raw-X LASSO were nearly tied overall: the seed-clustered paired XGBoost-minus-LASSO AUC difference was 0.0045 (95% Monte Carlo interval −0.0066 to 0.0157), and the LASSO-minus-XGBoost MSE difference was 0.0006 ( −0.0103 to 0.0114). Thus, the experiment does not support a stable overall advantage of the nonlinear tree learner over the sparse linear learner. The proposed method had the largest macro-AUC and smallest MSE in 22 of the 23 settings. The one exception is informative: at 𝜀 rot = 0, Raw-X LASSO achieved macro-AUC 0.9557 and MSE 0.0795, compared with 0.9369 and 0.0943 for the proposed method. When the source auxiliary coordinate systems were not rotated, a sparse raw-feature model could exploit the nearly shared linear structure directly. Its performance deteriorated with rotation, reaching macro-AUC 0.7329 and MSE 0.2288 at 𝜀 rot = 1, whereas the proposed method remained at 0.9297 and 0.0983. This exception therefore sharpens, rather than weakens, the interpretation of the alignment experiment. The label-shift trajectory most clearly separates ranking from probability calibration. The proposed macro-AUC remained between 0.9270 and 0.9323, while Raw-X XGBoost MSE increased from 0.1820 at 
+
+𝛿 = 0 to 0.2546 at 𝛿 = 0.40. At the largest shift, the proposed method had 21.7% higher macro-AUC and 59.5% lower MSE than Raw-X XGBoost. Across the rotation sweep, the proposed macro-AUC ranged from 0.9245 to 0.9369 and its MSE from 0.0943 to 0.1035. Under source-label missingness, degradation was gradual; at 𝑝 lab = 0.50, macro-AUC was 0.9198 and MSE was 0.1054. The modality-pattern results were nonmonotone because 𝑝 mod labels the nonnested patterns listed above rather than an ordered deletion probability. 
+
+S2.3 Surrogate-assisted simulation: Design and methods 
+
+The surrogate experiment used a binary restriction of the main data-generating mechanism. It retained one target and five source domains, the same five raw modality dimensions and source modality patterns, the 33 Table S1: Setting-equal summaries corresponding to the radar panels of Figure 2 in the main paper. Each sweep column averages its setting-level Monte Carlo means, and the Overall column averages all 23 settings. Higher macro-AUC and lower MSE are preferred; the best point estimate in each column is shown in bold. 
+
+## Method Overall Label shift Rotation Label missingness Modality pattern 
+
+## Panel A: Target macro-AUC 
+
+## Proposed 0.9269 0.9287 0.9299 0.9289 0.9187 
+
+## Raw-X XGBoost 0.7707 0.7667 0.7862 0.7666 0.7617 Raw-X LASSO 0.7661 0.7603 0.7902 0.7560 0.7563 Orthogonal 0.6469 0.6633 0.6411 0.6324 0.6517 BONMI 0.6437 0.6453 0.6313 0.6472 0.6521 RGCCA 0.6157 0.6124 0.6196 0.6049 0.6278 Direct 0.5809 0.5933 0.5612 0.5778 0.5935 Target-only 0.5119 0.5126 0.5110 0.5126 0.5112 
+
+## Panel B: Target MSE 
+
+## Proposed 0.1003 0.0996 0.0988 0.0986 0.1051 
+
+## Raw-X XGBoost 0.2080 0.2090 0.2033 0.2090 0.2114 Raw-X LASSO 0.2086 0.2109 0.1922 0.2166 0.2158 Orthogonal 0.2636 0.2540 0.2650 0.2705 0.2651 BONMI 0.2928 0.2860 0.3017 0.2923 0.2908 RGCCA 0.2694 0.2682 0.2700 0.2734 0.2653 Direct 0.2785 0.2721 0.2862 0.2804 0.2745 Target-only 0.3156 0.3156 0.3149 0.3156 0.3164 
+
+same rank-deficient auxiliary coordinate sets, reference and auxiliary measurement-error standard deviations 0.26 and 0.41, latent-noise standard deviation 0.70, auxiliary rotation 𝜀 rot = 0.50, and independent loading-subspace weight 0.5. The per-domain sample size varied over 
+
+{25 , 50 , 100 , 150 , 200 , 400 , 800 , 1600 , 3200 , 6400 },
+
+with 100 replications at each value. The target event prevalence was 0.22. The five source prevalences were 
+
+𝜋 (𝑚 ) = clip {0.22 + 0.24 𝑐 𝑚 , 0.05 , 0.95 }, (𝑐 1, . . . , 𝑐 5) = (0.6, 0.8, 1.0, 1.2, 1.4),
+
+which gives (0.364 , 0.412 , 0.460 , 0.508 , 0.556 ). A random unit direction a ∈ R5 was shared by the reference and auxiliary latent factors: 
+
+eu = 0.48 (2𝑌 − 1)a + ξ𝑢 , ev = 1.34 (2𝑌 − 1)a + ξ𝑣 , ξ𝑢 , ξ𝑣 ∼ 𝑁 5 (0, 0.70 2I).
+
+A continuous surrogate was observed only in the sources. With Δ = 2Φ−1 (0.80 ),
+
+𝑆 | 𝑌 = 𝑦 ∼ 𝑁 {( 2𝑦 − 1)Δ/2, 1}.
+
+34 Table S2: Joint label shift. Entries are Monte Carlo means with Monte Carlo standard errors in parentheses from 100 replications at each setting. Higher macro-AUC and lower MSE are preferred; the best point estimate in each column is shown in bold.                                                                                                                   
+
+> Method 𝛿 =0𝛿 =0.08 𝛿 =0.16 𝛿 =0.24 𝛿 =0.32 𝛿 =0.4
+> Panel A: Target macro-AUC
+> Proposed 0.9283 (0.0035) 0.9280 (0.0030) 0.9323 (0.0028) 0.9273 (0.0031) 0.9292 (0.0032) 0.9270 (0.0033)
+> Raw-X XGBoost 0.7678 (0.0095) 0.7705 (0.0091) 0.7700 (0.0091) 0.7670 (0.0093) 0.7628 (0.0096) 0.7617 (0.0090) Raw-X LASSO 0.7648 (0.0122) 0.7651 (0.0119) 0.7591 (0.0125) 0.7549 (0.0126) 0.7600 (0.0124) 0.7580 (0.0124) Orthogonal 0.6568 (0.0266) 0.6659 (0.0266) 0.6784 (0.0269) 0.6438 (0.0269) 0.6669 (0.0277) 0.6678 (0.0282) BONMI 0.6432 (0.0248) 0.6475 (0.0244) 0.6507 (0.0247) 0.6475 (0.0229) 0.6323 (0.0240) 0.6508 (0.0239) RGCCA 0.6283 (0.0231) 0.6036 (0.0228) 0.6227 (0.0223) 0.6041 (0.0219) 0.6033 (0.0230) 0.6122 (0.0233) Direct 0.6007 (0.0255) 0.5970 (0.0256) 0.6086 (0.0248) 0.5791 (0.0257) 0.5847 (0.0259) 0.5898 (0.0250) Target-only 0.5126 (0.0129) 0.5126 (0.0129) 0.5126 (0.0129) 0.5126 (0.0129) 0.5126 (0.0129) 0.5126 (0.0129)
+> Panel B: Target MSE
+> Proposed 0.0992 (0.0022) 0.0991 (0.0022) 0.0956 (0.0022) 0.1008 (0.0024) 0.0997 (0.0023) 0.1031 (0.0025)
+> Raw-X XGBoost 0.1820 (0.0018) 0.1852 (0.0018) 0.1946 (0.0019) 0.2091 (0.0021) 0.2283 (0.0022) 0.2546 (0.0023) Raw-X LASSO 0.2039 (0.0073) 0.2075 (0.0074) 0.2134 (0.0081) 0.2168 (0.0081) 0.2122 (0.0077) 0.2116 (0.0075) Orthogonal 0.2006 (0.0088) 0.2059 (0.0100) 0.2208 (0.0112) 0.2651 (0.0118) 0.2924 (0.0119) 0.3395 (0.0112) BONMI 0.2369 (0.0125) 0.2474 (0.0127) 0.2661 (0.0134) 0.2917 (0.0129) 0.3258 (0.0135) 0.3483 (0.0130) RGCCA 0.2123 (0.0086) 0.2293 (0.0090) 0.2399 (0.0091) 0.2733 (0.0092) 0.3069 (0.0095) 0.3477 (0.0093) Direct 0.2150 (0.0076) 0.2243 (0.0089) 0.2384 (0.0093) 0.2793 (0.0098) 0.3139 (0.0095) 0.3617 (0.0085) Target-only 0.3156 (0.0069) 0.3156 (0.0069) 0.3156 (0.0069) 0.3156 (0.0069) 0.3156 (0.0069) 0.3156 (0.0069)
+
+Neither target 𝑌 nor target 𝑆 was available during fitting. The surrogate-based variants used pooled rank-five reference PCA, within-domain rank-three auxiliary PCA, a two-component Gaussian mixture for the source surrogate distribution, and XGBoost surrogate regression with 60 trees, depth two, learning rate 0.04, row and column sampling fractions 0.9, ridge penalty one and minimum child weight five. The methods were defined as follows. 
+
+• Proposed (no 𝑌 ) used no source gold-standard labels. A reference-only surrogate bridge initialized the target prevalence. Within each source, a pre-match-up regression of 𝑆 on the reference and available auxiliary scores generated working outcome probabilities and expected label-shift weights. These weights entered the reference-anchored match-up, after which a pooled aligned surrogate bridge produced the target likelihood ratio. 
+
+• Proposed (semi) used exactly the same weights and aligned representation as Proposed (no 𝑌 ). ABernoulli 20% subset of source gold-standard outcomes was used only to add a monotone intercept correction to the final working probability. The calibration was activated only when the pooled gold subset contained at least 150 observations and both outcome classes; its shrinkage parameter was 10. Consequently, this variant has exactly the same AUC as Proposed (no 𝑌 ), but can improve MSE. 
+
+• Reference-only used the same source surrogate information but excluded all auxiliary alignment and transfer terms. Direct full-𝑌 used all source gold-standard outcomes with the reference representation but without target calibration or cross-domain alignment. Orthogonal full-𝑌 used all source gold-standard outcomes and an unweighted orthogonal alignment, but not the target CCA anchor. Proposed full-𝑌 used all source gold-standard outcomes in the complete target-calibrated reference-anchored procedure and serves as the full-label proposed benchmark. 
+
+• The final Vanilla XGBoost and Vanilla LASSO baselines pooled all five sources by row and concatenated all five raw modality blocks, with an absent source block represented by missing values and no source-35 Table S3: Auxiliary loading rotation. Entries are Monte Carlo means with Monte Carlo standard errors in parentheses from 100 replications at each setting. Higher macro-AUC and lower MSE are preferred; the best point estimate in each column is shown in bold.                                                                                                                   
+
+> Method 𝜀 rot =0𝜀 rot =0.2𝜀 rot =0.4𝜀 rot =0.6𝜀 rot =0.8𝜀 rot =1
+> Panel A: Target macro-AUC
+> Proposed 0.9369 (0.0029) 0.9245 (0.0037) 0.9299 (0.0027) 0.9272 (0.0031) 0.9311 (0.0026) 0.9297 (0.0032)
+> Raw-X XGBoost 0.9058 (0.0021) 0.7846 (0.0108) 0.7668 (0.0103) 0.7543 (0.0094) 0.7555 (0.0088) 0.7500 (0.0082) Raw-X LASSO 0.9557 (0.0012) 0.8000 (0.0131) 0.7688 (0.0132) 0.7442 (0.0119) 0.7398 (0.0117) 0.7329 (0.0113) Orthogonal 0.6228 (0.0297) 0.6498 (0.0271) 0.6494 (0.0267) 0.6441 (0.0269) 0.6411 (0.0270) 0.6394 (0.0269) BONMI 0.6819 (0.0227) 0.6233 (0.0255) 0.6357 (0.0243) 0.6387 (0.0237) 0.6081 (0.0249) 0.6003 (0.0249) RGCCA 0.6757 (0.0220) 0.6048 (0.0231) 0.6359 (0.0233) 0.6098 (0.0227) 0.6116 (0.0231) 0.5796 (0.0239) Direct 0.5972 (0.0274) 0.5471 (0.0268) 0.5697 (0.0267) 0.5620 (0.0271) 0.5442 (0.0277) 0.5472 (0.0278) Target-only 0.4996 (0.0124) 0.5133 (0.0123) 0.5113 (0.0121) 0.5155 (0.0130) 0.5127 (0.0131) 0.5137 (0.0122)
+> Panel B: Target MSE
+> Proposed 0.0943 (0.0022) 0.1035 (0.0029) 0.0987 (0.0022) 0.1005 (0.0024) 0.0975 (0.0021) 0.0983 (0.0024)
+> Raw-X XGBoost 0.1686 (0.0010) 0.2032 (0.0026) 0.2085 (0.0023) 0.2124 (0.0021) 0.2126 (0.0021) 0.2145 (0.0019) Raw-X LASSO 0.0795 (0.0011) 0.1896 (0.0087) 0.2076 (0.0085) 0.2225 (0.0074) 0.2254 (0.0074) 0.2288 (0.0071) Orthogonal 0.2678 (0.0122) 0.2624 (0.0119) 0.2626 (0.0117) 0.2650 (0.0118) 0.2656 (0.0117) 0.2664 (0.0117) BONMI 0.2731 (0.0129) 0.3084 (0.0147) 0.2981 (0.0138) 0.2958 (0.0134) 0.3157 (0.0142) 0.3188 (0.0141) RGCCA 0.2485 (0.0096) 0.2732 (0.0098) 0.2626 (0.0099) 0.2732 (0.0097) 0.2755 (0.0098) 0.2869 (0.0103) Direct 0.2701 (0.0101) 0.2891 (0.0105) 0.2833 (0.0105) 0.2867 (0.0103) 0.2957 (0.0109) 0.2925 (0.0106) Target-only 0.3221 (0.0063) 0.3111 (0.0063) 0.3146 (0.0066) 0.3124 (0.0072) 0.3152 (0.0077) 0.3138 (0.0073)
+
+site indicator. Both used the same working label: the true source 𝑌 on the Bernoulli 20% gold mask and 1(𝑆 > 0) otherwise. Vanilla XGBoost used 250 trees, depth three, learning rate 0.05 and row and column sampling fractions 0.9. Vanilla LASSO used source-only median imputation with missingness indicators, standardization, and 𝐿 1 logistic cross-validation over 12 𝐶 values using negative Brier score. Neither direct learner used label-shift weights, EM, the proposed alignment or any target-label adaptation [Chen and Guestrin, 2016, Tibshirani, 1996]. Target AUC and target MSE were evaluated against the hidden binary target outcome. 
+
+S2.4 Surrogate-assisted simulation: Results 
+
+At 𝑛 = 400 per domain, Proposed (no 𝑌 ) attained AUC 0.9695 and MSE 0.0880. Relative to Reference-only, this is a 20.4% increase in AUC and a 55.3% reduction in MSE; relative to Direct full-𝑌 , the corresponding changes are 18.8% and 54.6%. Proposed (semi) had the same AUC and reduced MSE further to 0.0814, while the Proposed full-𝑌 benchmark attained AUC 0.9794 and MSE 0.0722. As the sample size increased, the no-gold surrogate bridge approached the full-label proposed benchmark. At 𝑛 = 6400, Proposed (no 𝑌 ) had AUC 0.9822, only 0.29% below the full-label value 0.9851, and MSE 0.0676 versus 0.0617. The semi-supervised calibration reduced MSE to 0.0608. At the two largest sample sizes, its Monte Carlo mean was slightly below the full-label benchmark; this should not be interpreted as a systematic oracle improvement, because the differences are small relative to Monte Carlo uncertainty and the two procedures use different calibrated working models. The direct learners did not recover the same sample-size trend. Reference-only and Direct full-𝑌 plateaued near AUC 0.82 and MSE 0.19. Vanilla XGBoost and Vanilla LASSO improved only modestly, reaching AUC 0.7702 and 0.7965 and MSE 0.1878 and 0.1835, respectively, at 𝑛 = 6400. Orthogonal full-𝑌 eventually improved in ranking but remained less accurate probabilistically, with AUC 0.9335 and MSE 0.1212 at 36 Table S4: Missing source gold-standard outcomes. Entries are Monte Carlo means with Monte Carlo standard errors in parentheses from 100 replications at each setting. Higher macro-AUC and lower MSE are preferred; the best point estimate in each column is shown in bold.                                                                                                                   
+
+> Method 𝑝 lab =0𝑝 lab =0.1𝑝 lab =0.2𝑝 lab =0.3𝑝 lab =0.4𝑝 lab =0.5
+> Panel A: Target macro-AUC
+> Proposed 0.9344 (0.0025) 0.9310 (0.0029) 0.9328 (0.0029) 0.9279 (0.0035) 0.9276 (0.0035) 0.9198 (0.0043)
+> Raw-X XGBoost 0.7679 (0.0098) 0.7684 (0.0096) 0.7680 (0.0093) 0.7693 (0.0091) 0.7652 (0.0095) 0.7607 (0.0092) Raw-X LASSO 0.7579 (0.0130) 0.7570 (0.0128) 0.7576 (0.0127) 0.7563 (0.0125) 0.7531 (0.0126) 0.7541 (0.0121) Orthogonal 0.6191 (0.0275) 0.6263 (0.0275) 0.6291 (0.0276) 0.6391 (0.0272) 0.6457 (0.0269) 0.6352 (0.0280) BONMI 0.6456 (0.0228) 0.6462 (0.0228) 0.6467 (0.0228) 0.6476 (0.0229) 0.6482 (0.0229) 0.6490 (0.0226) RGCCA 0.6048 (0.0219) 0.6044 (0.0220) 0.6050 (0.0220) 0.6049 (0.0219) 0.6038 (0.0220) 0.6065 (0.0219) Direct 0.5748 (0.0265) 0.5764 (0.0263) 0.5775 (0.0262) 0.5796 (0.0259) 0.5772 (0.0255) 0.5812 (0.0247) Target-only 0.5126 (0.0129) 0.5126 (0.0129) 0.5126 (0.0129) 0.5126 (0.0129) 0.5126 (0.0129) 0.5126 (0.0129)
+> Panel B: Target MSE
+> Proposed 0.0950 (0.0020) 0.0970 (0.0020) 0.0961 (0.0022) 0.0989 (0.0026) 0.0993 (0.0024) 0.1054 (0.0028)
+> Raw-X XGBoost 0.2084 (0.0022) 0.2086 (0.0021) 0.2087 (0.0021) 0.2084 (0.0021) 0.2095 (0.0021) 0.2104 (0.0021) Raw-X LASSO 0.2156 (0.0085) 0.2164 (0.0084) 0.2156 (0.0082) 0.2167 (0.0082) 0.2168 (0.0080) 0.2186 (0.0078) Orthogonal 0.2764 (0.0124) 0.2734 (0.0123) 0.2730 (0.0123) 0.2662 (0.0119) 0.2638 (0.0117) 0.2700 (0.0119) BONMI 0.2953 (0.0131) 0.2943 (0.0130) 0.2934 (0.0130) 0.2921 (0.0129) 0.2908 (0.0128) 0.2882 (0.0126) RGCCA 0.2750 (0.0094) 0.2745 (0.0094) 0.2740 (0.0093) 0.2733 (0.0092) 0.2728 (0.0091) 0.2711 (0.0092) Direct 0.2839 (0.0106) 0.2824 (0.0103) 0.2815 (0.0102) 0.2793 (0.0098) 0.2792 (0.0096) 0.2762 (0.0090) Target-only 0.3156 (0.0069) 0.3156 (0.0069) 0.3156 (0.0069) 0.3156 (0.0069) 0.3156 (0.0069) 0.3156 (0.0069)
+
+𝑛 = 6400. At the smallest sample sizes, the proposed full-label and surrogate procedures were themselves variable; the advantage of the reference-anchored pathway became systematic as the representation and bridge estimators stabilized. 
+
+S2.5 Crossed ablation of the target-anchor CCA and target update 
+
+The crossed ablation was conducted at 𝜀 rot = 1, with 𝛿 = 0.24, 𝑝 lab = 0.35, the base source modality patterns, and 400 subjects in every domain. The same 100 Monte Carlo seeds were used in all four cells. The full method used pooled reference PCA, within-domain auxiliary PCA, raw reference scores for the initial target calibration, outcome-reweighted block alignment, the rank-five single-joint target-anchor CCA regression, source-overlap augmentation and the stabilized target update. The CCA switch disabled only the target-anchor CCA regression step. The preceding outcome-reweighted block alignment, initial target calibration, density-ratio fitting and all other components remained active. Thus this ablation isolates the extra target-defined CCA/ridge match-up from the reweighted pre-liminary alignment; it does not remove every alignment operation. The target-update switch bypassed the stabilized update while retaining the initial reference-based target distribution estimate. Crossing the two switches gave the full method, target-anchor CCA ablated, target update ablated, and both components ab-lated. Whenever the target update was active, the same convergence and marginal-shift safeguard described above was applied. It was activated in 95 of 100 full-method replications and in all 100 target-anchor-CCA-ablated replications. Removing the target-anchor CCA component caused the larger deterioration. Macro-AUC fell from 0.9297 to 0.8635 and MSE increased from 0.0983 to 0.1361. The paired full-minus-ablation AUC difference was 0.0662 (95% Monte Carlo interval 0.0591 to 0.0733), while the paired MSE reduction from retaining the component was 0.0379 (0.0332 to 0.0425). Hamming loss increased from 0.1306 to 0.1948 and exact-match accuracy decreased from 0.6786 to 0.5724. 37 Table S5: Source modality-pattern index. Entries are Monte Carlo means with Monte Carlo standard errors in parentheses from 100 replications at each setting. Higher macro-AUC and lower MSE are preferred; the best point estimate in each column is shown in bold. 
+
+Method 𝑝 mod = 0 𝑝 mod = 0.1 𝑝 mod = 0.2 𝑝 mod = 0.3 𝑝 mod = 0.4
+
+Panel A: Target macro-AUC 
+
+Proposed 0.9273 (0.0031) 0.9142 (0.0053) 0.9116 (0.0043) 0.9327 (0.0029) 0.9079 (0.0053) 
+
+Raw-X XGBoost 0.7670 (0.0093) 0.7668 (0.0092) 0.7653 (0.0091) 0.7556 (0.0097) 0.7538 (0.0099) Raw-X LASSO 0.7549 (0.0126) 0.7559 (0.0124) 0.7538 (0.0128) 0.7586 (0.0121) 0.7582 (0.0119) Orthogonal 0.6438 (0.0269) 0.6789 (0.0272) 0.6750 (0.0262) 0.6257 (0.0308) 0.6349 (0.0290) BONMI 0.6475 (0.0229) 0.6537 (0.0233) 0.6555 (0.0212) 0.6644 (0.0213) 0.6396 (0.0255) RGCCA 0.6041 (0.0219) 0.6276 (0.0228) 0.6188 (0.0204) 0.6424 (0.0227) 0.6460 (0.0235) Direct 0.5791 (0.0257) 0.5860 (0.0265) 0.6161 (0.0242) 0.5946 (0.0252) 0.5915 (0.0268) Target-only 0.5126 (0.0129) 0.5049 (0.0130) 0.4976 (0.0133) 0.5343 (0.0128) 0.5066 (0.0136) 
+
+Panel B: Target MSE 
+
+Proposed 0.1008 (0.0024) 0.1063 (0.0034) 0.1111 (0.0029) 0.0955 (0.0021) 0.1119 (0.0030) 
+
+Raw-X XGBoost 0.2091 (0.0021) 0.2081 (0.0020) 0.2090 (0.0019) 0.2159 (0.0021) 0.2149 (0.0022) Raw-X LASSO 0.2168 (0.0081) 0.2176 (0.0078) 0.2156 (0.0081) 0.2151 (0.0075) 0.2136 (0.0073) Orthogonal 0.2651 (0.0118) 0.2517 (0.0117) 0.2525 (0.0109) 0.2737 (0.0130) 0.2826 (0.0131) BONMI 0.2917 (0.0129) 0.2886 (0.0133) 0.2894 (0.0119) 0.2808 (0.0123) 0.3037 (0.0149) RGCCA 0.2733 (0.0092) 0.2676 (0.0098) 0.2667 (0.0082) 0.2585 (0.0095) 0.2601 (0.0101) Direct 0.2793 (0.0098) 0.2754 (0.0101) 0.2643 (0.0091) 0.2728 (0.0093) 0.2810 (0.0109) Target-only 0.3156 (0.0069) 0.3181 (0.0070) 0.3253 (0.0069) 0.3051 (0.0065) 0.3179 (0.0069) 
+
+The target update had a smaller, calibration-specific effect. Relative to the no-update variant, the full method reduced MSE by 0.0069 (0.0044 to 0.0094), Hamming loss from 0.1395 to 0.1306, and increased exact-match accuracy from 0.6635 to 0.6786. Macro-AUC was 0.0030 lower with the update, with the paired interval −0.0047 to −0.0012 for full minus no update. The state-prevalence 𝐿 1 reduction was 0.0213, with interval −0.0022 to 0.0448. Removing both components produced the largest MSE, state-prevalence error and Hamming loss. Together, these comparisons show that the target-anchor CCA regression supplies the main discrimination gain under loading rotation, while the stabilized target update primarily refines the posterior probability scale. 38 Table S6: Surrogate-assisted simulation at smaller per-domain sample sizes. Entries are Monte Carlo means with Monte Carlo standard errors in parentheses from 100 replications. Higher AUC and lower MSE are preferred; the best point estimate in each column is shown in bold. 
+
+Method 𝑛 = 25 𝑛 = 50 𝑛 = 100 𝑛 = 150 𝑛 = 200 
+
+Panel A: Target AUC 
+
+Proposed (no 𝑌 ) 0.7665 (0.0154) 0.8543 (0.0120) 0.9171 (0.0066) 0.9367 (0.0041) 0.9504 (0.0034) Proposed (semi) 0.7665 (0.0154) 0.8543 (0.0120) 0.9171 (0.0066) 0.9367 (0.0041) 0.9504 (0.0034) Vanilla XGBoost 0.6635 (0.0162) 0.6844 (0.0136) 0.7115 (0.0136) 0.7206 (0.0134) 0.7299 (0.0139) Vanilla LASSO 0.6055 (0.0189) 0.6391 (0.0167) 0.6725 (0.0171) 0.6991 (0.0169) 0.7101 (0.0157) Ref.-only 0.7308 (0.0129) 0.7626 (0.0087) 0.7886 (0.0053) 0.7873 (0.0050) 0.8009 (0.0039) Direct full-𝑌 0.8175 (0.0105) 0.8162 (0.0076) 0.8153 (0.0054) 0.8085 (0.0047) 0.8154 (0.0035) Orth. full-𝑌 0.4692 (0.0291) 0.4981 (0.0328) 0.5417 (0.0375) 0.5477 (0.0352) 0.5891 (0.0384) Prop. full-𝑌 0.8098 (0.0145) 0.8782 (0.0124) 0.9345 (0.0055) 0.9546 (0.0032) 0.9676 (0.0027) 
+
+Panel B: Target MSE 
+
+Proposed (no 𝑌 ) 0.2644 (0.0158) 0.1797 (0.0078) 0.1482 (0.0068) 0.1269 (0.0054) 0.1078 (0.0046) Proposed (semi) 0.2644 (0.0158) 0.1797 (0.0078) 0.1482 (0.0068) 0.1197 (0.0051) 0.0988 (0.0041) Vanilla XGBoost 0.2361 (0.0076) 0.2121 (0.0061) 0.1982 (0.0053) 0.1995 (0.0053) 0.1940 (0.0057) Vanilla LASSO 0.2444 (0.0067) 0.2382 (0.0063) 0.2299 (0.0070) 0.2231 (0.0065) 0.2196 (0.0067) Ref.-only 0.2525 (0.0099) 0.2198 (0.0062) 0.2121 (0.0043) 0.2098 (0.0039) 0.2012 (0.0030) Direct full-𝑌 0.1981 (0.0049) 0.1903 (0.0029) 0.1993 (0.0026) 0.1988 (0.0019) 0.1935 (0.0017) Orth. full-𝑌 0.2721 (0.0088) 0.2674 (0.0099) 0.2643 (0.0123) 0.2491 (0.0100) 0.2469 (0.0134) Prop. full-𝑌 0.2351 (0.0162) 0.1422 (0.0076) 0.1172 (0.0050) 0.1010 (0.0038) 0.0859 (0.0035) 
+
+> 39
+
+Table S7: Surrogate-assisted simulation at larger per-domain sample sizes. Entries are Monte Carlo means with Monte Carlo standard errors in parentheses from 100 replications. Higher AUC and lower MSE are preferred; the best point estimate in each column is shown in bold. 
+
+Method 𝑛 = 400 𝑛 = 800 𝑛 = 1600 𝑛 = 3200 𝑛 = 6400 
+
+Panel A: Target AUC 
+
+Proposed (no 𝑌 ) 0.9695 (0.0017) 0.9757 (0.0009) 0.9786 (0.0009) 0.9821 (0.0005) 0.9822 (0.0005) Proposed (semi) 0.9695 (0.0017) 0.9757 (0.0009) 0.9786 (0.0009) 0.9821 (0.0005) 0.9822 (0.0005) Vanilla XGBoost 0.7342 (0.0139) 0.7578 (0.0137) 0.7680 (0.0147) 0.7644 (0.0171) 0.7702 (0.0163) Vanilla LASSO 0.7132 (0.0163) 0.7585 (0.0148) 0.7677 (0.0164) 0.7806 (0.0184) 0.7965 (0.0169) Ref.-only 0.8055 (0.0024) 0.8123 (0.0020) 0.8144 (0.0013) 0.8172 (0.0009) 0.8165 (0.0007) Direct full-𝑌 0.8159 (0.0024) 0.8175 (0.0019) 0.8173 (0.0013) 0.8188 (0.0009) 0.8175 (0.0007) Orth. full-𝑌 0.6399 (0.0412) 0.7477 (0.0382) 0.8645 (0.0318) 0.8673 (0.0317) 0.9335 (0.0234) Prop. full-𝑌 0.9794 (0.0010) 0.9822 (0.0006) 0.9832 (0.0004) 0.9848 (0.0004) 0.9851 (0.0003) 
+
+Panel B: Target MSE 
+
+Proposed (no 𝑌 ) 0.0880 (0.0032) 0.0749 (0.0014) 0.0711 (0.0009) 0.0687 (0.0007) 0.0676 (0.0005) Proposed (semi) 0.0814 (0.0031) 0.0682 (0.0012) 0.0646 (0.0010) 0.0620 (0.0005) 0.0608 (0.0004) 
+
+Vanilla XGBoost 0.1931 (0.0046) 0.1879 (0.0043) 0.1854 (0.0043) 0.1873 (0.0049) 0.1878 (0.0045) Vanilla LASSO 0.2232 (0.0070) 0.1997 (0.0057) 0.1959 (0.0064) 0.1910 (0.0070) 0.1835 (0.0065) Ref.-only 0.1968 (0.0016) 0.1953 (0.0012) 0.1948 (0.0009) 0.1946 (0.0006) 0.1953 (0.0004) Direct full-𝑌 0.1941 (0.0012) 0.1933 (0.0009) 0.1939 (0.0006) 0.1937 (0.0004) 0.1939 (0.0003) Orth. full-𝑌 0.2309 (0.0139) 0.1895 (0.0124) 0.1477 (0.0125) 0.1539 (0.0141) 0.1212 (0.0098) Prop. full-𝑌 0.0722 (0.0016) 0.0657 (0.0010) 0.0640 (0.0007) 0.0632 (0.0005) 0.0617 (0.0003) 
+
+Table S8: Crossed ablation at 𝜀 rot = 1. Performance entries are Monte Carlo means with Monte Carlo standard errors in parentheses from 100 paired replications. Paired contrasts are normal-approximation 95% Monte Carlo confidence intervals and are oriented so that positive values favor the full method: full minus ablation for macro-AUC and ablation minus full for the error metrics.                                
+
+> Variant Target-anchor CCA Target update Target macro-AUC Target MSE State
+> 𝐿 1error Full proposed On On 0.9297 (0.0032) 0.0983 (0.0024) 0.3423 (0.0133)
+> Target update ablated On Off 0.9326 (0.0032) 0.1052 (0.0024) 0.3636 (0.0083) Target-anchor CCA ablated Off On 0.8635 (0.0033) 0.1361 (0.0019) 0.3745 (0.0113) Both components ablated Off Off 0.8627 (0.0033) 0.1417 (0.0020) 0.3886 (0.0100) Variant Hamming loss Exact match accuracy Full proposed 0.1306 (0.0032) 0.6786 (0.0063)
+> Target update ablated 0.1395 (0.0032) 0.6635 (0.0062) Target-anchor CCA ablated 0.1948 (0.0029) 0.5724 (0.0047) Both components ablated 0.2024 (0.0031) 0.5620 (0.0049)
+
+Full method versus Δmacro-AUC (95% CI) ΔMSE (95% CI) Δstate 𝐿 1 (95% CI) Target-anchor CCA ablated 0.0662 (0.0591, 0.0733) 0.0379 (0.0332, 0.0425) 0.0322 (0.0087, 0.0558) Target update ablated -0.0030 (-0.0047, -0.0012) 0.0069 (0.0044, 0.0094) 0.0213 (-0.0022, 0.0448) Both components ablated 0.0670 (0.0599, 0.0740) 0.0435 (0.0387, 0.0483) 0.0464 (0.0252, 0.0675) 
+
+40 S3 Real-data analysis protocol and supporting results 
+
+S3.1 Data assets, cohort construction and 12-month endpoint 
+
+The analysis reused patient-level assets developed in the two RCC studies cited in the main manuscript. The EHR study supplied the phenotyped RCC cohort, NLP-derived stage, grade and histology variables, and longitudinal latte recurrence outputs. The companion imaging study supplied linked preoperative CT scans, report-derived concepts, conventional radiomic features and residual radiomic features. The current analysis imposed a new endpoint, temporal split and modality-domain protocol on those source files; it did not reuse the previous papers’ prediction targets or train–test splits. After demographic, nephrectomy and stage-based exclusions, 8235 patients remained in the working cohort. A patient was eligible for the 12-month analysis when recurrence occurred by 12 months or at least 12 months of post-nephrectomy follow-up was available. Requiring a nonmissing year first ICD proxy left 7713 eligible patients. For chart-reviewed patients, the analysis endpoint was the physician-adjudicated indicator event12 . For all other patients, the endpoint was the latte -derived indicator 1{𝑆 rec = 1, 𝑆 𝑇 ≤
+
+12 }. The resulting mixed endpoint contained 240 physician-adjudicated labels and 7473 surrogate labels. Variables directly encoding recurrence status, recurrence time or death within 12 months were removed before preprocessing and model fitting. 
+
+S3.2 Temporal split and modality-domain assignment 
+
+The temporal split was pre-specified before any model was fitted. Patients with year first ICD ≤ 2016 formed the source/training set, and patients with year first ICD ≥ 2017 formed the late target/test set. The five modality blocks were: (1) demographics and NLP-derived clinicopathologic variables; (2) longitudinal codified EHR and healthcare-utilization summaries; (3) radiology-report concepts; (4) conventional CT radiomics; and (5) residual radiomic features. The three source domains were 1 + 2, 1 + 2 + 3 and 1 + 4 + 5. The primary late-target domain contained all five modalities, 1 + 2 + 3 + 4 + 5. The smaller late-target configurations 1 + 2 and 1 + 2 + 3, together with their pooled analysis, were retained as supplementary configurations. Rare partial-extra patterns were assigned downward to the largest fully observed compatible domain: 1 + 2 + 4 to 1 + 2, and 1 + 2 + 3 + 4 or 1 + 2 + 3 + 5 to 1 + 2 + 3. No patient was assigned upward by imputing an entirely missing modality block. Table S9: Cohort and label composition under the pre-specified temporal split. The pooled source and complete late-target rows form the primary analysis ( 𝑁 = 6053); the remaining late-target rows define supplementary configurations. Events refer to the mixed 12-month endpoint: physician-adjudicated event12 
+
+for chart-reviewed patients and latte -derived 𝑆 12 otherwise.                                                                                                  
+
+> Set Domain 𝑛 Events Gold 𝑛 Gold events Surrogate 𝑛 Surrogate events Source ( ≤2016) 1+2265 56 50260 56 Source ( ≤2016) 1+2+34248 805 130 17 4118 788 Source ( ≤2016) 1+4+51161 172 43 41118 168 Source ( ≤2016) Pooled 5674 1033 178 21 5496 1012 Target ( ≥2017) 1+2136 29 30133 29 Target ( ≥2017) 1+2+31524 326 41 81483 318 Target ( ≥2017) 1+2+3+4+5379 100 18 2361 98 Target ( ≥2017) Pooled 2039 455 62 10 1977 445
+
+All target outcomes were withheld from centering, feature processing, component construction, CCA alignment, density-ratio estimation, target-EM, model fitting and hyperparameter selection. Unlabelled target covariates entered only the prespecified unsupervised adaptation steps. Target outcomes were merged back after all predictions had been fixed. 41 S3.3 Primary analysis and supplementary target configurations 
+
+The primary test reported in Section 6 of the main paper used all 5674 source patients in their observed heterogeneous modality domains and the 379 patients in the complete late-target domain, for a total analysis cohort of 6053 patients. Thus, no source domain shown in the main paper was discarded: each contributed through its available blocks, while the target supplied modalities 1–5. The late-target 1 + 2 stratum ( 𝑛 = 136, 29 events), the late-target 1 + 2 + 3 stratum ( 𝑛 = 1524, 326 events), and the pooled late-target cohort (𝑛 = 2039, 455 events) are secondary configurations documented only in this supplement. They are useful for checking robustness to target-side modality availability but do not replace the complete-target primary analysis. 
+
+S3.4 Model implementations, metrics and uncertainty 
+
+The proposed row used deterministic within-site centering without PCA in the initial representation step, modality 1 as the reference block, a rank-10 CCA anchor, target-EM enabled and source-overlap augmentation disabled. In the primary complete-target experiment, all 5674 source rows were used in their observed 1 + 2, 1 + 2 + 3 or 1 + 4 + 5 domains, while the 379 complete-target rows retained modalities 1–5. The comparator set comprised direct-transfer XGBoost, category-specific logistic LASSO, RGCCA and BONMI. Each comparator used only allowable source rows and received no source reweighting, label-shift correction, target-EM or target-label calibration. The two primary metrics were the Brier skill score BSS = 1 − 𝑛 −1 Í𝑛 𝑖 =1 (𝑦 𝑖 − b𝑝 𝑖 )2
+
+𝑛 −1 Í𝑛 𝑖 =1 (𝑦 𝑖 − ¯𝑦 )2 ,
+
+where ¯ 𝑦 is the event rate in the evaluated target sample, and the absolute calibration gap | ¯b𝑝 − ¯𝑦 |. AUC summarized ranking performance, and average precision (AP) summarized precision across recall levels. The real-data tables report these metrics in the order BSS, calibration gap, AUC and AP, except that the ablation table focuses on the two core rubrics, BSS and calibration gap. Higher BSS, AUC and AP and lower calibration gap are preferred. Each table gives point estimates with standard errors in parentheses from 1,000 stratified patient-level bootstrap resamples of the fixed predictions without model refitting. Resampling was stratified by event status within a single target configuration and jointly by event status and target modality configuration for pooled analyses. The ablation used 1,000 common event-stratified resamples so that both cell-specific standard errors and paired-difference standard errors were computed from the same resamples. 
+
+S3.5 Surrogate-row-only endpoint sensitivity 
+
+Table S10 restricts evaluation to target rows with a latte -derived surrogate endpoint while retaining the predictions from the primary fits. In the complete target domain, the proposed method retained the highest BSS, 0.4389 (SE 0.0476), the smallest calibration gap, 0.0080 (SE 0.0084), and the highest AUC, 0.9082 (SE 0.0151). XGBoost retained the highest AP, 0.7662 (SE 0.0361), compared with 0.7238 (SE 0.0454) for the proposed method. Results in the smaller and pooled target configurations varied by metric, so this sensitivity analysis supports the primary complete-target calibration finding without implying uniform superiority in every supplementary configuration. 42 Table S10: Surrogate-row-only endpoint sensitivity using the fixed predictions from the primary fits. Paren-theses give standard errors from 1,000 stratified patient-level bootstrap resamples without model refitting. Higher BSS, AUC and AP and lower calibration gap are preferred. The best point estimate within each target domain is shown in bold .                                                                                                       
+
+> Target domain Method BSS Cal. gap AUC AP 1+2Proposed 0.2335 (0.0914) 0.0397 (0.0199) 0.8488 (0.0344) 0.6429 (0.0678) XGBoost 0.3404 (0.0789) 0.0408 (0.0156) 0.8773 (0.0317) 0.6932 (0.0737) Category-specific LASSO 0.3818 (0.0610) 0.0220 (0.0121) 0.9082 (0.0250) 0.7444 (0.0648)
+> RGCCA 0.0169 (0.0964) 0.0150 (0.0146) 0.7225 (0.0501) 0.4199 (0.0708) BONMI -0.0199 (0.0200) 0.0394 (0.0037) 0.5305 (0.0649) 0.2492 (0.0437) 1+2+3Proposed 0.3007 (0.0281) 0.0238 (0.0057) 0.8653 (0.0108) 0.6163 (0.0256) XGBoost 0.3912 (0.0246) 0.0355 (0.0050) 0.9003 (0.0087) 0.7229 (0.0215)
+> Category-specific LASSO 0.3243 (0.0298) 0.0116 (0.0058) 0.8796 (0.0098) 0.6180 (0.0267) RGCCA 0.2377 (0.0257) 0.0189 (0.0049) 0.8341 (0.0126) 0.5628 (0.0258) BONMI 0.0420 (0.0085) 0.0300 (0.0018) 0.6619 (0.0180) 0.3762 (0.0239) 1+2+3+4+5Proposed 0.4389 (0.0476) 0.0080 (0.0084) 0.9082 (0.0151) 0.7238 (0.0454) XGBoost 0.3461 (0.0463) 0.0907 (0.0103) 0.9044 (0.0160) 0.7662 (0.0361)
+> Category-specific LASSO 0.3018 (0.0505) 0.0822 (0.0112) 0.8771 (0.0209) 0.6989 (0.0450) RGCCA 0.1404 (0.0359) 0.1131 (0.0072) 0.8680 (0.0181) 0.6242 (0.0448) BONMI -0.0430 (0.0102) 0.0941 (0.0023) 0.5273 (0.0345) 0.3056 (0.0302) Pooled Proposed 0.3268 (0.0223) 0.0191 (0.0051) 0.8739 (0.0083) 0.6405 (0.0205) XGBoost 0.3802 (0.0210) 0.0459 (0.0040) 0.8987 (0.0076) 0.7262 (0.0181)
+> Category-specific LASSO 0.3253 (0.0257) 0.0252 (0.0050) 0.8771 (0.0094) 0.6324 (0.0235) RGCCA 0.2051 (0.0201) 0.0358 (0.0042) 0.8261 (0.0102) 0.5445 (0.0206) BONMI 0.0230 (0.0065) 0.0423 (0.0014) 0.6228 (0.0149) 0.3389 (0.0178)
+
+S3.6 Complete-domain matched-modality sensitivity 
+
+Table S11 reports the sensitivity analysis in which the 1 + 4 + 5 source domain and complete-target rows were both restricted to modalities 1, 4 and 5. All five methods were refitted under this matched-modality specification, with target outcomes still withheld. The proposed method had the best point estimate for each reported metric: BSS 0.3487 (SE 0.0438), calibration gap 0.0379 (SE 0.0103), AUC 0.8858 (SE 0.0167) and AP 0.6666 (SE 0.0456). This analysis separates the value of reference-anchored integration from the additional target-side availability of modalities 2 and 3 in the primary complete-target analysis. Table S11: Complete-domain matched-modality sensitivity retaining modalities 1, 4 and 5 in both source and target ( 𝑛 = 379, 100 events). Parentheses give event-stratified bootstrap standard errors from 1,000 resamples. Higher BSS, AUC and AP and lower calibration gap are preferred. The best point estimate for each metric is shown in bold .
+
+Method BSS Cal. gap AUC AP Proposed 0.3487 (0.0438) 0.0379 (0.0103) 0.8858 (0.0167) 0.6666 (0.0456) 
+
+XGBoost 0.2288 (0.0538) 0.0862 (0.0106) 0.8520 (0.0209) 0.6109 (0.0476) Category-specific LASSO 0.2529 (0.0451) 0.0720 (0.0095) 0.8481 (0.0213) 0.5941 (0.0448) RGCCA 0.1103 (0.0371) 0.1160 (0.0078) 0.8253 (0.0215) 0.5581 (0.0432) BONMI 0.1197 (0.0395) 0.1131 (0.0088) 0.8215 (0.0234) 0.5523 (0.0422) 
+
+S3.7 Complete-domain sensitivity using modalities 1, 2 and 3 
+
+Table S12 reports the complementary matched-modality analysis retaining modalities 1, 2 and 3. The proposed method had the highest BSS, 0.3938 (SE 0.0471), and the smallest calibration gap, 0.0113 (SE 0.0092). RGCCA had the highest AUC, 0.9068 (SE 0.0162), and AP, 0.7952 (SE 0.0348), compared with 43 0.8946 (SE 0.0159) and 0.7103 (SE 0.0448), respectively, for the proposed method. Thus, this configuration again favors the proposed method for probability accuracy and calibration, but not for every ranking metric. Table S12: Complete-domain matched-modality sensitivity retaining modalities 1, 2 and 3 in both source and target ( 𝑛 = 379, 100 events). Parentheses give event-stratified bootstrap standard errors from 1,000 resamples. Higher BSS, AUC and AP and lower calibration gap are preferred. The best point estimate for each metric is shown in bold .                        
+
+> Method BSS Cal. gap AUC AP Proposed 0.3938 (0.0471) 0.0113 (0.0092) 0.8946 (0.0159) 0.7103 (0.0448) XGBoost 0.3430 (0.0512) 0.0756 (0.0110) 0.8896 (0.0168) 0.7358 (0.0404) Category-specific LASSO 0.3306 (0.0503) 0.0738 (0.0104) 0.8836 (0.0203) 0.7118 (0.0458) RGCCA 0.3782 (0.0477) 0.0942 (0.0100) 0.9068 (0.0162) 0.7952 (0.0348)
+> BONMI 0.3093 (0.0457) 0.0950 (0.0093) 0.8742 (0.0214) 0.7357 (0.0408)
+
+S3.8 Crossed CCA and target-EM ablation 
+
+The ablation study held the primary complete-target cohort, endpoint, modality rules, preprocessing and all non-ablated settings fixed. Two binary components were crossed: the target-anchor CCA/ridge match-up and the target outcome-distribution update implemented by target-EM. The full-model cell used the same complete-domain predictions as the reference configuration; only the other three cells were refitted. As shown in Table S13, removal of the target-anchor CCA/ridge match-up reduced BSS by 0.0710 (paired SE 0.0260) and increased the calibration gap by 0.0628 (paired SE 0.0116). Removing target-EM reduced BSS by 0.0195 (paired SE 0.0080) and increased the calibration gap by 0.0366 (paired SE 0.0118). Removing both components reduced BSS by 0.0702 (paired SE 0.0257) and increased the calibration gap by 0.0621 (paired SE 0.0110). The target-EM update improved probability accuracy and calibration when the target-anchor CCA/ridge match-up was retained; without this match-up, its effect was negligible. This crossed pattern indicates that the target update relies on a sufficiently aligned representation, with the target-anchor CCA/ridge match-up producing the larger contribution. Table S13: Crossed ablation of the target-anchor CCA/ridge match-up and target-EM in the complete target domain ( 𝑛 = 379, 100 events). Parentheses give standard errors from 1,000 common event-stratified bootstrap resamples. The second panel reports full-model-minus-ablation point differences with paired bootstrap standard errors. The table reports the two core ablation rubrics: higher BSS and lower calibration gap are preferred. For calibration-gap differences, a negative value favors the full model.                             
+
+> Variant CCA Target-EM BSS Cal. gap Full model On On 0.4194 (0.0485) 0.0015 (0.0070)
+> CCA ablated Off On 0.3484 (0.0447) 0.0642 (0.0097) Target-EM ablated On Off 0.3999 (0.0444) 0.0381 (0.0105) CCA + target-EM ablated Off Off 0.3492 (0.0460) 0.0636 (0.0101) Full model minus ΔBSS ΔCal. gap CCA ablated 0.0710 (0.0260) −0.0628 (0.0116) Target-EM ablated 0.0195 (0.0080) −0.0366 (0.0118) Both components ablated 0.0702 (0.0257) −0.0621 (0.0110)
+
+44 S3.9 Missingness and interpretation 
+
+Whole missing modality blocks were handled through the canonical domain assignment rather than upward imputation. Within an observed block, the pre-specified method-specific preprocessing was used. XGBoost used its native missing-value mechanism. Category-specific LASSO used source-only median imputation, missingness indicators and source-only standardization. All transformation parameters estimated from labelled data were learned from source rows only. Among the 379 patients in the primary complete-target evaluation, 18 have labels adjudicated by physi-cians and 361 have latte -derived surrogate labels. The pooled secondary late-target evaluation contains 62 adjudicated labels and 1977 surrogate labels. Accordingly, the real-data analysis quantifies transport performance for the prespecified mixed endpoint. It should not be interpreted as a fully adjudicated external validation of 12-month RCC recurrence. 
+
+# References 
+
+Amr Alexandari, Anshul Kundaje, and Avanti Shrikumar. Maximum likelihood with bias-corrected calibra-tion is hard-to-beat at label shift adaptation. In Hal Daum´ e III and Aarti Singh, editors, Proceedings of the 37th International Conference on Machine Learning , volume 119 of Proceedings of Machine Learning Research , pages 222–232. PMLR, 13–18 Jul 2020. Tadas Baltruˇ saitis, Chaitanya Ahuja, and Louis-Philippe Morency. Multimodal machine learning: A survey and taxonomy. IEEE Transactions on Pattern Analysis and Machine Intelligence , 41(2):423–443, 2019. Shruthi Bannur, Stephanie Hyland, Qianchu Liu, Fernando Perez-Garcia, Maximilian Ilse, Daniel C Castro, Benedikt Boecking, Harshita Sharma, Kenza Bouzid, Anja Thieme, et al. Learning to exploit temporal structure for biomedical vision-language processing. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 15016–15027, 2023. Thomas B Berrett. Efficient estimation with incomplete data via generalised anova decompositions. arXiv preprint arXiv:2409.05729 , 2024. Glenn W. Brier. Verification of forecasts expressed in terms of probability. Monthly Weather Review , 78(1): 1–3, 1950. Tianxi Cai, T Tony Cai, and Anru Zhang. Structured matrix completion with applications to genomic data integration. Journal of the American Statistical Association , 111(514):621–633, 2016. Tianqi Chen and Carlos Guestrin. Xgboost: A scalable tree boosting system. In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining , KDD ’16, page 785–794, New York, NY, USA, 2016. Association for Computing Machinery. Gary S. Collins, Emmanuel O. Ogundimu, and Douglas G. Altman. Sample size considerations for the external validation of a multivariable prognostic model: A resampling study. Statistics in Medicine , 35 (2):214–226, 2016. Arthur P Dempster, Nan M Laird, and Donald B Rubin. Maximum likelihood from incomplete data via the em algorithm. Journal of the royal statistical society: series B (methodological) , 39(1):1–22, 1977. Ruidong Fan, Xiao Ouyang, Tingjin Luo, Dewen Hu, and Chenping Hou. Incomplete multi-view learning under label shift. IEEE Transactions on Image Processing , 32:3702–3716, 2023. 45 Saurabh Garg, Yifan Wu, Sivaraman Balakrishnan, and Zachary Lipton. A unified view of label shift estimation. Advances in Neural Information Processing Systems , 33:3290–3300, 2020. Jessica Gronsbell, Vidul Ayakulangara Panickan, Doudou Zhou, Chris Lin, Thomas Charlon, Chuan Hong, Xin Xiong, Linshanshan Wang, Jianhui Gao, Shirley Zhou, et al. A common pipeline for harmonizing electronic health record data for translational research. arXiv preprint arXiv:2509.08553 , 2025. David R Hardoon, Sandor Szedmak, and John Shawe-Taylor. Canonical correlation analysis: An overview with application to learning methods. Neural computation , 16(12):2639–2664, 2004. Trevor Hastie. Ridge regularization: An essential concept in data science. Technometrics , 62(4):426–433, 2020. Nicholas J. Higham. Functions of Matrices: Theory and Computation . Society for Industrial and Applied Mathematics, Philadelphia, PA, 2008. Harold Hotelling. Relations between two sets of variates. Biometrika , 28(3/4):321–377, 1936. ISSN 00063444. J Hou, J Wen, R Bhattacharya, Z Wang, S Morini Sweet, W Xu, A Elfiky, L Wang, R Srivastava, J Lu, et al. Estimate renal cell carcinoma recurrence rates using electronic health records. ESMO Real World Data and Digital Oncology , 12:100695, 2026. Fabian Isensee, Paul F Jaeger, Simon AA Kohl, Jens Petersen, and Klaus H Maier-Hein. nnu-net: a self-configuring method for deep learning-based biomedical image segmentation. Nature methods , 18(2): 203–211, 2021. Ian T Jolliffe and Jorge Cadima. Principal component analysis: a review and recent developments. Philosoph-ical transactions of the royal society A: Mathematical, Physical and Engineering Sciences , 374(2065): 20150202, 2016. Vladimir Koltchinskii and Karim Lounici. Concentration inequalities and moment bounds for sample covariance operators. Bernoulli , pages 110–133, 2017. Dana Lahat, T¨ ulay Adali, and Christian Jutten. Multimodal data fusion: an overview of methods, challenges, and prospects. Proceedings of the IEEE , 103(9):1449–1477, 2015. Seong-ho Lee, Yanyuan Ma, and Jiwei Zhao. Doubly flexible estimation under label shift. Journal of the American Statistical Association , 120(549):278–290, 2025a. Seong-ho Lee, Yanyuan Ma, and Jiwei Zhao. Efficient inference under label shift in unsupervised domain adaptation. arXiv preprint arXiv:2508.17780 , 2025b. Yiming Li, Ruoyu Wang, Ying Wei, and Molei Liu. Adaptive and efficient learning with blockwise missing and semi-supervised data. arXiv preprint arXiv:2405.18722 , 2024. Yitong Li, Michael Murias, Samantha Major, Geraldine Dawson, and David Carlson. On target shift in adversarial domain adaptation. In Proceedings of the Twenty-Second International Conference on Artificial Intelligence and Statistics , volume 89 of Proceedings of Machine Learning Research , pages 616–625. PMLR, 2019. Zachary Lipton, Yu-Xiang Wang, and Alexander Smola. Detecting and correcting for label shift with black box predictors. In International conference on machine learning , pages 3122–3130. PMLR, 2018. 46 Molei Liu, Yi Zhang, Katherine P Liao, and Tianxi Cai. Augmented transfer regression learning with semi-non-parametric nuisance models. Journal of Machine Learning Research , 24(293):1–50, 2023. Ziqi Liu, Ye Tian, and Weijing Tang. Representation learning with blockwise missingness and signal heterogeneity. arXiv preprint arXiv:2602.11511 , 2026. Simon J Mason. On using “climatology” as a reference strategy in the brier and ranked probability skill scores. Monthly Weather Review , 132(7):1891–1895, 2004. Hongxiang Qiu, Eric Tchetgen Tchetgen, and Edgar Dobriban. Efficient and multiply robust risk estimation under general forms of dataset shift. The Annals of Statistics , 52(4):1796–1824, 2024. Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervision. In International conference on machine learning , pages 8748–8763. PMLR, 2021. Ievgen Redko, Nicolas Courty, R´ emi Flamary, and Devis Tuia. Optimal transport for multi-source domain adaptation under target shift. In Proceedings of the Twenty-Second International Conference on Artificial Intelligence and Statistics , volume 89 of Proceedings of Machine Learning Research , pages 849–858. PMLR, 2019. Xavier Robin, Natacha Turck, Alexandre Hainard, Natalia Tiberti, Fr´ ed´ erique Lisacek, Jean-Charles Sanchez, and Markus M¨ uller. pROC: An open-source package for R and S+ to analyze and compare ROC curves. 
+
+BMC Bioinformatics , 12(1):77, 2011. Marco Saerens, Patrice Latinne, and Christine Decaestecker. Adjusting the outputs of a classifier to new a priori probabilities: a simple procedure. Neural computation , 14(1):21–41, 2002. Peter H Sch¨ onemann. A generalized solution of the orthogonal procrustes problem. Psychometrika , 31(1): 1–10, 1966. Hidetoshi Shimodaira. Improving predictive inference under covariate shift by weighting the log-likelihood function. Journal of statistical planning and inference , 90(2):227–244, 2000. Changjian Shui, Zijian Li, Jiaqi Li, Christian Gagn´ e, Charles X Ling, and Boyu Wang. Aggregating from multiple target-shifted sources. In Proceedings of the 38th International Conference on Machine Learning ,volume 139 of Proceedings of Machine Learning Research , pages 9638–9648. PMLR, 2021. Shanshan Song, Yuanyuan Lin, and Yong Zhou. Semi-supervised inference for block-wise missing data without imputation. Journal of Machine Learning Research , 25(99):1–36, 2024. Masashi Sugiyama, Taiji Suzuki, and Takafumi Kanamori. Density ratio estimation in machine learning .Cambridge University Press, 2012. Yang Sui, Qi Xu, Yang Bai, and Annie Qu. Multi-task learning for heterogeneous multi-source block-wise missing data. Journal of Computational and Graphical Statistics , pages 1–9, 2026. Arthur Tenenhaus and Michel Tenenhaus. Regularized generalized canonical correlation analysis. Psy-chometrika , 76(2):257–284, 2011. Robert Tibshirani. Regression shrinkage and selection via the lasso. Journal of the Royal Statistical Society Series B: Statistical Methodology , 58(1):267–288, 1996. 47 Ben Van Calster, Daan Nieboer, Yvonne Vergouwe, Bavo De Cock, Michael J. Pencina, and Ewout W. Steyerberg. A calibration hierarchy for risk models was defined: From utopia to empirical data. Journal of Clinical Epidemiology , 74:167–176, 2016. Aad W Van der Vaart. Asymptotic statistics , volume 3. Cambridge university press, 2000. Joost JM Van Griethuysen, Andriy Fedorov, Chintan Parmar, Ahmed Hosny, Nicole Aucoin, Vivek Narayan, Regina GH Beets-Tan, Jean-Christophe Fillion-Robin, Steve Pieper, and Hugo JWL Aerts. Computational radiomics system to decode the radiographic phenotype. Cancer research , 77(21):e104–e107, 2017. Roman Vershynin. High-Dimensional Probability: An Introduction with Applications in Data Science .Number 47 in Cambridge Series in Statistical and Probabilistic Mathematics. Cambridge University Press, Cambridge, 2018. Martin J Wainwright and Michael I Jordan. Graphical models, exponential families, and variational inference. 
+
+Foundations and Trends ® in Machine Learning , 1(1-2):1–305, 2008. Per-˚ Ake Wedin. Perturbation bounds in connection with singular value decomposition. BIT Numerical Mathematics , 12(1):99–111, 1972. Jun Wen, Jue Hou, Clara-Lea Bonzel, Yihan Zhao, Victor M Castro, Vivian S Gainer, Dana Weisenfeld, Tianrun Cai, Yuk-Lam Ho, Vidul A Panickan, et al. Latte: Label-efficient incident phenotyping from longitudinal electronic health records. Patterns , 5(1), 2024. Xin Xiong, Sara Morini Sweet, Molei Liu, Chuan Hong, Clara-Lea Bonzel, Vidul Ayakulangara Pan-ickan, Doudou Zhou, Linshanshan Wang, Lauren Costa, Yuk-Lam Ho, Alon Geva, Kenneth D. Mandl, Suchun Cheng, Zongqi Xia, Kelly Cho, J. Michael Gaziano, Katherine P. Liao, Tianxi Cai, and Tianrun Cai. Knowledge-driven online multimodal automated phenotyping system. medRxiv preprint 2023.09.29.23296239 , 2023. Congbin Xu, Chengde Qian, Zhaojun Wang, and Changliang Zou. Robust multi-source domain adaptation under label shift. arXiv preprint arXiv:2503.02506 , 2025. Qi Xu and Annie Qu. Representation retrieval learning for heterogeneous data integration. arXiv preprint arXiv:2503.09494 , 2025. Fei Xue and Annie Qu. Integrating multisource block-wise missing data in model selection. Journal of the American Statistical Association , 116(536):1914–1927, 2021. Guan Yu, Quefeng Li, Dinggang Shen, and Yufeng Liu. Optimal sparse linear prediction for block-missing multi-modality data without imputation. Journal of the American Statistical Association , 115(531): 1406–1419, 2020. Junhan Yu, Kejian Zhang, Doudou Zhou, and Guojun Zhu. Pattern-calibrated multimodal prediction under blockwise missingness. arXiv preprint arXiv:2607.01821 , 2026. Sheng Yu, Tianrun Cai, and Tianxi Cai. Nile: fast natural language processing for electronic health records. 
+
+arXiv preprint arXiv:1311.6063 , 2013. Yi Yu, Tengyao Wang, and Richard J Samworth. A useful variant of the davis–kahan theorem for statisticians. 
+
+Biometrika , 102(2):315–323, 2015. 48 Sicheng Zhao, Jing Jiang, Wenbo Tang, Jiankun Zhu, Hui Chen, Pengfei Xu, Bj¨ orn W. Schuller, Jianhua Tao, Hongxun Yao, and Guiguang Ding. Multi-source multi-modal domain adaptation. Information Fusion ,117:102862, 2025. Doudou Zhou, Tianxi Cai, and Junwei Lu. Multi-source learning via completion of block-wise overlapping noisy matrices. Journal of Machine Learning Research , 24(221):1–43, 2023. Huichen Zhu, Gen Li, and Eric F Lock. Generalized integrative principal component analysis for multi-type data with block-wise missing structure. Biostatistics , 21(2):302–318, 2020. 49
