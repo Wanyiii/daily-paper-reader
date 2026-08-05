@@ -1,0 +1,713 @@
+Title: SEER: A Self-Grounded Evidence Interface for Controlled Spatial Relation Classification
+
+URL Source: https://arxiv.org/pdf/2608.03631v1
+
+Published Time: Wed, 05 Aug 2026 01:04:25 GMT
+
+Number of Pages: 23
+
+Markdown Content:
+# SEER: A Self-Grounded Evidence Interface for Controlled Spatial Relation Classification 
+
+# Feixiang Liu 1,2 , Likun Wang 1,2 , Qiang Qiu 1, Hui Xu 1, Huawei Shen 1, Xueqi Cheng 1
+
+> 1
+
+State Key Laboratory of AI Safety, Institute of Computing Technology, CAS 
+
+> 2
+
+University of Chinese Academy of Sciences {liufeixiang23s@mails.ucas.ac.cn, wanglikun23z@ict.ac.cn, qiuqiang@ict.ac.cn, xuhui@ict.ac.cn, shenhuawei@ict.ac.cn, cxq@ict.ac.cn} 
+
+Abstract 
+
+Spatial relation questions require a model to identify the queried subject and object before comparing their layout. Yet a VLM can recognize both entities and still answer from the wrong instance or an ambiguous global view. We ask whether making query-specific evidence explicit can miti-gate this failure and propose SEER (Self-grounded Evidence for Entity-Relation Reasoning), a training-free inference-time evidence interface for frozen VLMs. SEER hides candidate relations during pair localization, constructs a query-specific view with explicit subject/object roles, and retains the full image and sparse box geometry as complementary evidence. For relation-choice protocols with exact inverse support, an optional refinement swaps the entity roles and changes the forward decision only when exactly one visual state obeys the corresponding inverse relation. On an image-disjoint GQA-Train900 test frozen before model scoring, SEER pools to +3.94 [2.17,5.72] over Full; the gain remains positive under label-independent grounding-order counterbalancing and on the 535 rows whose entity names are unique. The unchanged protocol yields +4.35 to +11.79 on all 2,434 filtered EmbSpa-tial pair-relation questions across three models. Matched con-trols separate local refocus from role-explicit conditioning. These results establish query-specific evidence construction as the principal intervention, with reciprocal consistency as a smaller protocol-specific refinement. 
+
+Code: https://github.com/SouthWinter/SEER 
+
+# Introduction 
+
+Vision-language models (VLMs) increasingly answer ques-tions that require reasoning about object relationships, yet spatial relations remain a stubborn failure mode. Benchmarks such as VSR (Liu, Emerson, and Collier 2023), What’sUp (Kamath, Hessel, and Chang 2023), GQA (Hudson and Man-ning 2019), ARO (Yuksekgonul et al. 2023), and recent spatial-intelligence surveys (Yu et al. 2025) show that mod-els can recognize individual objects while failing to compare their positions. These failures matter because spatial rela-tion reasoning is a core step in visual question answering, embodied instruction following, diagram understanding, and safety-critical visual assistance. Reasoning-oriented multimodal checkpoints are designed to support extended deliberation, but checkpoint identity alone does not establish correct visual evidence selection. A spatial answer is only as good as its input evidence: attending to the wrong instance, missing a small reference object, or relying on a language prior can corrupt the premise before re-lation prediction. This is consistent with recent hallucination work: HallusionBench (Guan et al. 2024) stresses image-context reasoning, and Reallocating Attention (Lu et al. 2026) argues that multimodal failures involve an imbalance between perceptual and reasoning stages. We use evidence alignment operationally: whether exposing query-specific S/O evidence improves the final decision, not whether pre-dicted boxes exactly recover annotated instances. SEER makes query-specific evidence explicit before rela-tion prediction. Target-relation-hidden self-grounding con-structs a local S/O-Marker view only for the queried pair: it shows where the entities are and which plays each lin-guistic role without candidate relations during localization. Unlike generic or detector-generated marks, the evidence comes from a frozen VLM grounder queried for that pair. Full preserves context and threshold-eligible Geometry sup-plies a sparse layout cue. A fixed forward rule produces an answer; inverse-supported protocols may additionally use re-ciprocal consistency as a conflict-resolution refinement. No model is trained and Full remains a fallback. The method-ological unit is not a new crop, glyph, or box heuristic in isolation, but their leakage-controlled composition into pair-specific evidence with explicit roles, selective geometry, and a deterministic Full fallback. Our evaluations separate frozen confirmation from de-velopment and mechanism analysis. On the same-source, image-disjoint GQA-Train900 nine-relation test frozen be-fore scoring, Qwen3-Instruct/Thinking gain +3.11/+4.78 over Full; the pooled gain is +3.94 [2.17,5.72], and remains +2.56 [0.72,4.39] under label-independent hash counterbal-ancing. The complete GQA/VG development pools contain 41,544 Qwen3 evaluations, and balanced 900-example sets add Qwen2.5-Instruct and R1-Onevision; final SEER im-proves all eight model/dataset rows over Full. Under a sepa-rately frozen EmbSpatial protocol, Qwen3-Instruct, Qwen3-Thinking, and InternVL3.5 gain +4.35, +5.09, and +11.79 on all 2,434 filtered pair-relation questions. Matched Crop, Self-Marker, corrupted-marker, and Oracle-Marker controls identify local evidence and explicit entity roles as the domi-nant evidence intervention. Our contributions are: 
+
+• We formulate spatial answering as a query-specific arXiv:2608.03631v1 [cs.CV] 4 Aug 2026 evidence-interface problem and introduce target-relation-hidden self-grounding that turns the queried pair into role-explicit visual evidence without VLM training or an external detector. 
+
+• As an optional inverse-supported refinement, we use exact subject/object exchange to obtain an observable consis-tency cue for conflicting evidence states, without learned calibration or target labels. 
+
+• We confirm gains on a nine-relation test frozen be-fore scoring and on EmbSpatial, audit entity-order and referential-ambiguity sensitivity, and isolate local refo-cus, role-explicit conditioning, and grounding headroom through matched counterfactuals and human audits. 
+
+# Related Work 
+
+Spatial and Compositional Failures. Compositional vision-language evaluation has repeatedly shown that models can recognize entities while failing to bind relations, word order, or object roles (Antol et al. 2015; Goyal et al. 2017; Johnson et al. 2017; Suhr et al. 2019; Thrush et al. 2022; Parcalabescu et al. 2022; Yuksekgonul et al. 2023; Hsieh et al. 2023). Spatial reasoning exposes this gap particularly clearly: prior work tests whether VLMs understand preposi-tions, relative direction, metric layout, and grounded scene relationships rather than only object presence or language priors (Krishna et al. 2017; Hudson and Manning 2019; Liu, Emerson, and Collier 2023; Kamath, Hessel, and Chang 2023; Rajabi and Kosecka 2024; Chen et al. 2024; Jia et al. 2025; Yu et al. 2025). We use this literature as the problem basis, not as a dataset contribution: our question is whether failures can be repaired by changing the visual evidence state available at inference time. 
+
+Global-Image VLM Interfaces. Large-scale image-text pretraining and interleaved multimodal modeling made global-image VLMs broadly useful for recognition, retrieval, captioning, and visual dialogue (Radford et al. 2021; Li et al. 2022, 2023a; Alayrac et al. 2022; Dai et al. 2023; Liu et al. 2024a; Peng et al. 2024). However, a global image inter-face leaves instance selection implicit. When a question asks about a particular subject/object pair, the model must inter-nally decide which instances matter, which view to inspect, and which relation cue to compare. SEER treats this interface as the bottleneck: it does not replace the VLM, but exposes competing evidence states so that the answer need not rely on an unobserved binding step. 
+
+Visual Prompting and Grounding Interfaces. Open-vocabulary grounding and segmentation systems make region-level visual prompts practical (Liu et al. 2024b; Kir-illov et al. 2023), and multimodal LLMs have been extended with grounded reference interfaces that connect language to regions (Peng et al. 2024; Chen et al. 2023; You et al. 2024). Region-aware and spatially trained models such as Spatial-RGPT and SpatialVLM improve grounded spatial reasoning with region proposals, depth, or spatial training data (Cheng et al. 2024; Chen et al. 2024). These systems define stronger model- or tool-augmented settings; our target is instead an inference-time interface for an unchanged VLM. Training-free visual prompting takes a complementary path: Set-of-Mark overlays visible marks so that a model can refer to regions using language-like symbols (Yang et al. 2023), VP-Bench systematically tests whether MLLMs can perceive and use such prompts (Xu et al. 2026), and Graph-of-Mark adds graph-connected region cues for spatial relations (Frisoni et al. 2026). SEER follows the same broad intuition that entities must become visually speakable, but changes the evidence protocol: target-relation-hidden self-grounding re-places external detection, the visual intervention is restricted to the queried pair, and geometry is admitted only when that pair’s self-grounded layout is unambiguous. These choices target pair-specific role conditioning rather than dense scene description; the supplement includes a matched diagnostic using the released Graph-of-Mark API. 
+
+Reasoning, Hallucination, and Evidence Reliability. 
+
+Chain-of-thought and reasoning-oriented multimodal mod-els motivate more deliberate inference (Wei et al. 2022); hallucination work shows the complementary risk that flu-ent reasoning can drift away from image evidence (Li et al. 2023b; Guan et al. 2024). MM-R3 measures consistency under question rephrasing, image restyling, and context changes and trains an adapter to reduce inconsistency (Chou et al. 2025); test-time consistency likewise aligns generic semantics-preserving variants through gradient-based adap-tation (Chou et al. 2026). SEER instead changes the visual evidence interface without adaptation and uses subject/object exchange as a task-specific relation equivariance only when an exact inverse exists. Other intervention methods mod-ify decoding, attention, or internal mechanisms. Reallocat-ing Attention, for example, rescales heads/layers to reduce MLRM hallucination (Lu et al. 2026). Our work instead externalizes subject/object evidence and uses this transfor-mation only as a protocol-specific conflict cue. 
+
+# Problem Setup 
+
+We study spatial relation decisions. For relation multiple choice, we write an example as xi = ( Ii, s i, o i, Ai), where 
+
+Ii is the image, si and oi are the subject and object phrases, and Ai is the candidate answer set. For caption-pair eval-uation, Ai contains the two candidate captions whose sub-ject/object relation differs. The goal is to select the visu-ally correct answer for the specified subject/object pair. We operationalize evidence alignment as the effect of expos-ing query-conditioned S/O evidence on that final decision: a model may know spatial vocabulary, or even localize ob-jects in isolation, yet still answer from a text prior, attend to the wrong instance, or rely on an ambiguous global view. Exact reference localization is audited separately rather than inferred from answer accuracy. The key constraint is that self-grounding must not receive the gold relation. During grounding, the model sees the im-age, the subject/object names, and generic pair-localization wording; answer options and relation labels are hidden. This prevents the grounder from using the answer relation to choose convenient boxes. For ARO caption-pair examples, the relation phrase is visible in both candidate captions; we Stage 1 Input  Stage 2 Relation -Hidden Grounding  Stage 3 Evidence States  Stage 4  Evidence Decision          
+
+> Question:
+> What is the spatial relation
+> between the red mug and the
+> blue book?
+> Candidate relations:
+> left of /right of / above / below
+> Frozen
+> VLM
+> Grounder
+> relations and
+> options hidden
+> locate subject
+> produce visual evidence
+> before answering
+> Construct complementary,
+> role -explicit evidence
+> 1) Full Image Evidence
+> 2)S/O Marker Evidence
+> 3) Geometry Evidence
+> (0,0 )x
+> ysubject
+> center object
+> center
+
+Final answer: 
+
+left of     
+
+> Entities:
+> S: mug
+> O: book
+> Geometry if eligible and
+> high -confidence;
+> otherwise use the visual
+> state with the larger
+> margin.
+> Keep
+> forward
+> Swap S/O ;use the
+> uniquely inverse -
+> consistent state
+> training -free fixed rule;
+> invalid grounding Full
+> locate object high -
+> conf.
+
+# S O
+
+> Full, Marker: frozen VLM scores
+> Geometry: fixed -rule confidence
+> Yes No
+> Inverse -supported Full/Marker conflict?
+
+Figure 1: SEER overview. Relation-hidden grounding builds Full, S/O-Marker, and Geometry evidence. The training-free rule uses eligible Geometry or the larger-margin visual state, resolves eligible conflicts by inverse-consistent S/O exchange, and falls back to Full after invalid grounding. therefore report ARO separately as an answer-blind caption-pair transfer diagnostic and keep GQA/VG as the cleaner target-relation-hidden relation-classification setting. 
+
+# Method 
+
+SEER is an inference-time evidence interface for a frozen VLM M and frozen VLM grounder G. By default G = M ;transfer experiments may fix G while changing M . The pro-cedure trains no model and uses no external detector. As illustrated in Figure 1, SEER first localizes the queried pair without access to candidate relations, converts that localiza-tion into role-explicit evidence, and obtains state-wise pre-dictions from the same M . It then makes a fixed forward decision. When the answer protocol supports an exact in-verse transformation, an optional reciprocal step may refine conflicts by exchanging the subject and object; Marker and Forward remain separately reported to expose the contribu-tion of evidence construction. The design has three constraints. First, localization is target-relation-hidden, so boxes cannot be chosen after seeing the target relation. Second, the same frozen VLM M reads every visual-linguistic state in a given experiment; chang-ing G changes only the evidence source. Third, the decision reuses state predictions and a known inverse-relation map rather than fitting a selector. Evidence construction supplies the visual intervention; optional reciprocal consistency re-finement supplies a protocol-specific transformation cue. 
+
+Target-Relation-Hidden Self-Grounding 
+
+Given the answer-removed localization input xi \ A i =(Ii, s i, o i), grounder G outputs normalized boxes bsi , b oi ∈
+
+[0 , 1] 4. Its prompt names the two entities but excludes Ai, the candidate relation, and any directional hint. We use subject-first as the pre-specified realization because the queried rela-tion is the ordered function r(si, o i); this semantic conven-tion is deterministic but is not claimed to remove mention-order bias. A sample-ID-hash counterbalancing audit is re-ported separately. When G = M , this is same-model self-grounding; when a shared G is used, we state it explicitly. We validate each box before using it. Boxes must have positive area, lie inside the image after clipping, and not collapse to degenerate coordinates. If either box is invalid, the example falls back to full-image evidence so that every method is evaluated on the same denominator. This fallback is important for interpretation: improvements cannot come from silently dropping difficult localization cases. 
+
+Constructing Complementary Evidence Types 
+
+The evidence types are deliberately complementary. Full im-age preserves context, marker view exposes role-explicit lo-cal conditioning, and geometry tests whether the box layout alone is enough. This redundancy is useful because a state can be informative on one example and misleading on an-other. 
+
+Full image. The unmodified image and original question. This preserves global context and is the safest fallback when grounding is uncertain, when the relevant relation depends on scene context, or when local cropping removes useful cues. 
+
+Self-grounded marker view. We crop a padded union of the subject/object boxes and draw a red box labeled S around the subject and a blue box labeled O around the object. Padding preserves nearby context while reducing unrelated distractors. The prompt states that S is the subject and O is the object and asks the model to answer about the S-to-O pair. This state combines three effects: local refocus, explicit role assignment, and a prompt-level interface for relation reading. Treating it as a separate state lets the experiments distinguish role-explicit S/O conditioning from cropping alone. 
+
+Threshold-eligible geometry. We derive a geometric can-didate from self-grounded box centers and extents. In the target-complete protocol, Geometry is eligible for left/right via signed horizontal displacement and for in-side/contains via asymmetric box coverage. It abstains for the above/below/on family because “on” cannot be distinguished reliably from vertical displacement alone, for front/behind because 2D boxes do not encode depth, and whenever its normalized layout score is below threshold. Geometry is therefore a sparse thresholded source available only on eligi-ble rows, not a third VLM prediction, a calibrated confidence estimate, or a universal replacement for visual reasoning. 
+
+Evidence States and Predictions 
+
+For each example xi, SEER defines three complementary evidence types for the same subject/object pair. Full and Marker are visual-linguistic states read by M ; Geometry is an optional deterministic state that carries a box-derived candidate and layout score and does not invoke M . Let Vi ⊆{full , marker } denote the available visual states and E(t)
+
+> i
+
+the concrete input shown to M for t ∈ V i. Full is always available, Marker requires valid grounding, and Geometry may abstain; the procedure therefore does not compare three VLM predictions on every row. The baseline applies M only to Full, whereas SEER ap-plies the same frozen M to each available visual state. For an answer option a ∈ A i and t ∈ V i, let ℓ(t) 
+
+> i
+
+(a) be the closed-set log-probability assigned by M under E(t) 
+
+> i
+
+. The visual-state prediction ˆa(t) 
+
+> i
+
+and option-score gap m(t) 
+
+> i
+
+are 
+
+ˆa(t) 
+
+> i
+
+= arg max a∈A i ℓ(t) 
+
+> i
+
+(a),m(t) 
+
+> i
+
+= ℓ(t) 
+
+> i
+
+(ˆ a(t) 
+
+> i
+
+) − max a∈A i, a ̸=ˆ a(t)
+
+> i
+
+ℓ(t) 
+
+> i
+
+(a). (1) The option-score gap is the difference between the top option and the strongest alternative. It is an uncalibrated ordering cue rather than a probability of state correctness, and it does not create a new answer candidate. 
+
+Training-Free Evidence Decision 
+
+The decision stage does not predict a new relation; it returns one of the state predictions defined above. It first obtains a forward candidate and then checks reciprocal consistency only for eligible visual-state conflicts. Both operations are deterministic and use no supervision or learned selector. 
+
+Forward decision. Let ˆa(geom)  
+
+> i
+
+be the box-derived candidate, 
+
+c(geom)  
+
+> i
+
+its normalized layout score, and z(geom)  
+
+> i
+
+indicate that the candidate maps to a supported relation. Geometry takes priority only when it is eligible and c(geom)  
+
+> i
+
+≥ τ . Otherwise, the visual state with the larger option-score gap provides a fallback forward source; exact ties favor Full. This source is 
+
+˜ti =
+
+
+
+geom , z(geom)  
+
+> i
+
+= 1 ∧ c(geom)  
+
+> i
+
+≥ τ, 
+
+marker , marker ∈ V i ∧ m(marker)  
+
+> i
+
+> m (full)  
+
+> i
+
+,
+
+full , otherwise, (2) The gap is only an ordering cue, not a calibrated probability that a state is correct. We use τ = 0 .5 for every model and dataset, and invalid grounding returns Full. 
+
+Reciprocal consistency refinement. Let r(a) map an op-tion to its relation and ι(r) denote the exact inverse, such as left-of ↔right-of or inside ↔contains. This refinement is used only in protocols whose candidate relations have defined in-verse mappings and that guarantee an inverse candidate for the correct relation; eligibility is fixed by dataset construc-tion, not by model outputs. On a row, Geometry must abstain and Full and Marker must disagree. We exchange si and oi
+
+while preserving the image, option strings, and order; for Marker, the visible S/O roles are also exchanged. If ˆa(t) 
+
+> i,ρ
+
+is state t’s prediction for this reciprocal query, its consistency indicator is q(t) 
+
+> i
+
+= ⊮[r(ˆ a(t)
+
+> i,ρ
+
+) = ι(r(ˆ a(t) 
+
+> i
+
+))] , which is zero if the predicted relation’s inverse is absent. The final source is 
+
+t∗ 
+
+> i
+
+=
+
+
+
+full , q(full)  
+
+> i
+
+= 1 , q (marker)  
+
+> i
+
+= 0 ,
+
+marker , q(marker)  
+
+> i
+
+= 1 , q (full)  
+
+> i
+
+= 0 ,
+
+˜ti, otherwise. (3) SEER returns ˆa(t∗  
+
+> i)
+> i
+
+. Thus reciprocity does not average scores or certify correctness by itself: it changes the forward source only when one state, but not the other, respects the required relation transformation. Protocols without inverse support retain the forward decision. The supplement reports uncondi-tional score fusion, equal-call reciprocal alternatives, trigger rates, and binary-task boundaries. 
+
+# Experimental Setup 
+
+Datasets. Our target-complete development suites contain 11,070 GQA (Hudson and Manning 2019) and 9,702 Visual Genome (VG) examples over nine relations. Targets are bal-anced within four option families: left/right, above/below/on, front/behind, and inside/contains. Every displayed relation occurs as a target; near/far is excluded because the source an-notations contain almost no reliable far targets. We also sam-ple 900 examples per dataset, 100 per relation, for balanced four-model development analysis. After fixing the method, we froze a separate GQA-Train900 test before model scor-ing: it contains 100 examples for each relation, uses 900 unique images, and has zero image-ID overlap with either development pool. We treat these constructed sets as con-trolled diagnostics; the development source pairs and a tar-geted 120-row frozen sample receive independent semantic audits. From the official EmbSpatial-Bench test (Du et al. 2024), we retain all 2,434 rows with exactly two queried ob-jects and a left/right/above/under target, spanning 276 scenes. We preserve its questions, options, order, and labels; official boxes are withheld from SEER and used only for post-hoc grounding IoU. The complete public VSR random test (Liu, Emerson, and Collier 2023) and all 1,860 inverse-predicate SpatialSense test judgments (Yang, Russakovsky, and Deng 2019) probe binary transfer. COCO-Geom is a 400-example box-derived mechanism diagnostic (Lin et al. 2014); ARO VG-Relation provides an external caption-pair test (Yuksek-gonul et al. 2023). Construction and audit details are in the supplement. 
+
+Models and scoring. The complete-pool study uses Qwen3-VL-8B-Instruct and Qwen3-VL-8B-Thinking (Bai, Chen et al. 2025). Balanced evaluation adds Qwen2.5-VL-7B-Instruct (Bai et al. 2025) and R1-Onevision-7B (Yang et al. 2025). Qwen3-I/T use same-model grounding (G = M ). For a controlled shared-grounder transfer setting, Qwen2.5-I and R1-OV use a fixed Qwen3-I grounder; this also avoids R1-OV’s unreliable box output through its tested interface. In every row, M remains the named evaluated VLM. Architecture-diverse replications use InternVL3.5-8B-HF with G = M on GQA and EmbSpatial (Wang et al. 2025); ARO additionally includes Qwen3-2B and LLaVA-1.5-7B (Liu et al. 2024a). Tables use the abbreviations above. Relation-MC and caption-pair tasks use length-normalized option log-probabilities with identical options and order across visual states. 
+
+Baselines and metrics. The primary baseline applies the same VLM to the original image. Crop isolates local refocus, Marker uses only the role-explicit S/O-marker state, Forward is the pre-refinement output of Equation 2, and SEER ap-plies Equation 3 whenever eligible. Accuracy is computed on every example; paired wrong-to-right/right-to-wrong counts and exact McNemar tests compare methods on identical rows. The supplement reports prompt-only SOP, Text-BBox, same-image prompt ensembles, external-grounder controls, the re-leased Graph-of-Mark high-level API, unconditional score fusion, and equal-call reciprocal alternatives. 
+
+Decision protocols and statistics. All methods are eval-uated on identical examples. The decision rule and global threshold τ = 0 .5 are fixed across models and datasets, with no dataset- or model-specific fitting. GQA/VG validation data served as method-development suites. We then applied the unchanged relation-MC protocol to the image-disjoint GQA-Train900 split and frozen EmbSpatial evaluation; VSR reused the frozen evidence construction and threshold un-der its native binary scoring. The complete 1,860-example SpatialSense inverse-predicate subset was separately frozen before scoring; a later relation-MC adaptation is labeled post-hoc in the supplement. The full chronology is documented there. In a post-hoc development-pool audit, two indepen-dent annotators inspected 240 stratified predicted ground-ings without model/dataset/IoU metadata and 270 relation-balanced source pairs without gold labels. Both university-peer annotators volunteered without compensation, gave in-formed consent, and provided no identifying or sensitive information. Because one image can yield several relation tu-ples, primary uncertainty uses a paired nonparametric boot-strap that resamples image IDs or scene IDs (20,000 rep-etitions). For pooled GQA/VG intervals, identical numeric image IDs form one cluster because GQA is derived from VG. GQA-Train900 resamples its 900 unique images, cluster-ing both model outcomes by image when pooled. We report 95% intervals for gains; pooled rows remain descriptive and all gains are computed from exact counts before rounding. The accompanying anonymous artifact provides frozen IDs and checksums, construction and scoring code, prompts, per-option scores, and analysis scripts. 
+
+# Frozen In-Domain Confirmation and Order Sensitivity 
+
+Table 1 evaluates GQA-Train900, whose IDs and check-sum were fixed before model scoring. Pre-specified subject-first SEER pools to +3.94 [2.17,5.72] over Full; complete object-first and label-independent Hash controls retain +2.22 [0.33,4.11] and +2.56 [0.72,4.39]. A more expensive two-order Marker score mean gives +3.00 [0.89,5.11]. Every pooled order control is positive, although relation-level ef-fects remain heterogeneous. Subject-first gains +1.22 over both Marker and Forward, identifying evidence construction as the larger intervention.                                     
+
+> Setting Full Marker Fwd. SEER Gain CI img
+> S-first/I 75.33 76.11 77.44 78.44 +3.11 [1.00,5.22] S-first/T 70.56 75.22 73.89 75.33 +4.78 [2.56,7.11] S-first/All 72.94 75.67 75.67 76.89 +3.94 [2.17,5.72] Object/All 72.94 74.33 73.56 75.17 +2.22 [0.33,4.11] Hash/All 72.94 74.72 74.17 75.50 +2.56 [0.72,4.39]
+
+Table 1: Frozen image-disjoint GQA-Train900 results (900 unique images; nine relations, 100 each). S-first is pre-specified; Object and Hash are post-hoc order controls. I/T denote Qwen3-I/T. Gain and intervals compare final SEER with Full. Under the pre-specified protocol, reciprocal refinement triggers on 10.61% of model–example pairs and makes 40 fixes versus 18 breaks relative to Forward, a pooled +1.22 [0.39,2.06]. Under Hash, final SEER versus Full gives per-model p = .343 /. 00156 ; relation-wise results are in the supplement. 
+
+# Development Results on GQA and VG 
+
+Table 2 gives results on the complete constructed pools. Final SEER improves Qwen3-I from 72.62 to 75.65 (+3.03) and Qwen3-T from 68.59 to 73.54 (+4.95). All four model/dataset image-cluster intervals against Full exclude zero. Marker supplies the initial +2.18-point aggregate gain, Forward adds +0.45, and reciprocal consistency refinement adds another +1.36 [1.17,1.54] over Forward. The final pooled gain is +3.99 [3.58,4.40] over Full. Table 3 broadens model coverage on relation-balanced subsets. Under subject-first grounding, final SEER improves all eight rows over Full, with a pooled +4.10 points; reciprocal consistency refinement adds +1.21 [0.72,1.70] over Forward. A post-hoc label-independent Hash audit also improves all eight rows and pools to +4.26 [3.27,5.25]. Seven row-wise intervals exclude zero; R1-OV/VG gives +1.89 [ −0.11 ,3.92]. Qwen2.5-I and R1-OV use a fixed Qwen3-I grounder, so Data Model Full Marker Fwd. SEER Gain GQA Qwen3-I 72.40 74.03 74.27 75.82 +3.41 GQA Qwen3-T 67.10 71.20 71.08 72.99 +5.89 VG Qwen3-I 72.87 73.76 74.60 75.47 +2.60 VG Qwen3-T 70.28 72.20 73.15 74.16 +3.88 All Qwen3-I 72.62 73.90 74.43 75.65 +3.03 All Qwen3-T 68.59 71.67 72.05 73.54 +4.95 
+
+Table 2: Complete development results on the constructed target-complete pools with same-model grounding (GQA: 11,070; VG: 9,702). Gain compares final SEER with Full. their rows test interface transfer rather than same-model self-grounding.                                                   
+
+> Data Model Full S-first Hash Gain H
+> GQA Qwen3-I 75.00 78.67 79.00 +4.00 GQA Qwen3-T 69.11 75.67 74.89 +5.78 GQA Qwen2.5-I †73.11 78.22 77.56 +4.44 GQA R1-OV †65.78 70.89 70.22 +4.44 VG Qwen3-I 70.33 72.67 73.22 +2.89 VG Qwen3-T 66.67 71.56 72.33 +5.67 VG Qwen2.5-I †68.89 72.56 73.89 +5.00 VG R1-OV †62.67 64.11 64.56 +1.89 All Overall 68.94 73.04 73.21 +4.26
+
+Table 3: Balanced cross-model development results (900 ex-amples per dataset; 100 per relation). S-first and Hash re-port final SEER under the pre-specified and sample-ID-hash grounding orders. Hash assignment uses neither labels nor model outputs; Gain H compares Hash with Full. † Grounder: Qwen3-I. As an architecture-diverse same-model replication, In-ternVL3.5 on GQA900 improves from 61.89 on Full to 63.89 on Marker, 68.78 with Forward, and 70.78 with final SEER (+8.89). We report this single-dataset replication separately rather than alter the symmetric four-model/two-dataset ag-gregate. 
+
+Option-Free Sanity Check 
+
+Closed-set scoring controls answer-format variability, so we additionally run a small option-free check with Qwen3-I, directly generating a relation phrase for 20 examples per re-lation and dataset. The option-free adaptation gains +6.67 on GQA and +5.00 on VG (+5.83 pooled) with 97.50% parseability; image-cluster intervals are [+2.26,+11.17] and [−0.56 ,+10.61]. This shows feasibility without answer op-tions rather than broad open-generation validity; dataset re-sults and the decision protocol are in the supplement. 
+
+# Mechanism Evidence 
+
+Controlled geometry. COCO-Geom is a controlled mech-anism diagnostic derived from COCO instance geometry. Its hard cases include overlap, small margins, diagonal dis-tractors, and non-left/right relations. Self-grounded boxes plus geometry improve Qwen3-T, Qwen3-I, R1-OV, and Qwen2.5-I by +27.75, +21.75, +41.75, and +29.75 points, respectively (full table in the supplement). Because its labels are geometry-derived, COCO-Geom isolates the intended mechanism: query-specific localization recovers spatial la-bels when box geometry is the relevant decision signal. Removing Geometry from Forward costs 0.51 [0.40,0.63] points on development and 0.22 [ −0.17 ,0.67] when frozen; it is a modest component and never routes EmbSpatial rows. 
+
+Matched evidence-state ablation. Table 4 separates lo-cal refocus from role-explicit conditioning on the balanced target-complete sets. Crop uses the target-relation-hidden self-grounded union without marks; Self-Marker adds S/O marks using exactly the same boxes. Oracle-Marker re-places self-grounding with source annotation boxes and is an analysis-only upper bound. Swapped and Random hold the self-grounded crop fixed but exchange S/O identities or move same-size markers within the crop. Full →Crop and Crop →Self-Marker add +1.25 and +1.64 points overall; the latter has an image-cluster 95% interval of [+0.25,+3.05]. Oracle-Marker adds another +6.17, whereas Swapped and Random remove 1.67 and 2.50 points from Self-Marker. Thus the gain depends on both local evidence and seman-tically correct S/O role assignment within the rendered view, while annotation boxes show substantial localization head-room.                         
+
+> Model Full Crop Self-M Oracle-M Swap Random Qwen3-I 72.67 73.72 74.39 80.61 73.78 72.06 Qwen3-T 67.89 69.33 71.94 78.06 69.22 69.28 All 70.28 71.53 73.17 79.33 71.50 70.67
+
+Table 4: Matched target-complete mechanism controls. Oracle-M is an annotation-box upper bound; Swap and Ran-dom corrupt S/O role assignment while retaining the self-grounded crop. The complete-pool Qwen3-I expansion sharpens this re-sult under the natural relation mix: Full, Crop, Self-Marker, Forward, and final SEER obtain 72.62, 74.10, 73.90, 74.43, and 75.65, respectively. Marker is slightly below Crop overall because it helps GQA but regresses on VG; reciprocal con-sistency refinement then adds +1.23 over Forward. Oracle-Marker reaches 80.45, leaving +6.55 points of localization headroom over Self-Marker. Together, the matched controls establish local refocus and role-explicit conditioning as the principal evidence intervention, with relation-aware consis-tency refinement selecting against some misleading views. Equal-call reciprocal alternatives and unconditional Full/Marker fusion are reported in the supplement. Across the two frozen GQA and three frozen EmbSpatial rows, the pre-specified rule is always within 0.34 points of the best equal-call alternative, and no alternative dominates across models; we therefore retain it rather than select a rule after observing test labels. External Transfer and Boundaries 
+
+ARO VG-Relation. On our balanced 600-example sub-set across seven models, Full, Box, and S/O-Marker average 73.14, 77.67, and 80.81; Marker improves six models (+7.67 mean), transferring beyond relation multiple choice. On the complete 23,937-example official split, relation-region crops raise Qwen3-I from 82.51 to 87.08, supporting the localization diagnosis but remaining separate from the self-grounded SEER claim. Because both captions expose rela-tion words, ARO is answer-blind rather than target-relation-hidden; supplementary crop–box–marker ablations attribute its gain mainly to explicit S/O evidence. 
+
+Frozen EmbSpatial confirmation. Under the frozen four-direction EmbSpatial protocol, Qwen3-I/T and a later unchanged-protocol InternVL3.5 replication improve over Full by +4.35/+5.09/+11.79, with scene-cluster intervals [+3.12,+5.68], [+3.81,+6.47], and [+10.14,+13.36]. Relative to Marker, final SEER changes by +0.90 [0.07,1.74], +0.78 [−0.08 ,1.60], and −0.53 [−1.63 ,0.58]. Reciprocal refine-ment adds 0.00/+0.25/+0.25 over Forward. Evidence con-struction transfers strongly; the additional decision benefit is smaller and model-dependent. 
+
+Binary protocol boundary. On 2,195 VSR random-test judgments, Full/Marker/Forward/SEER obtain 77.86/78.00/78.72/79.04. Final SEER is +1.18 [+0.13,+2.24] over Full, whereas its +0.32 [−0.14 ,+0.81] incre-ment over Forward is not statistically resolved. On 1,860 frozen official SpatialSense annotations, Qwen3-I Full/Forward/SEER obtain 67.69/67.53/67.63, and Qwen3-T obtains 63.82/63.66/63.12 with a fixed Qwen3-I grounder. The interface therefore does not transfer uniformly to binary truth judgment: reciprocal relation consistency is useful for controlled relation choice but is not a general truth-reliability certificate. 
+
+# Analysis 
+
+Evidence construction and its active intervention. 
+
+Across both complete-pool models, Marker improves the descriptive aggregate by +2.18, Forward by +2.63, and fi-nal SEER by +3.99. Table 4 separates local refocus from role-explicit conditioning, while the oracle gap quantifies lo-calization headroom. Frozen prompt/mark controls and the ARO crop–box–marker progression further show that the active intervention is making query-specific locations and roles jointly inspectable, rather than adding instructions or a particular glyph. 
+
+What reciprocal consistency refinement adds. The evi-dence states fail differently: Marker corrects 2,377 complete-pool examples where Full is wrong, while Full preserves 1,436 answers that Marker would break. Raw option-score gaps weakly predict which state is correct; fixed z-score, robust, and percentile normalizations do not improve con-sistently, and unconditional fusion changes Marker by at most +0.05 points. An oracle over the two visual states is +7.85. Only 4,267 of 41,544 pairs trigger reciprocal con-sistency refinement, which adds +1.36 [1.17,1.54] over For-ward; the frozen test gives +1.22 [0.39,2.06]. The cue is not a visual-correctness certificate: among 69 intact-image an-swer changes, only 3 recur under text-only input and 7 under shuffled images, so the positive control gains arise mostly on different examples. Geometry remains sparse (3,206 eligi-ble pairs), and reciprocal consistency refinement is a smaller conflict-selection refinement. 
+
+Model and compute controls. Qwen3-I is stronger on Full, but Qwen3-T receives the larger complete-pool gain (+4.95 versus +3.03). Closed-set scoring does not isolate free-form deliberation, so this shows only that a reasoning checkpoint can benefit from explicit evidence. On 3,600 bal-anced rows, seven Full prompts reach 70.25 by score averag-ing and 70.28 by voting at 7.00 × cost, versus SEER’s 74.64 at 7.12 ×. A post-hoc frozen efficiency diagnostic invokes full SEER only below a model-specific 25th-percentile Full-score gap selected on unlabeled development data. It covers 25.7% of rows, obtains a pooled +3.22 [1.89,4.61], and re-tains 81.7% of the full +3.94 gain at 2.57 × rather than 7.12 ×
+
+cost. We report this as an accuracy–cost diagnostic, not a sec-ond primary method. 
+
+Robustness, grounding, and scope. The method best fits named pairs with relations visible from local appearance or 2D layout. Hash improves five relations and regresses on four; the worst pooled gains are behind −4.5, con-tains/on −4.0, and right-of −2.5. Removing left/right, in-side/contains, role-swapped, or target-on rows still yields subject-first gains of +3.57, +2.64, +4.13, and +4.75. On the complete frozen set, 535 unique-name and 365 repeated-name images retain pooled gains of +2.24 [0.37,4.11] and +3.42 [0.41,6.44]. In the targeted audit, unanimously identi-fiable and non-unique images retain +8.70 [2.17,17.39] and +6.38 [ −4.26 ,17.02]; the 78-item strict-consensus subset re-tains +5.77 [ −1.28 ,13.46]. Gains are therefore not confined to ambiguous pairs, although SEER remains an evidence interface rather than a certificate of exact grounding. 
+
+# Limitations 
+
+SEER is bounded by grounding quality and relations visible from local appearance or 2D layout. Relation hiding does not remove order bias, although counterbalanced gains remain positive. Reciprocal refinement requires inverse-supported relation choice and binary transfer is inconsistent. Full SEER costs 7.12 × one Full score; its cheaper gate is post-hoc. Image-disjoint freezing cannot exclude pretraining exposure, and option-free evidence is tested only with Qwen3-I. 
+
+# Conclusion 
+
+SEER turns relation-hidden self-grounding into role-explicit evidence without training a new model or using an exter-nal detector. Across frozen and cross-model evaluations, matched controls identify local refocus and semantic S/O binding as the principal source of improvement, while recip-rocal consistency provides a smaller refinement when exact inverses are available. These results show that explicit evi-dence interfaces can complement stronger reasoning check-points, although robust grounding and open-ended spatial semantics remain unresolved. References 
+
+Alayrac, J.-B.; Donahue, J.; Luc, P.; Miech, A.; Barr, I.; Hasson, Y.; Lenc, K.; Mensch, A.; Millican, K.; Reynolds, M.; Ring, R.; Rutherford, E.; Cabi, S.; Han, T.; Gong, Z.; Samangooei, S.; Monteiro, M.; Menick, J.; Borgeaud, S.; Brock, A.; Nematzadeh, A.; Sharifzadeh, S.; Binkowski, M.; Barreira, R.; Vinyals, O.; Zisserman, A.; and Simonyan, K. 2022. Flamingo: A Visual Language Model for Few-Shot Learning. In Advances in Neural Information Processing Systems .Antol, S.; Agrawal, A.; Lu, J.; Mitchell, M.; Batra, D.; Zit-nick, C. L.; and Parikh, D. 2015. VQA: Visual Question Answering. In Proceedings of the IEEE International Con-ference on Computer Vision , 2425–2433. Bai, S.; Chen, K.; Liu, X.; Wang, J.; Ge, W.; Song, S.; Dang, K.; Wang, P.; Wang, S.; Tang, J.; Zhong, H.; Zhu, Y.; Yang, M.; Li, Z.; Wan, J.; Wang, P.; Ding, W.; Fu, Z.; Xu, Y.; Ye, J.; Zhang, X.; Xie, T.; Cheng, Z.; Zhang, H.; Yang, Z.; Xu, H.; and Lin, J. 2025. Qwen2.5-VL Technical Report. arXiv:2502.13923. Bai, S.; Chen, K.; et al. 2025. Qwen3-VL Technical Report. arXiv:2511.21631. Chen, B.; Xu, Z.; Kirmani, S.; Ichter, B.; Driess, D.; Florence, P.; Sadigh, D.; Guibas, L.; and Xia, F. 2024. SpatialVLM: Endowing Vision-Language Models with Spatial Reasoning Capabilities. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 14455–14465. Chen, K.; Zhang, Z.; Zeng, W.; Zhang, R.; Zhu, F.; and Zhao, R. 2023. Shikra: Unleashing Multimodal LLM’s Referential Dialogue Magic. arXiv preprint arXiv:2306.15195 .Cheng, A.-C.; Yin, H.; Fu, Y.; Guo, Q.; Yang, R.; Kautz, J.; Wang, X.; and Liu, S. 2024. SpatialRGPT: Grounded Spatial Reasoning in Vision Language Models. In Advances in Neural Information Processing Systems .Chou, S.-H.; Chandhok, S.; Little, J.; and Sigal, L. 2025. MM-R 3: On (In-)Consistency of Vision-Language Models (VLMs). In Findings of the Association for Computational Linguistics: ACL 2025 , 4762–4788. Association for Compu-tational Linguistics. Chou, S.-H.; Chandhok, S.; Little, J. J.; and Sigal, L. 2026. Test-Time Consistency in Vision Language Models. In Pro-ceedings of the IEEE/CVF Winter Conference on Applica-tions of Computer Vision , 7789–7798. Dai, W.; Li, J.; Li, D.; Tiong, A. M. H.; Zhao, J.; Wang, W.; Li, B.; Fung, P.; and Hoi, S. 2023. InstructBLIP: Towards General-Purpose Vision-Language Models with Instruction Tuning. In Advances in Neural Information Processing Sys-tems .Du, M.; Wu, B.; Li, Z.; Huang, X.; and Wei, Z. 2024. EmbSpatial-Bench: Benchmarking Spatial Understanding for Embodied Tasks with Large Vision-Language Models. In Proceedings of the 62nd Annual Meeting of the Associa-tion for Computational Linguistics (Volume 2: Short Papers) .Association for Computational Linguistics. Frisoni, G.; Molfetta, L.; Buzzoni, M.; and Moro, G. 2026. Graph-of-Mark: Promote Spatial Reasoning in Multimodal Language Models with Graph-Based Visual Prompting. Pro-ceedings of the AAAI Conference on Artificial Intelligence ,40(36): 30726–30734. Goyal, Y.; Khot, T.; Summers-Stay, D.; Batra, D.; and Parikh, D. 2017. Making the V in VQA Matter: Elevating the Role of Image Understanding in Visual Question Answering. In 
+
+Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 6904–6913. Guan, T.; Liu, F.; Wu, X.; Xian, R.; Li, Z.; Liu, X.; Wang, X.; Chen, L.; Huang, F.; Yacoob, Y.; Manocha, D.; and Zhou, T. 2024. HallusionBench: An Advanced Diagnostic Suite for Entangled Language Hallucination and Visual Illu-sion in Large Vision-Language Models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 14375–14385. Hsieh, C.-Y.; Zhang, J.; Ma, Z.; Kembhavi, A.; and Krishna, R. 2023. SugarCrepe: Fixing Hackable Benchmarks for Vision-Language Compositionality. In Advances in Neural Information Processing Systems .Hudson, D. A.; and Manning, C. D. 2019. GQA: A New Dataset for Real-World Visual Reasoning and Compositional Question Answering. In Proceedings of the IEEE/CVF Con-ference on Computer Vision and Pattern Recognition , 6700– 6709. Jia, M.; Qi, Z.; Zhang, S.; Zhang, W.; Yu, X.; He, J.; Wang, H.; and Yi, L. 2025. OmniSpatial: Towards Comprehensive Spatial Reasoning Benchmark for Vision Language Models. arXiv:2506.03135. Johnson, J.; Hariharan, B.; van der Maaten, L.; Fei-Fei, L.; Zitnick, C. L.; and Girshick, R. 2017. CLEVR: A Diag-nostic Dataset for Compositional Language and Elementary Visual Reasoning. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , 2901–2910. Kamath, A.; Hessel, J.; and Chang, K.-W. 2023. What’s “up” with Vision-Language Models? Investigating Their Struggle with Spatial Reasoning. In Proceedings of the 2023 Confer-ence on Empirical Methods in Natural Language Processing ,9161–9175. Kirillov, A.; Mintun, E.; Ravi, N.; Mao, H.; Rolland, C.; Gustafson, L.; Xiao, T.; Whitehead, S.; Berg, A. C.; Lo, W.-Y.; Dollar, P.; and Girshick, R. 2023. Segment Anything. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision , 4015–4026. Krishna, R.; Zhu, Y.; Groth, O.; Johnson, J.; Hata, K.; Kravitz, J.; Chen, S.; Kalantidis, Y.; Li, L.-J.; Shamma, D. A.; Bernstein, M. S.; and Fei-Fei, L. 2017. Visual Genome: Con-necting Language and Vision Using Crowdsourced Dense Image Annotations. International Journal of Computer Vi-sion , 123(1): 32–73. Li, J.; Li, D.; Savarese, S.; and Hoi, S. 2023a. BLIP-2: Boot-strapping Language-Image Pre-training with Frozen Image Encoders and Large Language Models. In Proceedings of the 40th International Conference on Machine Learning .Li, J.; Li, D.; Xiong, C.; and Hoi, S. 2022. BLIP: Boot-strapping Language-Image Pre-training for Unified Vision-Language Understanding and Generation. In Proceedings of the 39th International Conference on Machine Learning ,12888–12900. Li, Y.; Du, Y.; Zhou, K.; Wang, J.; Zhao, W. X.; and Wen, J.-R. 2023b. Evaluating Object Hallucination in Large Vision-Language Models. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , 292– 305. Lin, T.-Y.; Maire, M.; Belongie, S.; Hays, J.; Perona, P.; Ra-manan, D.; Dollar, P.; and Zitnick, C. L. 2014. Microsoft COCO: Common Objects in Context. In European Confer-ence on Computer Vision , 740–755. Liu, F.; Emerson, G.; and Collier, N. 2023. Visual Spatial Reasoning. Transactions of the Association for Computa-tional Linguistics , 11: 635–651. Liu, H.; Li, C.; Li, Y.; and Lee, Y. J. 2024a. Improved Baselines with Visual Instruction Tuning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 26296–26306. Liu, S.; Zeng, Z.; Ren, T.; Li, F.; Zhang, H.; Yang, J.; Jiang, Q.; Li, C.; Yang, J.; Su, H.; Zhu, J.; and Zhang, L. 2024b. Grounding DINO: Marrying DINO with Grounded Pre-Training for Open-Set Object Detection. In European Conference on Computer Vision .Lu, H.; Chu, B.; Fu, W.; Nan, G.; Liu, J.; Pan, M.; Li, Q.; Yu, Y.; Wang, H.; and Wang, K. 2026. Reallocating Attention Across Layers to Reduce Multimodal Hallucination. In Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 4157–4167. Minderer, M.; Gritsenko, A.; Stone, A.; Neumann, M.; Weis-senborn, D.; Dosovitskiy, A.; Mahendran, A.; Arnab, A.; Dehghani, M.; Shen, Z.; Wang, X.; Zhai, X.; Kipf, T.; and Houlsby, N. 2022. Simple Open-Vocabulary Object Detec-tion with Vision Transformers. In European Conference on Computer Vision , 728–755. Parcalabescu, L.; Cafagna, M.; Muradjan, L.; Frank, A.; Cal-ixto, I.; and Gatt, A. 2022. VALSE: A Task-Independent Benchmark for Vision and Language Models Centered on Linguistic Phenomena. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics ,8253–8280. Peng, Z.; Wang, W.; Dong, L.; Hao, Y.; Huang, S.; Ma, S.; and Wei, F. 2024. Kosmos-2: Grounding Multimodal Large Language Models to the World. In International Conference on Learning Representations .Radford, A.; Kim, J. W.; Hallacy, C.; Ramesh, A.; Goh, G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.; Krueger, G.; and Sutskever, I. 2021. Learning Transferable Visual Models From Natural Language Supervision. In Pro-ceedings of the 38th International Conference on Machine Learning , 8748–8763. Rajabi, N.; and Kosecka, J. 2024. GSR-Bench: A Benchmark for Grounded Spatial Reasoning Evaluation via Multimodal LLMs. arXiv:2406.13246. Suhr, A.; Zhou, S.; Zhang, A.; Zhang, I.; Bai, H.; and Artzi, Y. 2019. A Corpus for Reasoning about Natural Language Grounded in Photographs. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics ,6418–6428. Thrush, T.; Jiang, R.; Bartolo, M.; Singh, A.; Williams, A.; Kiela, D.; and Ross, C. 2022. Winoground: Probing Vision and Language Models for Visio-Linguistic Compositionality. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 5238–5248. Wang, W.; et al. 2025. InternVL3.5: Advancing Open-Source Multimodal Models in Versatility, Reasoning, and Efficiency. arXiv:2510.17707. Wei, J.; Wang, X.; Schuurmans, D.; Bosma, M.; Xia, F.; Chi, E.; Le, Q. V.; and Zhou, D. 2022. Chain-of-Thought Prompting Elicits Reasoning in Large Language Models. In 
+
+Advances in Neural Information Processing Systems .Xu, M.; Chen, J.; Zhao, Y.; Li, J. C. L.; Qiu, Y.; Du, Z.; Wu, M.; Zhang, P.; Li, K.; Yang, H.; Ma, W.; Wei, J.; Li, Q.; Liu, K.; and Lei, W. 2026. VP-Bench: A Comprehensive Bench-mark for Visual Prompting in Multimodal Large Language Models. Proceedings of the AAAI Conference on Artificial Intelligence , 40(13): 11332–11341. Yang, J.; Zhang, H.; Li, F.; Zou, X.; Li, C.; and Gao, J. 2023. Set-of-Mark Prompting Unleashes Extraordinary Vi-sual Grounding in GPT-4V. arXiv:2310.11441. Yang, K.; Russakovsky, O.; and Deng, J. 2019. SpatialSense: An Adversarially Crowdsourced Benchmark for Spatial Re-lation Recognition. In Proceedings of the IEEE/CVF Inter-national Conference on Computer Vision .Yang, Y.; He, X.; Pan, H.; Jiang, X.; Deng, Y.; Yang, X.; Lu, H.; Yin, D.; Rao, F.; Zhu, M.; Zhang, B.; and Chen, W. 2025. R1-Onevision: Advancing Generalized Multimodal Reasoning through Cross-Modal Formalization. In Proceed-ings of the IEEE/CVF International Conference on Computer Vision , 2376–2385. You, H.; Zhang, H.; Gan, Z.; Du, X.; Zhang, B.; Wang, Z.; Cao, L.; Chang, S.-F.; and Yang, Y. 2024. Ferret: Refer and Ground Anything Anywhere at Any Granularity. In 
+
+International Conference on Learning Representations .Yu, S.; Chen, Y.; Ju, H.; Jia, L.; Zhang, F.; Huang, S.; Wu, Y.; Cui, R.; Ran, B.; Zhang, Z.; Zheng, Z.; Zhang, Z.; Wang, Y.; Song, L.; Wang, L.; Li, Y.; Shan, Y.; and Lu, H. 2025. How Far are VLMs from Visual Spatial Intelligence? A Benchmark-Driven Perspective. arXiv:2509.18905. Yuksekgonul, M.; Bianchi, F.; Kalluri, P.; Jurafsky, D.; and Zou, J. 2023. When and Why Vision-Language Models Behave like Bags-of-Words, and What to Do about It? In 
+
+International Conference on Learning Representations .Supplementary Material Target-Complete Evaluation Protocol 
+
+Construction and Shortcut Audit 
+
+The target-complete development suites are derived from GQA (Hudson and Manning 2019) and Visual Genome (VG) (Krishna et al. 2017) scene graphs. We canonicalize relation names, require valid images and subject/object annotations, and deduplicate tuples. Four balanced option families cover left/right, above/below/on, front/behind, and inside/contains; every displayed relation therefore also occurs as a target. We exclude proximity because the source graphs contain many “near” annotations but almost no reliable “far” targets. For containment, we partition the available “inside” examples into two non-overlapping subsets and role-swap one subset to form “contains.” Candidate order is shuffled with seed 2027.                   
+
+> Relation family GQA VG Option prior Left / right 1,500 each 351 each 50.00 Above / below / on 1,190 each 1,500 each 33.33 Front / behind 1,500 each 1,500 each 50.00 Inside / contains 750 each 750 each 50.00 Total 11,070 9,702 –
+
+Table 5: Target-complete relation counts. Option prior is the majority-target accuracy within that answer set; all displayed relations are balanced targets. The cross-model sets sample 100 examples for each of nine labels (900 per dataset) from these pools before model evaluation. Full-scale evaluation measures the available re-lation distribution; the balanced sets give each relation equal weight across evaluated VLMs. 
+
+Frozen Same-Source, Image-Disjoint Test 
+
+To separate confirmation from protocol development, we in-dependently derive GQA-Train900 from GQA training scene graphs. We first remove every image ID appearing in either GQA or VG development pool, then select 100 examples for each of the same nine target relations while allowing at most one tuple per image. The resulting test has 900 examples, 900 images, and no development-image overlap; 535 exam-ples contain a unique named subject and object instance in the source scene graph, while 365 contain at least one re-peated name. Selection uses only sample ID, image ID, and target relation—never model outputs, boxes, option scores, or correctness. Before scoring, we fixed the exact 900 sample IDs, source-file checksums, selection seed 20270723, relation counts, and output SHA256 (prefix cc1319b3d942 ). The τ = 0 .5
+
+forward rule and reciprocal unique-consistency rule had both been frozen earlier, so this set supplies an untouched test of the complete nine-relation interface rather than another source for method selection. Against the self-grounded Marker state, final SEER gains +2.33 points for Qwen3-I (36 fixes/15 breaks, McNemar 
+
+p = .0046 , image-cluster 95% CI [+0.78,+3.89]) and +0.11 for Qwen3-T (26/25, p = 1 .0, [ −1.44 ,+1.67]). Pooling the                         
+
+> Model Full Marker Fwd. SEER Gain CI img
+> Qwen3-I 75.33 76.11 77.44 78.44 +3.11 [1.00,5.22] Qwen3-T 70.56 75.22 73.89 75.33 +4.78 [2.56,7.11] Both 72.94 75.67 75.67 76.89 +3.94 [2.17,5.72]
+
+Table 6: Frozen GQA-Train900 results. Fwd. is the pre-refinement output; final SEER applies the previously frozen reciprocal rule.                                                              
+
+> Qwen3-I Qwen3-T Relation Full SEER Gain Full SEER Gain above 61 64 +3 56 60 +4 behind 86 81 −585 81 −4
+> below 64 70 +6 65 68 +3 contains 92 96 +4 91 92 +1 in front of 74 85 +11 68 71 +3 inside 82 88 +6 64 87 +23 left of 58 72 +14 60 80 +20 on 80 75 −577 77 0right of 81 75 −669 62 −7
+
+Table 7: Per-relation accuracy on the frozen nine-relation test. Each model has exactly 100 examples per row. two model outcomes gives +1.22 [+0.06,+2.33]. Thus the frozen aggregate supports a decision benefit beyond evi-dence construction, while the per-model intervals show that its magnitude is heterogeneous. Because the largest frozen loss is on right-of, we recom-pute the Forward outputs after disabling Geometry and rout-ing only between Full and Marker by the same score-gap rule. Table 8 shows that Geometry is not the main cause of the pre-refinement asymmetry. Reciprocal consistency re-finement raises Qwen3-I right-of from 71 to 75 but changes Qwen3-T from 63 to 62, so it reduces the pooled deficit without eliminating grounding-order and interface bias. Forward improves Qwen3-I on both source-scene multi-plicity strata: +1.68 on 535 unique-instance examples and +2.74 on 365 examples with a repeated subject or object name. Qwen3-T gains +2.80 and +4.11 on the same strata. Relative to source boxes, Qwen3-I/Qwen3-T grounding suc-ceeds on 892/886 examples and has mean subject/object IoU 0.421/0.432 and 0.380/0.386. Positive Forward gains persist even when the smaller S/O IoU is zero (+1.40/+2.37), con-firming that source-box overlap is an imperfect proxy and should not be read as a human pair-correctness estimate. 
+
+Grounder and Evaluated VLM 
+
+The evaluated VLM M and VLM grounder G may differ. Qwen3-I/T use G = M ; Qwen2.5-I and R1-OV use Qwen3-I as G. Direct R1-OV grounding returned only 1/30 valid boxes, so we do not call its transfer setting self-grounded. 
+
+G receives the image, subject/object phrases, and the generic relation question only to resolve the relevant in-stances; answer options, candidate relation labels, and any request to produce an answer are withheld. It returns nor-Model Relation Full Marker Visual only Fwd. Qwen3-I left of 58 73 72 72 Qwen3-I right of 81 67 71 71 Qwen3-T left of 60 84 72 73 Qwen3-T right of 69 65 63 63 
+
+Table 8: Frozen directional diagnostic with Geometry dis-abled. “Visual only” compares Full and Marker option-score gaps; all rows contain 100 examples. malized JSON boxes. Boxes are clipped and rejected for non-positive area, side below 0.005, area below 10 −5, or extreme aspect ratio. Invalid grounding falls back to Full. 
+
+State Scoring and Evidence Decision 
+
+Full and Marker use the same frozen M , candidates, option order, and length-normalized continuation log-probability; the option-score gap is the difference between the top two scores. Marker crops the padded box union, draws red S and blue O boxes, and states those identities in the prompt. For a left/right-only candidate family, Geometry predicts left when 
+
+dx = xs − xo < 0 and right otherwise, with layout score c =
+
+|dx|, where xs and xo are normalized box-center coordinates. For an inside/contains-only family, let us = |bs ∩bo|/|bs| and 
+
+uo = |bs ∩ bo|/|bo|; Geometry predicts inside when us > u o
+
+and contains otherwise, with c = |us − uo|. It abstains on above/below/on and front/behind. At fixed τ = 0 .5, eligible Geometry takes priority; otherwise the larger-gap visual state defines Forward. No decision component is fit to labels. Final SEER follows the main-paper reciprocal rule only for inverse-supported relation-choice protocols. It exchanges entity roles and visible S/O identities while preserving option strings and order. On an eligible Full/Marker conflict, the for-ward source changes only when exactly one state predicts the inverse of its own forward relation; a missing inverse candi-date counts as inconsistent. Both- or neither-consistent cases retain Forward. SpatialSense below bounds this relation-MC rule outside relation classification. Option-score gaps provide an ordering cue but are not calibrated state-correctness probabilities. Across the four complete-pool Qwen3 runs, their state-selection AUC is only .565–.602; Qwen3-I Marker gaps exceed Full by roughly three points and win 76–77% of raw comparisons, whereas Qwen3-T scales are nearly matched. The highest equal-frequency gap bin is nevertheless 6.92–21.25 points more accurate than the lowest. Label-free z-score, median/IQR, and empirical-percentile normalizations change frozen GQA and EmbSpatial accuracy by at most 0.41 points and do not dominate raw gaps. We therefore retain the transparent raw comparison in Forward and use reciprocal structure for the final refinement. Unconditional Full/Marker fusion is similarly unhelpful on 41,544 development evaluations: always-Marker gives 72.79, raw-gap selection 72.73, mean-probability/log-score fusion 72.80/72.83, and rank fusion 71.91, versus 73.24 for Forward and 74.60 for final SEER. The Full/Marker oracle is 80.64, so complementarity exists but is not recovered by global score averaging. An exact No-Geometry ablation further isolates the sparse box-derived route before reciprocal refinement. On frozen Qwen3-I/T, No-Geometry Forward versus Forward is 77.44/77.44 and 73.44/73.89, giving a pooled Geometry increment of +0.22 [ −0.17 ,0.67]. On the four complete de-velopment rows, the increments are +0.19 GQA and +0.10 VG for Qwen3-I, and +1.05/+0.68 for Qwen3-T; pooled over 41,544 evaluations, Forward improves No-Geometry For-ward by +0.51 [0.40,0.63], with 309 fixes, 96 breaks, and 3,206 Geometry routes. EmbSpatial has no eligible Geome-try route under the frozen protocol. Thus Geometry is a mod-est positive development component, not the main source of improvement. 
+
+Prompts, Rendering, and Scoring 
+
+Table 10 gives the target-complete prompt skeletons. Grounding retains the entity names and generic question only to resolve instances; options and relation labels are re-moved. Full and Marker use the same question, options, and order, with Marker adding only visible S/O role cues and the corresponding instruction. Boxes are clipped to the image and validated before ren-dering. For valid boxes, Marker crops the union of the pair and expands it on each side by 0.7 times the union width or height, subject to image boundaries. The subject is rendered with a red rectangle and an S label; the object uses blue and O. If grounding is invalid, Marker and Geometry are unavail-able and the decision is exactly the Full prediction. Across all 41,544 model–example evaluations in the complete target-complete pools, each of the 440 invalid-grounding cases fol-lows this Full route. Marker scores for this subset are unused candidates; the routed output is identical to Full. For each visual state, the frozen VLM evaluates ev-ery option continuation and records its mean token neg-ative log-likelihood. Prediction selects the minimum-NLL option, equivalently the maximum length-normalized log-probability, and the state margin is the gap between the best and second-best scores. No option is generated and reparsed for the closed-set tables. Forward Full/Marker pairs and their reciprocal queries retain identical option strings and option order; only the queried entity roles, and the visible S/O iden-tities for Marker, are exchanged. Representative Qwen3-I timing on 100 GQA examples gives 0.281, 1.381, and 0.283 seconds/example for Full scor-ing, self-grounding, and Marker scoring. Marker, Forward, and final SEER therefore have estimated 5.92 ×, 6.91 ×,and 7.12 × latency, respectively; these implementation-level measurements are not hardware-independent constants. Adaptive SEER first scores Full and invokes the complete path only for low-gap examples. At unlabeled development quantiles of 10, 20, and 25%, frozen coverage is 11.8, 20.7, and 25.7%; estimated cost is 1.72 ×, 2.27 ×, and 2.57 ×; and pooled accuracy is 75.17, 75.83, and 76.17 from Full at 72.94. The 25% gate gains +3.22 [1.89,4.61] with 95 fixes and 37 breaks, retaining 81.7% of complete SEER’s +3.94 gain at 36.1% of its total cost. Because the adaptive analysis was designed after the primary protocol, it is a deployment diagnostic rather than frozen confirmation. Protocol Model N Full Marker Fwd. SEER Frozen GQA-Train900 Qwen3-I 900 75.33 76.11 77.44 78.44                                                
+
+> Qwen3-T 900 70.56 75.22 73.89 75.33
+> Pooled 1,800 72.94 75.67 75.67 76.89
+> GQA/VG development Qwen3-I 20,772 72.62 73.90 74.43 75.65
+> Qwen3-T 20,772 68.59 71.67 72.05 73.54
+> Pooled 41,544 70.60 72.79 73.24 74.60
+> Frozen EmbSpatial Qwen3-I 2,434 81.88 85.33 86.24 86.24
+> Qwen3-T 2,434 78.64 82.95 83.48 83.73
+> InternVL3.5 2,434 65.74 78.06 77.28 77.53 Pooled 7,302 75.42 82.11 82.33 82.50
+
+Table 9: Evidence construction and decision decomposition. Fwd. denotes Geometry/margin composition before reciprocal consistency refinement; final SEER is the primary relation-MC output.                              
+
+> Stage Prompt skeleton Grounding Locate queried S and O in the full image without answering. Return only valid JSON with normalized [0 ,1]
+> subject_bbox and object_bbox ; choose the pair relevant to q. Inputs are s,o, and q, with options removed. Full scoring Present qand the fixed ordered options; request exactly one option letter L.Marker scoring State that red S marks sand blue O marks o; present the same qand options; specify relation direction S-to-O, ignore unmarked duplicates, and request one letter L.Reciprocal scoring Exchange sand oin qwhile preserving option strings and order; for Marker, also exchange visible S/O assignments. Open output Remove options and request one spatial-relation phrase without explanation, coordinates, or an option letter.
+
+Table 10: Prompt skeletons. q, s, o, and L denote the sample question, subject, object, and ordered option labels. Quotation is compacted for presentation while preserving all task-relevant content.                
+
+> Protocol Ground calls Score calls Learned params. Full 010Marker 110Forward 120SEER 12 + 2 ⊮[recip .]0
+
+Table 11: Per-example call accounting when Full has not been precomputed. Reciprocal scores are requested only for eligible visual-state disagreements (10.27% in the complete-pool study).                          
+
+> τAcc. Gain Full Marker Geometry 0.1 74.38 +1.76 4,056 12,541 4,175 0.3 74.53 +1.91 4,397 13,627 2,748 0.5 74.43 +1.81 4,622 14,589 1,561 0.7 74.44 +1.81 4,711 14,925 1,136
+
+Table 12: Qwen3-I threshold sensitivity of the Forward ab-lation on 20,772 target-complete examples. Full accuracy is 72.62; Forward remains above Full for all thresholds. We use 
+
+τ = 0 .5 as a conservative global midpoint, unchanged across models and datasets. 
+
+# Additional Target-Complete Results 
+
+Complete-Pool Relation and Decision Breakdown 
+
+For complete-pool Qwen3-I, final SEER improves seven of nine GQA relations and six of nine VG relations. Its largest gains occur on inside (+11.86/+6.54), contains (+5.87/+9.60), and left-of (+13.46/+6.84); it loses on on 
+
+(−4.79 / − 3.47 ) and right-of ( −6.00 / − 4.27 ), with a further −0.60 on VG behind. Qwen3-T provides a sec-ond complete-pool same-model result: Forward reaches 71.08/73.15 and final SEER 72.99/74.16 from Full at 67.10/70.28 on GQA/VG. Reciprocal consistency refinement is inactive for above/below/on by design and is most helpful for depth and containment. Because “contains” is constructed by role-swapping a dis-joint subset of source “inside” annotations, we audit whether this construction drives the pooled gain. Table 13 shows that it does not: after excluding every role-swapped example, final SEER retains +3.69 [3.26,4.11]; excluding the entire contain-ment family as well retains +2.61 [2.19,3.04]. The larger gain on the role-swapped split indicates that containment is espe-cially recoverable from geometry, but the effect remains on source-native relations.                     
+
+> Split NFull SEER Gain All 41,544 70.60 74.60 +3.99 Source-native 38,544 69.81 73.49 +3.69 Role-swapped 3,000 80.87 88.77 +7.90 Native, no containment 35,544 69.83 72.44 +2.61
+
+Table 13: Construction audit pooled over Qwen3-I/T and GQA/VG. Source-native excludes role-swapped examples; the final row also excludes both containment labels. 1 2 3 4 5 6 7 
+
+> Estimated cost relative to Full
+> 73
+> 74
+> 75
+> 76
+> 77
+> Frozen pooled accuracy
+> Full
+> 10%
+> 25% 50%
+> All
+> 82% of gain
+
+# 1Figure 2: Post-hoc Adaptive SEER budget curve on the frozen GQA-Train900 Qwen3-I/T evaluations. A label-free gate in-vokes complete SEER only when the Full option-score gap falls below a model-specific quantile of the unlabeled devel-opment distribution. The full curve is reported rather than selecting a quantile from frozen accuracy.                                     
+
+> (κF, κ M)NFull Marker Fwd. SEER
+> (0 ,0) 558 49.64 50.36 56.45 56.45
+> (0 ,1) 2,283 25.71 74.29 57.73 74.29
+> (1 ,0) 1,042 71.11 28.89 53.26 71.11
+> (1 ,1) 384 61.20 38.80 46.09 46.09 All 4,267 43.12 56.88 55.43 68.64
+
+Table 14: Reciprocal-consistency structure on eligible Full/Marker conflicts. κF and κM indicate inverse consis-tency for Full and Marker. Entries after N are accuracies. The rule changes the forward source only for (0 , 1) or (1 , 0) ,which cover 3,325 cases (77.93%). Because Full and Marker disagree on every row in this table, exactly one of their forward predictions is correct. In the uniquely consistent rows, the consistent state is cor-rect in 2,437 of 3,325 cases (73.29%) and wrong in 888 (26.71%); the latter are false-consistency cases in which an incorrect state nevertheless transforms reciprocally. For-ward accuracy is 56.33% on these rows. Reliability is high-est for inside/contains (92.00/86.84% on uniquely consistent cases) and lower for left/right (67.93/61.86%), matching the horizontal-bias boundary reported below. Both- and neither-consistent patterns supply no state-specific evidence, so final SEER retains Forward. 
+
+Equal-Call Reciprocal Alternatives 
+
+All equal-call rules reuse identical forward and role-swapped Full/Marker scores. On development data, reciprocal sym-metrization, averaging, and margin/entropy selection im-prove Forward by +1.06 to +1.44 points; unique consistency adds +1.36. A post-hoc “any consistent, Full first” tie rule is 0.14 points higher overall but changes sign relative to unique consistency by dataset (+0.27/+0.34 on GQA and 
+
+−0.06 /−0.04 on VG for Qwen3-I/T). Because it hard-codes a Full preference after inspection, we retain the pre-specified rule. Table 15 gives the complete equal-call comparison on frozen evaluations. 
+
+Self-Grounding Quality and Error Propagation 
+
+The target-complete source records provide scene-graph boxes that are never exposed to SEER but permit a post-hoc localization audit. Table 17 reports valid-output rate and mean IoU on valid outputs. Self-grounding is usually parseable, but its boxes are noisy and model dependent; this is why SEER treats localization as evidence to assess rather than as a trusted detector output. Table 18 pools Qwen3-I/T Forward predictions by the smaller subject/object IoU. The gain is exactly zero for in-valid outputs because they are forced to Full. Gains increase to +2.89–+4.74 once both boxes have nonzero overlap with the annotations. The zero-IoU group remains slightly posi-tive, which can occur when the model localizes a visually relevant instance that differs from the scene-graph instance; therefore IoU is diagnostic rather than a test-time gate. Re-ciprocal decision quality is reported separately in Table 14. The state inventory also gives a direct Forward transition breakdown. Marker is selected in 2,377 cases where Full is wrong and Marker is correct; Full is retained in 1,436 cases where Full is correct and Marker is wrong. Geometry is the only correct candidate in 157 cases where both visual states fail, but is wrong in 169 cases where at least one visual state is correct. These candidate-level counts differ from the direct No-Geometry routing ablation above because the larger-gap visual rule does not always select the correct available vi-sual state. Together, the analyses show why neither “always use Marker” nor “always use Geometry” is sufficient: role-conditioned evidence supplies most repairs, while abstention and Full fallback contain its failures. 
+
+Independent Human Audit 
+
+Two annotators independently inspected 240 valid predicted-grounding cards, sampling 15 items from each dataset– grounder–IoU stratum, without model, dataset, IoU, or population-stratum metadata. Separately, they inspected 270 source-pair cards, sampling 15 items for each dataset and relation, without gold labels. The first audit asks whether the predicted S/O regions bind the intended entities and leave their local relation judgeable; the second checks whether the source pair is valid, the displayed relation is visually answer-able, and the candidate answer is unique. Both annotators were university peers of the authors. They volunteered with-out compensation and gave informed consent after receiving a complete description of the annotation task and its intended research use. The audit collected only task judgments; no demographic, identifying, or sensitive information was re-quested. Table 19 reports sampling-weighted percentages for the valid-grounding population and unweighted percentages for the relation-balanced semantic audit. Agreement and Co-hen’s κ are computed on the audited items before population weighting. We next form a strict consensus subset: both annotators must mark the source pair correct and the relation answer-Equal-call rule GQA-I GQA-T Emb-I Emb-T Emb-Intern Forward 77.44 73.89 86.24 83.48 77.28 SEER: unique consistency 78.44 75.33 86.24 83.73 77.53                                         
+
+> Any consistent, Full first 78.44 75.33 86.28 83.81 77.40 Any consistent, Marker first 78.44 75.44 86.20 83.73 77.53
+> Forward Full/Marker mean 77.67 74.00 86.20 83.57 77.24 Reciprocal Full symmetrization 78.33 75.33 86.28 83.53 76.95 Reciprocal Marker symmetrization 78.67 75.67 86.20 83.65 77.32 Reciprocal state mean 78.67 75.67 86.28 83.69 77.36 Reciprocal margin select 78.67 75.67 86.28 83.73 77.40 Reciprocal entropy select 78.67 75.67 86.32 83.69 77.28
+
+Table 15: Equal-call alternatives on frozen GQA-Train900 (900 rows/model) and EmbSpatial (2,434 rows/model). Every rule reuses identical forward and reciprocal scores. Score symmetrization requires complete inverse closure; on an inverse-supported EmbSpatial row without full closure, it retains Forward. The pre-specified SEER rule is within 0.34 points of the best rule in every column, and no alternative dominates across all five frozen evaluations.                             
+
+> Data Model Images Gain Image-cluster 95% CI GQA Qwen3-I 3,234 +3.41 [+2.74,+4.09] VG Qwen3-I 4,490 +2.60 [+1.92,+3.28] GQA Qwen3-T 3,234 +5.89 [+5.12,+6.67] VG Qwen3-T 4,490 +3.88 [+3.17,+4.60] All Qwen3-I 7,520 +3.03 [+2.55,+3.52] All Qwen3-T 7,520 +4.95 [+4.43,+5.48]
+
+Table 16: Paired image-cluster bootstrap intervals for final SEER gain over Full (20,000 repetitions). Pooled rows merge identical GQA/VG numeric image IDs and retain all model outcomes per image. Every interval excludes zero.                          
+
+> Data Grounder NValid S IoU O IoU GQA Qwen3-I 11,070 99.35 41.87 43.51 VG Qwen3-I 9,702 99.36 32.79 45.42 GQA Qwen3-T 11,070 98.72 37.93 38.89 VG Qwen3-T 9,702 98.31 28.83 41.09
+
+Table 17: Target-relation-hidden self-grounding audit. Valid, S IoU, and O IoU are percentages; IoU is averaged over valid outputs against source scene-graph boxes and is not available to the decision rule.                                
+
+> Min S/O IoU NFull Marker Forward Gain Invalid 440 68.41 68.64 68.41 +0.00 015,182 64.48 63.47 64.95 +0.47
+> (0 , . 10) 6,513 70.90 74.11 73.79 +2.89
+> [.10 , . 30) 6,646 72.30 77.31 77.04 +4.74
+> ≥.30 12,763 76.93 80.98 81.00 +4.07
+
+Table 18: Forward grounding-quality propagation over 41,544 target-complete model–example evaluations. Source boxes are used only for this post-hoc analysis. able, choose the hidden gold answer, and reject any second valid option. This retains 180 of 270 items. Table 20 links these items to the unchanged Qwen3-I/T predictions. The                                    
+
+> Audit decision NAnn. 1 Ann. 2 Agree κ
+> Grounding pair correct 240 74.80 79.23 89.17 .657 Local relation judgeable 240 81.63 82.40 88.75 .564 Source pair correct 270 95.56 94.07 95.56 .551 Relation answerable 270 92.59 92.22 90.74 .344 Best answer is gold 270 78.15 80.00 83.70 .749 Another option is valid 270 11.11 10.00 96.30 .814
+
+Table 19: Independent human-audit results (%). For the best-answer row, annotator columns measure agreement with the hidden gold answer, whereas inter-annotator agreement com-pares their exact selected options. Modest binary κ values can coexist with high raw agreement because positive judgments dominate pair correctness and answerability. pooled +4.72-point gain remains positive under an image-cluster bootstrap (95% CI [+0.83,+8.61]), so visibly invalid or multiply answerable source annotations do not fully ex-plain the primary effect. This is a post-hoc validity analysis, not a replacement benchmark estimate. The filter is inten-tionally conservative and leaves only 5 of the 30 audited on 
+
+examples, where contact and overlap often make more than one displayed relation defensible.                         
+
+> Model NFull Marker Forward Gain Fix/Break Qwen3-I 180 73.89 78.89 77.78 +3.89 15/8 Qwen3-T 180 64.44 72.22 70.00 +5.56 16/6 Pooled 360 69.17 75.56 73.89 +4.72 31/14
+
+Table 20: Forward performance on the strict two-annotator semantic-consensus subset. N counts model–example evalu-ations; Fix/Break compares Forward with Full. To audit the frozen set directly, the same annotators later evaluated 120 unique-image rows sampled before inspec-tion: 30 target-on rows, 30 horizontal rows with repeated entity names, 30 horizontal rows with unique names, and 30 other repeated-name rows. The two-stage interface first shows the original image and entity names without boxes, then reveals the source S/O boxes; gold labels, model outputs, method routes, and sampling-stratum names remain hidden. Table 21 separates referential ambiguity in the unboxed in-put from source-pair validity after the intended instances are shown. Aggregate raw agreement/Cohen’s κ is 85.83/.702 for unboxed pair uniqueness, 72.50/.645 for the unboxed an-swer, 89.17/.391 for source-pair correctness, 96.67/.944 for the boxed answer, and 97.50/.904 for whether another op-tion is valid. The low unboxed uniqueness rate confirms that repeated instances make this a genuinely binding-sensitive subset; the high boxed-gold agreement shows that most rows become semantically clear once the intended pair is exposed. The complete frozen set also permits a model-output-independent name-multiplicity split: 535 images contain ex-actly one scene-graph instance of each named entity, while 365 contain a repeated subject or object name. Table 22 shows that both groups retain positive pooled gains. The tar-geted audit further separates the 78 strict semantic-consensus rows by whether both annotators could identify the named pair before boxes were shown. The 23 unanimously unique images retain +8.70 [2.17,17.39], whereas the 47 unani-mously non-unique images retain +6.38 [ −4.26 ,17.02]; eight disagreements are included only in the all-strict row. Thus gains are not confined to repeated names or manually identi-fied ambiguous pairs. Across all 78 strict rows, the per-model gains are +7.69 for Qwen3-I and +3.85 for Qwen3-T, pooling to +5.77 [ −1.28 ,13.46]. Because the audit was deliberately targeted and its groups are small, these rows diagnose ambi-guity rather than estimate its population prevalence. Because both human audits flag on as the least clean target, Table 23 recomputes the complete automatic evaluations un-der two relation-defined, model-output-independent report-ing slices. Removing only on targets preserves the other eight target labels. Removing every candidate set that contains on 
+
+is stricter and drops the complete above/below/on family. Both filters increase the SEER–Full gain on the frozen and development pools; semantic ambiguity around on therefore cannot account for the aggregate improvement. Exact source-instance recovery is not required for a benchmark answer to improve. After weighting the 240 grounding cards to the valid target-complete population, Full/Marker/Forward accuracy is 70.59/72.14/72.89 when both annotators accept the grounding, 65.52/78.21/78.68 when both reject it, and 57.39/66.66/71.26 when they dis-agree. The larger gains in the latter strata can arise from same-class or contextual regions, scene context, and answer priors. Consequently, the human audit supports inspectable, query-conditioned evidence construction and quantifies its localization errors; it does not make benchmark gain a cer-tificate of exact reference faithfulness. 
+
+Target-Complete Mechanism Controls 
+
+We isolate the two operations inside the marker state on the balanced target-complete sets. Crop uses the target-relation-hidden self-grounded union without visible boxes or role labels. Self-Marker adds the S/O overlay using exactly the same predicted boxes. Oracle-Marker replaces those boxes with source scene-graph annotations and is a diagnostic up-per bound, not a deployable SEER setting. For Swapped and Random, the self-grounded crop is held fixed: Swapped exchanges the S/O marker identities, while Random moves same-size markers to deterministic positions within the crop. Invalid self-grounding retains the original image in all self-grounded conditions. Thus the counterfactuals corrupt S/O role assignment without changing the question, candidates, evaluated VLM, or scoring rule. The pooled ladder separates local refocus (Full →Crop, +1.25) from role-explicit conditioning (Crop →Self-Marker, +1.64). The latter remains positive under underlying-image-clustered bootstrap, with 95% interval [+0.25,+3.05]; this clustering keeps cross-dataset and cross-model outcomes for one image together. Oracle-Marker adds a further +6.17, ex-posing substantial headroom from localization quality, while Swapped and Random reduce Self-Marker by 1.67 and 2.50 points. Tuple-level exact McNemar tests give p < . 001 for the oracle and random comparisons and p = .0054 for Swapped, but are treated only as descriptive because images and VLMs repeat. The same qualitative ordering holds in all four rows. The larger marker and counterfactual effects for the Qwen3-T checkpoint show that its predictions remain sensitive to which visual entities are assigned to the query roles; they do not isolate free-form deliberation. The identical Marker instruction without visible marks returns exactly to Full accuracy despite changing 78 predic-tions, and role text on Full changes almost nothing. Visible query locations therefore contribute beyond extra wording. Full-image markers outperform their cropped counterpart, showing that crop context loss can offset local refocus; un-labeled color boxes also match role-text crops and exceed labeled S/O markers. We accordingly attribute the interven-tion to an explicit location-and-role interface, not uniquely to the glyphs or crop. We additionally expand Crop and Oracle-Marker to all 20,772 complete-pool Qwen3-I examples. On GQA, Full/Crop/Self-Marker/Forward/SEER/Oracle-Marker ob-tain 72.40/73.76/74.03/74.27/75.82/82.34; on VG they ob-tain 72.87/74.49/73.76/74.60/75.47/78.29. Crop improves both datasets, but Self-Marker does not uniformly dominate it: +0.27 on GQA and −0.73 on VG. In the pooled result, For-ward exceeds both single transformed states and final SEER adds +1.23, matching the intended setting in which the useful transformation varies by example. Paired Crop-versus-Full gains are +1.36 on GQA and +1.62 on VG, with image-cluster 95% intervals [+0.77,+1.94] and [+1.09,+2.16]. Self-Marker versus Crop remains uncertain: +0.27 [-0.47,+1.03] on GQA and −0.73 
+
+[-1.50,+0.04] on VG. Oracle-Marker exceeds Self-Marker by +8.31 [6.60,10.06] on GQA and +4.54 [3.76,5.31] on VG, giving a pooled +6.55-point grounding headroom. Bracketed quantities are paired image-cluster 95% intervals. 
+
+Balanced Cross-Model Paired Statistics 
+
+The main paper reports the symmetric four-model/two-dataset matrix under both grounding-order protocols; Ta-ble 26 adds paired changes for the pre-specified subject-first rows and a separate InternVL3.5 GQA replication. Every row has more corrections than regressions, while the two smallest effects are Qwen3-I and R1-OV on VG. The pooled Frozen audit stratum N Unboxed unique A/B Source pair A/B Boxed gold A/B Multi-valid A/B Strict Horizontal, repeated name 30 13.33/16.67 86.67/73.33 100.00/93.33 0.00/0.00 21 Horizontal, unique names 30 33.33/46.67 83.33/90.00 100.00/100.00 0.00/0.00 23 Other repeated name 30 36.67/40.00 96.67/96.67 90.00/90.00 3.33/3.33 25 Target on 30 63.33/60.00 100.00/96.67 93.33/93.33 63.33/53.33 9All 120 36.67/40.83 91.67/89.17 95.83/94.17 16.67/14.17 78 
+
+Table 21: Targeted two-annotator audit of frozen GQA-Train900 (%). “Unboxed unique” asks whether the named pair is uniquely identifiable before boxes are shown. “Strict” requires both annotators to accept the boxed source pair and answerability, select the hidden gold, and reject a second valid option. The strata deliberately stress horizontal order, repeated instances, and on ; they are not a prevalence-weighted estimate of all 900 rows.                 
+
+> Slice NFull Marker SEER Gain CI img
+> Complete frozen set
+> Unique names 535 75.42 77.38 77.66 +2.24 [0.37,4.11] Repeated name 365 69.32 73.15 72.74 +3.42 [0.41,6.44]
+> Targeted strict human audit
+> Unboxed unique 23 65.22 78.26 73.91 +8.70 [2.17,17.39] Unboxed non-unique 47 71.28 73.40 77.66 +6.38 [ −4.26 ,17.02] All strict 78 66.67 71.79 72.44 +5.77 [ −1.28 ,13.46]
+
+Table 22: Referential-ambiguity slices on frozen GQA-Train900. Scores pool Qwen3-I/T; N counts images, and intervals cluster both model outcomes by image. Name mul-tiplicity is computed on all 900 frozen scene graphs. Human-audit rows require strict semantic consensus; “unboxed” records whether both annotators identified the named pair before source boxes were shown. matrix is descriptive and does not treat repeated images or models as independent. InternVL3.5 has 690 image clusters. Marker alone gains +2.00, Forward gains +6.89, and final SEER gains +8.89, with 130 fixes against 50 breaks relative to Full (exact Mc-Nemar p = 2 .1 × 10 −9). Reciprocal consistency refinement contributes +2.00 over Forward with 39 fixes against 21 breaks ( p = .0273 , image-cluster interval [+0.22,+3.86]). Target-relation-hidden same-model grounding succeeds on 883/900 examples (98.11%), with mean subject/object IoU 0.458/0.469 against source boxes. This result extends same-model grounding beyond the Qwen architecture while retain-ing the same evidence states and decision rule. 
+
+SEER-Open: Option-Free Generation 
+
+SEER-Open is an option-free adaptation rather than the main paper’s closed-set equation applied unchanged. Its prompt hides candidate relations and asks for one short spatial phrase. A deterministic parser maps common surface forms such as “to the left of,” “contained in,” and “in front of” to nine canonical labels, with unparsable responses counted as wrong. Geometry retains the same eligibility rule; when it abstains, SEER-Open prefers the only parseable state if exactly one is parseable, otherwise uses the higher mean generated-token log-probability, and falls back to Full on an exact tie. Paired image-cluster 95% intervals for its gain over Full are [+2.26,+11.17] on GQA and [-0.56,+10.61] on VG; the smaller VG sample consequently yields the wider interval. 
+
+# Matched Component and Tool Controls 
+
+The component controls in Table 29 use independently con-structed relation-balanced GQA900 and VG630 diagnostics. Their candidate construction differs from the target-complete protocol, so they are not pooled with the primary tables. They remain useful for component attribution because every row compares identical sample identifiers, answer options, option order, and VLM scoring; only the evidence interface changes. Subsequent external-tool comparisons use the subsets stated in their captions and are reported separately. 
+
+Crop, Prompt Recipe, and Text Coordinates 
+
+Crop reuses the target-relation-hidden boxes but shows only the padded subject/object union, without boxes or role la-bels. SOP gives the model a textual sequence—localize the entities, estimate boxes, compare them, and answer—without materializing an intermediate evidence view. Text-BBox ex-poses the same predicted coordinates as text over the origi-nal image. Table 29 shows that crop-only recovers a modest +2.06 points overall and explicit S/O markers do slightly better, whereas merely describing the procedure or serial-izing noisy coordinates into text performs poorly under the matched scoring interface. The result supports role-explicit visual conditioning rather than additional instructions as the useful intervention. A latency-matched control uses seven genuinely distinct Full-image prompts, with neither grounding nor transformed visual evidence. On the balanced GQA/VG sets, soft score averaging obtains 74.44/70.89 for Qwen3-I and 69.22/66.44 for Qwen3-T; majority voting obtains 74.78/70.89 and 68.89/66.56. The corresponding final SEER results are 78.67/72.67 and 75.67/71.56. Across all 3,600 model– example rows, soft and vote ensembles obtain 70.25 and 70.28 versus 74.64 for SEER; the descriptive paired dif-ferences are +4.39 (317/159 fixes/breaks) and +4.36 points (314/157). Seven Full scores cost 7.00 × one Full score, closely matching the measured 7.12 × final SEER path, so repeated full-image prompting at the same budget does not recover the evidence-interface gain. Pool Reporting slice N Full Marker Fwd. SEER ∆Full Frozen GQA Exclude target on 1,600 72.25 76.12 75.62 77.00 +4.75 Frozen GQA Exclude on option family 1,200 75.83 79.17 79.00 80.83 +5.00 Development GQA/VG Exclude target on 36,164 69.51 73.24 73.13 74.69 +5.19 Development GQA/VG Exclude on option family 25,404 71.77 74.89 75.28 77.50 +5.74 
+
+Table 23: Robustness to on -related semantic ambiguity. N counts model–example evaluations. The option-family slice removes every above/below/on candidate set, not only rows whose target is on .                         
+
+> Model Data Full Crop Self-M Oracle-M Swap Random Qwen3-I GQA 75.00 75.44 76.67 84.00 75.56 75.33 Qwen3-I VG 70.33 72.00 72.11 77.22 72.00 68.78 Qwen3-T GQA 69.11 70.78 74.00 80.22 71.67 72.00 Qwen3-T VG 66.67 67.89 69.89 75.89 66.78 66.56 Pooled Both 70.28 71.53 73.17 79.33 71.50 70.67
+
+Table 24: Matched mechanism controls over 3,600 target-complete model–example evaluations. Oracle-M is an annotation-box upper bound. Swap and Random retain the self-grounded crop but corrupt S/O role assignment.                            
+
+> Frozen Qwen3-I condition Acc. Gain Fix/Break Full / direct 75.33 ––Full / role text 75.44 +0.11 18/17 Full / S/O marker 76.89 +1.56 72/58 Crop / direct 75.89 +0.56 32/27 Crop / Marker text, no marks 75.33 0.00 39/39 Crop / role text 76.67 +1.33 40/28 Crop / unlabeled red–blue boxes 76.67 +1.33 78/66 Crop / labeled S/O marker 76.11 +0.78 75/68
+
+Table 25: Matched interface controls on frozen GQA-Train900 using the same self-grounded boxes. The family separates image extent, role wording, visible box locations, and S/O glyphs; visual conditions use the corresponding box/marker instruction. 
+
+External Grounders and Released Marking Pipelines 
+
+We compare pair-specific evidence with two external-tool settings. First, OWL-ViT (Minderer et al. 2022) receives only the subject and object phrases. On its detector-success sub-sets, rendering the two detected boxes as S/O markers im-proves Qwen3-I from 67.01 to 69.98 on 876 GQA examples and from 67.91 to 68.72 on 617 VG examples, whereas deter-ministic geometry from those boxes obtains 45.78 and 44.41. This diagnostic shows that external localization can support the interface, but box geometry alone does not resolve all nine relations. Second, Table 30 evaluates the official released high-level Graph-of-Mark API (Frisoni et al. 2026) on every example of the balanced GQA900 and VG900 sets. We use repository commit 5d9ea6e , its native question-conditioned filtering, YOLOv8x, SAM-HQ ViT-B, Depth Anything V2 Large, and no CLIP stage. SoM is the released Set-of-Mark rendering (Yang et al. 2023); GoM adds the released graph/depth vi-sualization, and GoM+labels also displays textual relation labels. The original multiple-choice question is supplied for native filtering, but the gold answer is never exposed. Every visual input is scored by the same VLM with the same ordered options. This public API differs from the Graph-of-Mark pa-per’s full three-detector configuration, so the experiment is a reproducible released-pipeline comparison rather than an exact paper reproduction. Dense public mark renderings do not improve on Full in these rows, whereas SEER’s pair-specific evidence inter-face improves both VLMs. The result supports task–interface matching, not a general claim that SEER supersedes the full Graph-of-Mark system. 
+
+# Mechanism and Transfer Diagnostics 
+
+COCO-Geom 
+
+COCO-Geom is a controlled 400-example diagnostic de-rived from COCO instance boxes (Lin et al. 2014). Its labels intentionally follow 2D geometry, so it tests whether target-relation-hidden VLM localization can recover a box-derived decision rather than general human spatial semantics. The set includes diagonal distractors, overlap, small margins, and non-horizontal relations. GT-Box View renders the source COCO boxes for the VLM and is an analysis-only visual up-per bound; Blind Geometry and Box+Geometry instead use target-relation-hidden self-grounded boxes. Because GT-Box View still asks the VLM to classify the marked image, it is distinct from deterministic geometry computed directly from source boxes. The latter reaches 100% by construction and is therefore a label-generation ceiling rather than a model result. 
+
+ARO VG-Relation 
+
+ARO VG-Relation (Yuksekgonul et al. 2023) evaluates cap-tion pairs whose relation differs. The balanced 600-example diagnostic separates local refocus from role-explicit marker conditioning across seven models. Self-grounded crop-only is nearly neutral, while visible boxes and S/O markers yield larger mean gains. Because both captions contain relation phrases, this is answer-blind caption-pair grounding rather than the cleaner target-relation-hidden protocol used for GQA/VG. On the full official 23,937-example ARO VG-Relation set, Qwen3-I improves from 82.51 on the original image to 87.08 using the ARO-provided relation-region crop (+4.57). This uses ARO metadata rather than self-grounding, so it supports the localization diagnosis but is not a deployable SEER result. Data VLM G Full SEER Gain F/B p                                                               
+
+> GQA Qwen3-I Same 75.00 78.67 +3.67 69/36 .0017 GQA Qwen3-T Same 69.11 75.67 +6.56 86/27 2.3×10 −8
+> GQA Qwen2.5-I Q3-I 73.11 78.22 +5.11 67/21 9.2×10 −7
+> GQA R1-OV Q3-I 65.78 70.89 +5.11 74/28 5.9×10 −6
+> GQA InternVL3.5 Same 61.89 70.78 +8.89 130/50 2.1×10 −9
+> VG Qwen3-I Same 70.33 72.67 +2.33 66/45 .057 VG Qwen3-T Same 66.67 71.56 +4.89 89/45 .00018 VG Qwen2.5-I Q3-I 68.89 72.56 +3.67 74/41 .0027 VG R1-OV Q3-I 62.67 64.11 +1.44 48/35 .188
+
+Table 26: Balanced paired statistics. G is the grounder and F/B is fix/break. InternVL3.5 is an additional same-model GQA replication; no adjusted row-level claim is made.             
+
+> Data NFull Marker SEER-O GQA 180 67.78 70.00 74.44 VG 180 63.89 63.89 68.89
+
+Table 27: Option-free accuracy with 20 examples per rela-tion. SEER-O denotes SEER-Open. 
+
+Frozen EmbSpatial Pair-Relation Test 
+
+EmbSpatial-Bench (Du et al. 2024) contains spatial multiple-choice questions from AI2-THOR, Matterport3D, and Scan-Net. We retain all 2,434 official test rows with exactly two queried objects and a left, right, above, or under target. The official question, options, order, and answer remain un-changed. Qwen3-I, Qwen3-T, and InternVL3.5 each perform target-relation-hidden same-model grounding and do not re-ceive the answer options during localization. Official boxes are excluded from Full scoring, grounding, Marker construc-tion, and routing; they are used only for the post-hoc IoU diagnostic below. The decision protocol was fixed before Qwen3-I evaluation and left unchanged for the subsequent replications. For Qwen3-I, SEER produces 170 fixes and 64 breaks rel-ative to Full (exact McNemar p = 2 .83 × 10 −12 ); gains by target relation are +6.88 for above, +8.47 for below, +3.90 for left, and −1.61 for right. Grounding succeeds on 2,426/2,434 examples (99.67%), with mean subject/object IoU 0.367/0.356 against withheld official boxes. Reciprocal consistency refinement is eligible on 31 examples and has one fix and one break relative to Forward, hence zero net effect. For Qwen3-T, SEER produces 186 fixes and 62 breaks (p = 1 .42 × 10 −15 ); relation gains are +7.72 for above, +12.46 for below, +1.62 for left, and −1.13 for right. Ground-ing succeeds on 2,405/2,434 examples (98.81%), with mean IoU 0.339/0.326. Reciprocal consistency refinement is eligi-ble on 39 examples and adds 0.25 points over Forward. InternVL3.5 yields 364 fixes and 77 breaks ( p = 1 .11 ×
+
+10 −45 ), with relation gains of +18.62/+13.79/+6.66/+8.39 for above/below/left/right. Grounding succeeds on 2,385/2,434 examples (97.99%; mean IoU 0.311/0.365). Among 65 eligi-ble cases, reciprocal consistency refinement makes six fixes and no breaks, adding 0.25 points over Forward. Marker re-mains 0.53 points higher than final SEER, but the unchanged rule still gains 11.79 over Full. Across three backbones, re-ciprocal transfer is nonnegative but sparse. 
+
+VSR Public Random Test 
+
+VSR (Liu, Emerson, and Collier 2023) provides an external binary protocol with 2,195 public random-test examples over 49 relations and 1,874 COCO images. We retain every exam-ple. To keep grounding target-relation-hidden, the grounder sees the image, subject/object phrases, and the generic ques-tion “What is the spatial relation of [subject] to [object] in the image?”; it does not see the truth statement or relation word. Valid boxes are returned for 2,175 examples (99.09%), and invalid cases fall back to Full. Geometry uses the same fixed 
+
+τ = 0 .5, with 97 eligible left/right or containment routes; all other relations abstain. On a reciprocal check, the entities and marker identities are swapped and the relation is replaced by its inverse, yielding a truth-equivalent statement. Hence con-sistency means preserving the yes/no prediction rather than inverting a relation-class prediction. Full and Marker disagree on 259 examples, but only 112 are both inverse-mappable and not already handled by threshold-eligible Geometry. Reciprocal consistency refine-ment is uniquely discriminative on 78 of these cases and changes 29 Forward outcomes, producing 18 fixes and 11 breaks. Its +0.32 incremental gain has image-cluster inter-val [−0.14 , +0 .81] and McNemar p = .265 ; the statisti-cally supported comparison is therefore final SEER versus Full ( p = .0395 ), not SEER versus Forward. Marker helps positive statements (+1.52) but hurts negative statements (−1.48 ), illustrating why unconditional local evidence is in-sufficient on this heterogeneous binary benchmark. The zero-shot run was specified before scoring and reused the frozen protocol without calibration. It has no sample overlap with random test, although 261 of its 715 images are shared. Marker is unchanged on gold-true statements but loses 3.37 points on gold-false statements; reciprocal con-sistency refinement recovers only 0.08 points over Forward. Because truth polarity is unobservable at inference, we re-port this boundary rather than introduce a post-hoc polarity-conditioned rule. The random-test model divergence is likewise polarity-sensitive. For Qwen3-T, Full already predicts yes on only Interface Regions Query scope Target hidden Role-explicit Alternatives / decision Query crop/self-grounding Varies Query region Not required Usually implicit One transformed view Set-of-Mark (Yang et al. 2023) External segmentation Dense scene N/A Numeric marks One marked view Graph-of-Mark (Frisoni et al. 2026) Det./seg./depth graph Question-filtered No Graph nodes/edges One graph-enriched view SEER Frozen VLM grounder Queried S/O pair Yes Explicit S/O Complementary evidence; fixed forward/reciprocal rule 
+
+Table 28: Protocol-level component comparison. Individual primitives such as cropping, marks, or self-grounding are not claimed as new; SEER contributes their constrained conjunction: pair-specific target-relation-hidden localization, semantic-role conditioning, alternative evidence states, and a fixed relation-aware decision around an unchanged VLM.                                           
+
+> Data VLM NFull Crop S/O Marker SOP Text-BBox GQA900 Qwen3-I 900 66.78 68.78 70.00 53.22 52.89 GQA900 Qwen3-T 900 62.44 65.11 67.11 48.67 46.78 VG630 Qwen3-I 630 67.78 68.57 66.67 52.86 53.81 VG630 Qwen3-T 630 65.56 68.10 66.98 48.25 45.08 All Sample weighted 3,060 65.46 67.52 67.84 50.78 49.67
+
+Table 29: Matched evidence-interface controls on the relation-balanced diagnostic sets. These rows isolate components and are not target-complete benchmark results.                               
+
+> Data VLM Full SoM GoM +Label SEER GQA Qwen2.5-I 73.11 71.56 71.78 69.56 78.22
+> VG Qwen2.5-I 68.89 64.00 63.89 63.22 72.56
+> GQA Qwen3-I 75.00 71.11 72.33 70.00 78.67
+> VG Qwen3-I 70.33 68.44 67.44 66.00 72.67
+
+Table 30: Matched comparison with the official released Graph-of-Mark high-level API. Every row contains 900 ex-amples and uses identical closed-set option scoring. “+La-bel” is GoM with textual relation labels. Qwen3-I uses same-model self-grounding for SEER; Qwen2.5-I uses the fixed Qwen3-I grounder used throughout the balanced evaluation.                          
+
+> Model Full GT-Box V. Blind G. Box Box+G. Qwen3-T 55.75 74.75 84.50 64.50 83.50 Qwen3-I 63.50 81.00 84.75 70.50 85.25 R1-OV 41.75 48.25 83.50 43.75 83.50 Qwen2.5-I 56.25 73.00 84.00 64.00 86.00
+
+Table 31: COCO-Geom mechanism diagnostic. These box-derived labels favor geometric evidence by construction. 58.93% of gold-true statements while correctly rejecting 92.41% of gold-false statements; Marker further lowers the true-statement yes rate to 53.26% and reduces the mean ab-solute margin from 0.446 to 0.336. Qwen3-I instead moves from 83.74 to 85.27 on true statements while losing 1.48 points on false statements. This pattern attributes the negative Qwen3-T transfer to marker/interface sensitivity interacting with its strong no bias, rather than to a universal failure of visual localization.                                              
+
+> Model Full Crop Box S/O Marker Marker gain Qwen3-T 79.33 79.83 83.50 86.00 +6.67 Qwen3-I 79.17 80.17 83.83 88.17 +9.00 Qwen3-2B 73.33 73.50 79.67 82.50 +9.17 R1-OV 75.17 75.17 83.17 84.50 +9.33 Qwen2.5-I 79.50 79.67 83.33 86.17 +6.67 LLaVA-1.5 59.67 59.33 62.67 59.17 -0.50 InternVL3.5 65.83 65.17 67.50 79.17 +13.33 Mean 73.14 73.26 77.67 80.81 +7.67
+
+Table 32: ARO evidence-view ablation. Crop isolates local refocus; Box adds explicit locations; S/O Marker adds role identity. 
+
+Frozen SpatialSense Test and Protocol-Matched Diagnostic 
+
+SpatialSense (Yang, Russakovsky, and Deng 2019) provides an independent binary test that was not used to design the reciprocal rule. Before model scoring, we froze all 1,860 official test annotations from six inverse predicates: left/right, above/under, and in-front-of/behind. The set contains 930 true and 930 false judgments over 1,399 images. Qwen3-I uses same-model grounding; the Qwen3-T row fixes Qwen3-I boxes so that only the answer model changes. All equal-call reciprocal alternatives—Full/Marker score symmetrization, score averaging, and margin-based selection—are likewise non-significant on this frozen binary test. To distinguish a binary-polarity issue from a benchmark issue, we then constructed a protocol-matched relation-MC diagnostic from the 930 positive annotations, pairing each relation with its inverse and preserving every eligible anno-Model Source Full Marker SEER Gain Qwen3-I AI2-THOR 79.23 84.78 85.87 +6.64 MP3D 83.13 84.00 84.62 +1.49 ScanNet 83.38 87.25 88.25 +4.87 All 81.88 85.33 86.24 +4.35 Qwen3-T AI2-THOR 77.54 81.52 82.85 +5.31 MP3D 79.16 83.50 83.75 +4.59 ScanNet 79.25 83.88 84.62 +5.37 All 78.64 82.95 83.73 +5.09 InternVL3.5 AI2-THOR 65.70 76.21 77.05 +11.35 MP3D 62.78 78.41 76.30 +13.52 ScanNet 68.75 79.62 79.25 +10.50 All 65.74 78.06 77.53 +11.79 
+
+Table 33: Frozen-protocol primary SEER results on all official EmbSpatial pair-relation test rows. Sources con-tain 828/86, 806/26, and 800/164 examples/scenes for AI2-THOR, Matterport3D (MP3D), and ScanNet, totaling 2,434 examples from 276 scenes. All-source scene-cluster 95% intervals for Qwen3-I, Qwen3-T, and InternVL3.5 are [+3.12,+5.68], [+3.81,+6.47], and [+10.14,+13.36].                        
+
+> Protocol Accuracy Gain Fix/Break CI img
+> Full 77.86 –––Self-Marker 78.00 +0.14 131/128 [−1.32 ,+1 .58]
+> Forward 78.72 +0.87 83/64 [−0.18 ,+1 .94]
+> SEER 79.04 +1.18 87/61 [+0 .13 ,+2 .24]
+
+Table 34: Complete VSR random-test results for Qwen3-I. Gain, Fix/Break, and the paired image-cluster 95% interval compare each row with Full.                          
+
+> Split VLM Full Marker Forward Gain Random Qwen3-I 77.86 78.00 78.72 +0.87 Random Qwen3-T 74.40 71.39 73.76 −0.64
+> Random Qwen2.5-I 79.09 75.40 79.00 −0.09
+> Zero-shot Qwen3-I 81.26 79.62 80.61 −0.65
+
+Table 35: Complete VSR Forward-rule transfer and split audit. Qwen3 models self-ground; Qwen2.5-I uses a fixed Qwen3-I grounder. Gain compares Forward with Full. No row-level interval excludes zero; only final Qwen3-I SEER on random test is significantly positive against Full.               
+
+> VLM GFull Marker Fwd. SEER ∆Recip. Trig. Qwen3-I Same 67.69 67.63 67.53 67.63 +0.11 265 Qwen3-T Qwen3-I 63.82 62.53 63.66 63.12 −0.54 214
+
+Table 36: Frozen SpatialSense binary test (1,860 examples). 
+
+∆Recip. compares final SEER with Forward; image-cluster 95% intervals are [ −0.80 ,+1.01] and [ −1.44 ,+0.37]. tation. This adaptation was created after observing the binary result and is therefore a post-hoc mechanism diagnostic, not frozen confirmation. Qwen3-I obtains 76.67 on Full, 77.85 on Marker, 79.03 with Forward (+2.37; 56 fixes/34 breaks, McNemar p = .0263 ), and 78.71 with final SEER ( −0.32 
+
+versus Forward). Thus the evidence interface transfers to relation classification on SpatialSense, whereas unique re-ciprocal consistency is not uniformly beneficial outside the protocol on which it was specified. 
+
+# Robustness and Boundary Analysis 
+
+Grounding-Order Bias 
+
+Relation hiding prevents answer leakage but does not remove prompt-order bias. Subject-first is the pre-specified realiza-tion of the ordered relation query r(s, o ); it is deterministic and semantically aligned with the query arguments, but is not claimed to be bias-free or empirically optimal. Hash coun-terbalancing instead supplies a label-independent sensitivity by assigning one of two interfaces from an arbitrary sample identifier. On 400 balanced left/right examples, subject-first grounding places the subject left of the object in 60.91% of valid outputs, whereas object-first grounding does so in 34.26%; independent localization is closer to balanced at 51.76%. Direction accuracy is 65.72, 59.57, and 62.33, re-spectively. The bias reverses by target direction: subject-first is better for left targets, while object-first is better for right targets. We performed a post-hoc frozen-test sensitivity on Qwen3-I and Qwen3-T without using relation labels, model outputs, or correctness for protocol assignment. Table 37 now covers complete subject-first and object-first SEER, sample-ID-hash counterbalancing, and a two-order Marker score mean. Object-first, Hash, and two-order pooling im-prove Full by +2.22 [0.33,4.11], +2.56 [0.72,4.39], and +3.00 [0.89,5.11]. The intervals cluster both model outcomes by image; pooled fix/break counts are descriptive. The two-order mean doubles grounding and Marker scoring but does not use Geometry or reciprocal refinement. Every pooled control is positive, showing that the aggregate conclusion is not tied to subject-first; their per-model and relation differ-ences still establish order sensitivity. We retain subject-first as primary because it was pre-specified and uses one ground-ing call, not because it is assumed bias-free or universally optimal. The same post-hoc label-independent audit covers the four-model balanced development matrix in Table 38. SHA256 parity assigns 450/450 GQA rows and 425/475 VG rows to subject-/object-first grounding. Full scores, candidates, op-tion order, τ , and the decision rule remain unchanged. Hash-order SEER improves all eight model–dataset rows and pools to +4.26 [3.27,5.25], slightly above the subject-first aggre-gate of +4.10. Seven row-wise intervals exclude zero; only R1-OV/VG remains individually unresolved. This broader audit shows that the positive cross-model aggregate is not created by a single fixed mention order, while preserving order sensitivity as a model- and relation-level limitation. Pooled relation gains under Hash are +3.00 above, +3.62 behind, +5.88 below, +6.25 contains, +6.38 in-front-of, +11.50 inside, −0.62 left-of, −3.25 on, and +5.62 right-of. The image-cluster interval excludes zero for every relation except left-of; on remains negative. Thus counterbalancing VLM Order Full SEER Gain [95% CI] F/B Qwen3-I Subject-first 75.33 78.44 +3.11 [1.00,5.22] 62/34 Qwen3-I Object-first 75.33 76.56 +1.22 [ −1.11 ,3.56] 63/52 Qwen3-I Hash-balanced 75.33 76.56 +1.22 [ −1.00 ,3.44] 61/50 Qwen3-T Subject-first 70.56 75.33 +4.78 [2.56,7.11] 79/36 Qwen3-T Object-first 70.56 73.78 +3.22 [0.89,5.56] 73/44 Qwen3-T Hash-balanced 70.56 74.44 +3.89 [1.56,6.22] 76/41 Pooled Subject-first 72.94 76.89 +3.94 [2.17,5.72] 141/70 Pooled Object-first 72.94 75.17 +2.22 [0.33,4.11] 136/96 Pooled Hash-balanced 72.94 75.50 +2.56 [0.72,4.39] 137/91 Pooled Two-order mean 72.94 75.94 +3.00 [0.89,5.11] 180/126 
+
+Table 37: Frozen GQA-Train900 grounding-order sensitivity. Hash assigns 459/441 rows to subject-/object-first by SHA256 sample-ID parity. Two-order mean averages Marker option scores across both orders. Pooled intervals resample image IDs and keep both model outcomes in one cluster. 
+
+GQA VG VLM Full Hash Gain [95% CI img ] Full Hash Gain [95% CI img ]Qwen3-I 75.00 79.00 +4.00 [1.84,6.18] 70.33 73.22 +2.89 [0.66,5.22] Qwen3-T 69.11 74.89 +5.78 [3.60,7.96] 66.67 72.33 +5.67 [3.14,8.17] Qwen2.5-I 73.11 77.56 +4.44 [2.38,6.51] 68.89 73.89 +5.00 [2.60,7.40] R1-OV 65.78 70.22 +4.44 [2.38,6.55] 62.67 64.56 +1.89 [ −0.11 ,3.92] 
+
+Table 38: Cross-model hash-counterbalanced order audit on the relation-balanced development sets. Per-row intervals resample underlying images; the pooled interval keeps all model/dataset outcomes for an image in one cluster. removes neither semantic noise nor relation heterogeneity. Right-of is positive in this development audit despite its deficit on the frozen set, and the aggregate conclusion re-mains intact across answer models. Qwen3-I Qwen3-T Pooled Relation Full →SEER Gain [CI] p Full →SEER Gain [CI] p Full →SEER Gain [cluster CI] left-of 58 →67 +9 [ 0,18] .093 60 →68 +8 [ −2,18] .169 59 →67.5 +8.5 [0.5,16.5] right-of 81 →77 −4 [−11 ,3] .424 69 →68 −1 [−9,7] 1.00 75 →72.5 −2.5 [−8.5,3] above 61 →64 +3 [ −3,9] .508 56 →59 +3 [ −1,8] .375 58.5 →61.5 +3 [ −1,7.5] below 64 →67 +3 [ −3,9] .549 65 →68 +3 [ −2,8] .453 64.5 →67.5 +3 [ −1,7.5] on 80 →72 −8 [−15 ,−2] .039 77 →77 0 [ −5,5] 1.00 78.5 →74.5 −4 [−9,0.5] front 74 →84 +10 [3,17] .013 68 →74 +6 [ −1,13] .180 71 →79 +8 [2.5,14] behind 86 →81 −5 [−10 ,0] .125 85 →81 −4 [−8,−1] .125 85.5 →81 −4.5 [−8.5,−1]inside 82 →89 +7 [2,13] .039 64 →88 +24 [16,33] < . 001 73 →88.5 +15.5 [10,21] contains 92 →88 −4 [−11 ,3] .388 91 →87 −4 [−11 ,3] .388 91.5 →87.5 −4 [−9.5,1.5] 
+
+Table 39: Per-relation hash-counterbalanced results on the frozen set (100 examples per relation and model). Intervals are paired image bootstrap intervals; pooled intervals cluster the two model outcomes by image. Per-model p values are exact McNemar tests and are exploratory without correction across nine relations. We also tested whether multiple localization orders could become a stronger training-free route on the earlier 400-example horizontal diagnostic. The original full-image ac-curacy is 65.00; subject-first, object-first, and independent marker states achieve 62.00, 62.50, and 57.25. Selecting the maximum-gap state among Full and the joint subject-first Marker reaches 65.25, while selecting among all ground-ing orders reaches 64.00. An oracle over grounding views reaches 75.75, showing headroom, but the tested observable rules do not realize it. We therefore retain one target-relation-hidden grounding call and report horizontal bias as a limita-tion rather than adding costly multi-order inference.                                   
+
+> Evaluation slice NFull SEER / gain Development: all relations 41,544 70.60 74.60 / +3.99 without left/right 34,140 72.26 76.34 / +4.09 left/right only 7,404 62.99 66.55 / +3.55 worst final relation: on 5,380 77.99 73.94 / −4.05
+> Frozen: all relations 1,800 72.94 76.89 / +3.94 without left/right 1,400 74.64 78.21 / +3.57 left/right only 400 67.00 72.25 / +5.25 without inside/contains 1,400 70.29 72.93 / +2.64 without target on 1,600 72.25 77.00 / +4.75 without role-swapped rows 1,600 70.62 74.75 / +4.13
+
+Table 40: Relation and construction robustness for final SEER. Frozen rows pool Qwen3-I/T on GQA-Train900. Gains remain positive after removing horizontal, contain-ment, or role-swapped constructions. Reciprocal consistency refinement raises development-pool right-of accuracy from 57.67 under Forward to 59.78, reducing its deficit against Full from −5.89 to −3.78 ; the worst final relation is instead on. 
+
+Text-Only and Shuffled-Image Controls 
+
+We freeze a balanced Qwen3-I control set containing 1,800 forward examples (GQA900+VG900) and all 1,200 exact-inverse reciprocal queries. Text-only retains the entity names, candidate options, and Full- or Marker-style instruction but removes the image. Image-shuffle assigns every forward ex-ample an image from a different source example and gives its reciprocal query the same incorrect image. Geometry is disabled so that all decisions compare Full and Marker inter-faces. Table 41 shows a 10–13 point intact-evidence advan-tage, confirming that the task is not solved by text alone. How-ever, reciprocal selection still gains after visual destruction and image-shuffle produces many uniquely consistent cases. Reciprocal consistency is therefore an observable transfor-mation cue between states, not a sufficient certificate of vi-sual correctness; final SEER consequently uses it only on inverse-supported Full/Marker conflicts and otherwise re-tains Forward.                             
+
+> Condition Full Mark. Fwd. Rec. ∆F/B U% Intact visual 72.67 74.39 74.11 75.50 +1.39 47/22 27.08 Text-only 62.39 63.89 63.06 64.39 +1.33 46/22 20.42 Image-shuffle 60.22 62.28 62.94 65.33 +2.39 73/30 41.42
+
+Table 41: Visual-destruction controls. Accuracy and reciprocal-versus-Forward Fix/Break are on 1,800 examples; “Unique” is the percentage of 1,200 inverse-supported ex-amples for which exactly one state is reciprocal-consistent. Similar positive paired changes without correct images show that reciprocity measures interface transformation consis-tency, not visual correctness. No Geometry route is used. The matched sample identities show that the three gains do not come from repeatedly changing the same language-favored examples. Of 69 intact-image answer changes, only 3 overlap with text-only changes and 7 with shuffled-image changes; all 3 and 5 of the 7, respectively, have the same answer transition. Only 2/47 intact fixes remain fixes under text-only input and 3/47 under image shuffle. Trigger-set Jac-card similarities are .138/.209, while actual answer-change Jaccards are only .022/.042. Thus visual destruction can cre-ate its own protocol-consistent changes, but these are largely different from the intact-image corrections. Stratifying in-tact rows by the minimum source-box IoU gives net gains of +1.16, +1.58, and +2.04 for IoU below .25, .25–.50, and at least .50; the cue is not restricted to high-IoU grounding, though breaks become rarer there. HallusionBench Interface Diagnostic 
+
+HallusionBench (Guan et al. 2024) exposes answer-interface sensitivity in reasoning models. Under an 8-token direct-generation budget, R1-OV and Kimi-VL begin with reason-ing text and yield no parseable yes/no answer. Closed-set yes/no log-probability removes this formatting artifact. This diagnostic motivates controlled scoring in the main experi-ments; it is not evidence that closed-set scoring is universally preferable.                         
+
+> Model Protocol Parse Accuracy Qwen3-T Direct, 8 tok. 99.50 68.50 Qwen3-I Direct, 8 tok. 100.00 63.00 Qwen2.5-I Direct, 8 tok. 100.00 66.50 R1-OV Direct, 8 tok. 0.00 0.00 Kimi-VL Direct, 8 tok. 0.00 0.00 R1-OV Yes/no log-prob. 100.00 69.00 Kimi-VL Yes/no log-prob. 100.00 54.00
+
+Table 42: HallusionBench 200-example format diagnostic. Unparsed direct outputs count as wrong. 
+
+Non-Spatial Boundary 
+
+On a 1,651-example SugarCrepe (Hsieh et al. 2023) caption subset, Qwen3-T already scores 92.49 on the full image. A caption-difference crop reaches 92.55 (+0.06), while adding boxes reduces accuracy to 91.22 (-1.27). This boundary sup-ports applying explicit evidence states when a decision gen-uinely requires subject/object localization, not as an uncon-ditional preprocessing step for all compositional tasks. 
+
+# Reproducibility Notes 
+
+Hardware, software, and decoding. The reported Qwen-family runs use one NVIDIA A800 80GB PCIe GPU under CentOS 7, Python 3.13.9, PyTorch 2.6.0+cu124, Transform-ers 4.57.1, Accelerate 1.11.0, and qwen-vl-utils 0.0.14. Infer-ence uses bfloat16 and batch size one. Grounding is greedy with temperature zero and top-p disabled, using at most 96 new tokens for the main GQA/VG protocols; closed-set an-swers are length-normalized continuation log-probabilities scored sequentially. The processor preserves aspect ratio with 
+
+min_pixels=max_pixels=50,176 .            
+
+> Model Checkpoint ID Rev. prefix Qwen3-I Qwen3-VL-8B-Instruct 0c351dd01ed8
+> Qwen3-T Qwen3-VL-8B-Thinking 92f3c4b4fead
+> Qwen2.5-I Qwen2.5-VL-7B-Instruct cc594898137f
+> R1-OV R1-Onevision-7B 44ec19bbe90f
+> InternVL3.5 InternVL3_5-8B-HF 741a7d030204
+
+Table 43: Checkpoint revision prefixes used in the reported evaluations. 
+
+Protocol chronology. The evidence states, Forward rule, and reciprocal unique-consistency rule were developed on the GQA/VG validation diagnostics. Before the first Qwen3-I EmbSpatial evaluation, we fixed τ = 0 .5, invalid-grounding fallback, reciprocal eligibility, and the unique-consistency decision. Subsequent Qwen3-T and InternVL3.5 EmbSpa-tial replications used these settings unchanged. After method development and before any scoring on GQA-Train900, we froze its image-disjoint IDs and checksum; this set therefore confirms final SEER rather than selecting it. The grounding-order and No-Geometry audits were designed afterward; they reuse fixed examples, state scores, and decision rules and are reported as robustness or mechanism analyses, not protocol confirmation. The complete 1,860-example Spa-tialSense inverse-predicate binary test was likewise frozen before scoring. Its null/negative result bounds transfer from inverse-supported relation choice to binary truth judgment; the 930-example SpatialSense relation-MC adaptation was constructed only afterward and is labeled post hoc. Human la-bels were collected after the corresponding predictions were fixed and were used only for the audits in Tables 19, 20, 21, and 22, never for routing or threshold selection. Tables 33, 35, and 36 report external transfer and boundaries; no model or decision component is fit to their labels. 
+
+Possible pretraining exposure. Image-disjoint construction and protocol freezing prevent overlap with our development pools and prohibit selection using test outputs; they do not reveal the proprietary pretraining corpora of evaluated check-points. We therefore cannot certify that GQA/VG images or annotations were absent from pretraining. The causal com-parisons are paired within model and item, so Full and SEER share any memorized content while differing only in the evi-dence interface. Architecture-diverse replications, EmbSpa-tial transfer, and image-destruction controls reduce reliance on absolute benchmark accuracy, but they cannot eliminate a possible interaction between prior exposure and the inter-vention. All comparisons preserve identical sample identifiers, can-didates, targets, and option order across Full and Marker. Reused Qwen3-I predictions were required to satisfy exact input equivalence; a 494-example audit confirmed identical predictions and zero maximum continuation-NLL difference. Target-relation-hidden boxes required the same match, while role-swapped containment examples were grounded anew. Per-example analyses use predictions, routes, margins, Ge-ometry layout scores, and paired correction counts. Remaining nondeterminism comes from model kernels and generation; dataset construction, candidate order, pars-ing, geometry, and evidence decisions are deterministic un-der seed 2027. Image-cluster intervals use 20,000 paired bootstrap repetitions. Because GQA is derived from VG, identical numeric image IDs are merged across both pools, and all VLM outcomes for one underlying image share a cluster. The method trains no component. Forward uses one Full score, one target-relation-hidden grounding generation, and one Marker score; Geometry and decision logic add no VLM call. Final SEER adds two state scores only on eligible reciprocal conflicts.

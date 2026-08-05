@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-04</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-05</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 41 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 21 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>28</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>8</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-04 22:41:18 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-05 22:35:17 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读28篇、速读13篇，跨视角地理定位与3DGS预测双双满分领跑。最值得关注：稀疏混合专家模型实现高效多尺度交叉视图定位，以及解耦几何与外观的神经渲染新范式。普通读者可从3D场景生成与卫星立体匹配的速读论文入手，快速感受AI三维视觉的落地潜力。</p>
+<p>今日精读21篇论文，重点聚焦文本引导图像融合与混合现实机器人编程两大高影响力突破。最值得关注的是《Unleashing the Power of Text》与《ORCESTRA》均获9.0高分，前者用文本引导解决复杂退化图像融合，后者将VLM接入MR实现视觉机器人编程。普通读者可优先深读这两篇高分论文，速读方向可关注空间数据整合与农田分割智能体。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">28 篇</strong>
+    <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="One Query, Many Scales: Sparse Mixture-of-Experts for Efficient Hierarchical Cross-View Geo-Localization">One Query, Many Scales: Sparse Mixture-of-Experts for Efficient Hierarchical Cross-View Geo-Localization</span></li><li><span class="dpr-home-dashboard-paper-title" title="QuerySplat: Decoupling Geometry and Appearance Representations in 3DGS Prediction">QuerySplat: Decoupling Geometry and Appearance Representations in 3DGS Prediction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Spatio-Temporal Conditional Denoising Transformer for Modality-Missing RGBT Tracking">Spatio-Temporal Conditional Denoising Transformer for Modality-Missing RGBT Tracking</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Unleashing the Power of Text: Text-Guided Flow Matching for Image Fusion under Complex Degradations">Unleashing the Power of Text: Text-Guided Flow Matching for Image Fusion under Complex Degradations</span></li><li><span class="dpr-home-dashboard-paper-title" title="ORCESTRA: VLM-driven Visual Robot programming in Mixed Reality">ORCESTRA: VLM-driven Visual Robot programming in Mixed Reality</span></li><li><span class="dpr-home-dashboard-paper-title" title="Driver2Map: Imitating Human Driving for Online High-Definition Map Construction">Driver2Map: Imitating Human Driving for Online High-Definition Map Construction</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>15</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>10</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>4</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,9 +87,9 @@
     <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Genie Sim PanoWorld: An Infinite Indoor 3D World Generation Pipeline via Panoramic Scene Modeling and Simulation">Genie Sim PanoWorld: An Infinite Indoor 3D World Generation Pipeline via Panoramic Scene Modeling and Simulation</span></li><li><span class="dpr-home-dashboard-paper-title" title="SeasonStereo: Robust Dense Stereo Matching for Multi-Date Satellite Imagery via Generative AI">SeasonStereo: Robust Dense Stereo Matching for Multi-Date Satellite Imagery via Generative AI</span></li><li><span class="dpr-home-dashboard-paper-title" title="VidMap: Exploiting Temporal Structure for Video-Based Structure-from-Motion">VidMap: Exploiting Temporal Structure for Video-Based Structure-from-Motion</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="UrbanTrace: LLM-Assisted Discovery and Semantics-Aware Integration of Spatial Data">UrbanTrace: LLM-Assisted Discovery and Semantics-Aware Integration of Spatial Data</span></li><li><span class="dpr-home-dashboard-paper-title" title="Think with Extra-Image: A Farmland Segmentation Agent Driven by Spatio-Temporal Information Gain">Think with Extra-Image: A Farmland Segmentation Agent Driven by Spatio-Temporal Information Gain</span></li><li><span class="dpr-home-dashboard-paper-title" title="Beyond Visual Ambiguity: Guiding Robust Monocular Depth Estimation in Challenging Scenarios via Detailed Long Captions">Beyond Visual Ambiguity: Guiding Robust Monocular Depth Estimation in Challenging Scenarios via Detailed Long Captions</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>8</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>4</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">multimodal <strong>7</strong></span><span class="dpr-home-dashboard-tag">d-vision <strong>3</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>3</strong></span></div>
 </section>
 </div>
 

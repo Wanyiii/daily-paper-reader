@@ -1,0 +1,420 @@
+Title: From Uncertainty to Determinism: Coarse-to-Fine Visual Floorplan Localization without Ray Matching
+
+URL Source: https://arxiv.org/pdf/2607.26817v2
+
+Published Time: Tue, 04 Aug 2026 01:38:08 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# From Uncertainty to Determinism: Coarse-to-Fine Visual Floorplan Localization without Ray Matching 
+
+## Shiyong Meng, Bolei Chen ∗, Ping Zhong ∗, Yang Wan, Rongzhi Wang, Jiazhi Xia, Jianxin Wang 
+
+School of Computer Science and Engineering, Central South University {xiaowugui1017, boleichen, ping.zhong, 8205230820, 7803240121, xiajiazhi}@csu.edu.cn, jxwang@mail.csu.edu.cn 
+
+Abstract 
+
+Visual Floorplan Loc alization (FLoc) has emerged as a promising solution for indoor localization by matching ego-centric images against minimalist structural maps. However, due to cross-modal information asymmetry and repetitive in-door layouts, visual FLoc is fundamentally challenged by mul-timodal pose distributions, where visually identical observa-tions map to distinct, spatially separated locations. Existing ray-matching-based methods tackle this by explicitly predict-ing sparse geometric or semantic rays, which inherently incurs information loss and demands resource-intensive preprocess-ing alongside exhaustive matching during inference. In this paper, we bypass the intermediate ray-matching paradigm and propose a coarse-to-fine visual FLoc framework that pro-gresses from uncertainty to determinism. In the coarse stage, we design an image-conditioned pose diffusion model to pa-rameterize the continuous multimodal pose distribution, ef-fectively routing stochastically initialized pose particles to-ward distinct candidate modes. In the refinement stage, we propose a localized refiner that predicts bounded sub-meter pose residuals from candidate-centered floorplan crops, where structural ambiguities are largely eliminated. Our method ef-fectively balances global multi-hypothesis tracking and local sub-meter refinement without requiring any offline map pre-processing or test-time lookup tables. Comprehensive results on the S3D (full) and ZInD benchmarks demonstrate that our approach achieves state-of-the-art accuracy and robustness. Project page: xiaowuguiovo.github.io/cf2loc-project-page/. 
+
+## Introduction 
+
+Visual Floorplan Loc alization (FLoc) (Chen et al. 2024) has emerged as a promising and scalable paradigm for indoor localization by aligning egocentric RGB observations with lightweight 2D floorplans, bypassing the need for storage-intensive 3D reconstructions (Liu, Li, and Dai 2017; Sarlin et al. 2019; Sattler, Leibe, and Kobbelt 2017) or large-scale image databases (Balntas, Li, and Prisacariu 2018; Arand-jelović et al. 2016). Compared with dense 3D models, floor-plans are lightweight, easy to maintain, and readily available in built environments, making visual FLoc particularly ap-pealing for autonomous robot navigation (Li et al. 2025; Huang et al. 2025; Chen et al. 2026b) and augmented reality. However, the pronounced cross-modal information asymme-try between feature-rich visual observations and minimal-
+
+> ∗
+
+Corresponding author. Ray Prediction  
+
+> Image Encoding
+> Observation Geometric Ambiguity
+> Visual-to-Geometry Bottleneck
+> (a) Ray-based Localization (b) Ours: Direct Image-to-Map Localization
+> GT
+> Pred
+> Localization Succees!
+> GT
+> Pred
+> Localization Faild
+> Localization Hotmap
+> Floorplan Encoding
+> CF 2Loc
+> Global Pose Diffusion
+> Local Pose Refinement
+
+Figure 1: (a) Existing ray-matching-based methods rely on deterministic ray prediction and exhaustive map matching, which are susceptible to failure under cross-modal infor-mation asymmetry. (b) Revisiting visual FLoc from a pose distribution estimation perspective, our proposed CF 2Loc framework progresses from probabilistic hypothesis gener-ation to deterministic refinement, achieving robust global multi-hypothesis tracking and precise local refinement. ist structural floorplans renders visual FLoc an inherently multimodal inference problem. Compounded by repetitive indoor layouts—such as symmetric rooms and long corri-dors—visually identical observations often map to distinct, spatially separated locations, yielding a complex multimodal pose distribution. Early approaches (Min et al. 2022) addressed this chal-lenge by performing handcrafted feature matching between visual inputs and local floorplan structures, requiring com-plex feature engineering and heuristics. Recent advances (Chen et al. 2024, 2025, 2026a; Ye et al. 2026) have shifted visual FLoc from front-end feature matching to back-end ray-based observation matching. Instead of directly estimat-ing camera poses, these methods first compress observations into sparse geometric or semantic ray representations and lo-calize them by matching against pre-computed map represen-tations, as illustrated in Figure 1 (a). Despite their promising accuracy, ray-based methods adopt an indirect formulation for visual FLoc, which introduces three fundamental limi-arXiv:2607.26817v2 [cs.RO] 2 Aug 2026 tations. First, compressing feature-rich visual observations into sparse ray representations inevitably discards subtle ap-pearance and structural cues, creating an information bottle-neck prior to localization. Second, while ray matching can retain multiple candidate hypotheses at the map level, the front-end ray predictor deterministically maps observations to rays via a one-to-one function, failing to capture the multi-modal pose distribution induced by cross-modal asymmetry. Finally, ray matching depends on map-specific ray databases that must be densely pre-computed, incurring heavy offline preprocessing overhead and requiring exhaustive test-time matching, thereby restricting scalability. In this paper, we revisit visual FLoc from the perspec-tive of direct pose distribution estimation. Our key insight is that visual FLoc should directly infer the conditional pose distribution over the map rather than reconstruct intermedi-ate ray representations. Based on this insight, we propose a rendering-free, coarse-to-fine generative localization frame-work, named CF 2Loc, which progresses from probabilistic hypothesis generation to deterministic refinement, as shown in Figure 1 (b). Specifically, in the coarse stage, an image-conditioned pose diffusion model parameterizes the continu-ous multimodal pose distribution across the entire floorplan, enabling effective global hypothesis generation without ex-haustive map matching. Once coarse candidates are iden-tified, localization is constrained to candidate-centered lo-cal floorplan crops, where structural ambiguities are largely eliminated. A lightweight local pose refiner then predicts bounded sub-meter pose residuals for precise local correc-tion. By unifying generative global search with determinis-tic local refinement, our framework achieves robust global localization, accurate local refinement, and efficient infer-ence without requiring offline map preprocessing or test-time lookup tables. Our contributions are summarized as follows: (1) We formulate visual FLoc as a direct pose distribu-tion estimation problem and propose CF 2Loc, a rendering-free, coarse-to-fine generative localization framework that bypasses intermediate ray representations and exhaustive map matching. (2) We introduce an image-conditioned pose diffusion model for continuous global hypothesis generation, along-side a localized pose refiner operating on candidate-centered floorplan crops for bounded sub-meter residual correction, establishing a seamless coarse-to-fine workflow. (3) Extensive experiments on the Structured3D (full) and ZInD benchmarks demonstrate that our approach achieves State-Of-The-Art (SOTA) accuracy and efficiency while eliminating map-dependent preprocessing. The code will be publicly released. 
+
+Visual Localization 
+
+Visual localization estimates camera poses by establishing correspondences between query images and scene represen-tations. Classical approaches rely on image retrieval (Arand-jelović et al. 2016; Balntas, Li, and Prisacariu 2018), 2D–3D feature matching with Structure-from-Motion (SfM) models (Sarlin et al. 2019; Sattler, Leibe, and Kobbelt 2017), or di-rect pose regression using deep networks (Kendall, Grimes, and Cipolla 2015; Walch et al. 2017; Brachmann et al. 2017). Despite notable advances, these methods depend heavily on appearance-rich scene representations—such as dense 3D reconstructions or extensive image databases—which are costly to construct, store, and maintain, and remain sus-ceptible to environmental appearance changes. These lim-itations have motivated recent interest in visual FLoc, which localizes cameras by aligning egocentric observations with lightweight and readily available 2D floorplans. 
+
+End-to-End Visual FLoc 
+
+End-to-end visual FLoc directly learns a mapping from egocentric observations and floorplans to camera poses without explicit geometric matching. Representative meth-ods, such as LaLaLoc (Howard-Jenkins, Ruiz-Sarmiento, and Prisacariu 2021), LaLaLoc++ (Howard-Jenkins and Prisacariu 2022), and PF-Net (Karkus, Hsu, and Lee 2018), learn joint image–floorplan representations for direct pose regression or particle-filter-based localization. While these approaches demonstrate that deep neural networks can cap-ture cross-modal correspondences in an end-to-end fashion, they formulate localization as a deterministic mapping, im-plicitly assuming a one-to-one relationship between obser-vations and poses. This deterministic formulation fails to account for the inherently multimodal nature of visual FLoc, where repetitive layouts and structural symmetries often pro-duce multiple plausible pose hypotheses for a single observa-tion. In contrast, our method directly models the conditional pose distribution via generative inference, effectively retain-ing multimodal pose hypotheses prior to deterministic local refinement. 
+
+Ray Matching-Based Visual FLoc 
+
+Recent visual FLoc methods (Chen et al. 2024; Wüest et al. 2026; Chen et al. 2025, 2026a; Grader and Averbuch-Elor 2025; Ye et al. 2026) formulate localization as a ray-based observation matching problem. Rather than directly estimat-ing camera poses, these approaches first convert egocentric observations into sparse geometric or semantic ray represen-tations and then determine camera poses by matching these rays against map-dependent rays rendered from floorplans. Subsequent works have extended this paradigm by incorpo-rating depth uncertainty (Wüest et al. 2026), 3D geometric priors (Chen et al. 2025), semantic cues (Chen et al. 2026a), and probabilistic fusion strategies (Ye et al. 2026). Despite their promising results, ray-based methods solve localization indirectly through intermediate ray prediction and matching. This indirect formulation creates an information bottleneck prior to localization, overlooks the inherently multimodal pose distribution due to deterministic front-end ray pre-diction, and demands map-dependent ray pre-computation alongside exhaustive test-time matching. Furthermore, exist-ing refinement strategies (Grader and Averbuch-Elor 2025) often rely on specific semantic constraints, limiting their gen-eral applicability across different floorplan representations. In contrast, our framework performs residual pose refinement directly in the pose space, making it applicable to both ge-ometric and semantic floorplans while completely eliminat-ing ray prediction, offline map preprocessing, and test-time lookup tables. Preliminaries 
+
+Problem Formulation. Given an egocentric visual observa-tion I and a 2D floorplan map M , the objective of visual FLoc is to estimate the camera pose p = ( x, y, θ ), where 
+
+(x, y ) represents the 2D spatial coordinates and θ ∈ [0 , 2π)
+
+denotes the orientation angle within the floorplan coordi-nate system. To accommodate the intrinsic ambiguities of indoor structures, we move beyond deterministic regression and instead formulate localization as estimating the contin-uous conditional pose distribution p(p | I, M ). The optimal pose is theoretically defined by the maximum a posteriori (MAP) estimation:       
+
+> p∗= arg max
+> pp(p|I, M ).(1)
+
+Directly optimizing Eq. (1) globally is computationally intractable due to the highly non-convex nature of the con-tinuous pose space across a full map. We thus address this problem via a coarse-to-fine cascaded paradigm that decou-ples global uncertainty tracking from local deterministic re-finement. In the first stage, we parameterize a global proxy distribution q(p) ≈ p(p | I, M ) via a conditional gener-ative model over the entire floorplan, from which a set of plausible candidate modes {pkc }Kk=1 is sampled. In the sec-ond stage, conditioned on a specific coarse candidate pc,we restrict the search space to a localized floorplan region 
+
+Mc ⊂ M centered at pc. The fine-grained localization is then formulated as estimating a bounded local pose resid-ual ∆p = (∆ x, ∆y, ∆θ) within a locally unimodal frame, yielding the final refined pose pr = pc ⊕ ∆p, where ⊕
+
+denotes the rigid body transformation composition operator. 
+
+Motivation. The pronounced cross-modal asymmetry be-tween feature-rich visual observations and minimalist 2D floorplans renders visual localization a highly ill-posed prob-lem. Widespread indoor structural symmetries and repetitive layouts inherently map a single observation to multiple dis-joint locations, manifesting as a continuous multimodal pos-terior distribution p(p | I, M ). Existing paradigms strug-gle with this multimodal nature. Deterministic regressors enforce a single-peak constraint on the output, leading to mode collapse and significant averaging errors in ambiguous regions. Conversely, SOTA ray-matching methods explic-itly reconstruct 1D rays to preserve candidate hypotheses via exhaustive search; however, they suffer from an irre-versible representation bottleneck during 2D-to-1D projec-tion, alongside substantial test-time lookup table or rendering overheads during inference. To circumvent these limitations, our core motivation is to bridge global multimodal uncertainty modeling with lo-cal unimodal determinism. We leverage a generative global search to parameterize the full posterior, capturing ambigu-ous hypotheses via non-parametric particle aggregation with-out exhaustive matching. Crucially, while structural ambigu-ities are prevalent globally, they are largely eliminated within a restricted local support. By adaptively cropping candidate-centered local maps, our framework transitions optimization from a complex multimodal search into a straightforward, unimodal residual regression, resolving global spatial ambi-guities in a rendering-free manner. 
+
+## Methodology 
+
+Global Pose Diffusion 
+
+Given I and M , the global diffusion model directly estimates the continuous conditional pose distribution across the entire floorplan. As illustrated in Fig. 2(a), the framework first ex-tracts visual and floorplan features, performs cross-modal fu-sion to obtain observation-conditioned map representations, and models the multimodal pose distribution through condi-tional diffusion. 
+
+Multimodal Feature Encoding. The observation image is processed by a frozen visual backbone followed by lightweight projection and token-mixing layers, yielding dense visual tokens FI ∈ RNI ×d alongside a global image descriptor gI :      
+
+> FI,gI=EI(I).(2)
+
+The floorplan is rasterized into a structural tensor XM . For semantic floorplans, each semantic category is represented as an independent one-hot channel; otherwise, grayscale struc-tural maps are used. A convolutional encoder extracts spatial map features, which are further augmented with learnable positional embeddings:        
+
+> FM=EM(XM) + Epos (CM),(3)
+
+where CM denotes the metric coordinates of map tokens. To inject visual evidence into spatial map representations, we employ cross-attention with map tokens as queries and image tokens as keys and values:          
+
+> ˆFM=FM+ CrossAttn( FM,FI,FI),(4)
+
+yielding observation-conditioned floorplan tokens ˆFM ,which preserve the full spatial support of the floorplan while encoding image-dependent localization cues. 
+
+Conditional Pose Diffusion. Rather than predicting in-termediate ray representations, we directly model the con-ditional pose distribution in the continuous pose space. To circumvent boundary discontinuities associated with angular regression, the camera pose is parameterized as 
+
+˜p = ( x, y, cos θ, sin θ), where orientation is recovered us-ing atan2( ·) during inference. Following the standard DDPM (Ho, Jain, and Abbeel 2020) formulation, Gaussian noise is progressively injected into the pose representation:            
+
+> zt=√¯αtz0+√1−¯αtϵ,ϵ∼ N (0,I),(5)
+
+where z0 = ˜ p.A conditional denoising network predicts the injected noise from the noisy pose, diffusion timestep, global image descriptor, and observation-conditioned map tokens:         
+
+> ˆϵ=ϵθ(zt, t, ˆFM,gI).(6)
+
+The diffusion model is optimized using the standard noise prediction objective:       
+
+> Ldiff =Et, ϵ
+> ∥ϵ−ˆϵ∥22
+> .(7)
+
+Map-Pose Joint Rotation Augmentation. To prevent the diffusion model from overfitting to dataset-specific absolute orientation biases, we jointly rotate the floorplan and its cor-responding ground-truth pose during training:             
+
+> (M′,˜p′) = Ri(M, ˜p),i∈ { 0,1,2,3},(8) (a) Training (b) Inference
+> Cross-
+> Attention  Denoiser 𝓛 diff
+> Fused Global Tokens
+> Image Encoder
+> Floorplan Encoder
+> Cross-
+> Attention
+> Image
+> Local Map Encoder
+> Ori Head
+> Pose Head
+> 𝓛 refine
+> Fused Local Tokens
+> Noisy Poses
+> Floorplan
+> Score Head
+> Local Crop Map
+> Localization Result
+> Iterative Denoising
+> KDE Mode
+> Local Refiner
+> Coarse Pose
+> Refined Pose
+> Random Pose Samples
+
+Figure 2: (a) Overview of the training workflow for the coarse-to-fine visual FLoc framework. First, the pose diffusion model is trained under the supervision of Ldiff to generate coarse pose candidates. Next, the local refiner is optimized via Lrefine while freezing the pose diffusion model. (b) The inference pipeline of our coarse-to-fine visual FLoc method. where Ri denotes a discrete rotation of i × 90 ◦. Seman-tic floorplans are rotated synchronously across all channels while preserving semantic identities. This augmentation en-courages the model to learn relative image-to-floorplan align-ment instead of memorizing absolute scene orientations. 
+
+Local Pose Refiner 
+
+While the global diffusion model effectively resolves large-scale pose ambiguity, stochastic sampling alone bounds its sub-meter localization precision. We therefore introduce a lightweight local pose refiner that predicts deterministic pose residuals from candidate-centered local floorplan crops. As illustrated in Fig. 2(a), the refiner operates on localized floor-plan crops while reusing the visual tokens extracted during the coarse stage. 
+
+Candidate-Centered Local Refinement. Given a coarse pose candidate pkc = ( xkc , θ kc ), we extract an oriented local floorplan patch centered at xkc and aligned with the candidate orientation M kc = Crop( M, pkc ). Canonicalizing the candi-date orientation via a −θkc rotation eliminates global heading variance, substantially simplifying local image-to-map align-ment. The cropped floorplan is encoded by a lightweight local map encoder to obtain local map tokens Fkc , which are fused with the frozen visual tokens through the cross-attention for-mulation in Eq. (4): 
+
+ˆFkc = Fkc + CrossAttn( Fkc , FI , FI ). (9) 
+
+Using the fused local representation, three lightweight pre-diction heads (unified as Rϕ) respectively estimate position logits lk = {lkj }Nc
+
+> j=1
+
+, local heading vectors Vk = {vkj }Nc
+
+> j=1
+
+,and a candidate confidence score ˆsk:
+
+(lk , Vk , ˆsk ) = Rϕ(I, M kc , pkc ). (10) 
+
+Rather than directly regressing coordinates via global fea-ture pooling, we compute translation residuals by construct-ing a spatial localization distribution over local map tokens: 
+
+πkj = exp( lkj /τ )
+
+P 
+
+> n
+
+exp( lkn/τ ) , ∆ˆ xk = X
+
+> j
+
+πkj uj , (11) 
+
+where uj denotes the metric coordinate of token j in the candidate-local frame. Similarly, spatial heading vectors are aggregated via probability-weighted summation to determine the rotation residual: 
+
+∆ˆθk = atan2 
+
+"X
+
+> j
+
+πkj vkj
+
+#
+
+> 1
+
+,
+
+"X
+
+> j
+
+πkj vkj
+
+#
+
+> 2
+
+ . (12) 
+
+The refined pose pkr is obtained by applying the predicted residual to the coarse candidate pose pkc ⊕ (∆ˆ xk, ∆ˆθk).
+
+Training Objectives. The refiner is optimized indepen-dently while keeping the trained diffusion model frozen. To build robustness against varying coarse localization errors, training candidates are generated by jittering ground-truth poses p∗ = ( x∗, θ ∗) with multi-scale translation and rota-tion perturbations, covering both sub-meter corrections and larger local recovery scenarios. For each perturbed candi-date pose pc = ( xc, θ c), ground-truth translation residual 
+
+∆x∗ and orientation residual ∆θ∗ are defined within the candidate-local frame. (The candidate index k is omitted here for brevity.) The joint training objective is formulated as: 
+
+Lrefine = SmoothL1(∆ˆ x, ∆x∗)+ λθ
+
+h
+
+1 − cos(∆ ˆθ − ∆θ∗)
+
+i
+
++ λhLheat + λsLscore ,
+
+(13) 
+
+where the first two terms supervise residual pose estima-tion, while the latter two provide dense spatial supervision and hypothesis confidence supervision, balanced by hyper-parameters λθ , λh, and λs.Specifically, the dense spatial target is constructed as a spatial Gaussian distribution centered at the ground-truth translation residual: 
+
+π∗ 
+
+> j
+
+= 1
+
+Z exp 
+
+
+
+− ∥uj − ∆x∗∥22
+
+2σ2
+
+> h
+
+
+
+, (14) 
+
+and supervised via cross-entropy loss Lheat =
+
+− P 
+
+> j
+
+π∗ 
+
+> j
+
+log πj .To estimate hypothesis reliability, the score head predicts a confidence score supervised by a soft target derived from candidate pose errors:        
+
+> s∗= exp
+> "
+> −12
+> ∥xc−x∗∥22
+> σ2
+> s
+> + wrap( θc−θ∗)2
+> σ2
+> s,θ
+> !#
+> ,(15)
+
+where σs and σs,θ control translation and orientation error tolerances. The predicted confidence ˆs is optimized using binary cross-entropy:            
+
+> Lscore =−[s∗log ˆ s+ (1 −s∗) log(1 −ˆs)] .(16)
+
+Coarse-to-Fine Inference 
+
+During inference, our framework executes visual FLoc in a coarse-to-fine cascaded manner by sequentially coupling global diffusion sampling with local deterministic refine-ment, as illustrated in Fig. 2(b). 
+
+Global Pose Hypothesis Generation. We first initialize N
+
+pose particles from isotropic Gaussian noise zT ∼ N (0, I),and iteratively apply the reverse diffusion process condi-tioned on the visual observation and floorplan features to yield a set of pose samples {pi}Ni=1 . These particles approxi-mate the continuous multimodal pose posterior p(p | I, M ),naturally capturing distinct plausible localization hypothe-ses. To extract representative pose modes from the sample set, we estimate particle density over the pose manifold via Kernel Density Estimation (KDE):      
+
+> D(p) = 1
+> N
+> NX
+> i=1
+> KH(p−pi),(17)
+
+where KH (·) denotes a product kernel in SE(2) space with bandwidth matrix H. The K density local maxima are ex-tracted as coarse candidate modes {pkc }Kk=1 .
+
+Local Pose Refinement and Re-ranking. Each coarse candidate is processed independently by the local pose re-finer. Specifically, pkc , FI , and M kc are fed into the refiner to predict local translation residuals ∆ˆ xk, orientation residuals 
+
+∆ˆθk, and hypothesis confidence scores ˆsk. The refined pose is pkr = pkc ⊕ (∆ˆ xk, ∆ˆθk). Finally, candidate hypotheses are re-ranked based on their predicted confidence scores:     
+
+> k∗= arg max
+> k∈{ 1,...,K }
+> ˆsk,(18)
+
+and the top-ranked candidate pk∗ 
+
+> r
+
+is output as the final local-ization pose. Compared with existing ray matching-based paradigms, our inference pipeline solely relies on a few reverse diffusion steps and lightweight local refinement. It completely elimi-nates map-dependent ray rendering, test-time lookup tables, and exhaustive observation matching, thereby achieving both real-time execution and superior localization accuracy. 
+
+## Experiments 
+
+Experimental Setup 
+
+Datasets. We evaluate our framework on two standard vi-sual FLoc benchmarks: Structured3D (S3D) (Zheng et al. 2020) and the Zillow Indoor Dataset (ZInD) (Cruz et al. 2021), which provide complementary evaluation settings across synthetic and real-world scenes. S3D is a large-scale synthetic dataset containing 3,500 designer-created houses with photorealistic rendered observations, ground-truth cam-era poses, and aligned 2D floorplans. Following prior pro-tocols (Grader and Averbuch-Elor 2025; Ye et al. 2026), we conduct comparative experiments on the S3D (full) bench-mark, comprising 3,296 fully furnished indoor scenes and 78,453 monocular perspective images. Monocular images are set to a horizontal field of view (FoV) of 80 ◦, with a floorplan spatial resolution of 0.02 m under official train/-validation/test splits. ZInD is a real-world dataset comprising 1,575 unfurnished residential homes and 59,361 panoramic images paired with annotated floorplans. Following standard practice, panora-mas are converted into perspective views for localization in the corresponding 2D floorplan coordinate frame. 
+
+Baselines. We evaluate both geometric and semantic vari-ants of our method against nine baselines: 
+
+(1) PF-net (Karkus, Hsu, and Lee 2018) proposes a parti-cle filter specialized for visual FLoc. Its observation model aims to learn the similarity between an image and the corre-sponding map patch. 
+
+(2) MCL (Dellaert et al. 1999) is the most popular frame-work for 2D localization on pure geometry maps. 
+
+(3) LASER (Min et al. 2022) represents the floorplan as a set of points and gathers the features of the visible points of each pose in the floorplan. It actively compares the rendered pose features with the query image features for visual FLoc. 
+
+(4) F 3Loc (Chen et al. 2024) is a classic visual FLoc method that proposes a probabilistic model consisting of a ray-based observation module and a histogram filtering module. 
+
+(5) 3DP (Chen et al. 2025) injects 3D geometric priors into visual FLoc which significantly improve the single-frame and multi-frame FLoc accuracy without the need of any semantic labels. 
+
+(6) RSKFLoc (Chen et al. 2026a) serves as a strong base-line, incorporating unsupervised learning-based room style knowledge into visual FLoc without requiring explicit se-mantic information. 
+
+(7) SemRayLoc (Grader and Averbuch-Elor 2025) repre-sents a strong baseline in semantic FLoc. It utilizes sparse semantic floorplan priors to predict semantic rays, generating structural-semantic probability volumes to improve localiza-tion performance. 
+
+(8) SceneAligner (Cho, Cai, and Averbuch-Elor 2026) projects 3D reconstructions onto dense maps and aligns them with floorplans to achieve the previous SOTA in semantic-free visual FLoc. 
+
+(9) FoD (Ye et al. 2026) proposes a probabilistic fusion strategy that achieves state-of-the-art visual FLoc perfor-mance by fusing depth and semantic information. FoD d is a variant of FoD, indicating that the floorplan semantics is used during training, while only the depth is predicted during inference. 
+
+Evaluation Metrics. In accordance with standard proto-cols (Chen et al. 2024; Grader and Averbuch-Elor 2025; Ye et al. 2026), we report recall metrics at spatial accuracy thresholds of 0.1 m , 0.5 m , and 1.0 m . Additionally, we re-port joint pose recall requiring spatial accuracy within 1.0 m and orientation error bounded within 30 ◦. Recall measures the percentage of query images localized within the specified error thresholds. 
+
+Implementation Details. Our framework is implemented in PyTorch and trained on a single NVIDIA RTX 5880 Ada GPU. The visual observation encoder utilizes the frozen ViT-S backbone from Depth Anything V2 (Yang et al. 2024). Ge-ometric floorplans are formatted as single-channel grayscale rasters, whereas semantic floorplans are represented as five-channel one-hot tensors. The floorplan encoder comprises a convolutional stem and the first two stages of ResNet-18, fol-lowed by two residual context blocks. The global diffusion denoising network incorporates two pose-to-map attention blocks (Vaswani et al. 2017). All attention mechanisms em-ploy four heads with a dropout rate of 0.1.The diffusion model is optimized via AdamW (Loshchilov and Hutter 2017) using a cosine noise schedule ( T = 1000 ), a batch size of 8, an initial learning rate of 10 −4, a minimum learning rate of 10 −5, and a weight decay of 10 −4. Co-sine annealing and gradient clipping (maximum norm 1.0)are applied throughout training. Non-semantic and semantic models are trained for 30 and 60 epochs, respectively. Joint map-pose rotation augmentation is applied with probability 
+
+0.5 using discrete rotations from {90 ◦, 180 ◦, 270 ◦}.The local pose refiner reuses the frozen visual encoder and token-mixing layers from the diffusion stage. For each coarse candidate, a 5 m × 5 m oriented local floorplan crop is extracted and resized to 256 × 256 . Refiner networks are optimized via AdamW for 30 epochs with a batch size of 16 . Training candidates are generated via multi-scale pose perturbation: 50% sampled from fine Gaussian noise (0.3 m /10 ◦), 30% from moderate noise ( 0.8 m /25 ◦), and 
+
+20% from uniform noise within 1.5 m /45 ◦. Loss hyper-parameters are set to σh = 0 .2 m , σs = 0 .5 m , σs,θ = 20 ◦,
+
+λθ = 1 .0, λh = 1 .0, and λs = 0 .25 .During inference, 64 pose particles are initialized from Gaussian noise and refined through 10 reverse diffusion steps. Particle density is estimated using an SE(2) kernel with spa-tial and angular bandwidths of 0.75 m and 20 ◦, respectively. 
+
+K candidate modes are independently refined, and the hy-pothesis with the highest predicted confidence is selected as the final camera pose. 
+
+Comparative Studies 
+
+Comparison with SOTA Methods. Table 1 and Table 2 compare our method with SOTA visual FLoc approaches on the S3D (full) and ZInD benchmarks. When training with-out semantic floorplans, our complete framework consis-tently achieves top-performing results across all metrics. On S3D (full), it substantially improves upon the previous best 3D reconstruction-based baseline, SceneAligner, elevating the recall from 3.5% , 37 .5% , 53 .8% , and 51 .6% to 11 .3% ,
+
+64 .4% , 73 .7% , and 72 .6% under the 0.1 m , 0.5 m , 1.0 m ,and 1.0 m /30 ◦ criteria, respectively. On the real-world ZInD benchmark, our method similarly outperforms existing ap-proaches by a wide margin, boosting the 0.5 m recall from 
+
+11 .1% (LASER) and 7.9% (F3Loc ) to 45 .5% , while reaching 
+
+57 .3% and 45 .9% under the 1.0 m and 1.0 m /30 ◦ metrics, 
+
+Method (Venue) Sem. 0.1 m 0.5 m 1 m 1m 30 ◦
+
+Training without semantic floorplans 
+
+PF-net (CoRL 2018) No 0.2 1.3 3.2 0.9 MCL (ICRA 1999) No 1.3 5.2 7.8 6.4 LASER (CVPR 2022) No 0.7 6.4 10.4 8.7 F3Loc (CVPR 2024) No 1.5 14.6 22.4 21.3 RSKFLoc (AAAI 2026) No 4.5 31.7 38.7 37.5 3DP (ACM MM 2025) No 4.8 32.8 40.3 39.0 SceneAligner (Arxiv 2026) No 3.5 37.5 53.8 51.6 CF 2Loc w/o Sem. No 6.4 58.9 73.4 72.3 CF 2Loc w/o Sem. + Refine No 11.3 64.4 73.7 72.6 
+
+Training with semantic floorplans 
+
+SemRayLoc (ICCV 2025) Yes 5.7 45.5 58.8 57.5 FoD d(CVPR 2026) No 11.4 56.4 61.4 60.8 FoD (CVPR 2026) Yes 12.0 65.2 71.9 71.4 CF 2Loc w/Sem. Yes 8.0 65.2 78.7 78.1 CF 2Loc w/Sem. + Refine Yes 15.0 71.0 79.1 78.4 
+
+Table 1: Comparative experimental results on the S3D (full) dataset. Sem. indicates whether to predict semantic rays dur-ing inference. FoD d is a variant of FoD, indicating that the floorplan semantics is used during training, while only the depth is predicted during inference. 
+
+Method (Venue) Sem. 0.1m 0.5m 1m 1m 30 ◦
+
+Training without semantic floorplans 
+
+LASER (CVPR 2022) No 1.4 11.1 17.6 13.6 F3Loc (CVPR 2024) No 0.7 7.9 15.1 11.5 CF 2Loc w/o Sem. No 3.3 36.3 55.5 44.6 CF 2Loc w/o Sem. + Refine No 9.7 45.5 57.3 45.9 
+
+Training with semantic floorplans 
+
+SemRayLoc (ICCV 2025) Yes 3.3 26.6 38.0 31.9 FoD d(CVPR 2026) No 5.3 31.1 39.3 35.4 FoD (CVPR 2026) Yes 8.1 43.6 53.5 50.2 CF 2Loc w/Sem. Yes 4.3 43.4 61.9 53.9 CF 2Loc w/Sem. + Refine Yes 11.5 51.7 63.2 54.7 
+
+Table 2: Comparative experimental results on the ZInD dataset. Sem. indicates whether to predict semantic rays dur-ing inference. respectively. These marked gains verify that directly parame-terizing the conditional pose distribution and refining candi-date modes is significantly more effective than deterministic ray prediction and exhaustive observation matching, partic-ularly in the absence of semantic cues. When training with semantic floorplans, our method con-tinues to establish new SOTA performance. Compared with the strongest semantic baseline, FoD, our framework im-proves recall on S3D (full) from 12 .0% , 65 .2% , 71 .9% ,and 71 .4% to 15 .0% , 71 .0% , 79 .1% , and 78 .4% across the four evaluation criteria, respectively. On ZInD, it further el-evates the 0.5 m , 1.0 m , and 1.0 m /30 ◦ recalls from 43 .6% ,
+
+53 .5% , and 50 .2% to 51 .7% , 63 .2% , and 54 .7% , respectively. These results underscore the clear advantage of direct multi-modal pose distribution modeling over indirect ray-matching paradigms. Furthermore, the proposed local refiner consis-Figure 3: A qualitative comparison of our method (d-f) with existing methods (b-c) on S3D (full). F 3Loc and Unloc do not use semantics, while SemRayLoc does. 
+
+Figure 4: Trade-off analysis comparing visual FLoc perfor-mance ( 1.0 m Recall) and computational latency (ms) across varying denoising steps. Our method achieves superior ac-curacy while remaining computationally efficient. tently yields notable accuracy boosts under the stringent 
+
+0.1 m criterion (e.g., 12 .0% → 15 .0% on S3D (full) and 
+
+8.1% → 11 .5% on ZInD), while fully preserving the ro-bust global localization capacity established by the diffusion stage. The consistent superiority across both synthetic and real-world benchmarks demonstrates the effectiveness and strong generalization ability of our coarse-to-fine generative framework. Figure 3 presents a qualitative comparison between our method and representative baselines. While methods such as F3Loc , UnLoc, and SemRayLoc frequently suffer from catastrophic mode mismatches in symmetric indoor layouts, our approach reliably identifies true candidate modes through generative global search. The local refinement stage subse-quently sharpens pose accuracy, yielding significant gains under strict error thresholds. 
+
+Accuracy-Efficiency Trade-off. Figure 4 illustrates the trade-off between localization recall and inference la-                                          
+
+> MS RA Refiner LPR 0.1 m 0.5 m 1 m 1 m 30 ◦
+> ----4.2 45.8 63.7 62.7
+> ✓---5.4 53.8 71.5 70.7
+> ✓✓--6.3 58.5 73.2 72.2
+> ✓✓✓-6.9 59.6 73.1 72.0
+> ✓✓✓✓11.3 64.4 73.7 72.6
+
+Table 3: Ablation studies of our proposed method on the S3D (full) dataset. MS, RA, and LPR denote Mode Selection, Ro-tation Augmentation, and Local Patch Rotation, respectively.                       
+
+> Local Map Size 0.1 m 0.5 m 1 m 1 m 30 ◦
+> 3 m ×3 m 9.7 62.2 73.3 72.3 5 m ×5 m 11.3 64.4 73.7 72.6
+> 7 m ×7 m 10.3 63.1 72.0 71.0
+
+Table 4: Results of parametric studies on the local map size. tency under varying diffusion denoising steps. Our method achieves over 70% recall at 1.0 m using only 5 denoising steps with low runtime overhead, and converges rapidly around 
+
+10 steps, beyond which further iterations yield diminishing returns. This confirms that accurate conditional pose distri-bution modeling can be achieved with minimal generative sampling steps. Furthermore, compared with ray matching-based methods, our framework achieves a markedly superior accuracy-latency trade-off. Specifically, it improves the 1.0 m 
+
+recall from 58 .8% (SemRayLoc) to over 73% while reducing inference time by nearly 4×. These results demonstrate that direct pose distribution estimation enables both SOTA local-ization precision and real-time inference without requiring offline map preprocessing or online ray matching. 
+
+Ablation Studies 
+
+Table 3 presents comprehensive ablation studies conducted on S3D (full). Starting from the baseline diffusion model, in-corporating candidate mode selection substantially improves the 0.5 m recall from 45 .8% to 53 .8% and the 1.0 m recall from 63 .7% to 71 .5% . This confirms the necessity of preserv-ing dominant mode hypotheses in a multimodal pose distri-bution rather than naively averaging diffusion samples. Ap-plying joint map-pose rotation augmentation further boosts the 0.5 m recall to 58 .5% and the 1.0 m recall to 73 .2% ,indicating enhanced robustness to arbitrary global floorplan orientations. Integrating the local refiner consistently im-proves fine-grained localization accuracy, with gains becom-ing significantly more pronounced after enabling local patch canonicalization (rotation alignment). Specifically, 0.1 m re-call jumps from 6.9% to 11 .3% , and 0.5 m recall improves from 59 .6% to 64 .4% , while 1.0 m recall remains largely sta-ble. This highlights that local patch canonicalization effec-tively normalizes candidate-local coordinate frames, allow-ing the refiner to concentrate on regressing bounded residual displacements. Overall, these progressive gains validate that each component provides complementary advantages, col-lectively enabling robust global mode tracking and precise local refinement. Parametric Studies 
+
+We conduct sensitivity analyses on the local map size. As shown in Table 4, a 5 m × 5 m crop yields the best ac-curacy by balancing spatial layout context with local uni-modality—smaller patches lack context, whereas larger ones reintroduce structural ambiguities. Furthermore, K = 1 (se-lecting the top-confidence candidate) suffices to achieve top-tier performance on both S3D (full) and ZInD, confirming the reliability of our diffusion sampling and confidence scoring in identifying true pose modes. 
+
+## Conclusion 
+
+In this paper, we revisit visual floorplan localization (FLoc) from the perspective of direct conditional pose distribu-tion estimation and propose a rendering-free, coarse-to-fine generative framework. Rather than relying on intermediate 1D ray prediction or exhaustive observation matching, our method parameterizes the full multimodal pose posterior via an image-conditioned pose diffusion model, followed by a lightweight local refiner for precise residual regression. This coarse-to-fine formulation seamlessly bridges global uncer-tainty modeling with local unimodal determinism, enabling robust multi-hypothesis tracking and fine-grained pose es-timation within a unified architecture applicable to both geometric and semantic floorplans. Extensive evaluations on the S3D (full) and ZInD benchmarks demonstrate that our approach consistently establishes new SOTA accuracy while supporting real-time inference without requiring of-fline map preprocessing. We hope this work provides a scal-able, rendering-free alternative to traditional ray-matching paradigms and inspires further research in generative cross-modal spatial reasoning. 
+
+## References 
+
+Arandjelović, R.; Gronat, P.; Torii, A.; Pajdla, T.; and Sivic, J. 2016. NetVLAD: CNN Architecture for Weakly Supervised Place Recognition. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , 5297– 5307. Balntas, V.; Li, S.; and Prisacariu, V. A. 2018. RelocNet: Continuous Metric Learning Relocalisation Using Neural Nets. In Proceedings of the European Conference on Com-puter Vision (ECCV) , 751–767. Brachmann, E.; Krull, A.; Nowozin, S.; Shotton, J.; Michel, F.; Gumhold, S.; and Rother, C. 2017. Dsac-differentiable ransac for camera localization. In Proceedings of the IEEE conference on computer vision and pattern recognition ,6684–6692. Chen, B.; Kang, J.; Yang, H.; Zhong, P.; and Wang, J. 2025. Perspective from a Higher Dimension: Can 3D Geometric Priors Help Visual Floorplan Localization? In Proceedings of the 33rd ACM International Conference on Multimedia (ACM MM) , 7181–7190. Chen, B.; Yan, S.; Cui, Y.; Kang, J.; Zhong, P.; and Wang, J. 2026a. Perspective from a Broader Context: Can Room Style Knowledge Help Visual Floorplan Localization? In 
+
+Proceedings of the AAAI Conference on Artificial Intelli-gence , volume 40, 2787–2795. Chen, C.; Wang, R.; Vogel, C.; and Pollefeys, M. 2024. F3Loc: Fusion and Filtering for Floorplan Localization. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition (CVPR) , 18029–18038. Chen, K.; Huang, Y.; An, D.; He, J.; Su, Y.; Liu, J.; Liu, N.; and Wang, L. 2026b. FloorPlan-VLN: A New Paradigm for Floor Plan Guided Vision-Language Navigation. Cho, J.; Cai, R.; and Averbuch-Elor, H. 2026. SceneAligner: 3D-Grounded Floorplan Localization in the Wild. arXiv preprint arXiv:2605.22581 .Cruz, S.; Hutchcroft, W.; Li, Y.; Khosravan, N.; Boyadzhiev, I.; and Kang, S. B. 2021. Zillow Indoor Dataset: Annotated Floor Plans With 360 ° Panoramas and 3D Room Layouts. 
+
+IEEE .Dellaert, F.; Fox, D.; Burgard, W.; and Thrun, S. 1999. Monte Carlo Localization for Mobile Robots. In Proceedings of the IEEE International Conference on Robotics and Automation (ICRA) , volume 2, 1322–1328. Grader, Y.; and Averbuch-Elor, H. 2025. Supercharging Floorplan Localization with Semantic Rays. In Proceedings of the IEEE/CVF International Conference on Computer Vi-sion (ICCV) , 27116–27125. Ho, J.; Jain, A.; and Abbeel, P. 2020. Denoising Diffu-sion Probabilistic Models. In Larochelle, H.; Ranzato, M.; Hadsell, R.; Balcan, M.; and Lin, H., eds., Advances in Neu-ral Information Processing Systems , volume 33, 6840–6851. Curran Associates, Inc. Howard-Jenkins, H.; and Prisacariu, V. A. 2022. LaLaLoc++: Global Floor Plan Comprehension for Layout Localisation in Unvisited Environments. In Proceedings of the European Conference on Computer Vision (ECCV) , 693– 709. Howard-Jenkins, H.; Ruiz-Sarmiento, J.-R.; and Prisacariu, V. A. 2021. LaLaLoc: Latent Layout Localisation in Dy-namic, Unvisited Environments. In Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , 10107–10116. Huang, W.; Li, J.; Wan, Z.; Di, H.; Liang, W.; and Yang, Z. 2025. Floor Plan-Guided Visual Navigation In-corporating Depth and Directional Cues. arXiv preprint arXiv:2511.01493 .Karkus, P.; Hsu, D.; and Lee, W. S. 2018. Particle Filter Networks with Application to Visual Localization. In Pro-ceedings of the 2nd Conference on Robot Learning (CoRL) ,volume 87 of Proceedings of Machine Learning Research ,169–178. PMLR. Kendall, A.; Grimes, M.; and Cipolla, R. 2015. Posenet: A convolutional network for real-time 6-dof camera relocaliza-tion. In Proceedings of the IEEE international conference on computer vision , 2938–2946. Li, J.; Huang, W.; Wang, Z.; Liang, W.; Di, H.; and Liu, F. 2025. FloNa: Floor Plan Guided Embodied Visual Naviga-tion. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, 14610–14618. Liu, L.; Li, H.; and Dai, Y. 2017. Efficient Global 2D– 3D Matching for Camera Localization in a Large-Scale 3D Map. In Proceedings of the IEEE International Conference on Computer Vision (ICCV) , 2372–2381. Loshchilov, I.; and Hutter, F. 2017. Decoupled Weight Decay Regularization. In International Conference on Learning Representations .Min, Z.; Khosravan, N.; Bessinger, Z.; Narayana, M.; Kang, S. B.; Dunn, E.; and Boyadzhiev, I. 2022. LASER: LAtent SpacE Rendering for 2D Visual Localization. In Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 11122–11131. Sarlin, P.-E.; Cadena, C.; Siegwart, R.; and Dymczyk, M. 2019. From Coarse to Fine: Robust Hierarchical Localiza-tion at Large Scale. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition (CVPR) ,12716–12725. Sattler, T.; Leibe, B.; and Kobbelt, L. 2017. Efficient and Effective Prioritized Matching for Large-Scale Image-Based Localization. IEEE Transactions on Pattern Analysis and Machine Intelligence , 39(9): 1744–1756. Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones, L.; Gomez, A. N.; Kaiser, L.; and Polosukhin, I. 2017. Attention Is All You Need. arXiv .Walch, F.; Hazirbas, C.; Leal-Taixe, L.; Sattler, T.; Hilsen-beck, S.; and Cremers, D. 2017. Image-based localization using lstms for structured feature correlation. In Proceedings of the IEEE international conference on computer vision ,627–637. Wüest, M.; Engelmann, F.; Miksik, O.; Pollefeys, M.; and Barath, D. 2026. UnLoc: Leveraging Depth Uncertainties for Floorplan Localization. In International Conference on Learning Representations (ICLR) .Yang, L.; Kang, B.; Huang, Z.; Zhao, Z.; Xu, X.; Feng, J.; and Zhao, H. 2024. Depth Anything V2. ArXiv , abs/2406.09414. Ye, K.; Chen, M.; Zhang, X.; and Yang, X. 2026. Fusion of Depth and Semantics for Probabilistic Floorplan Local-ization. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 19413– 19422. Zheng, J.; Zhang, J.; Li, J.; Tang, R.; Gao, S.; and Zhou, Z. 2020. Structured3d: A large photo-realistic dataset for structured 3d modeling. In Computer Vision–ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part IX 16 , 519–535. Springer.

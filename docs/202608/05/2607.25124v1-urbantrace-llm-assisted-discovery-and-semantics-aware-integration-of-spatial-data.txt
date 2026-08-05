@@ -1,0 +1,450 @@
+Title: UrbanTrace: LLM-Assisted Discovery and Semantics-Aware Integration of Spatial Data
+
+URL Source: https://arxiv.org/pdf/2607.25124v1
+
+Published Time: Wed, 29 Jul 2026 00:24:26 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# UrbanTrace : LLM-Assisted Discovery and Semantics-Aware Integration of Spatial Data 
+
+Sonia Castelo , Eden Wu , João Rulff , Harish Doraiswamy , Juliana Freire , Cláudio Silva A C
+
+## D
+
+> B1
+> B2
+> B3
+> B4
+
+## E
+
+## B
+
+Figure 1: UrbanTrace applied to a real-world analysis identifying NYC neighborhoods in need of after-school programs. The workflow begins with the (A) Dataset Selector and is supported by the (E) Semantic Data Discovery Agent , which recommends datasets for the analysis. The selected datasets are displayed on the (B) Main Canvas as (B1) Dataset Nodes. These are connected to (B2) Integration Nodes, where a Semantic-Aware Operator Copilot recommends valid spatial transformations. The provenance of the transformations is visualized in the (D) Integration Provenance Graph (rectangles: data, triangles: mapping operators, circles: aggregations) – hovering over a transformation reveals the AI-generated rationale. The Synthesis Agent then generates a (B3) Result Map Node that displays a Multivariate Priority Map, with hotspots indicating areas of need. Using the (C) Spatial Analysis Panel, analysts can iteratively test counterfactuals by modifying weights or operators, and compare outcomes via the (B4) Spatial Delta Map, which highlights the differences between transformations, i.e., emerging (green) and diminishing (red) priority hotspots. 
+
+Abstract —Urban decision-making requires integrating heterogeneous spatial data. While current GIS tools handle geometric computation efficiently, they lack the semantic reasoning to guide complex workflows. Analysts manually manage data discovery, spatial boundaries, and measurement semantics, risking aggregation errors. We present UrbanTrace , a visual analytics system that transforms manual spatial data-wrangling into a transparent, node-based collaborative workflow with context-aware AI agents. Using an offline profiler to extract semantic and geometric metadata, UrbanTrace grounds LLMs in real-world data distributions. This enables specialized agents to retrieve datasets based on high-level goals and automatically enforce valid spatial aggregations. To make harmonization explicit, three interactive views: an Integration Provenance Graph, Multivariate Priority Map, and Spatial Delta Map, allow users to explore how conclusions shift across spatial configurations. We evaluate UrbanTrace on 28 urban scenarios spanning 112 datasets. Quantitative ablations show our profiling significantly outperforms baseline LLMs in data discovery, achieving 100% semantic and 87% geometric validity in spatial mapping. Through real-world case studies and expert interviews, we demonstrate that 
+
+UrbanTrace turns spatial aggregation sensitivity from a methodological burden into an exploratory visual asset. 
+
+Index Terms —Multivariate spatial harmonization, intent-driven data discovery, agentic spatial analytics 
+
+1 INTRODUCTION 
+
+Urban decision-making increasingly depends on integrating hetero-geneous spatial datasets – combining census surveys, administrative records, and infrastructure maps to understand where need is concen-trated and how resources should be allocated. There are analytical tools for these tasks [19, 24, 61], but users struggle with identifying datasets that are relevant to a given question, determining how to join datasets with incompatible zoning systems, and properly aggregate different 
+
+• Authors are with the New York University (NYU) and Microsoft Research. E-mails: {s.castelo, eden.wu, jlrulff, juliana.freire, csilva}@nyu.edu. {harish.doraiswamy}@microsoft.com Manuscript received xx xxx. 202x; accepted xx xxx. 202x. Date of Publication xx xxx. 202x; date of current version xx xxx. 202x. For information on obtaining reprints of this article, please send e-mail to: reprints@ieee.org. Digital Object Identifier: xx.xxxx/TVCG.202x.xxxxxxx 
+
+variables. These decisions are typically made manually, in an ad-hoc fashion. We illustrate these challenges through a concrete example. Suppose an analyst is tasked with implementing New York City’s Universal After-School initiative [43]. To allocate resources effectively, they must answer a specific operational question: which neighborhoods should be prioritized for additional after-school programs? Answering this question immediately surfaces three interrelated challenges. 
+
+C1 Challenge 1: Data Discovery. The first question to be answered is which datasets are needed for the analysis. An expert would look for data on student demand, existing digital and educational infrastructure, and socio-economic risk. But these are not stored in a single dataset. School enrollment, library locations, and public Wi-Fi spots are main-tained as discrete point data across different municipal portals, such as Capital Planning NYC and NYC Open Data [11, 45]. Meanwhile, socio-economic indicators such as poverty and income rates are pub-lished by the Furman Center [46] and aggregated into multipolygons at arXiv:2607.25124v1 [cs.HC] 27 Jul 2026 the Community District level. Each dataset was collected for different administrative purposes and different datasets use different spatial rep-resentations. Given that dataset descriptions are often terse [63], it is difficult to design keyword queries that retrieve the desired datasets. For example, an analyst searching for “internet access” may miss relevant data if it appears under administrative titles like ‘LinkNYC Kiosk Loca-tions’ without intuitive keywords. There is no systematic guidance on which datasets are relevant to a given question or how they relate to one another. Analysts must discover, evaluate, and assemble them through a combination of domain expertise and manual search, a process that remains time-consuming, error-prone, and largely invisible in the final analysis, despite advances in data cataloging and profiling [6, 7, 14, 21].  
+
+> C2
+
+Challenge 2: Selection of Spatial Unit for Joint Analysis. Once the relevant datasets are selected, combining point-level infrastructure (e.g., schools, libraries) with regional indicators (e.g., poverty rates) requires choosing a common spatial unit. This choice is never neutral, as different boundaries yield different answers, the Modifiable Areal Unit Problem (MAUP) [59]. For example, aggregating library access to a large Community District might mask localized deficits, while granular census tracts might artificially isolate a school from a library just across the street. Because administrative zones (e.g., census tracts, Council Districts) were drawn for purposes unrelated to after-school planning, the answer to the operational question changes with the zon-ing system, not the underlying reality. Consequently, no single “correct” spatial unit exists. Analysts must instead explore how conclusions shift across different aggregations [22, 26], treating boundary sensitivity as a valuable analytical signal rather than statistical noise.  
+
+> C3
+
+Challenge 3: Measurement Semantics. Variables behave dif-ferently under spatial aggregation, and applying the wrong operation produces incorrect results [52]. For instance, student counts are ex-tensive variables that sum correctly across merged neighborhoods. Conversely, poverty rates are intensive variables [48, 50] requiring population-weighted averages; summing them artificially inflates vul-nerability in larger districts. This semantic distinction governs every step of spatial harmonization, yet most standard GIS tools lack inher-ent semantic awareness and treat all numerical columns identically by default. The analyst has no way of knowing which is which unless the measurement type of each variable is explicitly encoded and enforced. Consequently, these three challenges are deeply intertwined: safely exploring spatial boundaries ( C2 ) depends on applying the correct semantic aggregation operators ( C3 ), and both depend on successfully discovering the relevant datasets ( C1 ). Existing GIS tools [19, 24, 49] address the geometric and computational aspects of these tasks but pro-vide no support for the reasoning layer: they cannot identify relevant datasets, infer measurement semantics, or flag when an aggregation operation is semantically invalid. 
+
+Our Approach: UrbanTrace . This paper presents a framework that makes all three challenges explicit and tractable through UrbanTrace , a visual analytics system in which analysts and AI agents collaborate. By leveraging a large language model (LLM) to bridge the gap between high-level analytical goals and harmonized spatial data, UrbanTrace 
+
+transforms rigid, “black-box” scripts into a transparent workflow. This environment enables analysts to interactively navigate the complexities of data discovery, spatial mapping, and aggregation operators, and to explore how different choices affect outcomes. A key requirement for data discovery and integration is data under-standing . As an offline process, UrbanTrace applies the Atlas Profiler 
+
+to extract semantic and geometric metadata to ground subsequent AI reasoning in statistical and geographic realities. The derived metadata enable the Semantic Data Discovery Agent to retrieve datasets based on their analytical relevance to high-level goals such as “identify neigh-borhoods underserved by after-school technology programs” , rather than simple keyword matching. Once datasets are selected for analysis, the agent uses their profiles to propose complementary layers, e.g., that include demographic or infrastructure information. To integrate these datasets, the Semantic-Aware Operator Copilot 
+
+leverages the metadata to classify each variable’s measurement type (i.e., extensive or intensive) and recommends valid operators, such as areal-weighted interpolation or sum aggregation, before any computa-tion is performed. Finally, the LLM Synthesis Agent renders harmo-nized layers into a unified view, inferring directional polarity relative to the stated objective to produce an objective-specific priority map that visualizes areas of need and opportunity. To support transparency and user steering, the system captures detailed provenance of the process. In summary, our main contributions can be summarized as follows: • We present UrbanTrace , a novel visual analytics system that trans-forms manual GIS data-wrangling into a transparent workflow, enabling analysts to navigate data discovery, spatial boundaries, and harmonization within a unified exploratory environment. • We design a pipeline of context-aware AI agents including: an offline Atlas Profiler for metadata extraction, a Semantic Data Discovery Agent that retrieves datasets based on high-level analyt-ical goals, and a Semantic-Aware Operator Copilot that enforces measurement semantics to prevent silent aggregation errors. • We design an integrated visual interface where an Integration Provenance Graph , Multivariate Priority Map , and Spatial Delta Map work in tandem to support structural transparency and coun-terfactual exploration across alternative spatial configurations. • We conduct a comprehensive multi-tiered evaluation of the frame-work, including quantitative ablation studies that establish the ne-cessity of explicit statistical profiling for LLM spatial reasoning, two real-world urban planning case studies, and domain expert interviews demonstrating the system’s ability to turn sensitivity to spatial aggregation and mapping operators from a methodological burden into an exploratory visual asset. 
+
+2 RELATED WORK 
+
+While urban open data initiatives provide broad access to raw spa-tial information [11, 45, 46], the last mile of integration, reconciling geometries and harmonizing statistical semantics, remains a manual, error-prone endeavor. Existing GIS platforms and spatial libraries (e.g., 
+
+ArcGIS [19], Apache Sedona [61], GeoPandas [24], PySAL [49]) offer robust procedural foundations for spatial ETL. However, these work-flows lack semantic awareness, placing the analytical burden entirely on users to manually identify relevant datasets and determine statis-tically valid operators (e.g., distinguishing intensive from extensive 
+
+variables). While these tools can execute any specified integration, they support neither intent-driven discovery nor automated operator recommendation, capabilities crucial for urban decision-making. Over-coming these limitations requires solving interconnected challenges in profiling, search, spatial reasoning, and visual analytics, expanding upon emerging paradigms in LLM-supported urban planning [67]. In what follows, we review prior work that addressed these challenges. 
+
+Uncovering Data Semantics. A prerequisite for urban data integration is recovering the meaning of raw attributes before they can be searched, aligned, or transformed. This is commonly addressed through column type annotation (CTA), which assigns semantic labels to table columns to support schema matching, search, and integration. CTA approaches have been proposed that use different methods, including learning-based such as Sato [62], table representation models such as TURL [15], and multi-task frameworks such as Doduo [55], and more recently, LLM-based approaches [21]. While these general approaches leverage table context and relational cues, work that focuses specifically on geospatial type detection remains limited and is often embedded within broader GIS or semantic-enrichment pipelines. Instead, existing work has focused on recovering spatial semantics from other raw forms, for example, by detecting geospatial location descriptions in natural language [54] or by converting raw GPS trajectories into semantic place- and route-based representations to support semantic querying [2]. 
+
+UrbanTrace builds on the general CTA literature but targets a narrower and more operational goal: identifying, at ingestion time, the specific attribute types that can anchor a dataset in space, such as coordinates, administrative identifiers, address-like fields, and geometry encodings. 
+
+Atlas Profiler specializes in semantic typing for geospatial attributes, rather than open-ended table understanding. 
+
+Mixed-Initiative Data Discovery. Spatial data discovery has tradition-ally been supported through geoportals and repository search interfaces, which help users locate datasets via metadata records, keyword search, and service catalogs. These systems typically assume users already know what they are looking for and provide limited support for seman-tic intent matching. Recent studies continually highlight issues such as weak search support, limited guidance, and poor metadata quality in practical geodata discovery workflows [3, 20], as well as the persistent difficulty of assembling heterogeneous spatial sources in practice [4,29]. To move beyond raw filenames and manually created metadata, pro-filing has emerged in data management as a key mechanism to make large repositories searchable. Systems like Auctus [6] have shown how precomputed profiles, sketches, and explicit spatial/temporal column detection can support dataset exploration and spatio-temporal search. 
+
+UrbanTrace builds on this profiling paradigm, and extends discov-ery workflows with geospatial column-type annotations and validation signals tailored to urban data. Recent research leverages LLMs to enhance data semantics and dis-covery capabilities. Frameworks like ArcheType [21] support retrieval-augmented CTA, while systems like AutoDDG [63] leverages dataset contents to generate textual summaries and improve findability. Con-currently, GIS research has explored LLM-centered geospatial agents for executing natural-language tools and retrieving data [44, 65]. While these efforts highlight the promise of intent-aware interaction, they typ-ically assume the presence of external toolchains or high-quality meta-data. UrbanTrace overcomes these limitations by grounding discovery locally via ingestion-time profiling that produces compact, reliable spa-tial signatures. By using the Atlas Profiler to extract structured profiles as inputs for automated description generation, UrbanTrace combines these structural signatures with generated summaries, enabling LLM agents to discover datasets that match a user’s analytical intent. 
+
+Spatial Operator Recommendation. Selecting appropriate mapping and aggregation operators is a fundamental challenge in multivariate spatial integration, as improper aggregation across spatial supports can introduce statistical bias and artifacts associated with MAUP [22,26,33]. While classical measurement theory distinguishes between extensive (e.g., counts) and intensive (e.g., densities) variables to determine valid aggregation strategies [25,53], modern GIS platforms typically force an-alysts to manually specify these transformations. Attempts to automate this via ontology-based GIS rely heavily on manually curated schemas, limiting their scalability in practical workflows [23, 57, 66]. While re-cent LLM-powered frameworks successfully translate natural-language queries into executable GIS pipelines [1, 40, 64, 65], they largely treat spatial operators as predefined tools rather than reasoning about their statistical suitability. UrbanTrace targets this gap by introducing an AI Copilot that recommends valid integration strategies using dataset metadata, geometric properties, and semantic reasoning. The reasoning is grounded by the semantic information extracted by Atlas Profiler ,which enables the automated, mathematically valid harmonization of heterogeneous spatial datasets, aligning with human-centric principles in GeoAI-enabled urban computing [39]. 
+
+Visual Interfaces for Data Integration. To render complex, heteroge-neous urban data actionable [16], visual interfaces keep analysts in the loop during data integration. Tabular systems expose candidate corre-spondences for human refinement [32, 60], while visual programming environments (e.g., VisTrails , Orange , KNIME , GeoVISTA Studio ) use explicit graph structures to represent pipelines [9,13,17,56]. For spatial analytics, tools like VAUD enable cross-domain urban querying over heterogeneous city data [8], while systems like GeoViz Toolkit , GeoDa Web , and GOdIVA provide coordinated views for web-based analyt-ics and interactive semantic enrichment [18, 28, 36]. More recently, approaches have been proposed to support report authoring via contex-tualized explanations ( GeoExplainer [35]) and multi-granularity map comparison ( S-VIDIA [12]). Emerging LLM-based copilots like Chat-GeoAI and GIS Copilot have begun integrating natural-language-driven analysis directly into GIS platforms [1, 41]. UrbanTrace combines graph-structured workflows and copilot assistance but targets a distinct integration challenge: constructing pipelines to integrate datasets with disparate geometries and statistical semantics. Rather than simply in-specting spatial data or executing predefined queries, our interface is designed to help analysts discover relevant datasets, iteratively compare alternative harmonization strategies, and maintain transparent analytical provenance throughout the entire process. 
+
+3 UrbanTrace 
+
+UrbanTrace is a visual analytics system designed to help analysts dis-cover, integrate, and explore heterogeneous spatial datasets to solve complex spatial problems. By maintaining continuous dialogue be-tween the human analyst and an ensemble of LLM-driven agents, Ur-banTrace streamlines spatial data discovery and harmonization. 
+
+3.1 Domain Requirements 
+
+Integrating heterogeneous spatial datasets introduces significant analyt-ical and cognitive hurdles. Following design-study methodology [51], we derived the following desiderata for UrbanTrace from the core challenges (Sec. 1) and our year-long engagement in the OSCUR project [47]: [R1] C1 Context-Aware Data Discovery : Analysts often struggle to find relevant datasets for their analyses. The system must dynam-ically recommend complementary spatial data based on the user task and the datasets currently in use. [R2] C1 C3 Metadata Generation : Open datasets are often published with terse descriptions and insufficient metadata. To support data discovery and integration, the system must automatically derive the necessary metadata in a data-driven fashion, by inferring attributes’ semantics as well as geometric and statistical properties directly from source files. [R3] C2 C3 Semantic-Aware Spatial Harmonization : Manually spec-ifying spatial joins across unaligned geographic boundaries is error-prone. Rather than requiring users to be GIS experts, the system must guide analysts through the harmonization process by recommending valid aggregation pathways, ensuring, for ex-ample, that extensive counts are summed and intensive rates are area-weighted. [R4] C1 C2 C3 Explainable Visual Provenance : AI-assisted work-flows risk becoming opaque "black boxes." The system must expose the complete analytical evidence chain, allowing users to interpret, audit, and manually override automated decisions. [R5] C2 Multivariate Synthesis and Spatial Comparison : Answering complex urban questions requires normalizing and combining multiple variables into a unified view (synthesis). Because these results are highly sensitive to zoning boundaries, the system must enable explicit visual comparison of how synthesized results shift when underlying spatial parameters or boundaries are modified. 
+
+3.2 System Overview 
+
+To fulfill these requirements, UrbanTrace employs a three-stage pipeline (Figure 2) that users interactively refine using the Spatial Integration Canvas (subsection 3.5). Offline, the Atlas Profiler (subsub-section 3.3.1) extracts semantic and geometric metadata from datasets in a data lake ([ R2] ) which enables both data discovery and spatial reasoning. The workflow begins with intent-driven discovery ([ R1] ): given a user-defined question or analysis description, the Semantic Data Discovery Agent retrieves candidate datasets. Next, the Semantic-Aware Operator Copilot uses the extracted metadata to recommend valid spatial mapping and aggregation operators ([ R3] ), while recording all operations in a transparent Integration Provenance Graph ([ R4] ). Finally, an LLM Synthesis Agent compiles the harmonized data into an interpretable Multivariate Priority Map ([ R5] ). 
+
+3.3 Analytical Foundations 
+
+3.3.1 Atlas Profiler : Spatial Column Type Annotation 
+
+A fundamental constraint on integrating LLMs into geospatial pipelines is that they cannot directly ingest raw spatial datasets due to strict context-window limits and the geometric complexity of vector data. To bridge this gap, UrbanTrace introduces the Atlas Profiler , an offline hybrid learning- and rule-based pipeline that converts raw tabular data into compact spatial profiles at ingestion time [ R2] .Figure 2: UrbanTrace architecture. 
+
+Profile Construction and Corpus Generation. The profiler maps columns to a bounded vocabulary of operational geospatial types T
+
+(Table 1). To train the classifier, we construct a corpus of human-annotated examples augmented by LLM-generated synthetic data. This augmentation helps distinguish surface regularities (e.g., latitude ,
+
+longitude , polygon , point ) from hard negatives —columns with deceptively similar lexical forms (e.g., borough_code vs. generic numeric identifiers, or address vs. free-form text).                     
+
+> Table 1: Supported classes in the Atlas Profiler geospatial classifier.
+> Category Recognized classes
+> Geographic coordinates latitude ,longitude
+> Projected coordinates x_coord ,y_coord
+> Admin identifiers bbl ,bin ,zip_code ,borough_code
+> Location strings city ,state ,address
+> WKT geometries point ,line ,polygon ,multi_polygon ,multi_line
+> Other non_spatial
+
+Lexical and Semantic Embedding. For each column c, the profiler constructs a token sequence Sc from its header and sampled values. Fol-lowing the serialization strategy used in Magneto [38], we repeat the col-umn name to increase its salience relative to the sampled values before encoding. Concretely, if nc is the column name and Vc = {v1, . . . , vk}
+
+is a random sample of observed values, we serialize the column as 
+
+Sc =
+
+ γM
+
+> j=1
+
+[COL ] ⊕ nc
+
+
+
+⊕
+
+ kM
+
+> i=1
+
+[VAL ] ⊕ vi
+
+
+
+, (1) where ⊕ denotes concatenation and [COL ], [VAL ] are delimiter tokens. We encode Sc using a BAAI/bge-base-en-v1.5 model, which we fine-tune for this task with contrastive learning. The encoder outputs token-level hidden states, and we apply mean pooling to obtain a single 768-dimensional representation for the entire column. 
+
+Contrastive Separation and Hybrid Classification. Since the tar-get label space is predefined and operational, the main challenge is not open-ended semantic interpretation, but separating hard negatives .Let s(c, c′) denote cosine similarity between normalized embeddings. For each column c, we mine hard negatives from its top-k nearest neighbors Nk(c), selecting the h most similar columns with different labels: H (c) = {c′ ∈ Nk(c) | yc′̸ = yc}1: h. These hard negatives guide a joint objective combining cross-entropy and supervised contrastive loss: Ltotal = α LSupCon + ( 1 − α) LCE , where LCE is cross-entropy, 
+
+LSupCon is supervised contrastive loss [31], and α balances the two. This objective pulls same-type columns together while separating hard negatives, improving classification over the target types T .
+
+Rule-Based Validation and Geometric Profiling. Neural predictions are verified by a rule-based stage enforcing physical constraints (e.g., latitude ∈ [−90 , 90 ]). Beyond semantic typing, the profiler also com-putes spatial coverage (e.g., bounding boxes, temporal extents) and summary statistics (mean, variance, distinct counts). The result is stored as a compact JSON profile for later retrieval. This JSON con-tains structured metadata only; without a generated natural-language description. Instead, Atlas Profiler ’s output is passed downstream to the 
+
+AutoDDG [63] description-generation step, which uses the structural profile to synthesize a dataset description. These stored profiles then ground the Semantic-Aware Operator Copilot ’s reasoning in observed dataset characteristics thus reducing the risk of analytical hallucination. 
+
+3.3.2 Formal Model of Spatial Integration 
+
+To integrate heterogeneous datasets while reducing spatial aggrega-tion errors [27, 59], UrbanTrace uses a deterministic geometric engine. Datasets ( D(k)) differ in geometry type (points, lines, polygons), res-olution, and semantics, so integration is defined over a standardized reference grid. Rather than directly joining unaligned datasets, which compounds spatial misalignment errors, we define a common regular grid partition S = {c1, . . . , cM } over the study region Ω ⊂ R2, where each c j is a grid cell and M is determined by the selected grid resolution (default = 8). This geometry-agnostic intermediate layer isolates initial spatial mapping from downstream reporting units, allowing analysts to examine sensitivity to MAUP across different spatial granularities. 
+
+Dimensions of an Integration Strategy. We define a spatial integra-tion strategy for a dataset D(k) as a sequence of three operator classes: 
+
+I (k) = Z ◦ A1 ◦ R. First, a Spatial Mapping Operator (R) maps raw input geometries to grid cells by assigning geometric weights wi j (e.g., via binary containment, nearest assignment, or proportional intersec-tion). Second, a Cell-Level Aggregation Operator (A1) summarizes the mapped values within each cell c j (e.g., via additive totals or central tendencies). Finally, a Zoning Operator (Z) aggregates the intermedi-ate grid cells into the user’s final reporting units (e.g., Council Districts) using area-weighted overlap or centroid containment. 
+
+Constraining the Operator Space. Allowing an LLM to choose op-erators in an unconstrained fashion may lead to errors (e.g., applying area-weighted mapping to dimensionless points). To ensure validity, we constrain the admissible families of operators based on the dataset’s pro-file. Geometric constraints bound R: point geometries are restricted to proximity or containment families, while polygons are strictly routed through proportional area-weighted operators to ensure mass preser-vation [26]. Semantic constraints bound A1 and Z [10]: extensive variables (e.g., population counts) permit Sum aggregations, intensive rates (e.g., poverty percentages) strictly require Weighted Means , and ordinal classifications default to Majority logic. Enforcing these rules reduces the combinatorial strategy space to a finite, deterministic set of sound pathways, serving as a guardrail for the LLM-driven Copilot. 
+
+3.4 LLM Agents 
+
+3.4.1 Semantic Data Discovery Agent 
+
+Open urban data portals support data discovery through keyword search, matching query terms to dataset metadata. Unless users know the cor-rect terms that match the terminology used in the metadata, they are unlikely to discover relevant datasets. Besides, metadata is often in-complete and sometimes inconsistent with the data [63]. UrbanTrace 
+
+addresses this problem through the Semantic Data Discovery Agent 
+
+[R1] . When an analyst provides a natural-language objective (e.g., 
+
+“Identify neighborhoods underserved by after-school technology pro-grams” ) or drops an initial dataset onto the canvas, the agent translates this intent into a curated set of spatial data recommendations. Rather than querying raw tables, the agent reasons over the compact dataset descriptions and structured metadata generated offline by Atlas Profiler 
+
+and AutoDDG . These include geometric type, attribute keywords, col-umn summaries, geospatial classifier outputs, and dataset-level textual descriptions. 
+
+Context-Aware Prompting and Complementary Retrieval. To gen-erate relevant recommendations, the agent evaluates a tripartite prompt containing: (i) task-level system instructions, (ii) the localized data lake catalog (enumerating dataset identifiers, column profiles, and semantic descriptions), and (iii) a live serialization of the current canvas state, including active nodes, spatial connections, and visual encodings. By conditioning retrieval on the active analytical topology rather than on the initial text prompt alone, the agent moves beyond simple lexical matching to propose complementary data layers. For instance, starting with a School Locations dataset, it may suggest demographic (poverty rates), service-demand (youth population), or infrastructure (broadband) layers, necessary to complete the spatial workflow. To maintain user agency, these recommendations are surfaced as suggestions, each accompanied by proposed visual encodings and a natural-language justification (Figure 4). The system only includes data upon explicit user acceptance, preserving a mixed-initiative workflow where the agent offers contextually useful suggestions while the analyst retains control over which layers are incorporated into the analysis. 
+
+3.4.2 Semantic-Aware Operator Copilot 
+
+A critical challenge in multivariate spatial integration is selecting ap-propriate mapping and aggregation operators. While the formal model established in Section 3.3.2 defines a deterministic space of valid inte-gration strategies, manually navigating this space remains a daunting task for analysts. Naïve selections, such as directly summing intensive variables like poverty rates, lead to severe spatial aggregation errors and scale-dependent distortions in spatial analysis [59]. To bridge this gap, UrbanTrace introduces the Semantic-Aware Operator Copilot , an LLM-driven engine that automatically navigates these guardrails to recommend suitable operators [ R3] .
+
+Semantic Classification and Operator Logic. Each source variable v
+
+is characterized by a spatial signature Mv = {η, μ, D, S, Gsrc } derived from the dataset profiles generated by the Atlas Profiler , where η is the column name, μ is the mean, D is the distinct value count, S is a data sample, and Gsrc is the source geometry. The Copilot abstracts the grid engine by deriving a mapping function f : (Mv, Gtgt ) → (M , A ),where M defines the spatial mapping ( R, Z) and A defines semantic aggregation ( A1) into the target geometry Gtgt .To constrain the LLM’s recommendation space, the Copilot first clas-sifies the variable’s semantic type C(v) based on structural types in S
+
+and lexical cues in η (e.g., “density” implying intensive quantities). We define three classes based on foundational cartographic and geocompu-tational principles [10, 26, 50]: Extensive (Cext ) for spatially dependent magnitudes that scale proportionally with area (e.g., population); In-tensive (Cint ) for spatially independent ratios or densities (e.g., poverty rate) that do not scale additively with area; and Ordinal (Cord ) for qualitative categories (e.g., zoning). Formally, we define C(v) = Cord 
+
+if D ≤ 10 ∧ S ⊂ Z; Cint if S ⊂ R \ Z ∨ is_rate (η); and Cext otherwise. The primary recommendation engine leverages an LLM routed via an AI Gateway. Prompted with Mv, Gtgt , and a zero-shot classification schema, the LLM determines the statistically valid operators based on the inferred C(v).
+
+Integration Provenance. To ensure the Copilot’s automated decisions remain transparent, the system externalizes the analytical provenance through an interactive Integration Provenance Graph [ R4] . This panel uses a semantically typed node-link grammar to visualize operator composition: rectangular cards for data states, triangles for mapping (M ), and circles for aggregation ( A ), as shown in Figure 1(D). When the Copilot assigns an operator, it populates this graph using progres-sive disclosure. Hovering reveals an Operator Tooltip with the LLM’s parsed, natural-language rationale (e.g., “Poverty rate is classified as an intensive variable that does not scale with area; applying areal-weighted interpolation...” ). While exposing the complete step-by-step pipeline introduces a slight learning curve compared to a minimal “black-box” UI, this explicit provenance is critical. It enables analysts to trace data flows, verify AI-driven physical changes via coordinated map highlighting, audit mathematical guardrails, and manually over-ride recommendations, ensuring that final outputs are trustworthy for decision-critical urban governance. 
+
+3.4.3 Multivariate Synthesis and Counterfactuals 
+
+With the diverse spatial datasets harmonized into a common zoning framework (Sections 3.3.2 and 3.4.2), the final analytical challenge is translating these disparate indicators into a cohesive view. UrbanTrace 
+
+accomplishes this through the LLM Synthesis Agent , which evaluates the harmonized variables against the user’s original natural-language objective to infer semantic relationships and compute a final multivari-ate priority score (Req. [ R5] ). 
+
+Directional Polarity and Weight Inference. In multivariate urban analysis, variables lack inherent positive or negative utility; their impact is strictly contextual. Let O be the user’s stated analytical objective (e.g., “identify neighborhoods underserved by after-school technology programs” ). For each harmonized target variable k, the Synthesis Agent 
+
+evaluates its semantic relationship to O to infer two critical parameters. First, for Directional Polarity (dk ∈ { 1, −1}), the LLM dynamically infers this orientation based on the specific goal. For example, if O
+
+targets areas with low poverty, the poverty rate is assigned dk = −1(Inverted), meaning lower raw values yield a higher priority score. If no explicit objective is defined, the system defaults to a vulnerability heuristic: variables that correlate with a deficit or risk (e.g., poverty) are assigned dk = 1 (Normal), whereas existing assets (e.g., broadband) are assigned dk = −1 . Second, Relative Importance (wk): the LLM assesses how directly tied the variable is to O, assigning weights that the system normalizes to ensure ∑Kk=1 wk = 1. 
+
+Multivariate Priority Scoring. Grounding this workflow in data-driven Multi-Criterion Decision Making (MCDM) [37], the system computes a composite index Pℓ for each administrative zone zℓ by com-bining the agent’s weights and polarities: Pℓ = ∑Kk=1 wk · φ ( ˆy(k) 
+
+> ℓ
+
+, dk),where ˆy(k) 
+
+> ℓ
+
+∈ [0, 1] is the min-max normalized variable, and the inver-sion function φ (x, 1) = x, φ (x, −1) = 1 − x mathematically flips values to align with the urban goal O. Users can manually override these weights via interactive sliders within the Hotspot Priority legend (see bottom-right in Figure 6 (Left)), enabling domain experts to dynam-ically test alternative analytical scenarios via real-time recalculation. The analytical output of this synthesis is the Multivariate Priority Map (see Figure 1 (B3)), a choropleth map that highlights intervention hotspots. The interface shows the assigned weights, polarities, and the LLM’s natural-language rationale via interactive tooltips (Figure 7 (left)), ensuring that the final output remains fully traceable. 
+
+Counterfactual Analysis via the Spatial Delta Map. To support coun-terfactual scenario exploration, UrbanTrace provides a Spatial Delta Map [R5] . By accepting two Multivariate Priority Maps as inputs (e.g., a baseline model and a modified counterfactual model), as shown in Figure 1 (B4), the system automatically aligns spatial geometries and computes the exact signed difference ( ∆ = Pmodel 2 − Pmodel 1 ) for each shared unit. To mitigate occlusion and visual clutter typical of multi-channel map overlays [42], the absolute shift magnitude maps to a high-contrast sequential background color scale, while spatial variance is encoded using toggleable directional glyphs (arrows). Informed by cartographic placement and layout strategies to preserve underlying color legibility [42], these glyphs are scaled proportionally across dis-crete semantic tiers (Minor, Moderate, Significant, Major) and colored divergently (green for priority increases, red for decreases, gray for negligible variance), immediately drawing the analyst’s attention to the largest localized fluctuations. 
+
+3.5 Spatial Integration Canvas : A Unified Visual Workspace 
+
+The following describes how these components are unified within a single interactive workspace. To support the iterative nature of spa-tial exploration, the primary user interface is an infinite, node-based spatial canvas, shown in Figure 1(B). This flexible visual program-ming paradigm serves as the foundational workspace for discovery, harmonization, and synthesis. 
+
+Node-Based Visual Provenance. The analytical state is externalized via a directed graph of interactive components (Figure 1 B). Source datasets are loaded as Dataset Nodes (B1) (which map viewports to raw geometries), and users link them to Integration Nodes (B2) that encap-sulate the transformation logic. The integrated data is then visualized in the synthesized Multivariate Priority Map (B3). The Integration Provenance Graph (Fig. 1 D) explicitly shows the provenance of the results: the flow of data from raw inputs through the specific operations applied by the AI-assisted geometric engine ([ R4] ). 
+
+Coordinated Spatial Synchronization. To support comparative rea-soning across heterogeneous geometries, all map-bearing nodes employ a Coordinated Multiple Views (CMV) architecture. Spatial interactions, such as panning or zooming on a hotspot, automatically synchronize across all upstream viewports, allowing users to pre-attentively verify local distributions without losing spatial context. 
+
+Comparative Exploration and the Delta Map. The infinite canvas supports branching analyses ([ R5] ). Analysts can duplicate a pipeline, adjust weights or spatial operators, and evaluate alternative models. To compare the results from different approaches, UrbanTrace includes a Spatial Delta Map (Fig. 1 B4). Given two results, it computes and visualizes the exact geographic shifts (increases or decreases in priority) between competing models, thereby drawing the analyst’s attention to areas exhibiting higher variance under altered assumptions. 
+
+4 EVALUATION 
+
+Our evaluation uses a multi-pronged approach to answer the following questions: 1) Do AI agents make accurate recommendations? 2) Does the system support effective real-world analyses? 3) Do domain experts find it useful in practice? First, we quantitatively assess the accuracy of the AI agents in two ablation studies: one targeting dataset discovery (Sec. 4.1) and one targeting spatial operator recommendation (Sec. 4.2). Second, we demonstrate end-to-end scenario exploration and priority map synthesis through two real-world case studies (Sec. 4.3–4.4). Third, we validate the system’s practical utility and workflow integration through structured interviews with four domain experts (Sec. 4.5). 
+
+4.1 C1 Quantitative Ablation: Dataset Discovery 
+
+Identifying relevant datasets for a given analytical goal is the first and most open-ended challenge UrbanTrace addresses. We designed a controlled ablation study to assess how effectively the Semantic Data Discovery Agent meets this challenge, and specifically whether the structured metadata generated offline by Atlas Profiler and the dataset descriptions produced by AutoDDG provide meaningful retrieval gains beyond what an LLM can infer from dataset names alone. 
+
+Benchmark Tasks and Data Lake Scope. We created a benchmark of 28 real-world urban research scenarios constructed using a cu-rated NYC OpenData lake containing 112 geospatial datasets . For each dataset, we precompute structured profiles using Atlas Profiler 
+
+and dataset-level descriptions using AutoDDG . The benchmark tasks span multiple policy themes, including housing, education, mobility, environmental justice, public services, and composite neighborhood pri-oritization. Each task consists of: (i) a ∼100-word prompt describing a realistic urban research or planning goal; (ii) a manually validated set of 3 to 5 relevant datasets ; and (iii) supporting references grounding the scenario in real research, report, or policy. Note that the prompts de-scribe the analytical goal without explicitly naming the correct datasets, so the benchmark evaluates semantic discovery rather than keyword matching. For example, mapping NYC districts where low student performance and high crime overlap [34] requires the agent to choose the aligned education and community-district crime-rate datasets. 
+
+Task Construction and Annotation. We adopted an LLM-assisted, human-validated workflow to construct the benchmark. The LLM first identified candidate research scenarios from multiple trusted public sources and proposed task formulations, along with plausible, relevant datasets from our catalog. We manually curated each task, rewrote prompts to control realism and ambiguity, and validated the expected datasets against the contents of the UrbanTrace repository. This pro-cess ensured that the benchmark reflects realistic discovery conditions in which the agent must connect a high-level analysis objective to appropriate data layers, while avoiding trivial name-based retrieval. 
+
+Baselines and Conditions. For each benchmark task, the Seman-tic Data Discovery Agent receives the task prompt together with dataset metadata from the local data lake, and returns a set of rec-ommended dataset identifiers. We evaluate five conditions as shown in Fig. 3: (i) Name only , in which the agent receives only dataset names; (ii) Source description only , in which names are augmented with orig-inal source descriptions from NYC OpenData; (iii) Profile only , in which names are augmented with explicit Atlas Profiler profile meta-data; (iv) AutoDDG description only , in which names are augmented with AutoDDG -generated descriptions derived from Atlas Profiler pro-files, but no explicit profile metadata is provided at inference time; and (v) Full , which combines AutoDDG -generated profile-derived descrip-tions with explicit Atlas Profiler profile metadata. The Full condition does not include the original source descriptions. Dataset names are included in all conditions as they provide the reference handle needed for the agent to identify and return candidate datasets. This comparison isolates the contribution of lexical metadata, source-authored descrip-tions, structured profiles, and profile-derived semantic descriptions to urban dataset discovery.    
+
+> Figure 3: Macro-average precision, recall, and F1 for the dataset dis-covery ablation across 28 benchmark cases, using Gemini 3 Pro and
+> GPT-5 mini as discovery backbones and averaging over five runs per case.
+
+Evaluation Protocol. To assess robustness across model families, we instantiate the Semantic Data Discovery Agent with two LLMs: Gemini 3 Pro and GPT-5 mini . For each combination of task, model, and ablation condition, we repeat the discovery process 5 times to ac-count for stochastic LLM variability. Retrieval quality is evaluated by comparing the set of datasets recommended by the agent against the manually validated ground-truth, computing precision , recall , and F1 
+
+based on set overlap, and aggregating results across repeated runs and benchmark tasks. Note that raw accuracy over all datasets would be dominated by true negatives—most datasets in the lake are irrelevant to any given task—so these retrieval-oriented metrics more directly capture the agent’s ability to surface what matters. Precision measures whether recommended datasets are relevant; recall measures whether relevant datasets are found; F1 balances the two. This protocol evalu-ates whether richer metadata grounding consistently improves dataset retrieval across model families, supporting downstream urban analysis. As shown in Fig. 3, both Full and AutoDDG description only achieve strong retrieval performance across models. The biggest gains come from profile-derived AutoDDG descriptions: for Gemini 3 Pro , F1 increases from 0.426 with source descriptions to 0.654 with AutoDDG 
+
+descriptions; for GPT-5 mini , F1 increases from 0.403 to 0.651. This shows that Atlas Profiler contributes substantial value when its struc-tured profiles are used by AutoDDG to generate dataset descriptions. Explicit profiles alone also improve substantially over Name only , but they do not match the performance of profile-derived natural-language descriptions. This suggests that LLM-based discovery benefits most when structured profile metadata is translated into compact dataset-level semantic descriptions. Adding explicit profiles on top of AutoDDG 
+
+descriptions does not consistently improve over AutoDDG descriptions alone, suggesting partial redundancy between the generated descrip-tions and the structured profile metadata. At the other extreme, the 
+
+Name only condition performs near zero across all metrics, confirming that dataset names alone provide almost no useful signal for realistic urban data discovery. 
+
+4.2 C2 C3 Quantitative Ablation: Operator Selection 
+
+We designed a second controlled experiment to assess the automated operator selection, benchmarking the Copilot across two dimensions corresponding to the framework’s core logic: Geometric Validity (the correct selection of the spatial mapping operator based on source and target geometries) and Semantic Validity (the correct selection of the aggregation operator based on variable semantics, e.g., summing extensive absolute counts vs. averaging intensive rates). 
+
+Dataset Scope and Ground Truth. Our evaluation corpus comprises 25 real-world spatial datasets drawn from the 112-dataset collection de-scribed in Section 4.1: 17 MultiPolygon, 7 Point, and 1 MultiLineString, a distribution reflecting how municipalities aggregate sensitive data into polygons for geoprivacy [46, 58]. After excluding uninformative fields such as identifiers and coordinate columns, the corpus contains 215 semantically meaningful target columns. Variable semantics are context-dependent (e.g., a column labeled 2023 can represent absolute counts or intensive rates); therefore, we annotated semantics at the dataset–column level. By decomposing the benchmark of 28 complex urban research scenarios into their pairwise dataset integrations, we extracted exactly 100 distinct spatial mapping scenarios . Finally, to establish ground truth, a semi-automatic workflow (LLM prelimi-Table 2: Spatial operator selection accuracy. Geom. Val. denotes Geo-metric Validity (Mapping Operator); Sem. Val. denotes Semantic Validity (Aggregation Operator). 
+
+Condition Geom. Val. (%) Sem. Val. (%) 
+
+Rule-Based (Legacy GIS) 33.0 28.0 Naive LLM (GPT-4o-Mini) 7.0 51.0 Naive LLM (Claude 3.5 Sonnet) 52.0 80.0 Naive LLM (Claude 4.6 Opus) 74.0 94.0 
+
+Semantic-Aware Operator Copilot (Opus + Context) 87.0 100.0 
+
+nary classification followed by manual curation) classified the relevant variables within these 100 scenarios as extensive, intensive, or ordinal. 
+
+Baselines and Conditions. To test the necessity of statistical context, we evaluated five conditions: (i) a Rule-Based legacy GIS baseline; (ii– iv) three LLMs (GPT-4o-Mini, Claude 3.5 Sonnet, Claude 4.6 Opus); and (v) our Semantic-Aware Operator Copilot . Following a strict protocol, conditions (i–iv) were provided with only the dataset names 
+
+(source and target) and column names . They were explicitly denied access to data profiles (e.g., geometry types, data distributions) and did not perform our intermediate semantic classification step ( C(v)), forcing them to infer both spatial and statistical properties from lexical cues alone. 
+
+Results and Trade-offs. Table 2 summarizes the results. The Semantic-Aware Operator Copilot outperforms all the baselines by a large margin. Despite having access to dataset-level context, the Rule-Based sys-tem and LLMs struggled with Geometric Validity, achieving 33% and 
+
+≤74%, respectively. This confirms that the dataset and column names are insufficient to reliably determine a variable’s spatial representation. While all baselines exhibit low Geometric Validity (below 70%), the Claude variants achieve high semantic validity (80% and 94%), demon-strating their sophisticated linguistic reasoning. The performance gap between the Semantic-Aware Operator Copilot and LLMs underscores the need for statistical profiling for robust spatial automation, enabling the system to move beyond the inherent ambiguity of municipal naming conventions to achieve "data-aware" reasoning. 
+
+4.3 C3 Case Study 1: Digital Equity in the NYC Universal After-School Initiative 
+
+In 2025, the New York City Mayor’s Office launched an ambitious 
+
+Universal After-School initiative, announcing 115 new locations to bridge the city’s educational divide [43]. While described as data-driven , the initiative’s spatial logic remained opaque. We aimed to determine if UrbanTrace could replicate these expert-level decisions using only raw open data, while producing a transparent, auditable digital twin of the decision-making process. 
+
+Intention-Driven Data Discovery. The workflow begins with the ana-lyst formulating a high-level goal: identifying neighborhoods where after-school programs are most needed for educational and digital eq-uity. The analyst starts with the most obvious foundational dataset, “NYC Schools” dataset (point geometries containing student enrolment capacity), dragging it onto the main canvas. To surface supporting vari-ables, the analyst prompts the Semantic Data Discovery Agent : “Find Neighborhood-level poverty rates (2000-2023) to identify areas with the greatest socioeconomic need for after-school programs.   
+
+> Library locations as key after-school public resources; useful for identifying access gaps relative to school and student locations.
+> NYC_poverty_rate
+> NYC_libraries
+> NYC Schools Pending Copilot Suggestions
+> pending
+> 5
+> pending
+> MultiPolygon 55 rows
+> Agent Trace
+
+Figure 4: Semantic Data Discovery Agent in action. Based on the user’s natural language prompt and the “NYC Schools” dataset already present on the canvas, the system suggests contextually relevant socio-economic and infrastructure datasets for the analysis. AI Rationale        
+
+> AI Rationale
+> Weighted MeanZoning is used for aggregation to produce an area-weighted average income, avoiding nonsensical summation of median incomes.
+> The column '2023' from NYC_median_household_income represents median household income -- an intensive variable that does not scale with area. Weighted MeanZoning is used for aggregation to
+> SumZoning aggregate the counts to get the total number of libraries per NTA zone.
+> SOURCES
+> PERF
+> Spatial Agg
+> ARE-WEI CEN WEI-MEA SUM
+> poverty_rate 1x libraries 1x Schools 1x Wi-Fi_Hotspot... 1x median_hous... 1x
+> poverty_rate libraries Schools Wi-Fi_Hotspot... median_hous...
+> The 'count' column is a constant 1 for each library point, representing individual library locations. This is an extensive count variable.
+
+Figure 5: Integration Provenance graph for the After-School case study. Each node encodes the semantic type of its variable and the operator recommended by the AI Copilot. The UI also exposes the AI ratio-nale, such as the logic behind selecting sumZoning for libraries and 
+
+areaWeightedZoning for household income. 
+
+datasets related to socio-economic risk and access to public resources to study after-school program needs.” Parsing the intent and the exist-ing canvas context, the agent suggests median household income and poverty rates (Community District polygons) and public libraries and Wi-Fi hotspots (points) as shown in Figure 4. 
+
+Data Heterogeneity and the Isolation Problem. The retrieved layers highlight a persistent challenge: they have incompatible coordinate systems, administrative boundaries (districts vs. neighborhoods), and statistical semantics. Naïve combination risks applying invalid oper-ations , e.g., summing a rate, thereby corrupting downstream analysis. Figure 1 (B3) illustrates how these choices, along with polarity adjust-ments, cascade into drastically different priority maps. 
+
+AI-Guided Semantic and Geometric Alignment. To resolve these conflicts, the Semantic-Aware Operator Copilot first classifies each variable’s semantic type C(v) ∈ { Extensive , Intensive }. It then selects the appropriate spatial mapping and aggregation operators : for the student-count (extensive point data), it applies a spatial join to NYC Neighborhood Tabulation Areas (NTAs), followed by aggregation (sum) within each NTA; for poverty rates (intensive district polygons), it applies Areal Weighted Interpolation (AWI) to re-project values onto the same spatial units without distorting magnitudes. Unlike traditional GIS workflows, the resulting Integration Provenance Graph (Figure 5) makes every transformation step and AI rationale, such as the choice of areaWeightedZoning for income, fully transparent and traceable. 
+
+Hotspot Synthesis and Priority Visualization. Once harmonized, the framework computes a Multivariate Priority Map (P) . The LLM infers the directional polarity required to surface the opportunity gap , the co-occurrence of high demand, high vulnerability, and limited services: 
+
+P = w1 ˜Vstudents +w2 ˜Vpoverty +w3(1− ˜Vincome )+ w4(1− ˜Vwifi )+ w5(1−
+
+˜Vlibrary ), where ˜V denotes min-max normalized values. By inverting 
+
+income and infrastructure, the system highlights underserved areas ,areas where elevated demand and concentrated poverty intersect with a deficiency of existing services (Figure 6, Left). While the LLM proposes initial weights wi based on the policy objective, the analyst can manually refine them to explore alternative scenarios. 
+
+Validation Against Ground Truth. To validate the framework, we Hotspot Priority      
+
+> Zoned Result
+> 2023 - NYC_poverty_rate 35%
+> count - NYC_libraries 5%
+> student - NYC_Schools 15%
+> count - NYC_Wi-Fi_Hotspot_Locations 10%
+> 2023 - NYC_median_household_income 35%
+
+Figure 6: Spatial distribution of the Multivariate Hotspot Index and ground-truth validation. Left: The composite index P rendered as a choropleth over NYC NTAs, where deep red districts score highest. The inset legend (bottom-right) details the parameter configuration, including inverted polarity for public Wi-Fi, libraries, and median household income, with user-adjustable weights. Right: AI Hotspot Priority Zones overlaid with the 114 geocoded Universal After-School locations used for validation. geocoded the official addresses of the 115 Universal After-School sites announced by the Mayor’s Office, successfully locating 114 sites as ground truth (Figure 6, Right). Using percentile thresholds (Table 3), 
+
+UrbanTrace captures 77.2% of sites within the top 50% of priority zones (lift = 1.54). As selectivity increases, the top 30% of zones capture 56.1% of sites (lift = 1.87), confirming that higher-ranked zones are significantly enriched with actual intervention sites. These results show that an AI-assisted pipeline can closely reproduce municipal site-selection decisions. Unlike black-box prediction, UrbanTrace records every weight, operator, and boundary transformation in the topology graph, providing a transparent chain of evidence that supports verifiable public policy decisions.                         
+
+> Table 3: Hotspot quality validation across percentile thresholds.
+> Quantile Thresh. Coverage Nhigh Ntotal Baseline Lift
+> 0.5 0.530 77.2% 88 114 0.5 1.54 0.6 0.557 69.3% 79 114 0.4 1.73 0.7 0.584 56.1% 64 114 0.3 1.87
+
+4.4 C2 Case Study 2: Uncovering "Opportunity Bargains" via Interactive Scenario Testing 
+
+Motivation: Overcoming Rigid Pipeline Constraints. Urban plan-ners often use composite indices to allocate resources or guide housing policy. One example is the School-Violence-Poverty (SVP) index [30], which identifies neighborhoods maximizing economic mobility for chil-dren. Planners use these measures to allocate subsidies and affordable housing, while families use them to identify high-opportunity neighbor-hoods. Traditionally, "opportunity bargains" are found by comparing SVP scores against housing costs using post-hoc model residuals. However, conventional GIS software are largely fixed. Incorporat-ing new factors, such as affordability, requires acquiring additional datasets, resolving spatial mismatches (e.g., Zip Codes versus Census Tracts), and updating transformation scripts. This prevents analysts from interactively reformulating the model during analysis to explore alternative definitions of opportunity. This case study demonstrates how our framework instead supports AI-guided spatial scenario testing. 
+
+Dynamic Construction of the Baseline Index. Instead of relying on a pre-computed shapefile, the user constructs the baseline SVP index interactively within the framework. The user imports five datasets obtained from the Furman Center [46]: elementary student performance (Math and English Language Arts) and crime rates (violent and property crimes), both aggregated at the Community District level, alongside poverty rates aggregated at the Sub-Borough Area level. These datasets include the metrics needed to compute the core SVP concept. Although all inputs are polygon layers, they represent fundamentally different administrative boundaries. To support both policy-level tar-geting and household-level exploration, the user sets the target spatial unit to NTAs, which provide a neighborhood-scale resolution suitable for both planning and decision-making contexts. The AI Copilot recog-nizes these mismatched geometries and automatically applies an AWI operator to harmonize both the Community District and Sub-Borough Area polygons into the NTA spatial resolution. The baseline Result Map Node then computes the SVP hotspot priority map (Figure 7, Top-Middle), approximating the spatial patterns reported in prior work [30] by highlighting traditionally high-opportunity neighborhoods. 
+
+The “Injection”: Flexible Spatial Harmonization. To transform the analysis from a static observation of opportunity into an actionable decision-support tool for both planners and families, the user dynami-cally injects a sixth dataset into the live topology visualization: Median Rent, which is also aggregated at the Sub-Borough Area level. In a traditional GIS environment, integrating this new variable into an NTA-level index would require the user to manually script another round of spatial joins and areal interpolation. In our framework, the AI Copilot identifies the geometric conflict and automatically inserts the appropriate AWI operator to harmonize the rent data with the uni-fied NTA map. Furthermore, the Copilot infers the analytical intent (identifying affordable, high-opportunity areas) and applies an inverted directional polarity to the rent variable, ensuring that lower rents in-crease the composite hotspot score (Figure 7, Bottom-Middle). While this formulation departs from the original residual-based definition of opportunity bargains, it enables a complementary perspective in which affordability is treated as an intrinsic component of opportunity rather than a post hoc adjustment. 
+
+Exploratory Analysis via the Spatial Delta Map. Because our frame-work supports interactive model construction, the user can immediately visualize the impact of the rent layer using a Spatial Delta Map (Fig-ure 7, Right). The map encodes the marginal effect of affordability on opportunity. High-opportunity but expensive neighborhoods appear as negative deltas ( red down arrows ), indicating where housing costs di-minish opportunity and subsidies may be needed. Conversely, positive deltas ( green up arrows ) reveal hidden “opportunity bargains,” where strong SVP characteristics coincide with relatively affordable housing. This workflow demonstrates a fundamental shift in spatial analyt-ics. By automating the mechanics of operator selection and polygon-to-polygon harmonization, the framework elevates the analyst from executing rigid, one-off geoprocessing pipelines to engaging in rapid, domain-specific hypothesis testing and model reformulation across both policy and individual decision-making contexts. 
+
+4.5 Domain Expert Interview 
+
+To assess the practical utility of UrbanTrace and evaluate how its AI-assisted pipeline integrates into real-world analytical workflows, we conducted semi-structured expert evaluation sessions. Per design-study methodology [51], these sessions serve as a strictly summative validation of the completed system, rather than formative co-design. 
+
+Participants and Protocol. We recruited four domain experts in urban data: an MIT CS/City Planning researcher (E1); the Assistant Direc-tor of Research at a university transportation center (E2); an urban data software engineer (E3); and an urban researcher from the NYU Center for Urban Science (E4). Sessions lasted 60–100 minutes and in-cluded a system introduction (15 min), a think-aloud spatial integration task based on Case Study 1 (35 min), and a semi-structured interview evaluating usability, trust, and workflow integration (10 min). Domain experts provided professional feedback on urban data analy-sis workflows and the relevance of UrbanTrace’s capabilities. Because the study gathered professional domain expertise rather than studying the experts themselves, IRB review was not required under NYU guid-ance. All participants provided informed consent prior to participation. 
+
+Workflow Acceleration. All experts emphasized that UrbanTrace 
+
+accelerates the early stages of spatial analysis. E1, whose current work-flow relies on manually coding Python and GeoPandas scripts, noted that she “can’t imagine how much time” the system would save, describ-ing the visual transition from data discovery to integration as “straight-forward” and “compelling.” E2 echoed this sentiment, likening the drag-and-drop canvas paradigm to familiar business intelligence tools (e.g., Tableau), which she noted lowers the barrier to entry for urban planners who lack advanced programming skills. E4 first used keyword search but quickly switched to the Semantic Data Discovery Agent ,observing that natural-language retrieval streamlined exploration. 
+
+Intent-Driven Discovery and Data Exploration. Before executing integrations, analysts must locate and verify the relevant data. The experts highlighted the Semantic Data Discovery Agent as a major im-provement over rigid open data portals. E2 emphasized that real-world dataset column names are often obscure; E2 and E4 both found the system’s auto-generated dataset summaries and sample records embed-ded directly in the Dataset Nodes crucial for interpreting the dataset structure before selection. Once the datasets were retrieved, the visual exploration features proved to be effective. E1 and E4 noted that syn-chronized map navigation enabled them to seamlessly verify local data distributions across multiple layers simultaneously, ensuring contextual alignment before invoking the AI Copilot for formal integration. 
+
+Integration Strategy Generation and Mitigating the “Black Box.” 
+
+While experts (E2, E3) explicitly warned against “black box” systems for spatial integration, they validated that UrbanTrace ’s architecture successfully mitigates these concerns. E3 initially feared computational and hallucination risks but acknowledged the Atlas Profiler ’s metadata AI Rationale 
+
+> NYC_poverty_rate
+> Lower poverty rates signal higher
+> neighborhood opportunity and stability.
+> However, for a 'bargain' lens, extremely low
+> poverty areas may already be priced in. Still,
+> low poverty is a core opportunity signal.
+> Inverted because lower poverty = higher
+> opportunity. Moderate weight.
+
+AI Rationale 
+
+> NYC_media_rent (2017)
+> This is the bargain 'dimension' of the goal.
+> Lower median rent in an otherwise high-
+> opportunity area represents an undervalued
+> bargain. Inverted because lower rent = better
+> bargain. This is critical to the goal's 'bargain'
+> component and receives the highest weight to
+> ensure cost-effectiveness is strongly
+
+Figure 7: Exploratory Scenario Testing via the Spatial Delta Map . Top-Middle: The baseline SVP index map, highlighting high-opportunity areas regardless of housing cost. Bottom-Middle: The modified index map (SVP + Rent), incorporating dynamically harmonized Sub-Borough rent data. The annotated tooltips ( Left ) provide examples of the AI Copilot’s semantic reasoning, demonstrating how it automatically applies inverted polarity (shown here for poverty and median rent) to maximize opportunity. Right: The resulting Spatial Delta Map. Areas marked by red downward arrows 
+
+indicate neighbourhoods that dropped in priority due to prohibitive rents, while green upward arrows highlight newly surfaced “Opportunity Bargains.” 
+
+injection as an effective optimization that grounds the LLM. On the frontend, the Integration Provenance Graph served as the primary anchor for user trust, with E4 noting that exposing the LLM rationales and making the integration logic visible supports user engagement and trust. E1 highlighted that navigating mismatched Coordinate Reference Systems (CRS) and partial geometric overlaps is a “big problem” in practice. While she found the provenance graph “made [her] feel very controllable,” she still wanted to verify the underlying computations and spatial transformations, as did E4. When shown the system’s ability to expose the intermediate grid-based allocations, E1 responded emphatically: “That is exactly what I want.” This highlights a critical HCI finding for spatial AI: structural provenance (the node graph) must be paired with geometric provenance (inspectable intermediate grid-based visualization) to secure expert trust. 
+
+Interpretable Spatial Synthesis. The experts actively engaged with the 
+
+Multivariate Priority Map and the Spatial Delta Map , testing counter-factual scenarios by adjusting variable weights. E1 praised the LLM’s automated inference of directional polarity (e.g., inverting infrastruc-ture variables to highlight gaps), describing it as “very straightforward and easy to understand” for policy planning. E2 initially raised con-cerns about mathematically combining skewed distributions (e.g., raw student counts vs. library counts), but was reassured by the system’s ex-plicit display of its backend normalization logic and the LLM rationale tooltips. E3 described the end-to-end synthesis as “crazy cool,” noting that deriving multi-factor insights from raw data is non-trivial even for experienced programmers. E4 found the Delta Map ’s directional arrows effective for tracking hotspot shifts, calling the dynamic weight adjustments “really helpful” for what-if exploration. 
+
+Expert Perspectives on UrbanTrace Extensions. Suggested ex-tensions include time-series operators for temporal dynamics (E3, E4), LLM-assisted geocoding of locations from legacy administrative records (e.g., datasets with free-text addresses) (E2), and code-based preprocessing within the tool prior to integration for advanced research (E4). To ensure policy defensibility and provide an auditable paper trail of the “reasoning process” (E1), experts (E1, E3, E4) recommended ex-porting the Integration Provenance alongside LLM-generated narrative summaries for seamless embedding into municipal reports. 
+
+5 DISCUSSION AND LIMITATIONS 
+
+Hallucination Mitigation and Dataset Quality. LLM-driven spatial workflows risk introducing silent errors via hallucination and bias. 
+
+UrbanTrace mitigates this structurally: ingestion quality is partially verified through rule-based geometry checks (though source accuracy remains the portal’s responsibility), while Semantic-Aware Operator Copilot is confined to a strict operator space and Atlas Profiler grounds every LLM call in observed statistics rather than free-form generation. Rather than relying on automated error-blocking, we enforce human-in-the-loop transparency: the Provenance Graph exposes all structural inferences, tooltips display AI-generated rationales, and the interface allows analysts to override incorrect operator choices, weights, or polarities, transforming potential silent failures into inspectable choices. 
+
+MAUP and Spatial Aggregation. UrbanTrace does not eliminate MAUP; no single spatial partition can. Rather, the system makes bound-ary sensitivity explorable : the grid resolution is user-configurable, and the Spatial Delta Map exposes how synthesized priorities shift under alternative configurations. As discussed in Section 3.3.2, the com-mon grid serves as a geometry-agnostic intermediate layer that reduces misalignment errors between incompatible administrative boundaries, while MAUP-related effects remain dependent on the analyst’s chosen resolution and reporting units. 
+
+Limitations. 1) While Semantic-Aware Operator Copilot achieved 100% semantic validity, geometric validity reached 87%. The remain-ing 13% reflects localized boundary-alignment challenges during spa-tial joins across complex or unaligned geographic scales, such as linear network features with polygon zones, rather than systematic reasoning failures, occasionally requiring manual intervention. 2) Offline profil-ing limits adaptability to real-time, requiring future dynamic profiling. 3) Semantic Data Discovery Agent currently processes entire catalogs, incurring linear token costs; future work will integrate retrieval methods to pre-filter datasets. 4) The Integration Provenance Graph introduces a learning curve over conventional chat interfaces; however, expert feed-back (Sec. 4.5) suggests this trade-off is justified by the transparency and trust provided through explicit visual provenance. 
+
+6 CONCLUSION 
+
+Integrating heterogeneous spatial data has traditionally required urban analysts to manually bridge the gap between high-level policy goals and rigid spatial operations. In this paper, we present UrbanTrace ,a visual analytics system that fills this gap by coupling LLMs with structured data profiling, transforming opaque spatial data wrangling into a transparent, intention-driven collaborative workflow that enables intent-driven data discovery and semantic-aware harmonization. 
+
+Future Work. Building on these findings, future research will focus on expanding the system’s spatial reasoning capabilities. We plan to integrate more sophisticated harmonization techniques, such as allow-ing Semantic-Aware Operator Copilot to recommend auxiliary-variable dasymetric interpolation, which provides higher fidelity than standard areal weighting. We aim to extend Spatial Integration Canvas to support spatio-temporal analysis, enabling users to visualize how spatial priori-ties evolve over time. Finally, we plan to evaluate UrbanTrace across diverse geographic regions and scale the Atlas Profiler and Semantic Data Discovery Agent to support multiple heterogeneous municipal data lakes, enabling large-scale cross-city comparative analytics. SUPPLEMENTAL MATERIAL 
+
+Details regarding specifications and prompt templates for UrbanTrace’s three LLM agents, 28 benchmark scenarios, ablation studies, and com-plete source code are available in our public repository release [5]. 
+
+ACKNOWLEDGMENTS 
+
+The authors thank the reviewers for the constructive comments and the domain experts that evaluated the system. This work was supported in part by the National Science Foundation grant OAC-2411221. Silva was partially supported by the DARPA expMath program (under cooperative agreement HR0011262E029). Any opinions, findings, and conclusions or recommendations expressed in this material are those of the authors and do not necessarily reflect the views of NSF or DARPA. 
+
+REFERENCES 
+
+[1] T. Akinboyewa, Z. Li, H. Ning, and M. N. Lessani. GIS Copilot: towards an autonomous GIS agent for spatial analysis. International Journal of Digital Earth , 18(1):2497489, 2025. doi: 10.1080/17538947.2025. 2497489 3 [2] S. Al-Dohuki, Y. Wu, F. Kamw, J. Yang, X. Li, Y. Zhao et al. SemanticTraj: A New Approach to Interacting with Massive Taxi Trajectories. IEEE Transactions on Visualization and Computer Graphics , 23(1):11–20, 2017. doi: 10.1109/TVCG.2016.2598416 2 [3] S. Ankama, A. Degbelo, E. Naoseb, C. Henzen, and L. Bernard. How Well Do Current Geoportals Support Geodata Discovery? An Empirical Study. ISPRS International Journal of Geo-Information , 15(2), 2026. doi: 10.3390/ijgi15020082 3 [4] M. Bogdanovi´ c, A. Stanimirovi´ c, and L. Stoimenov. Methodology for geospatial data source discovery in ontology-driven geo-information inte-gration architectures. Journal of Web Semantics , 32:1–15, 2015. doi: 10. 1016/j.websem.2015.01.002 3 [5] S. Castelo and collaborators. UrbanTrace: Supplementary Material and Source Code. https://github.com/VIDA-NYU/urbanTrace/rele ases/tag/vis2026-camera-ready , 2026. Release: vis2026-camera-ready. 10 [6] S. Castelo, R. Rampin, A. Santos, A. Bessa, F. Chirigati, and J. Freire. Auctus: a dataset search engine for data discovery and augmentation. 
+
+Proceedings of the VLDB Endowment , 14(12):2791–2794, July 2021. doi: 10.14778/3476311.3476346 2, 3 [7] R. Castro Fernandez, Z. Abedjan, F. Koko, G. Yuan, S. Madden, and M. Stonebraker. Aurum: A Data Discovery System. In 2018 IEEE 34th International Conference on Data Engineering (ICDE) , pp. 1001–1012, 2018. doi: 10.1109/ICDE.2018.00094 2 [8] W. Chen, Z. Huang, F. Wu, M. Zhu, H. Guan, and R. Maciejewski. VAUD: A Visual Analysis Approach for Exploring Spatio-Temporal Urban Data. 
+
+IEEE Transactions on Visualization and Computer Graphics , 24(9):2636– 2648, 2018. doi: 10.1109/TVCG.2017.2758362 3 [9] F. Chirigati, J. Freire, D. Koop, and C. Silva. VisTrails provenance traces for benchmarking. In Proceedings of the Joint EDBT/ICDT 2013 Work-shops , EDBT ’13, pp. 323–324. Association for Computing Machinery, New York, NY, USA, 2013. doi: 10.1145/2457317.2457373 3 [10] N. R. Chrisman. Rethinking Levels of Measurement for Cartography. 
+
+Cartography and Geographic Information Systems , 25(4):231–242, 1998. doi: 10.1559/152304098782383043 4, 5 [11] City of New York. Nyc open data. https://opendata.cityofnewyo rk.us/ , 2024. Accessed: 2026-03-28. 1, 2 [12] A. de Oliveira Bastos, E. Santos, D. Viana, and L. Barbosa. Visual analytics for diagnosing spatial interpolation models. Transactions in GIS ,27(2):364–387, 2023. doi: 10.1111/tgis.13028 3 [13] J. Demšar, T. Curk, A. Erjavec, v. Gorup, T. Hoˇ cevar, M. Milutinoviˇ c et al. Orange: data mining toolbox in python. The Journal of Machine Learning Research , 14(1):2349–2353, Jan. 2013. 3 [14] D. Deng, R. C. Fernandez, Z. Abedjan, S. Wang, M. Stonebraker, A. K. Elmagarmid et al. The Data Civilizer System. In Conference on Innovative Data Systems Research , 2017. 2 [15] X. Deng, H. Sun, A. Lees, Y. Wu, and C. Yu. TURL: Table Understanding through Representation Learning. SIGMOD Rec. , 51(1):33–40, June 2022. doi: 10.1145/3542700.3542709 2 [16] Z. Deng, D. Weng, S. Liu, Y. Tian, M. Xu, and Y. Wu. A survey of urban visual analytics: Advances and future directions. Computational Visual Media , 9:3–39, 10 2022. doi: 10.1007/s41095-022-0275-7 3 [17] C. Dietz, C. T. Rueden, S. Helfrich, E. T. A. Dobson, M. Horn, J. Eglinger et al. Integration of the ImageJ Ecosystem in KNIME Analytics Platform. 
+
+Frontiers in Computer Science , Volume 2 - 2020, 2020. doi: 10.3389/ fcomp.2020.00008 3 [18] L. Ding, G. Xiao, D. Calvanese, and L. Meng. A Framework Unit-ing Ontology-Based Geodata Integration and Geovisual Analytics. IS-PRS International Journal of Geo-Information , 9(8), 2020. doi: 10.3390/ ijgi9080474 3 [19] Esri. Arcgis. https://www.esri.com/en-us/arcgis/about-arcgi s/overview , 2024. Accessed: 2026-03-30. 1, 2 [20] E. Ferrari, F. Striewski, F. Tiefenbacher, P. Bereuter, D. Oesch, and P. Di Donato. Search Engine for Open Geospatial Consortium Web Services Improving Discoverability through Natural Language Processing-Based Processing and Ranking. ISPRS International Journal of Geo-Information , 13(4), 2024. doi: 10.3390/ijgi13040128 3 [21] B. Feuer, Y. Liu, C. Hegde, and J. Freire. ArcheType: A Novel Framework for Open-Source Column Type Annotation Using Large Language Models. 
+
+Proceedings of the VLDB Endowment , 17(9):2279–2292, May 2024. doi: 10.14778/3665844.3665857 2, 3 [22] R. Flowerdew and M. Green. Data integration: Statistical methods for transferring data between zonal systems. Handling geographical informa-tion , 63:38–54, 01 1991. 2, 3 [23] F. T. Fonseca, M. J. Egenhofer, P. Agouris, and G. Câmara. Using Ontolo-gies for Integrated Geographic Information Systems. Transactions in GIS ,6(3):231–257, 2002. doi: 10.1111/1467-9671.00109 3 [24] GeoPandas Developers. Geopandas: Python tools for geographic data. 
+
+https://geopandas.org/ , 2024. Accessed: 2026-03-30. 1, 2 [25] M. F. Goodchild. Twenty years of progress: GIScience in 2010. Journal of Spatial Information Science , 2010(1):3–20, 2010. doi: 10.5311/JOSIS. 2010.1.2 3 [26] M. F. Goodchild and N. Siu-Ngan Lam. Areal interpolation: a variant of the traditional spatial problem. Geo-Processing , 1(3):297–312, 1980. 2, 3, 4, 5 [27] C. A. Gotway and L. J. Young. Combining Incompatible Spatial Data. 
+
+Journal of the American Statistical Association , 97(458):632–648, 2002. doi: 10.1198/016214502760047140 4 [28] F. Hardisty and A. C. Robinson. The GeoViz Toolkit: Using component-oriented coordination methods for geographic visualization and analysis. 
+
+International Journal of Geographical Information Science , 25(2):191– 210, 2011. doi: 10.1080/13658810903214203 3 [29] L. He and R. Liu. Discovering Links between Geospatial Data Sources in the Web of Data: The Open Geospatial Engine Approach. ISPRS International Journal of Geo-Information , 13(5), 2024. doi: 10.3390/ ijgi13050143 3 [30] N. Kelly and I. G. Ellen. Planning for Opportunity: How Planners Can Expand Access to Affordable Opportunity Bargain Areas. Journal of the American Planning Association , 89(3):267–281, 2023. doi: 10.1080/ 01944363.2022.2073904 8 [31] P. Khosla, P. Teterwak, C. Wang, A. Sarna, Y. Tian, P. Isola et al. Su-pervised contrastive learning. In Proceedings of the 34th International Conference on Neural Information Processing Systems , NIPS ’20, art. no. 1567, 13 pp. Curran Associates Inc., Red Hook, NY, USA, 2020. 4 [32] C. Koutras, K. Psarakis, G. Siachamis, A. Ionescu, M. Fragkoulis, A. Boni-fati et al. Valentine in action: matching tabular data at scale. Proceedings of the VLDB Endowment , 14(12):2871–2874, July 2021. doi: 10.14778/ 3476311.3476366 3 [33] M. Langford. Obtaining population estimates in non-census reporting zones: An evaluation of the 3-class dasymetric method. Computers, Environment and Urban Systems , 30(2):161–180, 2006. doi: 10.1016/j. compenvurbsys.2004.07.001 3 [34] A. Laurito, J. Lacoe, A. E. Schwartz, P. Sharkey, and I. G. Ellen. School Climate and the Impact of Neighborhood Crime on Test Scores. RSF: The Russell Sage Foundation Journal of the Social Sciences , 5(2):141–166, 2019. doi: 10.7758/RSF.2019.5.2.08 6 [35] F. Lei, Y. Ma, A. S. Fotheringham, E. A. Mack, Z. Li, M. Sachdeva et al. GeoExplainer: A Visual Analytics Framework for Spatial Modeling Con-textualization and Report Generation. IEEE Transactions on Visualization and Computer Graphics , 30(1):1391–1401, 2024. doi: 10.1109/TVCG. 2023.3327359 3 [36] X. Li, L. Anselin, and J. Koschinsky. GeoDa web: enhancing web-based mapping with spatial analytics. In Proceedings of the 23rd SIGSPATIAL International Conference on Advances in Geographic Information Systems ,SIGSPATIAL ’15, art. no. 94, 4 pp. Association for Computing Machinery, New York, NY, USA, 2015. doi: 10.1145/2820783.2820792 3 [37] H. Liao, Y. He, X. Wu, Z. Wu, and R. Bausys. Reimagining multi-criterion decision making by data-driven methods based on machine learning: A literature review. Information Fusion , 100:101970, 2023. doi: 10.1016/j. inffus.2023.101970 5 [38] Y. Liu, E. Peña, A. S. R. Santos, E. Wu, and J. Freire. Magneto: Combining small and large language models for schema matching. Proceedings of the VLDB Endowment , 18(8):2681–2694, 2025. doi: 10.14778/3742728. 3742757 4 [39] F. Lu, S. Cheng, and P. Wang. GeoAI enabled urban computing: status and challenges. Annals of GIS , 31(4):537–555, 2025. doi: 10.1080/19475683. 2025.2552152 3 [40] Q. Luo, Q. Lin, L. Xu, S. Wu, R. Mao, C. Wang et al. GeoJSON agents: a multi-agent LLM architecture for geospatial analysis—function calling vs. code generation. Big Earth Data , 0(0):1–55, 2026. doi: 10.1080/20964471 .2026.2615511 3 [41] A. Mansourian and R. Oucheikh. ChatGeoAI: Enabling Geospatial Analy-sis for Public through Natural Language, with Large Language Models. 
+
+ISPRS International Journal of Geo-Information , 13(10), 2024. doi: 10. 3390/ijgi13100348 3 [42] L. McNabb and R. S. Laramee. Multivariate maps—a glyph-placement algorithm to support multivariate geospatial visualization. Information ,10(10), 2019. doi: 10.3390/info10100302 5 [43] New York City Mayor’s Office. Mayor adams announces next step of ambitious universal after-school initiative. https://www.nyc.gov/ mayors-office/news/2025/11/mayor-adams-announces-nex t-step-of-ambitious-universal-after-sch , November 2025. Accessed: 2026-03-23. 1, 7 [44] H. Ning, Z. Li, T. Akinboyewa, and M. N. Lessani. An autonomous GIS agent framework for geospatial data retrieval. International Journal of Digital Earth , 18(1):2458688, 2025. doi: 10.1080/17538947.2025. 2458688 3 [45] NYC Office of Management and Budget. Capital planning platform. 
+
+https://capitalplanning.nyc.gov/ , 2024. Accessed: 2026-03-30. 1, 2 [46] NYU Furman Center. Nyu furman center. https://furmancenter.o rg/ , 2024. Accessed: 2026-03-28. 1, 2, 6, 8 [47] OSCUR: Open-Source Cyberinfrastructure for Urban Computing. Na-tional Science Foundation Award #2411221, 2024. Available at https: //oscur.org/ . 3 [48] E. Pebesma, M. Fleischmann, J. Parry, J. Nowosad, A. Graser, D. Dun-nington et al. Spatial Data Science Languages: Commonalities and Needs. 
+
+Journal of Spatial Information Science , 31(31):119–144, 2025. doi: 10. 5311/JOSIS.2025.31.462 2 [49] S. J. Rey and L. Anselin. PySAL: A Python Library of Spatial Analytical Methods. In M. M. Fischer and A. Getis, eds., Handbook of Applied Spatial Analysis: Software Tools, Methods and Applications , pp. 175–193. Springer Berlin Heidelberg, Berlin, Heidelberg, 2010. doi: 10.1007/978-3 -642-03647-7_11 2 [50] S. Scheider and M. D. Huisjes. Distinguishing extensive and intensive properties for meaningful geocomputation and mapping. International Journal of Geographical Information Science , 33(1):28–54, 2019. doi: 10. 1080/13658816.2018.1514120 2, 5 [51] M. Sedlmair, M. Meyer, and T. Munzner. Design study methodology: Reflections from the trenches and the stacks. IEEE Transactions on Visualization and Computer Graphics (InfoVis) , 18(12):2431–2440, dec 2012. doi: 10.1109/TVCG.2012.213 3, 8 [52] C. Stasch, S. Scheider, E. Pebesma, and W. Kuhn. Meaningful spatial prediction and aggregation. Environmental Modelling & Software , 51:149– 165, 2014. doi: 10.1016/j.envsoft.2013.09.006 2 [53] S. S. Stevens. On the theory of scales of measurement. Science ,103(2684):677–680, 1946. doi: 10.1126/science.103.2684.677 3 [54] K. Stock, C. B. Jones, S. Russell, M. Radke, P. Das, and N. Aflaki. Detect-ing geospatial location descriptions in natural language text. International Journal of Geographical Information Science , 36(3):547–584, 2022. doi: 10.1080/13658816.2021.1987441 2 [55] Y. Suhara, J. Li, Y. Li, D. Zhang, c. Demiralp, C. Chen et al. Annotating Columns with Pre-trained Language Models. In Proceedings of the 2022 International Conference on Management of Data , SIGMOD ’22, pp. 1493–1503. Association for Computing Machinery, New York, NY, USA, 2022. doi: 10.1145/3514221.3517906 2 [56] M. Takatsuka and M. Gahegan. Exploratory geospatial analysis using Geo-VISTA Studio: from a desktop to the Web. In Proceedings of the Second International Conference on Web Information Systems Engineering , vol. 2, pp. 92–101 vol.2, 2001. doi: 10.1109/WISE.2001.996715 3 [57] E. Top, S. Scheider, H. Xu, E. Nyamsuren, and N. Steenbergen. The semantics of extensive quantities within geographic information. Applied Ontology , 17(3):337–364, 2022. doi: 10.3233/AO-220268 3 [58] L. K. VanWey, R. R. Rindfuss, M. P. Gutmann, B. Entwisle, and D. L. Balk. Confidentiality and spatially explicit data: Concerns and challenges. 
+
+Proceedings of the National Academy of Sciences , 102(43):15337–15342, 2005. doi: 10.1073/pnas.0507804102 6 [59] D. Wong. Modifiable areal unit problem. In R. Kitchin and N. Thrift, eds., 
+
+International Encyclopedia of Human Geography , pp. 169–174. Elsevier, Oxford, 2009. doi: 10.1016/B978-008044910-4.00475-2 2, 4, 5 [60] E. Wu, D. G. Turakhia, G. Wu, C. Koutras, S. Keegan, W. Liu et al. BDIViz: An Interactive Visualization System for Biomedical Schema Matching with LLM-Powered Validation . IEEE Transactions on Visu-alization & Computer Graphics , 32(01):1208–1218, Jan. 2026. doi: 10. 1109/TVCG.2025.3634843 3 [61] J. Yu, Z. Zhang, and M. Sarwat. Spatial Data Management in Apache Spark: The GeoSpark Perspective and Beyond. GeoInformatica , 23(1):37– 78, 2019. doi: 10.1007/s10707-018-0330-9 1, 2 [62] D. Zhang, M. Hulsebos, Y. Suhara, c. Demiralp, J. Li, and W.-C. Tan. Sato: contextual semantic type detection in tables. Proceedings of the VLDB Endowment , 13(12):1835–1848, July 2020. doi: 10.14778/3407790 .3407793 2 [63] H. Zhang, Y. Liu, A. Santos, W.-L. A. Hung, and J. Freire. AutoDDG: Automated Dataset Description Generation using Large Language Models. 
+
+Proceedings of the ACM on Management of Data , 4(1), art. no. 12, 27 pp., Apr. 2026. doi: 10.1145/3786626 2, 3, 4 [64] Q. Zhang, S. Gao, C. Wei, Y. Zhao, Y. Nie, Z. Chen et al. GeoAnalyst-Bench: A GeoAI Benchmark for Assessing Large Language Models for Spatial Analysis Workflow and Code Generation. Transactions in GIS ,29(7):e70135, 2025. e70135 8156745. doi: 10.1111/tgis.70135 3 [65] Y. Zhang, C. Wei, Z. He, and W. Yu. GeoGPT: An assistant for under-standing and processing geospatial tasks. International Journal of Applied Earth Observation and Geoinformation , 131:103976, 2024. doi: 10.1016/j .jag.2024.103976 3 [66] T. Zhao, C. Zhang, M. Wei, and Z.-R. Peng. Ontology-based geospatial data query and integration. In T. J. Cova, H. J. Miller, K. Beard, A. U. Frank, and M. F. Goodchild, eds., Geographic Information Science , pp. 370–392. Springer Berlin Heidelberg, Berlin, Heidelberg, 2008. doi: 10. 1007/978-3-540-87473-7_24 3 [67] Y. Zheng, F. Xu, Y. Lin, P. Santi, C. Ratti, Q. R. Wang et al. Urban planning in the era of large language models. Nature Computational Science , 5(9):727–736, Sept. 2025. doi: 10.1038/s43588-025-00846-1 2

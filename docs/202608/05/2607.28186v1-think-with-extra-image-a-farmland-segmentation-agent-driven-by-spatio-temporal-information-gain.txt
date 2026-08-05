@@ -1,0 +1,730 @@
+Title: Think with Extra-Image: A Farmland Segmentation Agent Driven by Spatio-Temporal Information Gain
+
+URL Source: https://arxiv.org/pdf/2607.28186v1
+
+Published Time: Fri, 31 Jul 2026 01:17:33 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+# Think with Extra-Image: A Farmland Segmentation Agent Driven by Spatio-Temporal Information Gain 
+
+# Haiyang Wu 1∗, Weiliang Mu 1∗, Zhuofei Du 1, Dandan Zhong 1, Kaijie Shi 1, Haifeng Li 1, Chao Tao 1†
+
+> 1
+
+Central South University, Changsha, China ocean-w@csu.edu.cn, 245012170@csu.edu.cn, kingtaochao@csu.edu.cn 
+
+Abstract 
+
+Existing farmland remote sensing image (FRSI) segmenta-tion follows a “Think with Intra-Image” paradigm, assuming that the current image contains sufficient visual evidence for reliable segmentation. Yet farmland appearance varies with phenology and spatial context and is often confused with other land-cover, making instantaneous, local observations inadequate. Thus, segmentation ambiguity stems not only from limited model representation, but more fundamentally from the required spatio-temporal information lying beyond the current image. Based on this insight, we redefine FRSI segmentation from an information bottleneck perspective as a dynamic decision process driven by task-relevant extra spatio-temporal information gain. We further propose FarmSeeker, a dynamic FRSI segmentation agent that identifies ambiguous regions, reasons about their causes, and queries extra spatio-temporal information on demand for accurate segmentation. To evaluate FarmSeeker, we construct GSFS-Bench, the first global-scale, high-resolution FRSI segmentation benchmark that supports reasoning-querying. Experiments show that FarmSeeker achieves more stable segmentation performance than existing methods. The project is publicly available at: https://withoutocean.github.io/FarmSeeker/ 
+
+# Introduction 
+
+Farmland remote sensing image (FRSI) segmentation has long been regarded as a representation learning problem: given an RSI, the model is expected to follow a “Think with Intra-Image” paradigm, extracting discriminative fea-tures from the current image to recover a pixel-level farm-land mask (Zheng et al. 2026a; Wang et al. 2026; Hossain et al. 2026). However, this paradigm implicitly assumes that the current image already contains sufficient visual evidence for FRSI segmentation. This raises a conjecture: could the key bottleneck in FRSI segmentation lie not in insufficient model representation capacity, but in the incomplete visual evidence provided by the current image? The key basis for this view lies in the inherent spatio-temporal dependence of farmland (Zhang et al. 2025). Tem-porally, the farmland status of a parcel may remain unchanged while its visual appearance varies across phenological stages, exhibiting states such as vegetation cover, bare soil, or surface 
+
+> ∗
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. 
+
+water. In other words, the same farmland may present sub-stantially different visual appearances over time (Zhu et al. 2025). Spatially, farmland recognition depends on bound-ary continuity and contextual relationships with neighboring land-cover types, such that similar appearances may corre-spond to different classes under different spatial configu-rations (Muhawenayo et al. 2026). Therefore, many errors in complex scenes do not fundamentally arise because the model fails to extract sufficient information from the current image, but because the critical evidence required for reliable recognition may lie beyond the observational scope of that image. When the current image does not contain the complete chain of spatio-temporal evidence required for farmland recognition, a natural solution is to actively acquire the miss-ing evidence from external observations on demand. The human interpretation paradigm provides important insights. When experts encounter an ambiguous region that appears inundated in the current image, they do not draw a conclusion solely from the current observation. Instead, they retrieve images of the same parcel from other periods to determine whether it is a paddy field during the irrigation stage. When a locally cropped image happens to truncate field boundaries, experts expand the observation range and incorporate spatial relationships into their assessment. In this process, humans do not simply inspect more images. Instead, guided by un-certainty in the current observation, they examine external spatio-temporal data on demand to fill critical information gaps. Based on the above view, we first theoretically clarify the necessity of actively acquiring external spatio-temporal information gain, and accordingly propose FarmSeeker, a farmland segmentation agent framework driven by spatio-temporal information gain. The framework is organized around four core questions: when external information is needed, what information is required, how it should be ac-quired, and how the newly obtained evidence should be utilized. To implement this framework, we construct FM-Seg69K, a multi-stage training dataset, and design a cor-responding progressive training strategy (PTS) and task-driven reward functions (TRFs). Specifically, FM-Seg69K is constructed around a complete task chain comprising am-biguity perception, evidence need assessment, tool calling, cross spatio-temporal collaborative reasoning, and mask re-arXiv:2607.28186v1 [cs.CV] 30 Jul 2026 finement. The PTS organizes this task chain into a staged learning process, enabling the model to acquire the required capabilities in a stable and progressive manner. The TRFs translate the key decisions and final segmentation results into explicit optimization signals, guiding the model toward effective information acquisition and utilization. To evaluate FarmSeeker, we further establish GSFS-Bench, the global-scale, high-resolution FRSI segmentation benchmark that supports dynamic querying and cross spatio-temporal rea-soning. Experiments show that FarmSeeker achieves more stable segmentation performance across diverse regions and ambiguous scenarios. 
+
+• Motivated by an information-bottleneck view, we for-mulate farmland segmentation under incomplete obser-vations as an on-demand extra-image evidence acquisi-tion problem and introduce the Think with Extra-Image paradigm. 
+
+• We propose FarmSeeker, which constructs a multi-stage training dataset FM-Seg69K and designs a PTS along with TRFs, enabling FarmSeeker to develop a closed-loop capability for on-demand acquisition of spatio-temporal information gain. 
+
+• We construct GSFS-Bench, a global high-resolution farmland segmentation benchmark that supports the eval-uation of in-region and cross-region generalization, am-biguity perception, tool calling, and multi-image collab-orative reasoning. 
+
+# Related Work 
+
+Applications of Extra Spatio-Temporal Information in FRSI Segmentation. Existing studies have widely integrated multi-temporal information and spatial context to improve segmentation performance (Liu et al. 2025; Wang et al. 2025; Xie et al. 2026; Li et al. 2026). Temporal fusion methods model farmland dynamics across seasons, mitigating seman-tic ambiguity caused by transient appearances (Lobert et al. 2025). Spatial-context methods leverage field morphology, boundary continuity, and neighborhood relationships to im-prove discrimination in complex scenes (Li et al. 2024). How-ever, these methods typically treat extra spatio-temporal data as predefined inputs for passive fusion, potentially weaken-ing the discriminative contribution of key evidence (Turkoglu et al. 2026; Zhao et al. 2026a). 
+
+Active Visual Reasoning and Remote-Sensing Agents. 
+
+Recent studies on agents have shown that models can supple-ment visual evidence through active re-observation and tool calling, and update their judgments accordingly (Li et al. 2025a; Yao et al. 2026b,a). For example, DeepEyes (Zheng et al. 2026b) can fill evidence gaps in the current obser-vation through active visual revisitation. ZoomEarth (Liu et al. 2026) first establishes a global understanding of the scene, then adaptively localizes key regions and performs fine-grained re-observation through cropping and zoom-ing. Although these works demonstrate the feasibility of information-seeking visual reasoning, their evidence acquisi-tion remains largely confined to the current image, following a “Think with Intra-Image” (Shao et al. 2026). Moreover, existing methods primarily target image understanding and 
+
+Figure 1: Conceptual illustration of intra-image and extra-image spatio-temporal information gain. visual question answering, and lack a complete mechanism for translating actively acquired evidence into pixel-level seg-mentation refinement. 
+
+# Why Extra-Image Spatio-Temporal Information Gain is Needed 
+
+Given a farmland remote sensing image (FRSI) X, the ground-truth farmland semantics Y , and an internal repre-sentation Z extracted from X, the information bottleneck (Tishby, Pereira, and Bialek 2000; Hu et al. 2024) aims to learn a compact yet task-relevant representation by op-timizing max p(z|x)[I(Z; Y ) − βI (Z; X)] , where I(·; ·) de-notes mutual information, I(Z; Y ) measures the farmland-discriminative information retained in Z, I(Z; X) measures the input information preserved by the representation, and 
+
+β > 0 controls the trade-off between task relevance and rep-resentation compression. Since Z is derived solely from X,the variables form the Markov chain Y → X → Z. Accord-ing to the data processing inequality, I(Z; Y ) ≤ I(X; Y ).This implies that multi-scale modeling, zoom-in operations, and boundary enhancement can only better extract and orga-nize the information already contained in the current image, but cannot generate discriminative evidence that is absent from it. As illustrated in Figure 1, these operations can be expressed as internal transformations Z(k) = gk(X). The right of Figure 1 further illustrates this limitation from a task-information perspective. The yellow region denotes the in-formation required to determine farmland semantics, H(Y ),whereas the blue region denotes the task-relevant informa-tion available from the current image, I(Y ; X). Phenological changes may cause farmland to exhibit visual characteristics similar to bare soil, vegetated land, or water bodies during specific periods, while local image windows may truncate neighborhood structural information. In such cases, I(Y ; X)
+
+is insufficient to support a reliable prediction of Y . The pri-mary limitation is therefore no longer only the model’s rep-resentation capacity, but a more fundamental observation bottleneck. To this end, let q denote a query action and Eq the extra-image evidence returned by the query, such as imagery from another time point or a broader spatial context. After incor-Figure 2: spatio-temporal diversity of the GSFS-Bench. porating Eq , the available task-relevant information satisfies 
+
+I(Y ; X, E q ) = I(Y ; X) + I(Y ; Eq | X) (1) Here, the conditional mutual information I(Y ; Eq | X)
+
+quantifies the extra task-relevant information provided by 
+
+Eq given the current image X. It corresponds to the green region in the right of Figure 1. Unlike internal represen-tations derived from X, Eq originates beyond the current observation and can therefore extend the observable infor-mation boundary. Accordingly, we define the task-relevant information gain of query q as 
+
+I(Y ; Eq | X) = H(Y | X) − H(Y | X, E q ) (2) where H(Y | X) denotes the remaining uncertainty in farmland semantics given only the current image, and 
+
+H(Y | X, E q ) denotes the uncertainty after incorporating the queried evidence. Temporal and spatial queries address different information deficiencies. Extra temporal imagery provides phenological evolution cues for resolving temporal ambiguity, whereas broader spatial imagery provides boundary continuity and neighborhood organization for resolving spatial ambiguity. The objective is therefore not to indiscriminately introduce more images, but to select the query that provides the largest task-relevant information gain: 
+
+q∗ = arg max 
+
+> q∈Q
+
+I(Y ; Eq | X) (3) where Q denotes the set of candidate spatio-temporal queries and q∗ denotes the optimal query action. Equation (3) defines an ideal query objective rather than a directly computable training target. In FarmSeeker, this objective is not explicitly optimized. Instead, it is implicitly approximated through a learned query policy that identifies insufficient observations, predicts the type of missing evidence, and selects an appro-priate spatio-temporal query under task-oriented supervision and outcome-based rewards. 
+
+# GSFS-Bench 
+
+Existing high-resolution farmland segmentation benchmarks cannot adequately capture substantial distribution shifts across global agricultural landscapes. They also cannot as-sess whether a model can identify missing information, ac-tively acquire additional imagery, and use the newly obtained evidence to revise its segmentation results. As illustrated in Fig. 2, we construct GSFS-Bench, which covers representative regions from more than ten major agricultural-producing countries. For each region, we collect multi-temporal FRSIs from Google Earth within a time span of no more than one year. In total, the benchmark contains more than 200 wide-swath images with spatial resolutions ranging from 0.5 to 1 m. After manually removing areas af-fected by cloud cover, experts provide pixel-level farmland annotations. Subsequently, one temporal image from each region is selected as the current observation and uniformly cropped into 512 × 512 pixels, resulting in a segmentation evaluation set containing 10K samples. The remaining tem-poral images and their corresponding original wide-swath images jointly constitute queryable temporal and spatial evi-dence pools. To support different levels evaluation, we divide the regions in China into eight agricultural regions according to their agro-geographical characteristics for in-region evalu-ation (The training samples used in this work are strictly sep-arated from GSFS-Bench). Regions outside China are used for cross-region evaluation. Furthermore, to evaluate ambi-guity perception, tool calling, and collaborative reasoning, we construct three evaluation subsets based on the data from China: ambiguity perception, tool-calling type classification, and multi-image collaborative reasoning. More details are provided in the supplementary material. 
+
+# FarmSeeker 
+
+Overview 
+
+As shown in Fig. 3, FarmSeeker is a dynamic FRSI segmen-tation framework composed of a multimodal large language model (MLLM) based reasoning engine (RE) R and a tool repository containing a basic perception tool, a query-and-cropping tool, and a segmentation refinement tool. It consists of three stages: basic perception, reasoning query, and collab-orative segmentation. Given an FRSI X, the basic perception tool Tp first generates an initial farmland mask: 
+
+M0 = Tp(X). (4) The RE then jointly analyzes X and M0 to localize am-biguous regions bi with insufficient evidence and determine a query strategy qi ∈ { temporal , spatial , none } for each region. For regions requiring extra information, the query tool Tq retrieves extra-image evidence Ei from the spatio-temporal evidence pool. The RE further integrates the input image, the initial mask and the newly acquired evidence to generate a regional-level refinement decision si. Finally, the segmentation refinement tool Ts converts each decision at the region-level into a prediction at the local pixel-level and fuses it with the initial mask: 
+
+M ∗ = Fuse  M0, {T s(X, b i, s i)}Ni=1 
+
+ , (5) where M ∗ denotes the final result of the FRSI segmentation. Figure 3: Overview of FarmSeeker. The reasoning engine and tools collaborate to complete three stages: Basic Perception calls a basic perception tool to generate an initial farmland mask; Reasoning Query performs ambiguity perception and evidence need assessment, and accordingly calls query and cropping tools to acquire extra evidence; Collaborative Segmentation performs collaborative reasoning over the initial prediction and retrieved evidence, and calls a segmentation refinement tool to produce the final mask. 
+
+FM-Seg69K 
+
+To support the training of FarmSeeker, we construct FM-Seg69K, which consists of four parts. The basic perception data uses FarmSeg-VL (Tao et al. 2025) to train the basic perception tool. The General Fine-Tuning (FT) data are constructed by filtering and uniformly organizing existing datasets, including EarthReason (Li et al. 2025b), FarmSeg-VL, WeThink (Yang et al. 2025), and DIOR-RSVG (Zhan, Xiong, and Yuan 2023), to enhance general understanding, region localization, and instruction following capabilities. 
+
+The Cold-Start FT data and Reinforcement Fine-Tuning (RFT) data are independently constructed around the core capabilities of FarmSeeker. The former uses initial segmen-tation results and ground-truth annotations to construct sam-ples for ambiguous-region localization, evidence need as-sessment, tool calling, and cross spatio-temporal collabora-tive reasoning, thereby initializing the task behaviors of the reasoning engine. The latter adopts the same task format but further improves sample quality and difficulty hierarchy. 
+
+More details are provided in the supplementary material. 
+
+Progressive Training Strategy 
+
+Inspired by recent post-training paradigms (Zhao et al. 2026b), we propose a progressive training strategy. We se-quentially apply General FT, Cold-Start FT, and RFT to train the RE. General FT first establishes remote-sensing scene understanding, region localization, and general reasoning ca-pabilities, providing a foundation for identifying anomalous regions in images and masks. Cold-Start FT then introduces ambiguity localization, spatio-temporal query planning, and multi-image collaborative reasoning through structured task trajectories, providing a stable initialization for RFT. Finally, RFT combines GRPO (Guo et al. 2025) with task-driven reward functions to further optimize ambiguity perception, tool calling, and evidence utilization. 
+
+Task-driven reward functions 
+
+FarmSeeker involves two capabilities: ambiguity perception and tool calling Tdet , and collaborative extra-image reason-ing Trea . Since the two capabilities have different objectives, we design task-specific rule-based rewards. 
+
+Ambiguity perception and Tool calling. This capability requires the RE to localize ambiguous regions, produce valid bounding boxes, and select an appropriate query tool for each detected region. We evaluate these objectives through format validity, detection coverage, detection efficiency, and tool calling accuracy. A detection output is valid when each 
+
+bbox is paired with a label and contains four coordinates. Let fdet = 1 denote a valid format. The detection format reward is defined as 
+
+Rdet fmt y =
+
+ 0, fdet = 1 ,
+
+−1, otherwise (6) This negative-only constraint prevents the model from over-optimizing simple formatting rules. We then apply Hungar-ian matching (Carion et al. 2020) between the predicted and ground-truth boxes. Let T P , GT , and P red denote the num-bers of valid detections, ground-truth boxes, and predicted boxes, respectively. The detection recall reward is 
+
+Rrec =
+
+
+
+T P GT , GT ≥ 1,
+
+0, GT = 0 
+
+(7) To discourage excessive predictions, the detection efficiency reward is defined as 
+
+Reff =
+
+
+
+T P P red , P red ≥ 1,
+
+0, P red = 0 
+
+(8) Let V denote the set of valid matches, and let ˆui and ui
+
+denote the predicted and ground-truth tool types for the i-th matched region. The tool calling reward is 
+
+Rtool =
+
+
+
+1
+
+|V| 
+
+X
+
+> i∈V
+
+1 (ˆ ui = ui) , |V| ≥ 1,
+
+0, |V| = 0 
+
+(9) These rewards encourage complete ambiguity localization, suppress redundant bounding boxes, and establish a reliable mapping between ambiguity types and query tools. 
+
+Collaborative Reasoning. This capability requires the RE to integrate the queried evidence and predict the category of the target region. Given the predicted label ˆy and the ground-truth label y, the answer reward is 
+
+Rans = 1(ˆ y = y) (10) To avoid rewarding correct answers obtained through ac-cidental guessing, we employ Qwen3-32B as a fixed LLM judge. Given the question, reasoning trajectory, and final answer, it evaluates answer consistency rcon , linguistic and logical coherence rgram , and task compliance rtraj . The rea-soning reward is defined as 
+
+Rcot =
+
+ 1, rcon = rgram = rtraj = 1 ,
+
+0, otherwise . (11) The complete judge prompt is provided in the supplemen-tary material. The model is also required to place its reason-ing and final prediction within <think></think> and 
+
+<answer></answer> , respectively. Let fthink = 1 de-note a valid output structure. The reasoning format reward is 
+
+Rthink fmt =
+
+ 0, fthink = 1 ,
+
+−1, otherwise (12) 
+
+Task-Driven Reward Aggregation. For ambiguity per-ception and tool calling, the total reward is 
+
+Rdet = Rthink fmt + Rdet fmt + Rrec + Reff + Rtool (13) For collaborative extra-image reasoning, the total reward is 
+
+Rrea = Rthink fmt + Rcot + Rans (14) Accordingly, the task-driven reward for response oi generated from sample xi is defined as 
+
+R(oi) = 
+
+ Rdet , xi ∈ Tdet ,Rrea , xi ∈ Trea (15) Through the above design, the RE can jointly optimize ambi-guity perception, tool calling, and tool-feedback-based col-laborative reasoning during RFT. 
+
+# Experiments 
+
+The basic perception tool of FarmSeeker and all compared methods are trained on the same FarmSeg-VL subset of FM-Seg69K. The compared methods include DeepLabv3+ (Chen et al. 2018), DDRNet (Pan et al. 2022), DSNet (Guo et al. 2024), DBBANet (Li et al. 2024), LaSagnA(7B) (Wei et al. 2024), PixelLM(7B) (Ren et al. 2024), SegEarth-R1(1.3B) (Li et al. 2025b), and FSVLM(7B) (Wu et al. 2025). Farm-Seeker uses SegEarth-R1 as the basic perception tool, a fine-tuned Qwen2.5-VL-7B (Bai et al. 2025) as the reasoning en-gine, and sam2.1_hiera_large.pt (Ravi et al. 2024) as the segmentation refinement tool. Unless otherwise spec-ified, all experiments in the main text are conducted on the mixed test subset comprising eight major agricultural regions in China from GSFS-Bench. The main text reports only Re-call and IoU. All experiments are conducted on four A800. 
+
+More experimental results are provided in the supple-mentary material. 
+
+In-Region and Cross-Region Performance 
+
+Table 1 reports the IoU of all methods across 8 agricul-tural regions in China (in-region) and 11 agricultural coun-tries outside China (cross-region). FarmSeeker achieves the best results in 6 in-region agricultural regions and ranks second in the remaining 2. It also achieves the best results in 10 cross-region countries, demonstrating stable in-region performance and strong cross-region generalization. Further analysis shows that the gains of FarmSeeker are closely re-lated to regional difficulty. In regions where baseline perfor-mance is already high, such as the Northeast China Plain, Huang-Huai-Hai Plain, Germany, and Canada, the improve-ments are relatively limited. In contrast, more substantial gains are observed in more challenging regions, including South China Areas, the Sichuan Basin, Australia, and Ar-gentina, indicating that extra spatio-temporal evidence is particularly beneficial when the current image provides in-sufficient information. 
+
+Segmentation Robustness under Spatio-Temporal Ambiguity 
+
+To evaluate FarmSeeker under insufficient visual observa-tions, we select 649 highly ambiguous samples from GSFS-Bench, covering temporal ambiguity caused by phenological and seasonal variations, and spatial ambiguity caused by limited fields of view and missing neighborhood context. As shown in Fig. 4, the comparison between FarmSeeker and the two best-performing baseline methods shows that FarmSeeker acquires spatio-temporal evidence according to the source of ambiguity, thereby producing more complete and accurate segmentation results. Overall, these results val-idate the effectiveness of extra spatio-temporal evidence in alleviating segmentation ambiguity under insufficient obser-vations. 
+
+The Necessity of On-Demand Extra Spatio-Temporal Information Gain 
+
+As shown in Table 2, both enhancing local evidence within the current image and incorporating extra-image spatio-Region / Country DeepLabv3+ DDRNet DSNet DBBANet LaSagnA PixelLM FSVLM SegEarth-R1 FarmSeeker                                                                                                                                                                            
+
+> In-Region
+> Northeast China Plain 94.81 92.57 94.19 95.06 94.16 94.57 93.93 95.47 95.99
+> Huang-Huai-Hai Plain 95.73 91.38 95.28 96.50 94.27 95.56 94.31 96.38 96.78
+> Northern Arid and Semi-arid Region 85.90 85.91 82.63 88.24 88.58 87.68 87.53 85.64 88.73
+> Loess Plateau 94.72 89.40 91.93 90.77 85.16 95.13 95.96 94.78 95.49 South China Areas 65.14 63.87 59.17 71.15 53.57 69.36 69.39 73.01 75.23
+> Sichuan Basin 77.23 76.64 77.15 79.17 79.25 79.86 78.57 78.30 81.57
+> Yunnan-Guizhou Plateau 81.20 66.21 81.46 80.74 73.96 78.76 85.03 84.73 86.41
+> Middle-lower Yangtze Plain 75.13 75.20 74.52 72.16 76.78 75.82 73.37 73.43 76.21
+> Cross-Region
+> United States 61.77 61.97 59.01 55.31 60.12 70.52 79.78 78.01 79.98
+> Germany 83.88 81.51 81.34 82.56 85.00 84.95 84.00 84.06 85.19
+> United Kingdom 75.67 80.55 79.14 83.36 87.64 87.82 89.19 87.13 89.31
+> France 85.13 88.43 88.00 93.33 93.24 93.98 93.80 94.97 95.54
+> India 76.25 74.96 73.63 80.11 83.19 80.37 80.18 80.36 84.65
+> Australia 71.12 53.76 64.01 73.21 70.74 69.76 66.85 73.53 77.94
+> Argentina 78.04 62.32 61.98 73.42 75.09 80.56 78.12 84.50 88.15
+> Brazil 74.01 58.39 69.00 76.80 86.98 89.03 88.62 76.82 88.40 Vietnam 83.70 83.04 82.62 83.76 83.53 84.06 83.21 84.27 84.89
+> Cambodia 74.31 75.32 63.80 63.23 70.61 75.72 73.06 75.01 77.18
+> Canada 84.65 82.59 81.38 86.30 89.76 90.81 91.06 91.04 91.45
+
+Table 1: In-region and cross-region performance in terms of IoU (%). The best and second-best results are highlighted in bold and underlined, respectively. 
+
+Figure 4: Segmentation results under spatio-temporal ambi-guity. Green indicates correctly segmented farmland regions, while red indicates incorrectly segmented regions. temporal observations improve segmentation performance, with more pronounced gains in highly ambiguous regions. This indicates that information gain can effectively alleviate ambiguity in farmland segmentation. However, more obser-vations do not necessarily lead to better performance. The predefined ST strategy directly combines all spatial and tem-poral observations, achieving 87.54% Recall and 83.24% IoU on the China test set, yet underperforming MT, which uses only multi-temporal observations. This suggests that indiscriminate information input may introduce redundant Scope / Acquisition Setting China Ambiguous Recall ↑ IoU ↑ Recall ↑ IoU ↑                                
+
+> Current SegEarth-R1 85.67 82.13 67.34 63.95 Intra-Image +ZI 86.73 83.06 76.66 72.14 Extra-Image (Pre.)
+> +SW 86.69 82.81 76.94 72.58
+> +MT 88.61 83.70 78.47 75.61
+> +ST 87.54 83.24 78.31 75.76 Extra-Image (On-D.) +FS 88.63 84.15 83.45 78.62
+
+Table 2: All variants differ only in evidence acquisition. ZI denotes zooming each ambiguous region to 512 × 512 ; SW retrieves a 512 × 512 context window centered on the region; MT retrieves all available multi-temporal images of the same region; ST combines SW and MT; FS denotes FarmSeeker. or mismatched evidence. In contrast, FarmSeeker selects spatio-temporal observations on demand according to the information gaps in the current prediction and achieves the best performance. These results demonstrate that its advan-tage does not come from simply increasing the number of extra images, but from acquiring spatio-temporal evidence that matches the current information gaps on demand. 
+
+Ablation Studies 
+
+Ablation Study of Progressive Training. As shown in Ta-ble 3, the complete progressive training strategy achieves the best performance, with Recall and IoU reaching 88.63% and 84.15%, respectively. The combination of General FT and Cold Start FT achieves the second-best results, indicat-ing that remote-sensing domain knowledge and task behavior initialization jointly provide an important foundation for sub-sequent optimization. Adding RFT further improves Recall and IoU by 1.33 and 0.97 percentage points, respectively, General FT Cold Start FT RFT Recall ↑ IoU ↑
+
+Yes – – 85.67 82.13 – Yes – 86.64 82.59 – – Yes 86.63 82.79 – Yes Yes 87.02 82.73 Yes Yes – 87.30 83.18 Yes – Yes 86.68 82.12 Yes Yes Yes 88.63 84.15 
+
+Table 3: Ablation of the progressive training strategy (%). Setting Recall ↑ IoU ↑
+
+w/o RFT 87.30 83.18 
+
+Rdet only 87.64 83.65 
+
+Rrea only 87.82 83.76 Full rewards 88.63 84.15 
+
+Table 4: Ablation study of the task-driven rewards (%). validating its effectiveness in further optimizing the model. These results demonstrate that the three training stages play complementary roles in domain adaptation, task initializa-tion, and dynamic decision optimization. 
+
+Ablation Study of Task-driven Rewards. As shown in Table 4, applying either Rdet or Rrea individually improves the final segmentation performance over the model without RFT. Jointly optimizing both task-driven rewards achieves the best Recall and IoU, demonstrating their complemen-tary contributions to ambiguity perception, tool calling, and collaborative extra-image reasoning. 
+
+Framework Generality and Practical Boundary 
+
+To examine whether FarmSeeker depends on a specific base segmentation model, we compare the segmentation perfor-mance of different models used as the basic perception tool within FarmSeeker. As shown in Table 5, FarmSeeker consis-tently improves performance across all four basic perception tools. Recall increases by 2.85-3.39 percentage points, while IoU improves by 1.08-2.56 percentage points, indicating that its error-correction capability is not tied to a particular model. We further evaluate the intermediate capabilities of the RE. As shown in Table 6, it achieves an F1-score of 60.23% for ambiguity perception at an IoU threshold of 0.5, a tool-calling accuracy of 90.79%, and a collaborative reasoning accuracy of 88.72%. These results indicate that the reason-ing engine can effectively select appropriate query tools and reason over the acquired extra images. However, ambiguity perception remains relatively challenging, and localization errors at this stage may propagate to subsequent querying and mask refinement. Table 7 reports the segmentation per-formance and inference time under different evidence acqui-sition strategies. Compared with SegEarth-R1, FarmSeeker incurs higher computational costs because it additionally per-forms ambiguity perception, image querying, collaborative reasoning, and local mask refinement. However, this addi-tional computation brings more substantial reliability gains Method Recall IoU Base Corrected Base Corrected LaSagnA 83.69 86.64 (↑2.95) 78.19 80.75 (↑2.56)                   
+
+> PixelLM 84.66 87.51 (↑2.85) 81.13 82.21 (↑1.08)
+> SegEarth-R1 85.67 88.63 (↑2.96) 82.13 84.15 (↑2.02)
+> FSVLM 84.36 87.75 (↑3.39) 80.98 82.13 (↑1.15)
+
+Table 5: Framework generality analysis (%). Base denotes the initial segmentation result, while Corrected denotes the result refined by FarmSeeker.       
+
+> Ambiguity Perception Tool-Calling Collaborative Reasoning F1@0.5 (%) Accuracy (%) Accuracy (%)
+> 60.23 90.79 88.72
+
+Table 6: Evaluation of the RE in ambiguity perception, tool calling, and collaborative reasoning.                                
+
+> Setting China Ambiguous Time (s) ↓
+> Recall ↑IoU ↑Recall ↑IoU ↑
+> SegEarth-R1 85.67 82.13 67.34 63.95 0.3
+> Predefined MT 88.61 83.70 78.47 75.61 24.1 Predefined SW 86.69 82.81 76.94 72.58 23.8 FarmSeeker 88.63 84.15 83.45 78.62 23.9
+
+Table 7: Performance and computational cost under different strategies. The inference time is the average processing time per image. in ambiguous scenarios. Moreover, FarmSeeker explicitly presents ambiguous regions, evidence requirements, query results, and refinement rationales during segmentation, mak-ing the process verifiable. Therefore, FarmSeeker is more suitable for offline farmland mapping, difficult-region verifi-cation, and practical applications that are sensitive to omis-sion errors. Further reducing its computational overhead re-mains an important direction for future work. 
+
+# Conclusion 
+
+This work revisits farmland segmentation from an informa-tion bottleneck perspective and proposes a farmland segmen-tation paradigm driven by spatio-temporal information gain. Rather than indiscriminately introducing more images, the paradigm identifies information gaps in the current predic-tion and acquires complementary observations on demand to reduce semantic uncertainty. Building on this paradigm, we develop FarmSeeker, which translates newly acquired infor-mation gain into pixel-level improvements through ambigu-ity perception, on-demand querying, collaborative reasoning, and segmentation refinement. We further establish GSFS-Bench to support unified evaluation across diverse agri-cultural regions, unseen geographies, and spatio-temporally ambiguous scenarios. Experimental results demonstrate that FarmSeeker consistently improves overall segmentation per-formance, cross-region generalization, prediction stability, and robustness on challenging samples. References 
+
+Bai, S.; Chen, K.; Liu, X.; Wang, J.; Ge, W.; Song, S.; Dang, K.; Wang, P.; Wang, S.; Tang, J.; Zhong, H.; Zhu, Y.; Yang, M.; Li, Z.; Wan, J.; Wang, P.; Ding, W.; Fu, Z.; Xu, Y.; Ye, J.; Zhang, X.; Xie, T.; Cheng, Z.; Zhang, H.; Yang, Z.; Xu, H.; and Lin, J. 2025. Qwen2.5-VL Technical Report. arXiv:2502.13923. Carion, N.; Massa, F.; Synnaeve, G.; Usunier, N.; Kirillov, A.; and Zagoruyko, S. 2020. End-to-end object detection with transformers. In European conference on computer vision , 213–229. Springer. Chen, L.-C.; Zhu, Y.; Papandreou, G.; Schroff, F.; and Adam, H. 2018. Encoder-decoder with atrous separable convolution for semantic image segmentation. In Proceedings of the European conference on computer vision (ECCV) , 801–818. Guo, D.; Yang, D.; Zhang, H.; Song, J.; Wang, P.; Zhu, Q.; Xu, R.; Zhang, R.; Ma, S.; Bi, X.; et al. 2025. DeepSeek-R1 incentivizes reasoning in LLMs through reinforcement learning. Nature , 645(8081): 633–638. Guo, Z.; Bian, L.; Wei, H.; Li, J.; Ni, H.; and Huang, X. 2024. DSNet: A novel way to use atrous convolutions in semantic segmentation. IEEE Transactions on Circuits and Systems for Video Technology , 35(4): 3679–3692. Hossain, N.; Jiang, X.; Tian, Y.; Seguin, P.; Clark, O. G.; and Sun, S. 2026. Vision-Language Semantic Grounding for Multi-Domain Crop-Weed Segmentation. arXiv:2602.23677. Hu, S.; Lou, Z.; Yan, X.; and Ye, Y. 2024. A survey on infor-mation bottleneck. IEEE Transactions on Pattern Analysis and Machine Intelligence , 46(8): 5325–5344. Li, J.; Wei, Y.; Wei, T.; and He, W. 2024. A comprehensive deep-learning framework for fine-grained farmland mapping from high-resolution images. IEEE Transactions on Geo-science and Remote Sensing , 63: 1–15. Li, K.; Wang, J.; Wang, Z.; Qiao, H.; Zhang, W.; Meng, D.; and Cao, X. 2025a. Designing Domain-Specific Agents via Hierarchical Task Abstraction Mechanism. arXiv:2511.17198. Li, K.; Xin, Z.; Pang, L.; Pang, C.; Deng, Y.; Yao, J.; Xia, G.; Meng, D.; Wang, Z.; and Cao, X. 2025b. SegEarth-R1: Geospatial Pixel Reasoning via Large Language Model. arXiv:2504.09644. Li, W.; Liang, S.; Chen, K.; Chen, Y.; Ma, H.; Xu, J.; Ma, Y.; Zhang, Y.; Guan, S.; Fang, H.; et al. 2026. AgriFM: A multi-source temporal remote sensing foundation model for Agriculture mapping. Remote Sensing of Environment , 334: 115234. Liu, R.; Fu, B.; Song, J.; Li, K.; Li, W.; Xue, L.; Qiao, H.; Zhang, W.; Meng, D.; and Cao, X. 2026. Zoomearth: Active perception for ultra-high-resolution geospatial vision-language tasks. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 34877–34888. Liu, T.; Yu, L.; Liu, X.; Peng, D.; Chen, X.; Du, Z.; Tu, Y.; Wu, H.; and Zhao, Q. 2025. A global review of monitoring cropland abandonment using remote sensing: Temporal–spatial patterns, causes, ecological effects, and fu-ture prospects. Journal of Remote Sensing , 5: 0584. Lobert, F.; Schwieder, M.; Alsleben, J.; Broeg, T.; Kowalski, K.; Okujeni, A.; Hostert, P.; and Erasmi, S. 2025. Unveiling year-round cropland cover by soil-specific spectral unmixing of Landsat and Sentinel-2 time series. Remote Sensing of Environment , 318: 114594. Muhawenayo, G.; Robinson, C.; Khanal, S.; Fang, Z.; Corley, I.; Wollam, A.; Gao, T.; Strnad, L.; Avery, R.; Estes, L.; Tárano, A.; Jacobs, N.; and Kerner, H. 2026. PRUE: A Practical Recipe for Field Boundary Segmentation at Scale. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 6484–6495. Pan, H.; Hong, Y.; Sun, W.; and Jia, Y. 2022. Deep dual-resolution networks for real-time and accurate semantic seg-mentation of traffic scenes. IEEE Transactions on Intelligent Transportation Systems , 24(3): 3448–3460. Ravi, N.; Gabeur, V.; Hu, Y.-T.; Hu, R.; Ryali, C.; Ma, T.; Khedr, H.; Rädle, R.; Rolland, C.; Gustafson, L.; Mintun, E.; Pan, J.; Alwala, K. V.; Carion, N.; Wu, C.-Y.; Girshick, R.; Dollár, P.; and Feichtenhofer, C. 2024. SAM 2: Segment Anything in Images and Videos. arXiv:2408.00714. Ren, Z.; Huang, Z.; Wei, Y.; Zhao, Y.; Fu, D.; Feng, J.; and Jin, X. 2024. Pixellm: Pixel reasoning with large multimodal model. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 26374–26383. Shao, R.; Li, Z.; Zhang, Z.; Xu, L.; He, X.; Yuan, H.; He, B.; Dai, Y.; Yan, Y.; Chen, Y.; et al. 2026. Asking like Socrates: Socrates helps VLMs understand remote sensing images. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 26465–26475. Tao, C.; Zhong, D.; Mu, W.; Du, Z.; and Wu, H. 2025. A large-scale image–text dataset benchmark for farmland seg-mentation. Earth System Science Data , 17(9): 4835–4864. Tishby, N.; Pereira, F. C.; and Bialek, W. 2000. The infor-mation bottleneck method. arXiv:physics/0004057. Turkoglu, M. O.; Ledain, S.; Zweidler, J.; Lauber, T.; and Aasen, H. 2026. T 3S: Think in Thermal Time for Gener-alizable Crop Mapping from Satellite Image Time Series. arXiv:2506.12885. Wang, C.; Ge, X.; Zhao, Y.; Cai, J.; Xia, Y.; Wen, Z.; Feng, H.; Fang, K.; and Gadekallu, T. R. 2026. A comprehen-sive survey on segmentation-enabled precision agriculture: Methodologies, applications, and the road to agriculture 5.0. 
+
+Computers and Electronics in Agriculture , 251: 111986. Wang, Y.; Belgiu, M.; Wu, H.; Zhong, D.; Cao, Y.; Li, H.; and Tao, C. 2025. Joint Learning for Feature Reconstruction and Prediction in Agricultural Semantic Segmentation From Incomplete Satellite Image Time Series. IEEE Transactions on Geoscience and Remote Sensing , 64: 1–23. Wei, C.; Tan, H.; Zhong, Y.; Yang, Y.; and Ma, L. 2024. LaSagnA: Language-based Segmentation Assistant for Com-plex Queries. arXiv:2404.08506. Wu, H.; Du, Z.; Zhong, D.; Wang, Y.; and Tao, C. 2025. FSVLM: A vision-language model for remote sensing farm-land segmentation. IEEE Transactions on Geoscience and Remote Sensing , 63: 1–13. Xie, J.; Wu, H.; Wu, W.; Hong, L.; He, L.; Yu, Q.; Liu, L.; Lin, A.; and Som-ard, J. 2026. A CNN-Transformer Hybrid Network With Boundary Guidance for Mapping Cropland Field Parcels From High-Resolution Remote Sensing Im-agery. IEEE Transactions on Geoscience and Remote Sens-ing , 64: 1–22. Yang, J.; Ma, F.; Wang, Z.; Yin, D.; Rong, K.; Rao, F.; and Zhang, R. 2025. WeThink: Toward General-purpose Vision-Language Reasoning via Reinforcement Learning. arXiv:2506.07905. Yao, L.; Liu, F.; Lu, H.; Zhang, C.; Min, R.; Xu, S.; Di, S.; and Peng, P. 2026a. RemoteReasoner: Towards Unifying Geospatial Reasoning Workflow. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, 11883– 11891. Yao, L.; Xu, S.; Liu, F.; Zhang, C.; Yao, B.; Min, R.; Li, Y.; Ouyang, C.; Di, S.; and Zhang, M.-L. 2026b. Re-moteAgent: Bridging Vague Human Intents and Earth Ob-servation with RL-Based Agentic MLLMs. arXiv preprint arXiv:2604.07765 .Zhan, Y.; Xiong, Z.; and Yuan, Y. 2023. Rsvg: Exploring data and models for visual grounding on remote sensing data. IEEE transactions on geoscience and remote sensing ,61: 1–13. Zhang, Z.; Ye, Z.; Wen, Y.; Yuan, S.; Fu, H.; Huang, J.; and Zheng, J. 2025. GTPBD: A Fine-Grained Global Terraced Parcel and Boundary Dataset. In Advances in Neural Infor-mation Processing Systems . Curran Associates, Inc. Datasets and Benchmarks Track. Zhao, W.; Guo, S.; Zhang, X.; Tang, P.; Pan, X.; Mu, H.; Yang, C.; Xia, Z.; Wang, Z.; Du, J.; et al. 2026a. A weakly supervised approach for large-scale agricultural parcel ex-traction from VHR imagery via foundation models and adap-tive noise correction. ISPRS Journal of Photogrammetry and Remote Sensing , 233: 180–208. Zhao, Z.; Wan, Z.; Chen, L.; Lin, X.; Yu, S.; Zhang, S.; Ma, D.; Zhu, Z.; Zhang, D.; Wang, H.; Dai, Z.; Wen, L.; Chen, B.; Chen, X.; and Yu, K. 2026b. ChemDFM-R: A Chemical Reasoning LLM Enhanced with Atomized Chemical Knowl-edge. arXiv:2507.21990. Zheng, J.; Ye, Z.; Wen, Y.; Huang, J.; Zhang, Z.; Li, Q.; Hu, Q.; Xu, B.; Zhao, L.; and Fu, H. 2026a. A comprehensive review of agricultural parcel and boundary delineation from remote sensing images: Recent progress and future perspec-tives. IEEE Geoscience and Remote Sensing Magazine .Zheng, Z.; Yang, M.; Hong, J.; Zhao, C.; Xu, G.; Yang, L.; Shen, C.; and XingYu. 2026b. DeepEyes: Incentivizing ”Thinking with Images” via Reinforcement Learning. In The Fourteenth International Conference on Learning Represen-tations .Zhu, H.; Zhu, Y.; Xiao, J.; Xiao, T.; Ma, Y.; Zhang, Y.; and Dai, F. 2025. Exact: Exploring Space-Time Perceptive Clues for Weakly Supervised Satellite Image Time Series Semantic Segmentation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 14036–14045. Supplementary Material 
+
+# 1. Overview 
+
+This supplementary material extends the main paper from five aspects, including data, implementation, experiments, and process visualization, to further improve the complete-ness of the task setting and the reproducibility of the method. The contents are organized as follows: 
+
+• Section 2 provides detailed statistics of GSFS-Bench and FM-Seg69K, including their scale, data distribution, and complex-scene characteristics, to illustrate the represen-tativeness, complexity, and challenges of the task setting. 
+
+• Section 3 provides detailed implementation configura-tions, including the query-and-cropping tool, collabora-tive reasoning and local mask refinement, progressive training settings, the end-to-end inference procedure, and the LLM judge used during reinforcement fine-tuning. 
+
+• Section 4 provides more comprehensive experimental re-sults and analyses. For experiments already reported in the main paper, we supplement additional evaluation metrics and qualitative results. We further compare FarmSeeker with non-expert human interpretation and conduct large-scale mapping experiments to assess its effectiveness and practical potential in complex farmland scenarios. 
+
+• Section 5 presents step-by-step visualizations of the dy-namic querying and reasoning process of FarmSeeker in complex farmland scenarios, providing a more intuitive understanding of its working mechanism. 
+
+# 2. Dataset and Benchmark Details 
+
+2.1. GSFS-Bench 
+
+In this section, we provide additional data analyses of GSFS-Bench and details on the construction of its evaluation sub-sets. 
+
+(1) Statistical Analysis of the GSFS-Bench 
+
+To further characterize its data composition and represen-tativeness as a dynamic farmland interpretation benchmark, we analyze GSFS-Bench from three aspects: climate type, field morphology, and seasonal distribution. As shown in Fig. S1(a), GSFS-Bench covers various rep-resentative agricultural climate types, including monsoon-dominated mixed climates, temperate oceanic climates, Mediterranean climates, tropical monsoon climates, tropical and subtropical climates, arid and semi-arid climates, and cold temperate continental climates. These climate condi-tions correspond to substantially different hydrothermal envi-ronments, cropping systems, and surface characteristics, re-sulting in considerable variations in the spectral appearance, boundary clarity, and seasonal evolution of farmland. There-fore, the benchmark provides diverse observation scenarios ranging from regular temperate farmland to fragmented trop-ical smallholder fields. As shown in Fig. S1(b), GSFS-Bench also exhibits substantial diversity in field morphology. Large regular blocks contain 4,093 samples, while Mixed mosaic fields and Mixed pattern contain 2,608 and 2,067 samples, respectively. Fragmented small plots and Fragmented narrow fields contain 790 and 307 samples, respectively. This distri-bution covers both large-scale regular contiguous farmland and fragmented, narrow, and mosaic-like fields, supporting the evaluation of model adaptability to complex boundaries, small fragmented fields, and heterogeneous backgrounds. As shown in Fig. S1(c), samples from different countries and re-gions exhibit clear seasonal differences. Samples from China cover spring, summer, autumn, and winter, providing rela-tively complete temporal support for phenological evolution and seasonal ambiguity analysis. Samples from the US and Germany are mainly concentrated in spring, those from Ar-gentina in winter, and those from the UK in summer, while Australia, France, and India cover multiple seasons. This distribution preserves appearance variations across different growth stages, climatic conditions, and agricultural cycles, providing a data foundation for temporal ambiguity analysis and cross-temporal reasoning evaluation. 
+
+(2) Construction of Specialized Evaluation Subsets in GSFS-Bench Ambiguity Perception Subset. We construct reference ambiguous regions from the complete China subset using a multi-base-model voting mechanism. Specifically, multiple farmland segmentation models are first employed to gen-erate prediction masks, and connected regions jointly mis-segmented by at least three models are identified as can-didate ambiguous regions. The candidate regions are then filtered according to their bounding-box areas and the pro-portions of erroneous pixels within the boxes. The bounding-box area is restricted to 1,000–100,000 pixels, and the mini-mum erroneous-pixel ratio is set to 30%. Tool-Calling Type Subset. For each reference ambiguous region, we jointly ex-amine the current image, multi-temporal images, and wide-swath spatial images. Qwen-VL-Max is first employed to generate the required evidence-type label, including tempo-ral, spatial, or none. The generated labels are subsequently manually verified and corrected to ensure the accuracy of the evidence-need annotations. A sample containing multi-ple ambiguous regions may involve both temporal and spa-tial queries. Multi-Image Collaborative Reasoning Subset. 
+
+According to the annotated evidence type, we retrieve addi-tional images from the corresponding temporal and spatial evidence pools. Human annotators then organize the current image, initial segmentation result, target ambiguous region, and corresponding additional evidence into multi-image col-laborative reasoning samples. Based on the ground-truth farmland mask, each target region is further labeled as ei-ther farmland or non-farmland. 
+
+2.2. Statistical Analysis of FM-Seg69K 
+
+To support the collaborative training of the basic perception tool and the reasoning engine in FarmSeeker, we construct FM-Seg69K. As shown in Fig. S2, the basic perception tool is directly trained on the farmland image-text dataset FarmSeg-VL to acquire fundamental visual-semantic perception capa-bilities for farmland scenes. The remaining 54,420 samples are used to train the reasoning engine and cover three stages, Figure S1: Statistical analysis of GSFS-Bench. (a) Climate-type distribution. (b) Farmland morphology distribution. (c) Seasonal distribution across countries and regions. namely General Fine-Tuning (GFT), Cold Start Fine-Tuning (CSFT), and Reinforcement Fine-Tuning (RFT). These sam-ples are collectively referred to as FM-Seg54K. As shown in Fig. S3, FM-Seg54K follows a clear progressive struc-ture. GFT contains 40,040 samples, accounting for 73.6%, and is used to establish remote-sensing domain adaptation, cross-modal understanding, and basic reasoning capabilities. CSFT contains 10,000 samples, accounting for 18.4%, and initializes ambiguity perception, tool calling, and collabora-tive reasoning behaviors. RFT contains 4,380 samples, ac-counting for 8.0%, and further optimizes decision-making and self-correction capabilities in complex scenarios. GFT integrates data for remote-sensing referring seg-mentation, object detection, general chain-of-thought rea-soning, and farmland image-text understanding. As shown in Fig. S4(b), DIOR-RSVG, FarmSeg-VL, we_think, and earth_reason contain 17,338, 10,000, 8,522, and 4,180 sam-ples, accounting for 43.3%, 25.0%, 21.3%, and 10.4%, re-spectively. This stage primarily focuses on remote-sensing scene understanding and farmland semantic supervision, while incorporating general reasoning data to improve the model’s transferability and compatibility with reasoning tasks. CSFT establishes the core task logic of FarmSeeker. As shown in Fig. S4(a), this stage contains 6,000 samples for ambiguity perception and tool calling, and 4,000 samples for collaborative reasoning. Among the former, 4,723 samples call the temporal-image query tool, 250 call the larger-context image query tool, and 1,027 call both tools. This distribution indicates that temporal evidence is the primary source of information gain, while complex scenarios still require the joint use of spatial and temporal evidence. This subset also covers different numbers of ambiguous regions. A total of 3,234 samples contain three or more ambiguous regions, accounting for more than half of the subset and enabling the model to learn multi-region inspection, stepwise querying, and cross-evidence reasoning. RFT follows the same task format as CSFT but places greater emphasis on annotation accuracy, clarity of ambigu-ity sources, stability of tool mapping, and completeness of Figure S2: FM-Seg69K sample examples. 
+
+Figure S3: Hierarchical composition of FM-Seg69K. The inner ring shows the overall proportions of the three stages used to train the reasoning engine, including General Fine-Tuning, Cold Start Fine-Tuning, and Reinforcement Fine-Tuning. The outer ring further presents the data sources or functional components within each stage. reasoning chains. As shown in Fig. S4(c), this stage contains 1,970 samples for ambiguity perception and tool calling and 2,410 samples for collaborative reasoning. The proportion of collaborative reasoning samples increases from 40.0% to 55.0%, indicating that the training focus shifts from task be-havior initialization toward improving reasoning quality and decision-making with the support of external evidence. 
+
+# 3. Implementation Details 
+
+This section provides implementation details of the query-and-cropping tool, local mask refinement, the end-to-end inference procedure, and the LLM judge used during rein-forcement fine-tuning. 
+
+3.1. Query-and-Cropping Tool 
+
+The query-and-cropping tool Tq maps each ambiguity region 
+
+bi predicted by the reasoning engine to corresponding extra-image evidence Ei. According to the query strategy qi, it performs either a temporal query or a spatial query. 
+
+Temporal query. The tool first matches the current im-age X to its corresponding wide-swath image and retrieves wide-swath images of the same region from other timestamps according to the region and month information encoded in the file names. Using the geospatial transformations pro-vided by rasterio , the geographic extent of X is projected onto each retrieved image. The corresponding region is then cropped and resampled to the same size as X. Since the re-sulting crop and X share the same geographic coverage and pixel grid, the ambiguity region bi can be directly overlaid on the temporal crop. 
+
+Spatial query. The center of bi is first converted from the pixel coordinates of X to geographic coordinates and then projected onto the corresponding same-period wide-swath image. A 512 ×512 context window centered on this position is subsequently cropped. The target box is redrawn at the center of the retrieved image while preserving its original size, allowing the reasoning engine to jointly observe the target region and its surrounding spatial context. Both tools return standardized evidence images with the target region explicitly marked. Their implementation is sum-marized in Algorithm 1. 
+
+3.2. Collaborative Reasoning and Mask Refinement 
+
+After obtaining Ei, the reasoning engine R jointly analyzes 
+
+X, the initial mask M0, the ambiguity region bi, and the retrieved evidence. It then generates a regional-level refine-ment decision si, which specifies the semantic judgment of the target region and whether local mask correction is re-quired. For a region requiring correction, the segmentation re-finement tool Ts uses bi as the bounding-box prompt and generates a local refined mask. The refined mask replaces the corresponding prediction in M0, while regions that do not require correction remain unchanged. Figure S4: Statistical analysis of FM-Seg54K. (a) Functional composition and difficulty distribution of the Cold Start Fine-Tuning stage. (b) Distribution of data sources in the General Fine-Tuning stage. (c) Comparison of the functional compositions of the Cold Start Fine-Tuning and Reinforcement Fine-Tuning stages. When multiple corrected regions overlap, FarmSeeker re-tains the correction associated with the more confident re-gional decision. This local replacement strategy converts regional collaborative reasoning into pixel-level refinement without rerunning segmentation over the entire image. The procedure is summarized in Algorithm 2. 
+
+3.3. Training Configuration 
+
+Following the progressive training strategy described in the main paper, the reasoning engine is sequentially optimized through General Fine-Tuning (GFT), Cold Start Fine-Tuning (CSFT), and Reinforcement Fine-Tuning (RFT). 
+
+General and Cold Start Fine-Tuning. GFT and CSFT are both conducted using LoRA within the LLaMA-Factory framework. GFT establishes general remote-sensing under-standing, region localization, and reasoning capabilities, whereas CSFT initializes the task-specific behaviors of am-biguity perception, evidence-need assessment, tool calling, and collaborative reasoning. The two stages adopt the same training configuration. Specifically, the initial learning rate is set to 2 × 10 −5, and each stage is trained for 3 epochs. The per-device batch size is set to 2 with 8 gradient accumulation steps. The maximum number of input-image pixels, denoted by image_max_pixels , is set to 262,144. 
+
+Reinforcement Fine-Tuning. During RFT, the reasoning engine is optimized using Group Relative Policy Optimiza-tion (GRPO). The initial learning rate is set to 5 × 10 −6,and the model is trained for 1 epoch with a batch size of 1. For each input sample, the model generates six candidate responses, corresponding to a GRPO group size of 6. During response generation, the sampling temperature and Top-p are set to 1.0 and 0.9, respectively. The max-Algorithm 1: Query and cropping of extra-image evidence 
+
+Require: Current image X; ambiguity region bi; query strategy qi; wide-swath image database D
+
+Ensure: Extra-image evidence Ei 
+
+> 1:
+
+Wcur ← MatchWideSwathImage( X, D) 
+
+> 2:
+
+if qi = temporal then  
+
+> 3:
+
+C ← RetrieveTemporalImages( Wcur , D) 
+
+> 4:
+
+GX ← GeoExtent( X) 
+
+> 5:
+
+Ei ← ∅ 
+
+> 6:
+
+for each temporal wide-swath image Wt ∈ C do  
+
+> 7:
+
+Pt ← CropByGeoExtent( Wt, G X ) 
+
+> 8:
+
+Pt ← Resize  Pt, Width( X), Height( X) 
+
+> 9:
+
+Pt ← DrawBox( Pt, b i) 
+
+> 10:
+
+Ei ← Ei ∪ { Pt} 
+
+> 11:
+
+end for  
+
+> 12:
+
+else if qi = spatial then  
+
+> 13:
+
+pctr  
+
+> i
+
+← Center( bi) 
+
+> 14:
+
+gctr  
+
+> i
+
+← PixelToGeo( X, p ctr  
+
+> i
+
+) 
+
+> 15:
+
+pwide  
+
+> i
+
+← GeoToPixel( Wcur , g ctr  
+
+> i
+
+) 
+
+> 16:
+
+Ωi ← CenteredWindow  pwide  
+
+> i
+
+, Width( X), Height( X) 
+
+> 17:
+
+Pi ← CropWindow( Wcur , Ωi) 
+
+> 18:
+
+˜bi ← RecenterBox  bi, Center( Pi) 
+
+> 19:
+
+Pi ← DrawBox( Pi, ˜bi) 
+
+> 20:
+
+Ei ← { Pi} 
+
+> 21:
+
+end if  
+
+> 22:
+
+return Ei
+
+Algorithm 2: Local mask refinement and fusion 
+
+Require: Current image X; initial mask M0; regional deci-sions S = {(bi, s i)}Ni=1 ; segmentation refinement tool 
+
+Ts
+
+Ensure: Final segmentation result M ∗ 
+
+> 1:
+
+M ∗ ← M0 
+
+> 2:
+
+for i = 1 to N do  
+
+> 3:
+
+if si indicates that no local correction is required then  
+
+> 4:
+
+continue  
+
+> 5:
+
+end if  
+
+> 6:
+
+Mi ← Ts(X, b i, s i) {Generate a local refined mask using bi as the prompt}  
+
+> 7:
+
+M ∗ ← Fuse( M ∗, M i, b i, s i) {Replace the local pre-diction and resolve possible overlaps}  
+
+> 8:
+
+end for  
+
+> 9:
+
+return M ∗
+
+imum completion length is set to 1,024 tokens, and 
+
+image_max_pixels is set to 12,845,056. A larger image-pixel budget is adopted during RFT because collaborative reasoning samples contain multiple images, including the current observation and the retrieved spatio-temporal evi-dence. The coefficient of the KL-divergence penalty is set to 0.05 to constrain the distributional deviation of the policy model from the reference model. For tasks involving multiple reward components, the indi-vidual reward terms are first linearly summed to obtain the total reward for each candidate response. The total rewards Algorithm 3: End-to-end inference procedure of FarmSeeker 
+
+Require: Current image X; reasoning engine R; basic per-ception tool Tp; query-and-cropping tool Tq ; segmenta-tion refinement tool Ts
+
+Ensure: Final segmentation result M ∗ 
+
+> 1:
+
+M0 ← Tp(X) {Generate the initial farmland mask}  
+
+> 2:
+
+A ← R(X, M 0) {A = {(bi, q i)}Ni=1 } 
+
+> 3:
+
+if A = ∅ then  
+
+> 4:
+
+return M0 
+
+> 5:
+
+end if  
+
+> 6:
+
+S ← ∅ 
+
+> 7:
+
+for each (bi, q i) ∈ A do  
+
+> 8:
+
+if qi = none then  
+
+> 9:
+
+Ei ← ∅ 
+
+> 10:
+
+else  
+
+> 11:
+
+Ei ← Tq (X, b i, q i) {Retrieve temporal or spatial evidence}  
+
+> 12:
+
+end if  
+
+> 13:
+
+si ← R(X, M 0, b i, E i) {Perform regional collabora-tive reasoning}  
+
+> 14:
+
+S ← S ∪ { (bi, s i)} 
+
+> 15:
+
+end for  
+
+> 16:
+
+M ∗ ← LocalMaskRefinement( X, M 0, S, T s) {Apply Algorithm 2}  
+
+> 17:
+
+return M ∗
+
+within each group are then scaled and normalized, and the resulting normalized rewards are used to compute the advan-tages for policy optimization. 
+
+3.4. End-to-End Inference Procedure 
+
+Given an FRSI X, the basic perception tool Tp first gen-erates the initial farmland mask M0. The reasoning engine then jointly analyzes X and M0 to identify ambiguity re-gions bi and assign each region a query strategy qi, including temporal, spatial, or none. For a temporal query, Tq retrieves images of the same region from other timestamps. For a spatial query, it retrieves a context window centered on the ambiguity region from the corresponding same-period wide-swath image. When no additional evidence is required, the reasoning engine directly evaluates the region using the current observation and initial prediction. The reasoning engine subsequently combines the available evidence to produce the regional-level refinement decision 
+
+si. Regions requiring correction are processed by Ts, and their refined masks are locally fused with M0 to obtain the final mask M ∗.Unlike predefined evidence acquisition strategies, Farm-Seeker triggers extra-image querying and local refinement only for regions with insufficient observations. Its additional computation is therefore concentrated on ambiguity regions rather than uniformly applied to the entire image. The com-plete procedure is presented in Algorithm 3. 3.5. LLM Judge for Reinforcement Fine-Tuning 
+
+During reinforcement fine-tuning of collaborative reasoning, Qwen3-32B is used as a fixed LLM judge to evaluate the reasoning trajectory generated by the reasoning engine. The judge model is used only for reward computation and remains frozen throughout training. For each response, the question, reasoning content, and fi-nal answer are inserted into the placeholders {Question} ,
+
+{Model_thinking} , and {Model_Answer} , respec-tively. The judge evaluates semantic consistency rcon , lin-guistic and logical correctness rgram , and trajectory compli-ance rtraj .The complete judge prompt is as follows:                                                                                     
+
+> ’{Model_thinking}’ is the thinking content output by the model for the problem ‘{Question}’, and ‘{Model_Answer}’ is the answer output by the model. Firstly, check whether the model is thinking according to the requirements of the problem. Secondly, check whether the thinking content is consistent with the output answer. Finally, check whether the thinking content of the model is coherent in word order and logic. If there are no issues with the above three requirements, then it is judged as 1. If any item does not meet the requirements, it will be judged as 0. Only output judgment, do not output any other content.
+
+The judge output is parsed as the binary reasoning reward 
+
+Rcot . An exact output of 1 is assigned Rcot = 1 , while all other outputs, including outputs containing additional text, are assigned Rcot = 0 . The resulting reward is combined with the answer reward and the reasoning-format reward ac-cording to the reward aggregation defined in the main paper. 
+
+# 4. Additional Experimental Results 
+
+4.1. Additional Evaluation Metrics and Qualitative Results for the Reported Experiments 
+
+This section supplements selected evaluation metrics for the experiments reported in the main paper. 
+
+(1) Supplementary Results for In-Region Performance and Cross-Region Generalization 
+
+As shown in Tables S1 and S2, we supplement the com-plete evaluation metrics for the In-Region Performance and Cross-Region Generalization experiments reported in the main paper, including IoU, Recall, and Accuracy. These met-rics exhibit trends consistent with those reported in the main paper, further confirming the stable advantages of Farm-Seeker in both in-region segmentation and cross-region gen-eralization. We further provide qualitative segmentation results of dif-ferent methods across eight representative agricultural re-gions in China. As shown in Fig. S5, the qualitative results are generally consistent with the quantitative comparisons. For example, in the densely distributed water-network re-gions of the Huang-Huai-Hai Plain and Sichuan Basin, as shown in Figs. S5(b) and S5(f), the red-circled regions ex-hibit substantial confusion between farmland and water bod-ies or shadows. Existing methods frequently miss farmland regions or produce excessively expanded masks. In contrast, FarmSeeker acquires complementary spatio-temporal evi-dence on demand, allowing it to identify ambiguous regions more accurately and recover the boundaries of fragmented fields. Its predictions therefore show higher consistency with the ground-truth annotations. These results further demon-strate that extra spatio-temporal information can effectively alleviate insufficient local observations and semantic ambi-guity in complex agricultural scenes. 
+
+(2) Supplementary Results on Segmentation Robust-ness under Spatio-Temporal Ambiguity 
+
+This section reports the complete results of the Segmen-tation Robustness under Spatio-Temporal Ambiguity exper-iment. As shown in Fig. S6, FarmSeeker achieves the best overall performance across all four metrics, including IoU, Dice, Recall, and Accuracy. SegEarth-R1, which serves as the basic perception tool of FarmSeeker, exhibits only mod-erate performance under ambiguous scenarios and shows a clear gap from FarmSeeker. This indicates that the improve-ment of FarmSeeker in highly ambiguous scenarios does not result from simple enhancement of the basic segmentation output, but primarily from its active analysis of ambiguous re-gions, acquisition of complementary evidence, and targeted refinement. We further analyze the performance of different methods over the long-tailed distribution of ambiguous samples. As shown in Figs. S7(a) and S7(b), the samples are reordered from easy to difficult, with the most difficult 20% highlighted by shaded regions. For both IoU and Recall, the curve of FarmSeeker remains above those of LaSagnA and SegEarth-R1 across most of the sample range, indicating that its ad-vantage is not limited to a small number of easy samples but extends across the overall distribution of ambiguous samples. In particular, within the most difficult 20% of samples, although all methods exhibit varying degrees of perfor-mance degradation, FarmSeeker shows a relatively slower decline and maintains a higher overall performance level. This demonstrates that FarmSeeker preserves better target recovery and regional overlap quality under stronger tem-poral variations, more severe boundary confusion, and in-creasingly complex spatial structures, reflecting its superior long-tail robustness and adaptability to complex scenarios. 
+
+(3) Supplementary Results on Ablation Studies 
+
+This section provides supplementary ablation experiments on different reasoning engines. As shown in Table S3, the general-purpose Qwen2.5-VL-7B yields the same perfor-mance as the setting without a reasoning engine. This is because the untrained 7B model cannot reliably generate valid ambiguous regions under the task-specific output for-mat. Consequently, no extra-image query or subsequent mask refinement is triggered, and the final prediction remains iden-tical to the output of the basic perception tool. As the scale of the general-purpose reasoning engine increases, the overall system performance generally im-proves, indicating that stronger multimodal perception and reasoning capabilities facilitate ambiguity identification and Region Metric DeepLabv3+ DDRNet DSNet DBBANet LaSagnA PixelLM FSVLM SegEarth-R1 FarmSeeker Northeast China Plain Recall 97.66 97.05 97.50 97.91 96.97 97.12 95.93 97.38 98.00                                                                                                                                                                                                                
+
+> IoU 94.81 92.57 94.19 95.06 94.16 94.57 93.93 95.47 95.99
+> Acc 96.04 94.17 95.54 97.02 95.55 95.87 95.40 96.68 97.05
+> Huang-Huai-Hai Plain Recall 97.98 98.07 97.84 98.01 96.45 97.73 96.40 97.96 98.40
+> IoU 95.73 91.38 95.28 96.50 94.27 95.56 94.31 96.38 96.78
+> Acc 96.87 93.37 96.53 97.45 95.80 96.75 95.83 97.44 97.72
+> Northern Arid and Semi-arid Region Recall 89.62 90.58 87.01 90.81 91.76 91.30 91.12 88.14 92.00
+> IoU 85.90 85.91 82.63 88.24 88.58 87.68 87.53 85.64 88.73
+> Acc 90.42 90.01 88.09 92.12 92.21 91.66 91.55 91.06 92.93
+> Loess Plateau Recall 97.13 93.62 96.33 94.84 89.20 97.55 97.27 96.75 97.70
+> IoU 94.72 89.40 91.93 90.77 85.16 95.13 95.96 94.78 95.49 Acc 96.61 93.06 94.71 93.97 90.27 97.04 97.44 96.80 97.23 South China Areas Recall 72.51 84.59 68.49 78.76 61.38 77.72 76.81 81.01 84.74
+> IoU 65.14 63.87 59.17 71.15 53.57 69.36 69.39 73.01 75.23
+> Acc 92.16 90.33 90.45 93.54 89.25 93.06 90.76 93.42 93.87
+> Sichuan Basin Recall 81.89 84.57 84.35 82.86 85.37 85.85 84.40 81.83 86.03
+> IoU 77.23 76.64 77.15 79.17 79.25 79.86 78.57 78.30 81.57
+> Acc 92.57 91.51 92.31 93.29 93.12 93.34 92.91 93.32 94.27
+> Yunnan-Guizhou Plateau Recall 89.46 92.49 91.18 91.82 81.10 87.69 93.25 92.55 94.99
+> IoU 81.20 66.21 81.46 80.74 73.96 78.76 85.03 84.73 86.41
+> Acc 91.34 79.42 91.33 93.24 88.07 90.11 92.60 93.36 94.05
+> Middle-lower Yangtze Plain Recall 78.68 79.76 79.21 79.87 76.60 80.12 76.92 76.19 81.56
+> IoU 75.13 75.20 74.52 72.16 76.78 75.82 73.37 73.43 76.21 Acc 86.27 85.26 85.72 85.28 84.42 86.53 86.89 85.46 87.27
+
+Table S1: Regional segmentation performance in terms of Recall, IoU, and Accuracy (%). extra-image evidence integration. However, after applying the proposed progressive training strategy, the task-trained Qwen2.5-VL-7B achieves the best overall performance, with Recall, IoU, and Acc reaching 88.63%, 84.15%, and 91.74%, respectively, outperforming the substantially larger general-purpose Qwen2.5-VL-72B. These results demonstrate that the performance gains of FarmSeeker do not simply rely on increasing model scale. Instead, progressive task-specific supervision and reinforcement optimization enable the com-pact 7B reasoning engine to acquire more effective ambiguity perception, query planning, and collaborative reasoning ca-pabilities, thereby surpassing larger general-purpose models. 
+
+(4) Performance Limits of Ambiguity Perception in FarmSeeker 
+
+Table S4 reports the ambiguity perception results under different IoU matching thresholds. We evaluate the predicted ambiguity boxes using bounding-box-based Precision, Re-call, and F1-score at IoU thresholds of 0.5 and 0.75. At an IoU threshold of 0.5, FarmSeeker achieves a Precision of 63.51%, a Recall of 58.03%, and an F1-score of 60.23%. These results indicate that the model has developed a preliminary ability to identify regions with potentially insufficient information from the initial segmentation results. When the IoU threshold increases from 0.5 to 0.75, Precision, Recall, and F1-score decrease by 41.00, 44.77, and 43.54 percentage points, re-spectively. This suggests that the current model is more ef-fective at coarse-grained localization of ambiguous regions, namely identifying where potential problems may exist, but remains limited in accurately fitting their boundaries. This re-sult also reflects the fundamental difference between ambigu-ity perception and conventional object detection. Ambiguous regions often lack stable, clear, and structured boundaries, while their spatial extents are inherently fuzzy, transitional, and semantically dependent. A substantial performance de-crease under a stricter IoU threshold is therefore expected. In addition, Precision is consistently higher than Recall at both IoU thresholds, indicating that the model adopts a rela-tively conservative prediction strategy. Although a consider-able proportion of the predicted boxes are valid, the coverage of ground-truth ambiguous regions remains incomplete, with missed detections being more prominent. This observation is consistent with the characteristics of complex farmland scenes. Farmland often exhibits substantial visual confusion with bare soil, roads, abandoned fields, and the boundaries of built-up areas. Consequently, the model is more likely to generate localized and conservative candidate regions than to completely cover all ambiguous areas. Overall, FarmSeeker has demonstrated an initial capability for ambiguity-region perception, providing effective candi-date regions for subsequent query decisions and collabora-tive reasoning. Nevertheless, precise ambiguity localization remains an important challenge for the current framework. At present, the model is more capable of answering where po-tential problems may exist than where the precise boundaries of the problematic regions lie. Future work may further im-prove the representation of ambiguous regions through finer-grained region modeling, stronger boundary constraints, and multi-scale contextual modeling. 
+
+4.2. A Large-scale Farmland Mapping Applications of FarmSeeker 
+
+To evaluate the potential of FarmSeeker for large-scale farm-land mapping, we conduct experiments in a representative region with complex terrain in Sichuan Province, China. The region is characterized by fragmented terrain, small and sparsely distributed farmland parcels, and interwoven Figure S5: Qualitative comparison of farmland segmentation between FarmSeeker and mainstream methods across different agricultural regions. (a) Selected segmentation results on the Northeast China Plain. (b) Selected segmentation results on the Huang-Huai-Hai Plain. (c) Selected segmentation results in the Northern Arid and Semi-arid Region. (d) Selected segmentation results on the Loess Plateau. (e) Selected segmentation results in South China Areas. (f) Selected segmentation results in the Sichuan Basin. (g) Selected segmentation results on the Yunnan-Guizhou Plateau. (h) Selected segmentation results on the Middle-lower Yangtze Plain. Red circles indicate regions with notable differences. Green masks represent farmland, while black denotes the non-farmland background. land-cover types such as forests, settlements, and water bod-ies, posing substantial challenges to the recognition of small fields and the preservation of complex boundaries. As shown in Fig. S8, we compare FarmSeeker with the base segmentation model SegEarth-R1 and its sliding-window inference variants under different overlap ratios. All sliding-window variants use an input size of 512 × 512 , with overlap ratios of 10%, 30%, and 50%, respectively, to fur-ther evaluate the advantage of FarmSeeker over conventional local-context enhancement strategies. Subfigure S8(a) shows the mapping result of SegEarth-R1. Clear false positives and false negatives remain in several red-circled regions, par-ticularly where farmland is adjacent to forests, roads, and built-up areas. In these complex regions, the model tends to produce missing boundaries, excessive mask expansion, and unstable local predictions. Subfigure S8(b) shows the result of FarmSeeker, which produces more complete and consis-tent farmland predictions in these regions and substantially alleviates the local errors of the base model. This indicates that FarmSeeker does not merely smooth the initial mask, but corrects erroneous decisions caused by insufficient ob-servations through ambiguity-region identification, targeted querying, and collaborative reasoning. Subfigures S8(c)–(e) present the sliding-window inference results with overlap ra-Country Metric DeepLabv3+ DDRNet DSNet DBBANet LaSagnA PixelLM FSVLM SegEarth-R1 FarmSeeker United States Recall 63.20 65.22 60.67 56.42 61.51 72.73 80.83 80.94 83.04 
+
+IoU 61.77 61.97 59.01 55.31 60.12 70.52 79.78 78.01 79.98 
+
+Acc 67.76 67.01 65.27 62.44 66.37 74.94 82.05 82.31 83.54 
+
+Germany Recall 85.20 84.01 82.62 83.81 86.96 86.02 85.46 85.22 87.03 
+
+IoU 83.88 81.51 81.34 82.56 85.00 84.95 84.00 84.06 85.19 
+
+Acc 88.42 86.52 86.59 87.47 89.15 89.22 88.48 88.57 89.29 
+
+United Kingdom Recall 80.30 87.54 83.11 85.49 89.28 90.26 90.16 88.87 91.68 
+
+IoU 75.67 80.55 79.14 83.36 87.64 87.82 89.19 87.13 89.31 
+
+Acc 82.53 85.70 85.18 88.46 91.49 91.53 92.53 91.12 91.99 France Recall 90.29 90.22 92.25 95.68 95.36 96.00 95.56 96.74 97.17 
+
+IoU 85.13 88.43 88.00 93.33 93.24 93.98 93.80 94.97 95.54 
+
+Acc 88.03 90.44 90.46 94.81 94.75 95.33 95.21 96.11 97.98 
+
+India Recall 79.69 80.23 77.45 85.95 87.95 86.00 87.85 88.43 90.82 
+
+IoU 76.25 74.96 73.63 80.11 83.19 80.37 80.18 80.36 84.65 
+
+Acc 83.06 81.71 81.07 85.54 85.18 85.00 85.18 87.95 88.76 
+
+Australia Recall 87.02 86.10 87.52 88.37 84.86 81.14 80.12 86.60 90.03 
+
+IoU 71.12 53.76 64.01 73.21 70.74 69.76 66.85 73.53 77.94 
+
+Acc 82.29 62.90 75.35 82.88 80.34 80.21 76.79 84.38 87.23 
+
+Argentina Recall 81.01 70.21 66.28 76.00 82.38 85.50 86.04 88.34 92.75 
+
+IoU 78.04 62.32 61.98 73.42 75.09 80.56 78.12 84.50 88.15 
+
+Acc 84.42 71.00 72.22 81.20 81.33 85.91 83.54 88.93 91.48 
+
+Brazil Recall 76.26 75.10 72.83 78.72 91.50 90.86 94.37 78.73 93.38 IoU 74.01 58.39 69.00 76.80 86.98 89.03 88.62 76.82 88.40 Acc 84.21 68.44 80.71 85.98 91.75 93.18 92.85 86.00 93.48 
+
+Vietnam Recall 91.47 89.53 89.36 89.57 90.94 90.53 88.92 90.15 92.04 
+
+IoU 83.70 83.04 82.62 83.76 83.53 84.06 83.21 84.27 84.89 
+
+Acc 89.86 89.02 88.94 90.12 89.79 90.23 89.78 90.42 91.67 
+
+Cambodia Recall 76.00 76.76 65.57 64.23 73.47 77.32 75.25 77.56 82.85 
+
+IoU 74.31 75.32 63.80 63.23 70.61 75.72 73.06 75.01 77.18 
+
+Acc 80.31 80.04 72.13 72.01 77.85 81.43 79.91 81.64 82.48 
+
+Canada Recall 93.16 88.83 86.39 92.79 96.28 98.16 98.35 98.11 98.70 
+
+IoU 84.65 82.59 81.38 86.30 89.76 90.81 91.06 91.04 91.45 
+
+Acc 86.21 84.71 83.86 87.97 91.03 91.81 92.12 92.47 92.51 
+
+Table S2: Cross-region farmland segmentation performance in terms of Recall, IoU, and Accuracy (%). Reasoning Engine Recall ↑ IoU ↑ Acc ↑
+
+None 85.67 82.13 90.57 Qwen2.5-VL-7B 85.67 82.13 90.57 Qwen2.5-VL-32B 85.94 82.95 90.70 Qwen2.5-VL-72B 88.37 83.94 91.20 Qwen2.5-VL-7B (T) 88.63 84.15 91.74 
+
+Table S3: Ablation study of different reasoning engines (%). T denotes the model trained using the proposed progressive training strategy. The general-purpose Qwen2.5-VL-7B fails to reliably generate valid ambiguous regions and therefore produces the same result as the setting without a reasoning engine. tios of 10%, 30%, and 50%, respectively. Although increas-ing the overlap ratio improves local segmentation continuity, the overall gains remain limited. Sliding-window inference mainly mitigates stitching discontinuities through repeated coverage, without changing the evidence used by the model 
+
+Evaluation Metric IoU = 0 .5 IoU = 0 .75 
+
+Precision (%) 63.51 22.51 Recall (%) 58.03 13.26 F1-score (%) 60.23 16.69 Table S4: Quantitative results of ambiguity perception under different IoU matching thresholds. to distinguish ambiguous regions. Consequently, clear false positives and false negatives remain in several red-circled regions even at higher overlap ratios. These results indicate that simply enlarging the local context or increasing window overlap cannot effectively resolve the deeper semantic ambi-guities caused by phenological confusion, interference from neighboring land-cover types, and insufficient local observa-tions. Figure S6: Radar chart comparison of different methods across four metrics, including IoU, Dice, Recall, and Ac-curacy. The methods are arranged along the axes, while the metrics are represented as closed curves to provide an overall view of each model’s performance profile on the ambiguous sample set. 
+
+4.3. Comparison Between FarmSeeker and Non-expert Manual Farmland Interpretation in Real-world Ambiguous Scenarios 
+
+To further evaluate the practical value of FarmSeeker in real-world complex scenarios, we compare it with non-expert manual farmland interpretation. Specifically, we select 10 real remote sensing image samples from the China sub-set of GSFS-Bench and recruit four undergraduate students without professional backgrounds in remote sensing as non-expert annotators. Expert farmland annotations are used as the ground truth to ensure the objectivity and consistency of the evaluation. In addition to segmentation accuracy, we record the annotation time of the non-experts and the infer-ence time of FarmSeeker, thereby comparing their perfor-mance in real-world ambiguous scenarios from the perspec-tives of both accuracy and efficiency. As shown in Table S5, FarmSeeker outperforms non-expert manual interpretation across all evaluation metrics. In particular, it identifies farmland regions more completely and effectively reduces the risk of missed detections in com-plex ambiguous areas. In scenarios where farmland bound-aries are unclear and easily confused with roads, bare land, built-up areas, or post-harvest surfaces, non-experts tend to rely on intuitive judgment and are therefore more likely to omit local farmland regions. By contrast, FarmSeeker sup-plements the insufficient discriminative information in the current image through ambiguity perception, auxiliary evi-dence retrieval, and collaborative reasoning, thereby reduc-ing omission errors. FarmSeeker also demonstrates a clear advantage in efficiency. The four non-experts require 734– 1112 s to complete the annotation task, with an average time of approximately 897 s, whereas FarmSeeker completes the same task in only 243 s. These results indicate that Farm-Seeker not only achieves higher segmentation accuracy but also substantially reduces the time cost. This advantage is par-Metric NE1 NE2 NE3 NE4 Mean FarmSeeker Recall ↑ 81.21 80.52 83.77 74.94 80.11 89.68                      
+
+> IoU ↑72.02 77.86 76.70 64.10 72.67 78.26
+> Acc. ↑78.95 83.08 82.12 77.64 80.45 89.10
+> Time (s) ↓735 734 1112 1007 897 243
+
+Table S5: Comparison between FarmSeeker and non-expert manual farmland interpretation in real-world ambiguous sce-narios. NE denotes non-expert. ticularly important for large-scale farmland mapping, where manual interpretation is time-consuming and often affected by differences in annotator experience. The qualitative results in Figure S9 further support these findings. In two representative ambiguous cases, the non-expert annotations show considerable inconsistencies along farmland boundaries and in complex background re-gions. Some annotations underestimate the farmland extent, whereas others fail to preserve the complete shapes of farm-land parcels. In comparison, the segmentation results pro-duced by FarmSeeker are generally closer to the expert an-notations. With the assistance of auxiliary temporal imagery, FarmSeeker provides more reasonable and complete inter-pretations for regions that are difficult to identify from the original image alone. This indicates that FarmSeeker does not simply imitate manual annotation behavior. Instead, it surpasses non-expert manual interpretation in complex sce-narios through ambiguity-driven dynamic evidence supple-mentation and collaborative reasoning. Overall, the experiment demonstrates that FarmSeeker achieves higher segmentation accuracy, greater efficiency, and better consistency than non-expert manual interpreta-tion in real-world ambiguous scenarios. These results fur-ther validate the practical potential of the proposed dynamic segmentation agent framework. FarmSeeker can serve as an efficient and stable tool for complex farmland interpretation, reducing the dependence of large-scale mapping tasks on manual interpretation experience. 
+
+# 5. Step-by-step Visualization of FarmSeeker 
+
+To provide a more intuitive analysis of the dynamic interpre-tation process of FarmSeeker, this section randomly selects several cases and visualizes the complete execution chain from initial segmentation to final refinement. These cases mainly cover two typical scenarios, namely temporal ambi-guity and insufficient spatial context. Figures S10-S11 illustrate the dynamic querying process driven by temporal ambiguity. In such scenarios, the target regions may be observed after harvest, during fallow periods, or at early crop growth stages, making their appearance more similar to bare soil or sparsely vegetated areas and conse-quently causing omissions in the initial segmentation. After identifying local anomalies in the initial mask, the reasoning engine determines that the current spatial context is suffi-ciently complete and therefore prioritizes the multi-temporal query tool. By comparing tonal changes, texture evolution, and temporal consistency with the surrounding farmland across different months, the system confirms that the target Figure S7: Performance analysis under ambiguous scenarios. (a) Long-tail performance curves based on IoU. Samples are reordered from easy to difficult, where sample difficulty is jointly defined by the mean IoU achieved by all methods on each sample, with a lower mean indicating a more difficult sample. The shaded region denotes the most difficult 20% of samples. The figure compares the performance trends of the second-best method LaSagnA, the basic segmentation model SegEarth-R1, and the proposed FarmSeeker across the sample distribution from easy to difficult. (b) Long-tail performance curves based on Recall. The same sample ordering and difficult-sample definition as in (a) are adopted to analyze changes in the target recovery capability of different models on long-tail difficult samples. regions exhibit stable agricultural activity patterns and cor-rects them as farmland. This process demonstrates that when ambiguity mainly arises from phenological changes and tem-poral appearance variations, additional temporal evidence can effectively compensate for insufficient single-temporal observations. Figures S12-S13 illustrate the dynamic querying process driven by insufficient spatial context. Such ambiguous re-gions are typically located near image edges or cropping boundaries. Because the target structures are truncated, the model cannot reliably determine their true properties using only the current field of view. After detecting this type of boundary ambiguity, the reasoning engine selects the enlarge query tool to retrieve a broader spatial context from the wide-swath image and further analyzes the structural continuity, texture arrangement, and geometric relationships between the target region and surrounding objects. In Figure S12, the enlarged view shows that the target region lies at the boundary between a river channel and surrounding natural surfaces and lacks typical farmland textures; it is therefore corrected as non-farmland. In Figure S13, the target region exhibits clear continuity with surrounding regular fields in ridge texture, orientation, and spatial organization and is therefore restored as farmland. This process shows that expanding the spatial context can effectively recover missing evidence caused by a limited local field of view or boundary truncation. These cases further demonstrate that the advantage of FarmSeeker does not come from simply introducing more images, but from selecting auxiliary evidence with greater information gain according to the source of ambiguity. Figure S8: Comparison between FarmSeeker and the sliding-window strategy in a mapping case from Sichuan. a, SegEarth-R1. b, FarmSeeker. c, SegEarth-R1 with sliding-window inference (window size: 512 × 512, overlap ratio: 10%). d, SegEarth-R1 with sliding-window inference (window size: 512 × 512, overlap ratio: 30%). e, SegEarth-R1 with sliding-window inference (window size: 512 × 512, overlap ratio: 50%). The red circles highlight representative ambiguous regions. Figure S9: Comparison between FarmSeeker and non-expert manual farmland interpretation in representative real-world am-biguous scenarios. For each case, the original image, the auxiliary image from another timestamp, the expert labeling, the results from four non-expert annotators, and the prediction of FarmSeeker are shown. Figure S10: Example 1 of dynamic reasoning with multi-temporal auxiliary evidence. 
+
+Figure S11: Example 2 of dynamic reasoning with multi-temporal auxiliary evidence. Figure S12: Example 1 of dynamic reasoning with enlarged image retrieval. 
+
+Figure S13: Example 2 of dynamic reasoning with enlarged image retrieval.
