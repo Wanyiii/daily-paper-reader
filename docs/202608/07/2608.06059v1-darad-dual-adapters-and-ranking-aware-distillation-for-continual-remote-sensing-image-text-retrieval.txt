@@ -1,0 +1,255 @@
+Title: DARAD: Dual Adapters and Ranking-Aware Distillation for Continual Remote Sensing Image-Text Retrieval
+
+URL Source: https://arxiv.org/pdf/2608.06059v1
+
+Published Time: Fri, 07 Aug 2026 01:02:53 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# DARAD: Dual Adapters and Ranking-Aware Distillation for Continual Remote Sensing Image-Text Retrieval 
+
+## Xi Chen 1, Xu Chen 1, Xiangyang Jia 1, Wei Wang 2, Xu Zhang 1, Zhenyuan Sun 1
+
+> 1
+
+School of Computer Science, Wuhan University, Wuhan 430072, China 
+
+> 2
+
+Beijing Institute for General Artificial Intelligence (BIGAI) 2024102110094@whu.edu.cn, xuchen@whu.edu.cn, jxy@whu.edu.cn, wangwei@bigai.ai, zhangx0802@whu.edu.cn, zhenyuansun@whu.edu.cn 
+
+Abstract 
+
+With the rapid growth of Earth observation technologies, remote sensing archives are rapidly expanding, making re-mote sensing image-text retrieval (RS-ITR) increasingly im-portant. However, continual RS-ITR remains challenging be-cause scale variation and distribution shifts in RS aggravate cross-modal alignment space distortion, making it difficult for existing continual learning (CL) methods to support re-liable continual retrieval. To address this challenge, we pro-pose DARAD, a dual-adapter and ranking-aware distillation framework that preserves the historical cross-modal ranking structure while learning new visual and textual concepts from evolving archives. Specifically, the visual branch introduces a spatial fusion adapter, which integrates coarse regional cues and fine-grained patch cues to accommodate RS scale vari-ation while anchoring visual updates to the pretrained align-ment space. The textual branch employs multi-expert seman-tic routing, which separates shared textual semantics from semantically specialized residuals to absorb newly emerging descriptions while constraining global text embedding drift. Furthermore, bidirectional ranking distillation uses a frozen teacher model and historical anchors to preserve the historical cross-modal ranking structure, thereby mitigating alignment space distortion across continual stages. Experiments under a multi-stage continual retrieval protocol show that DARAD achieves superior performance over existing CL methods, im-proving adaptation to newly arrived data while maintaining effectiveness on historical data. 
+
+## 1 Introduction 
+
+With the continuous advancement of Earth observation tech-nologies, remote sensing (RS) image-text archives are rapidly expanding, making RS image-text retrieval (RS-ITR) in-creasingly important for cross-modal access to large-scale RS data (Yuan et al. 2022a; Muhammad et al. 2025). Re-cent RS-ITR studies have progressed from both data and model perspectives: large-scale RS image-text datasets, in-cluding RS5M, SkyScript, and RST2I-110K, promote cross-modal representation learning (Zhang et al. 2024b; Wang et al. 2024b; Zhang, Huang, and Zhang 2026), while CLIP-like and RS-oriented vision-language models (VLMs) fur-ther improve RS-ITR and broader RS vision-language un-derstanding through aligned image-text representations (Liu et al. 2024, 2025a). However, most existing RS-ITR methods assume a static data setting with fixed training data, semantic 
+
+Figure 1: Current-stage mR (C-mR) over stages, with green annotations showing DARAD’s gains over the baseline. The lower strip shows signed historical-change mR (F-mR): green/red markers indicate non-negative/negative change. categories, and retrieval galleries; when newly arrived data are introduced, direct fine-tuning often improves current-data adaptation but degrades historical retrieval performance due to visual forgetting and text embedding drift. Although continual learning (CL) has been extensively studied for classification, detection, and recently VLMs, di-rectly transferring existing CL strategies to semantic-stage continual RS-ITR remains insufficient (Liu et al. 2025a; Gao et al. 2026; Liu et al. 2025b). This is mainly caused by three coupled challenges in continual RS-ITR. (1) Scale-induced visual drift. RS imagery contains objects and scenes with drastically different geographic scales, forcing the visual en-coder to readjust spatial receptive fields when learning new tasks and thereby disturbing historical visual representations. (2) Asymmetric cross-modal drift. Textual semantics often undergo abrupt shifts due to terminology changes (e.g., from “flooded area” to “commercial zone”), while visual feature distributions evolve more smoothly, invalidating previously established cross-modal alignments. (3) Ranking-sensitive retrieval structure. RS-ITR relies on relative rankings in the arXiv:2608.06059v1 [cs.CV] 6 Aug 2026 cross-modal embedding space, which conventional feature-level distillation designed for classification or detection does not explicitly preserve. To address these challenges, we propose DARAD, a dual-adapter and ranking-aware distillation framework for semantic-stage continual RS-ITR over evolving RS archives. In the visual branch, a spatial fusion adapter (SFA) integrates coarse regional cues and fine-grained patch cues to accom-modate RS scale variation. In the textual branch, multi-expert semantic routing (MSR) decomposes textual adaptation into a shared low-rank semantic basis and routed semantically specialized residual experts, enabling the model to absorb newly emerging descriptions while constraining global text embedding drift. In addition, bidirectional ranking distilla-tion (BRD) uses a frozen teacher and compact historical anchors to align T2I, I2T, and anchor-internal relation matri-ces, explicitly preserving the historical cross-modal ranking structure against retrieval degradation caused by feature drift. As shown in Fig. 1, DARAD consistently improves current-stage retrieval over the strongest CL baseline while main-taining non-negative historical change across the continual stages. The main contributions of this work are as follows: (1) We propose DARAD, a dual-adapter method for semantic-stage continual RS-ITR, where SFA performs scale-aware visual adaptation and MSR performs semanti-cally routed adaptation to mitigate visual forgetting and text embedding drift. (2) We introduce a BRD loss to preserve the historical cross-modal ranking structure during the dynamic expansion of the cross-modal alignment space. (3) We establish a multi-stage continual retrieval protocol for RS-ITR and conduct extensive experiments to evaluate new-data adaptation and historical retrieval performance re-tention over evolving RS image-text archives. 
+
+## 2 Related Work 
+
+2.1 Remote Sensing Image-Text Retrieval 
+
+RS-ITR aims to retrieve relevant RS images or texts across modalities by learning aligned image representations and text representations. Early studies were mainly developed on manually annotated benchmarks such as RSICD, UCM-Captions, and RSITMD (Lu et al. 2018; Yang and Newsam 2010; Qu et al. 2016; Yuan et al. 2022a), following long-standing RS image understanding and captioning re-search (Zhang, Li, and Wang 2024). A series of task-specific matching methods were proposed to improve cross-modal alignment between RS images and texts (Yuan et al. 2022a,b; Pan, Ma, and Bai 2023). These methods explored global-local matching, multi-scale attention, fine-grained visual-semantic alignment, and knowledge-aware representation learning to handle the complex spatial layouts, multi-scale targets, redundant regions, and semantic gaps in RS scenes (Ji et al. 2024; Yang et al. 2024a; Hu et al. 2024; Li et al. 2025; Chen, Zheng, and Lu 2025; Zheng et al. 2025b). Recent variants further address representation discrepancy, modal-ity gap, hashing efficiency, visual grounding, false-negative mitigation, and hierarchical or collaborative semantic align-ment in RS cross-modal retrieval (Ning et al. 2025; Zavras et al. 2025; Huang et al. 2024; Liang et al. 2025; Zheng et al. 2026; Zhang et al. 2026a; Zhao et al. 2026). More recently, large-scale RS image-text datasets, such as RS5M, SkyScript, and Vigen500k, together with RS-oriented VLMs such as RemoteCLIP and GeoRSCLIP, have further promoted RS-ITR from task-specific supervised matching toward VLM-based representation learning (Liu et al. 2024; Zhang et al. 2024b; Wang et al. 2024b; Tong et al. 2024). Several re-cent methods also introduce prompt learning, prior knowl-edge, keyword reasoning, coarse-to-fine retrieval, or entity-level semantic modeling to enhance fine-grained cross-modal matching (Yang et al. 2024b; Hu, Yang, and Li 2025; Sun et al. 2025; Wang et al. 2025; Zheng et al. 2025a; Zhou, Wu, and Deng 2025; Zhang et al. 2026b). Meanwhile, RS VLMs and multimodal foundation models have broadened RS vision-language learning beyond retrieval to grounded di-alogue, instruction following, and multi-sensor understand-ing (Kuckreja et al. 2024; Zhang et al. 2024a; Zhan, Xiong, and Yuan 2024; Bazi et al. 2024; Wang et al. 2024a; Li, Zhang, and Qu 2025). Despite these advances, most existing RS-ITR methods are still developed and evaluated under a static data setting, where the training data, semantic distribu-tion, and retrieval gallery are assumed to be fixed. They do not explicitly address evolving RS image-text archives, where newly arrived data are continuously collected and direct fine-tuning may cause visual forgetting and text embedding drift, thereby degrading retrieval performance on historical data. 
+
+2.2 Continual Learning for Retrieval 
+
+CL aims to enable models to learn from sequentially arriv-ing data while alleviating catastrophic forgetting of previ-ously acquired knowledge. Existing methods are commonly developed through replay, regularization, knowledge distil-lation, and architecture adaptation, and have been widely studied in classification, detection, and representation learn-ing tasks. Beyond unimodal scenarios, CL has also been introduced into cross-modal retrieval and vision-language learning. Early continual cross-modal retrieval studies in-vestigate how new tasks affect embedding spaces and cross-modal alignment, and further analyze the training, indexing, and querying stages of retrieval systems (Ni et al. 2023; Zheng et al. 2023). More recently, prompt learning, visual prompt tuning, multimodal prompt learning, and adapter-based tuning have provided lightweight ways to adapt CLIP-like VLMs (Zhou et al. 2022; Jia et al. 2022; Khattak et al. 2023; Hu et al. 2022), while continual VLM methods focus on adapting pretrained image and text encoders to new tasks or domains without severely degrading previously learned vision-language knowledge (Yu et al. 2024; Liu et al. 2025a; Wu et al. 2025; Huang et al. 2025; Gao et al. 2026; Liu et al. 2025b). These studies provide important foundations for con-tinual cross-modal representation learning. However, most of them are designed for general image-text data or generic VLM scenarios. Compared with natural images, RS images usually exhibit more complex spatial layouts and multi-scale region compositions, making continual RS-ITR require more careful control of visual forgetting and text embedding drift over evolving RS image-text archives. 3 Methodology 
+
+3.1 Overview of DARAD 
+
+As illustrated in Fig. 2, DARAD combines two complemen-tary adapters with ranking-aware distillation for semantic-stage continual RS-ITR. SFA integrates coarse regional con-text and fine-grained patch cues for scale-aware visual adap-tation, while MSR routes shared and semantically special-ized residuals for controlled textual adaptation. BRD further distills bidirectional relation matrices from a frozen teacher to preserve the historical cross-modal ranking structure dur-ing sequential adaptation. The formal stage-wise continual RS-ITR problem is defined in Appendix A. 
+
+3.2 Spatial Fusion Adapter 
+
+RS images often couple compact targets, such as aircraft, with broad spatial layouts, such as residential areas. Scale changes across continual stages can bias visual adaptation toward newly arrived spatial patterns and weaken previously useful local details or scene-level context. SFA addresses this issue through scale-aware residual adaptation that com-poses coarse regional cues and fine-grained patch cues while retaining the base image representation. Given an RS image Iti , the visual encoder produces a global token gti , fine patch tokens Pti, and a normalized base representation vti, base . SFA pools Pti into coarse regional to-kens and performs hierarchical cross-attention in two steps. The coarse tokens first query the fine patch tokens to absorb local evidence; the global token then attends to the concate-nated refined coarse and original patch tokens. This hierarchy integrates local objects and regional layouts into a multi-scale global representation. An input-dependent gate balances the coarse and fine cues to produce zti, avoiding a fixed weighting across different RS scenes. SFA projects zti into the shared retrieval space and injects it through a base-preserved residual: 
+
+vti = Norm 2
+
+ vti, base + α ϕI (zti) − vti, base 
+
+ , (1) where ϕI (·) is the image-side retrieval projection, Norm 2(·)
+
+denotes ℓ2 normalization, and α is a learnable scalar initial-ized to zero. SFA therefore starts from vti, base and gradually learns scale-aware corrections, providing spatial adaptation capacity while limiting disturbance to the pretrained cross-modal alignment. Full details are provided in Appendix B.1. 
+
+3.3 Multi-Expert Semantic Routing 
+
+Text descriptions may change abruptly across continual stages as new scene categories. Updating a single shared text adapter for all queries can entangle reusable semantics with newly emerging descriptions, causing global text em-bedding drift. MSR instead decomposes textual adaptation into shared textual semantics and semantically specialized residuals while retaining the base textual representation. Given a text query T ti , the base textual encoder produces the normalized representation uti, base . Each expert applies a lightweight low-rank residual transformation. E1 is an always-active main expert optimized by all queries to accu-mulate shared textual semantics, whereas E2–E8 are seven auxiliary experts that capture semantically specialized resid-uals. Using only uti, base as input, the router selects the Top-2 auxiliary experts and normalizes their routing weights. No task or stage identifier is provided. The routed auxiliary resid-ual is 
+
+∆uti, aux = X
+
+> m∈K ti
+
+αm(T ti )Em(uti, base ), (2) where Kti is the selected auxiliary expert set and Em(·) de-notes expert m. Sparse routing confines query-dependent adaptation to a small subset of auxiliary paths instead of up-dating every expert for every description. MSR combines the base textual representation with the main-expert and routed auxiliary residuals: 
+
+uti = Norm 2
+
+ uti, base + Emain (uti, base ) + ∆ uti, aux 
+
+ . (3) All residual paths are zero-initialized, so the initial output equals the base textual representation. During adaptation, the main expert learns semantics shared across stages, while the routed auxiliary experts absorb more localized semantic changes. This separation increases textual adaptation capac-ity without requiring task identity and limits abrupt global drift in the shared retrieval space. Low-rank parameteriza-tion, routing weights, and initialization details are provided in Appendix B.2. 
+
+3.4 Bidirectional Ranking Distillation 
+
+Many existing CL methods inherit classification-oriented ob-jectives and reduce forgetting either through feature-level dis-tillation, which constrains Euclidean feature distances, often with mean squared error, or by distilling classification logits. Such constraints do not directly preserve the information that determines image-text retrieval. RS-ITR depends on the rel-ative ordering of cross-modal similarities: for a given query, its positive candidate must remain ahead of negative candi-dates. During continual adaptation, individual historical fea-tures may remain close to their teacher counterparts while small changes in pairwise similarities reorder positive and negative candidates, thereby reducing retrieval recall. BRD therefore preserves the historical cross-modal ranking struc-ture rather than forcing absolute feature values to remain unchanged. After stage t − 1, BRD freezes the learned model as the teacher Mt−1 and retains a compact historical anchor bank 
+
+At−1. At stage t, both the current model Mt and the frozen teacher encode a current mini-batch Bt and a historical an-chor batch Ba ⊂ A t−1. Let Vtc and Utc denote the nor-malized image and text representations of the current batch produced by Mt, and let Vta and Uta denote those of the historical anchor batch. The corresponding teacher represen-tations are denoted by Vt−1 
+
+> c
+
+, Ut−1 
+
+> c
+
+, Vt−1 
+
+> a
+
+, and Ut−1 
+
+> a
+
+. For two normalized feature matrices X and Y, we define the temperature-scaled relation matrix as 
+
+S(X, Y) = XY ⊤
+
+τ , (4) where τ is the temperature. Each row of a T2I relation matrix contains one text query’s scores against all image candidates, and the ordering of these scores directly determines retrieval Figure 2: Overview of DARAD. SFA and MSR provide scale-aware visual and semantically routed textual adaptation, respec-tively, while BRD preserves the historical cross-modal ranking structure. recall rather than the feature vector itself. Thus, the cur-rent model and frozen teacher may produce different feature vectors for an image without changing its retrieval contribu-tion, provided that its relative rank among image candidates is preserved for every text query. BRD distills this ranking structure through three complementary relations: 
+
+LT2I = Drel 
+
+ S(Utc, Vta), S(Ut−1 
+
+> c
+
+, Vt−1 
+
+> a
+
+) ,
+
+LI2T = Drel 
+
+ S(Vtc, Uta), S(Vt−1 
+
+> c
+
+, Ut−1 
+
+> a
+
+) ,
+
+LA = Drel 
+
+ S(Vta, Uta), S(Vt−1 
+
+> a
+
+, Ut−1 
+
+> a
+
+) .
+
+(5) Here, LT2I preserves the T2I relation between current text queries and historical image anchors, LI2T preserves the I2T relation between current images and historical text anchors, and LA preserves the anchor-internal relation. We instanti-ate Drel (·, ·) as mean squared error between corresponding relation matrices. The total BRD regularization is 
+
+LBRD = λT2I LT2I + λI2T LI2T + λALA, (6) where λT2I , λI2T , and λA balance the three relations. By aligning relation matrices rather than absolute feature values, BRD permits reasonable feature drift while preserving the historical cross-modal ranking structure. Additional BRD details and the overall optimization objective are provided in Appendix B.3 and Appendix B.4, respectively. 
+
+## 4 Experiments 
+
+4.1 Experimental Setup 
+
+Datasets and protocol. We evaluate DARAD on RST2I-110K (Zhang, Huang, and Zhang 2026) and three manu-ally annotated RS-ITR benchmarks, including RSICD (Lu et al. 2018), RSITMD (Yuan et al. 2022a), and UCM-Captions (Yang and Newsam 2010; Qu et al. 2016). RST2I-110K serves as the main continual RS-ITR benchmark due to its large scale and broad semantic coverage, and is or-ganized into six sequential semantic stages. At stage t, the model learns only the newly arrived data. Detailed statistics and stage splits are provided in Appendix C.1. 
+
+Evaluation metrics. We use mean Recall (mR), averaging Recall@1, 5, and 10 over image-to-text (I2T) and text-to-image (T2I) retrieval. Let Qk be the queries originating from stage k and G≤t = Stj=1 Gj the unified all-seen gallery at stage t (the corresponding image or text candidates for T2I or I2T). We define at,k = mR( Mt, Qk, G≤t), where 1 ≤ k ≤
+
+t ≤ T and T = 6 . Current mR (C-mR) at stage t is at,t , Avg. C-mR is 1
+
+> T
+
+PTt=1 at,t , and Final mR is 1
+
+> T
+
+PTk=1 aT,k . F-mR measures the signed historical performance change under the Table 1: Comparison with existing methods on RSICD, RSITMD, UCM-Captions, and the semantic-stage RST2I-110K protocol. RST2I-110K uses unified all-seen galleries. Higher mR, C-mR, and F-mR are better; a negative F-mR indicates degradation. “–” denotes unavailable or undefined entries.                                                                                                                                                                                                                        
+
+> Method RSICD RSITMD UCM RST2I-110K Task 1 Task 2 Task 3 Task 4 Task 5 Task 6 mR mR mR C-mR F-mR C-mR F-mR C-mR F-mR C-mR F-mR C-mR F-mR C-mR F-mR
+> Remote sensing methods
+> GaLR TGRS’22 18.24 30.91 48.21 3.73 –6.99 −2.45 14.96 −0.74 16.05 −1.01 10.91 −3.71 23.04 −1.06
+> PIR ACM MM’23 24.40 38.76 52.73 4.12 –7.83 −2.04 18.34 −0.93 20.66 −0.15 14.78 −2.27 29.29 −0.12
+> CFTIR GRSL’25 37.13 43.87 52.10 4.04 –7.91 −2.46 17.49 −0.81 21.04 −0.64 15.31 −1.89 27.58 −1.43
+> CLIP-based methods
+> CLIP-ft ICML’21 35.82 48.56 52.60 12.89 –18.89 −5.00 34.98 −2.45 34.52 −2.50 27.07 −4.85 43.23 −3.60
+> CoOp IJCV’22 20.51 27.85 34.98 6.07 –10.75 −2.21 19.71 −1.67 21.17 −1.41 13.35 −3.28 26.93 −2.17
+> VPT ECCV’22 25.95 34.14 35.64 6.00 –9.34 −2.44 18.88 −1.71 19.11 −1.38 14.01 −2.46 26.29 −1.53
+> MaPLe CVPR’23 29.31 41.23 38.78 8.50 –13.90 −3.89 24.94 −2.65 25.92 −2.61 18.54 −3.83 32.87 −2.83
+> RemoteCLIP TGRS’24 36.35 50.52 56.36 15.33 –20.14 −0.97 33.57 −1.29 36.48 −1.43 29.44 −2.73 44.59 −4.22
+> AIR ACM MM’24 36.24 50.22 48.09 13.12 –18.97 −4.94 35.11 −2.37 35.41 −2.27 28.25 −3.84 45.44 −2.87
+> FSSN TGRS’25 37.39 51.28 46.80 11.59 –16.61 −5.48 29.90 −2.56 29.80 −2.05 22.84 −5.62 37.08 −3.39
+> TriSim CVPR’26 37.55 51.35 49.31 11.58 –16.06 −4.88 29.56 −2.63 30.05 −1.71 22.71 −5.11 38.86 −2.86
+> DARAD (ours) 37.92 51.31 53.28 12.16 –21.17 +0.44 39.58 +0.76 39.06 +0.24 30.67 +0.39 50.73 +1.01
+
+all-seen gallery: 
+
+F-mR t = 1
+
+t − 1
+
+> t−1
+
+X
+
+> k=1
+
+(at,k − ak,k ) , t ≥ 2. (7) 
+
+Implementation details. We use a ViT-B/32 dual-encoder retrieval model and resize all images to 224 × 224 with CLIP normalization. For SFA, the coarse spatial grid is 3 × 3 with 8-head cross-attention. MSR uses one always-active main expert and seven auxiliary experts (eight in total), with Top-2 routing over E2–E8 and a low-rank dimension of 16. For BRD, we retain 1,000 historical anchors per stage by herding. The model is optimized with AdamW using learning rates of 3 × 10 −6 and 10 −5 for the base model and adaptation modules, respectively, with a batch size of 64. 
+
+4.2 Comparison with State-of-the-Art Methods 
+
+We compare DARAD with two groups of baselines. Ta-ble 1 includes RS-specific retrieval methods (GaLR, PIR, and CFTIR) (Yuan et al. 2022b; Pan, Ma, and Bai 2023; Zhou, Wu, and Deng 2025), together with CLIP-based adaptation and recent RS-ITR methods (CLIP-ft, CoOp, VPT, MaPLe, RemoteCLIP, AIR, FSSN, and TriSim) (Radford et al. 2021; Zhou et al. 2022; Jia et al. 2022; Khattak et al. 2023; Liu et al. 2024; Yang et al. 2024b; Zheng et al. 2025b, 2026). Ta-ble 2 evaluates continual learning on RST2I-110K using Se-qFT, parameter-efficient SeqLoRA, C-CLIP, which directly considers continual image-text retrieval, and the VLM-CL frameworks GIFT, MG-CLIP, and ConDU adapted to the same retrieval protocol (Liu et al. 2025a; Wu et al. 2025; Huang et al. 2025; Gao et al. 2026). Baseline configurations and retrieval adaptations are detailed in Appendix C.2. Table 1 reports standard retrieval performance and stage-wise continual retrieval results. On the three classical bench-marks, DARAD achieves the best mR on RSICD and the second-best mR on RSITMD and UCM-Captions, indicating that the proposed continual adaptation design remains com-petitive under standard static retrieval protocols. On RST2I-110K, several strong CLIP-based methods achieve compet-itive C-mR on individual stages, but their F-mR values are consistently negative after new semantic stages arrive. In contrast, DARAD obtains the best C-mR from Task 2 to Task 6 and maintains positive F-mR values from +0 .24 to 
+
++1 .01 . This suggests that DARAD improves adaptation to newly arrived RS image-text pairs while better preserving historical-query retrieval performance. Table 2 further isolates CL behavior on RST2I-110K. Se-qFT preserves strong plasticity in early stages, but its F-mR remains negative after every subsequent stage, showing de-clining historical retrieval as the unified gallery expands. Se-qLoRA provides parameter-efficient adaptation but still suf-fers from historical degradation. Recent VLM CL methods, including C-CLIP, GIFT, MG-CLIP, and ConDU, improve historical retention in several later stages. DARAD achieves the highest C-mR on Tasks 2–6 while keeping positive F-mR throughout Tasks 2–6, indicating a more favorable balance between new-stage adaptation and historical retrieval performance retention. Appendix C.4 further evaluates two additional fixed stage permutations. Across the three orders, DARAD obtains 32 .11 ± 0.13 Avg. Table 2: Comparison with existing CL methods on the six semantic stages of RST2I-110K using unified all-seen galleries. Mean results over five runs under fixed O1 are reported, with standard deviations as subscripts and rankings based on means. Task 1 reports only C-mR because F-mR requires historical tasks.                                                                                                    
+
+> Method RST2I-110K Task 1 Task 2 Task 3 Task 4 Task 5 Task 6 C-mR C-mR F-mR C-mR F-mR C-mR F-mR C-mR F-mR C-mR F-mR SeqFT Baseline 15 .33 ±0.24 20 .14 ±0.31 −0.97 ±0.19 33 .57 ±0.29 −1.29 ±0.23 36 .48 ±0.34 −1.43 ±0.26 29 .44 ±0.37 −2.73 ±0.32 44 .59 ±0.42 −4.22 ±0.39
+> SeqLoRA ICLR’22 11 .16 ±0.21 16 .93 ±0.27 −4.59 ±0.34 31 .83 ±0.33 −2.18 ±0.25 32 .71 ±0.31 −2.43 ±0.28 24 .93 ±0.36 −4.01 ±0.37 41 .72 ±0.40 −2.59 ±0.30
+> C-CLIP ICLR’25 10 .19 ±0.18 7.90 ±0.23 −1.80 ±0.20 19 .06 ±0.28 −0.46 ±0.13 22 .83 ±0.30 +0.71 ±0.12 15 .94 ±0.27 +0 .58 ±0.11 34 .23 ±0.35 +0 .74 ±0.15
+> GIFT CVPR’25 10 .18 ±0.13 7.64 ±0.24 −1.31 ±0.17 18 .87 ±0.26 +0 .32 ±0.11 22 .18 ±0.29 −0.19 ±0.14 14 .58 ±0.32 +0.62 ±0.10 33 .12 ±0.34 +0 .93 ±0.13
+> MG-CLIP ICCV’25 10 .07 ±0.20 7.83 ±0.25 −1.78 ±0.19 19 .10 ±0.30 −0.57 ±0.14 22 .93 ±0.28 +0 .50 ±0.12 16 .14 ±0.26 +0 .34 ±0.11 34 .00 ±0.37 +0 .72 ±0.14
+> ConDU ICLR’26 10 .24 ±0.14 10 .59 ±0.27 −1.91 ±0.21 24 .66 ±0.31 +0 .29 ±0.13 27 .86 ±0.29 −0.11 ±0.15 20 .70 ±0.33 +0 .41 ±0.12 39 .46 ±0.36 +0 .50 ±0.14
+> DARAD (ours) 12 .16 ±0.19 21 .17 ±0.20 +0.44 ±0.08 39 .58 ±0.26 +0.76 ±0.10 39 .06 ±0.24 +0 .24 ±0.09 30 .67 ±0.28 +0 .39 ±0.10 50 .73 ±0.30 +1.01 ±0.12
+
+Table 3: Main component ablation of DARAD on the six semantic stages of RST2I-110K using unified all-seen galleries. Each stage reports C-mR and signed F-mR; F-mR is undefined for Task 1. 
+
+Variant RST2I-110K Task 1 Task 2 Task 3 Task 4 Task 5 Task 6 C-mR F-mR C-mR F-mR C-mR F-mR C-mR F-mR C-mR F-mR C-mR F-mR RemoteCLIP 15.33 – 20.14 −0.97 33.57 −1.29 36.48 −1.43 29.44 −2.73 44.59 −4.22 
+
+w/o SFA 11.84 – 20.42 +0 .28 37.21 +0 .47 37.02 +0 .13 29.12 +0 .21 48.36 +0 .68 
+
+w/o MSR 11.67 – 19.86 +0 .19 36.84 +0 .32 36.55 +0 .06 28.74 +0 .15 47.92 +0 .51 
+
+w/o BRD 12.16 – 21.04 −0.42 38.91 −0.58 38.52 −0.81 30.18 −1.14 49.86 −1.62 
+
+DARAD 12.16 – 21.17 +0 .44 39.58 +0 .76 39.06 +0 .24 30.67 +0 .39 50.73 +1 .01 
+
+C-mR, +0 .53 ± 0.04 Avg. F-mR, and 0.62 ± 0.06 maxi-mum forgetting, indicating limited sensitivity to the evalu-ated semantic-stage order. Appendix C.5 additionally eval-uates a cross-dataset stream, where DARAD obtains 47.46 mR and near-zero Avg. F-mR ( +0 .01 ) under dataset-level distribution changes. 
+
+4.3 Ablation Studies 
+
+We conduct ablation studies on RST2I-110K to examine the contribution of each component in DARAD. Table 3 reports removal-based component ablations over the six semantic stages. All variants use the same stage order, training sched-ule, and evaluation protocol. Controlled comparisons and mechanism-level ablations are provided in Appendix C.2. Table 3 shows that each component contributes to con-tinual RS-ITR from a different perspective. Removing BRD keeps relatively high C-mR but changes all F-mR values to negative values, confirming that BRD is critical for pre-serving the historical ranking structure. Removing SFA or MSR still keeps positive F-mR because BRD is retained, but both variants consistently reduce C-mR compared with full DARAD, indicating that scale-aware visual adaptation and semantically routed adaptation are important for learning newly arrived semantics. Mechanism-level ablations in Ap-pendix C.2 provide further evidence beyond component re-moval: coarse–fine spatial fusion improves both local-object and global-layout retrieval while reducing visual drift, and sparse semantic routing reduces historical text drift com-pared with main-only and dense-routing variants. Across five matched seeds under the same anchor and teacher budgets, BRD improves Avg. C-mR and Avg. F-mR by 0.25 and 0.26 points, respectively, over replay combined with feature-level distillation; the Avg. F-mR retention gain is statistically sig-nificant (two-sided paired t-test, p = 0 .0013 ). With fixed total budgets of 1,000 and 2,500 anchors, BRD maintains positive Avg. F-mR ( +0 .09 and +0 .25 ) and remains above the matched replay baseline in both aggregate metrics. The complete memory-matched, fixed-budget, and significance analyses are reported in Appendix C.2. 
+
+4.4 Mechanism Analysis and Visualization 
+
+Spatial Response of SFA Fig. 3 compares spatial response maps on representative RS scenes to illustrate the effect of SFA. RemoteCLIP tends to produce broad region-level re-sponses, and the w/o SFA variant captures part of the rele-vant structure but remains less precise around small objects and local boundaries. In contrast, DARAD-SFA produces more concentrated responses over retrieval-relevant struc-tures, such as aircraft and nearby vehicles, storage tanks and surrounding containers, and sports-field boundaries. Table 4: Stage-wise historical ranking preservation on RST2I-110K under the default stage order (O1). At each transition 
+
+t = 2 , . . . , 6, the previous-stage and updated models rank the same pre-update historical gallery. 
+
+Retention mechanism RST2I-110K T2I I2T Kendall τ Spearman ρ Overlap@10 Kendall τ Spearman ρ Overlap@10 w/o BRD 0.486 0.662 0.614 0.514 0.684 0.642 Feature KD 0.591 0.728 0.722 0.617 0.771 0.731 Replay + Feature KD 0.647 0.791 0.751 0.649 0.803 0.764 
+
+BRD (DARAD) 0.724 0.857 0.813 0.779 0.901 0.862 
+
+Figure 3: Spatial response comparison of the original images, RemoteCLIP, DARAD without SFA, and DARAD-SFA on representative RS scenes. 
+
+Final-stage Expert Routing of MSR Fig. 4 visualizes final-stage MSR routing on the seen RST2I-110K test split. E1 is the always-active shared expert and E2–E8 visualize auxiliary routing responses. E1 and E8 contain mixed col-ors, suggesting that they capture shared and relation-oriented semantics across stages. This indicates that MSR does not absorb newly arrived text semantics through a single global update, but routes semantically related residuals to special-ized experts. The complete routing evolution over continual stages is provided in Appendix C.6. 
+
+Historical Ranking Consistency of BRD To directly as-sess historical ranking preservation, we compare the frozen previous-stage model Mt−1 with the updated model Mt at each transition t = 2 , . . . , 6. Kendall’s τ measures pairwise ordering agreement, Spearman’s ρ measures rank displace-ment, and Overlap@10 measures how many previous-model Top-10 candidates remain in the updated-model Top-10. To emphasize retrieval-relevant candidates rather than the long gallery tail, τ and ρ are computed over the union of the two models’ Top-100 candidates. Formal definitions are provided in Appendix C.2. Table 4 shows that feature-level distillation improves rank-ing consistency over the unconstrained variant, and historical replay provides a further gain. BRD achieves the highest con-E1 main/shared E2 airport E3 residential E4 transport        
+
+> E5 urban E6 port E7 natural E8 relation/mixed
+> T1 Airport T2 Residential T3 Transport T4 Urban T5 Port T6 Natural
+
+Figure 4: Final-stage MSR routing. E1 is the always-active expert and E2–E8 are sparsely routed auxiliary experts. sistency in both retrieval directions. Compared with Replay + Feature KD, BRD improves Kendall’s τ , Spearman’s ρ,and Overlap@10 by 0.077, 0.066, and 0.062 in T2I, and by 0.130, 0.098, and 0.098 in I2T, respectively. These results indicate that directly aligning cross-modal relation matri-ces preserves historical retrieval order more effectively than point-wise feature matching and replay. 
+
+## 5 Discussion and Conclusion 
+
+This work studies semantic-stage continual RS-ITR, where sequential adaptation may disrupt historical visual-textual representations and cross-modal rankings. DARAD com-bines two complementary adapters with ranking-aware dis-tillation: SFA supports scale-aware visual adaptation, MSR accommodates evolving textual semantics through sparse ex-pert routing, and BRD constrains changes in historical bidi-rectional ranking structures. Experiments on three standard RS-ITR benchmarks show that DARAD remains competitive under static retrieval settings. Under the controlled six-stage RST2I-110K protocol, DARAD achieves a favorable bal-ance between current-stage retrieval and historical retention across the evaluated task orders. References 
+
+Bazi, Y.; Bashmal, L.; Al Rahhal, M. M.; Ricci, R.; and Melgani, F. 2024. RS-LLaVA: A Large Vision-Language Model for Joint Captioning and Question Answering in Re-mote Sensing Imagery. Remote Sensing , 16(8): 1477. Chen, X.; Zheng, X.; and Lu, X. 2025. Context-Aware Local-Global Semantic Alignment for Remote Sensing Image-Text Retrieval. IEEE Transactions on Geoscience and Remote Sensing , 63: 1–12. Gao, H.; Zhang, Z.; Wei, Y.; Zhao, L.; Li, G.; Li, Y.; Wang, B.; Kong, L.; and Huang, W. 2026. Enhanced Continual Learning of Vision-Language Models with Model Fusion. In International Conference on Learning Representations .Hu, E. J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang, S.; Wang, L.; and Chen, W. 2022. LoRA: Low-Rank Adaptation of Large Language Models. In International Conference on Learning Representations .Hu, G.; Wen, Z.; Lv, Y.; Zhang, J.; and Wu, Q. 2024. Global-Local Information Soft-Alignment for Cross-Modal Remote-Sensing Image-Text Retrieval. IEEE Transactions on Geo-science and Remote Sensing , 62: 1–15. Hu, M.; Yang, K.; and Li, J. 2025. Prompt-Based Granularity-Unified Representation Network for Remote Sensing Image-Text Matching. IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing ,18: 10172–10185. Huang, J.; Feng, Y.; Zhou, M.; Xiong, X.; Wang, Y.; and Qiang, B. 2024. Deep Multiscale Fine-Grained Hashing for Remote Sensing Cross-Modal Retrieval. IEEE Geoscience and Remote Sensing Letters , 21: 1–5. Huang, L.; Cao, X.; Lu, H.; Meng, Y.; Yang, F.; and Liu, X. 2025. Mind the Gap: Preserving and Compensating for the Modality Gap in CLIP-Based Continual Learning. In 
+
+IEEE/CVF International Conference on Computer Vision ,3777–3786. Ji, Z.; Meng, C.; Zhang, Y.; Wang, H.; Pang, Y.; and Han, J. 2024. Eliminate Before Align: A Remote Sensing Image-Text Retrieval Framework with Keyword Explicit Reasoning. In Proceedings of the 32nd ACM International Conference on Multimedia , 1662–1671. Jia, M.; Tang, L.; Chen, B.-C.; Cardie, C.; Belongie, S.; Hariharan, B.; and Lim, S.-N. 2022. Visual Prompt Tuning. In European Conference on Computer Vision , 709–727. Khattak, M. U.; Rasheed, H.; Maaz, M.; Khan, S.; and Khan, F. S. 2023. MaPLe: Multi-Modal Prompt Learning. In IEEE/CVF Conference on Computer Vision and Pattern Recognition , 19113–19122. Kuckreja, K.; Danish, M. S.; Naseer, M.; Das, A.; Khan, S.; and Khan, F. S. 2024. GeoChat: Grounded Large Vision-Language Model for Remote Sensing. In IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition , 27831– 27840. Li, H.; Zhang, X.; and Qu, H. 2025. DDFAV: Remote Sens-ing Large Vision Language Models Dataset and Evaluation Benchmark. Remote Sensing , 17(4): 719. Li, S.; Ji, H.; Liu, F.; Jiao, L.; Min, X.; Huang, X.; Wang, J.; Sun, L.; Li, L.; and Liu, X. 2025. Fine-Grained Visual-Language Alignment for Remote Sensing Image-Text Re-trieval. IEEE Transactions on Geoscience and Remote Sens-ing , 63: 1–14. Liang, L.; Quan, Y.; Wang, C.; Chang, Y.; and Qiao, Y. 2025. Transferring CLIP for visual grounding in remote sensing images. International Journal of Digital Earth , 18(1). Liu, F.; Chen, D.; Guan, Z.; Zhou, X.; Zhu, J.; Ye, Q.; Fu, L.; and Zhou, J. 2024. RemoteCLIP: A Vision Language Foundation Model for Remote Sensing. IEEE Transactions on Geoscience and Remote Sensing , 62: 1–16. Liu, W.; Zhu, F.; Wei, L.; and Tian, Q. 2025a. C-CLIP: Multimodal Continual Learning for Vision-Language Model. In International Conference on Learning Representations .Liu, Y.; Hong, Q.; Huang, L.; Gomez-Villa, A.; Goswami, D.; Liu, X.; van de Weijer, J.; and Tian, Y. 2025b. Contin-ual Learning for VLMs: A Survey and Taxonomy Beyond Forgetting. arXiv preprint arXiv:2508.04227 .Lu, X.; Wang, B.; Zheng, X.; and Li, X. 2018. Exploring Models and Data for Remote Sensing Image Caption Genera-tion. IEEE Transactions on Geoscience and Remote Sensing ,56(4): 2183–2195. Muhammad, K.; Khan, S.; Zhu, X. X.; and Demir, B. 2025. Foundation Models for Remote Sensing: A Survey. IEEE Geoscience and Remote Sensing Magazine .Ni, Z.; Wei, L.; Tang, S.; Zhuang, Y.; and Tian, Q. 2023. Continual Vision-Language Representation Learning with Off-Diagonal Information. In International Conference on Machine Learning , 26129–26149. Ning, H.; Wang, S.; Lei, T.; Cao, X.; Dou, H.; Zhao, B.; Nandi, A. K.; and Radeva, P. 2025. Representation dis-crepancy bridging method for remote sensing image-text re-trieval. Neurocomputing , 650: 130915. Pan, J.; Ma, Q.; and Bai, C. 2023. A Prior Instruction Rep-resentation Framework for Remote Sensing Image-text Re-trieval. In Proceedings of the 31st ACM International Con-ference on Multimedia , 611–620. Qu, B.; Li, X.; Tao, D.; and Lu, X. 2016. Deep semantic understanding of high resolution remote sensing image. In 
+
+2016 International Conference on Computer, Information and Telecommunication Systems (CITS) , 1–5. Radford, A.; Kim, J. W.; Hallacy, C.; Ramesh, A.; Goh, G.; Agarwal, S.; Sastry, G.; Askell, A.; Mishkin, P.; Clark, J.; Krueger, G.; and Sutskever, I. 2021. Learning Transferable Visual Models From Natural Language Supervision. In In-ternational Conference on Machine Learning , 8748–8763. Sun, T.; Zheng, C.; Li, X.; Gao, Y.; Nie, J.; Huang, L.; and Wei, Z. 2025. Strong and Weak Prompt Engineering for Remote Sensing Image-Text Cross-Modal Retrieval. IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing , 18: 6968–6980. Tong, B.; Du, R.; Zhang, W.; Li, J.; Li, S.; Li, C.; Guo, Z.; Sun, X.; and Xu, G. 2024. Vigen500k: A Sustainable-Expansion Image-Text Aligned Dataset For Remote Sensing. In IGARSS 2024 - 2024 IEEE International Geoscience and Remote Sensing Symposium , 2941–2944. Wang, W.; Lv, Q.; Yu, W.; Hong, W.; Qi, J.; Wang, Y.; Ji, J.; Yang, Z.; Zhao, L.; Song, X.; Xu, J.; Xu, B.; Li, J.; Dong, Y.; Ding, M.; and Tang, J. 2024a. CogVLM: Visual Ex-pert for Pretrained Language Models. Advances in Neural Information Processing Systems , 37. Wang, Y.; Tang, X.; Ma, J.; Zhang, X.; Liu, F.; and Jiao, L. 2025. Cross-Modal Remote Sensing Image-Text Retrieval via Context and Uncertainty-Aware Prompt. IEEE Trans-actions on Neural Networks and Learning Systems , 36(6): 11384–11398. Wang, Z.; Prabha, R.; Huang, T.; Wu, J.; and Rajagopal, R. 2024b. SkyScript: A Large and Semantically Diverse Vision-Language Dataset for Remote Sensing. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 38, 5805–5813. Wu, B.; Shi, W.; Wang, J.; and Ye, M. 2025. Synthetic Data is an Elegant GIFT for Continual Vision-Language Models. In IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2813–2823. Yang, L.; Zhou, T.; Ma, W.; Du, M.; Liu, L.; Li, F.; Zhao, S.; and Wang, Y. 2024a. Remote Sensing Image-Text Retrieval With Implicit-Explicit Relation Reasoning. IEEE Transac-tions on Geoscience and Remote Sensing , 62: 1–11. Yang, R.; Wang, S.; Tao, J.; Han, Y.; Lin, Q.; Guo, Y.; Hou, B.; and Jiao, L. 2024b. Accurate and Lightweight Learning for Specific Domain Image-Text Retrieval. In Proceedings of the 32nd ACM International Conference on Multimedia ,9719–9728. Yang, Y.; and Newsam, S. 2010. Bag-of-visual-words and spatial extensions for land-use classification. In Proceed-ings of the 18th SIGSPATIAL International Conference on Advances in Geographic Information Systems , 270–279. Yu, J.; Zhuge, Y.; Zhang, L.; Hu, P.; Wang, D.; Lu, H.; and He, Y. 2024. Boosting Continual Learning of Vision-Language Models via Mixture-of-Experts Adapters. In IEEE/CVF Conference on Computer Vision and Pattern Recognition ,23219–23230. Yuan, Z.; Zhang, W.; Fu, K.; Li, X.; Deng, C.; Wang, H.; and Sun, X. 2022a. Exploring a Fine-Grained Multiscale Method for Cross-Modal Remote Sensing Image Retrieval. 
+
+IEEE Transactions on Geoscience and Remote Sensing , 60: 1–19. Yuan, Z.; Zhang, W.; Tian, C.; Rong, X.; Zhang, Z.; Wang, H.; Fu, K.; and Sun, X. 2022b. Remote Sensing Cross-Modal Text-Image Retrieval Based on Global and Local Informa-tion. IEEE Transactions on Geoscience and Remote Sensing ,60: 1–16. Zavras, A.; Michail, D.; Demir, B.; and Papoutsis, I. 2025. Mind the modality gap: Towards a remote sensing vision-language model via cross-modal alignment. ISPRS Journal of Photogrammetry and Remote Sensing , 228: 270–287. Zhan, Y.; Xiong, Z.; and Yuan, Y. 2024. SkyEyeGPT: Uni-fying Remote Sensing Vision-Language Tasks via Instruc-tion Tuning with Large Language Model. arXiv preprint arXiv:2401.09712 .Zhang, K.; Li, P.; and Wang, J. 2024. A Review of Deep Learning-Based Remote Sensing Image Caption: Methods, Models, Comparisons and Future Directions. Remote Sens-ing , 16(21): 4113. Zhang, W.; Cai, M.; Zhang, T.; Zhuang, Y.; and Mao, X. 2024a. EarthGPT: A Universal Multi-modal Large Language Model for Multi-sensor Image Comprehension in Remote Sensing Domain. IEEE Transactions on Geoscience and Remote Sensing .Zhang, W.; Zhang, W.; Li, J.; Zhou, R.; Tong, B.; Li, C.; Fang, J.; and Gao, X. 2026a. Toward Fine-Grained Remote Sensing Image-Text Retrieval via Hierarchical Multigranu-larity Alignment. IEEE Transactions on Geoscience and Remote Sensing , 64: 5629416. Zhang, X.; Huang, J.; and Zhang, L. 2026. Any2RSI: Controllable Remote Sensing Text-to-Image Generation via Any Control and Enriched Description. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, 12852–12860. Zhang, Y.; Ji, Z.; Meng, C.; and Pang, Y. 2026b. iEBAKER: Improved remote sensing image-text retrieval framework via eliminate before align and keyword explicit reasoning. Ex-pert Systems with Applications , 296: 128968. Zhang, Z.; Zhao, T.; Guo, Y.; and Yin, J. 2024b. RS5M and GeoRSCLIP: A Large-Scale Vision- Language Dataset and a Large Vision-Language Model for Remote Sensing. IEEE Transactions on Geoscience and Remote Sensing , 62: 1–23. Zhao, Z.; Liu, W.; Miao, X.; and Wang, D. 2026. Explicit-Implicit Semantic Collaborative Guidance for Cross-Modal Remote Sensing Image-Text Retrieval. IEEE Transactions on Geoscience and Remote Sensing , 64: 3002215–3002215. Zheng, C.; Li, X.; Liang, X.; Huang, L.; Du, S.; Nie, J.; and Dong, J. 2025a. Cross-Modal Progressive Perspective Matching Network for Remote Sensing Image-Text Retrieval. 
+
+IEEE Transactions on Multimedia , 27: 3966–3978. Zheng, C.; Lu, H.; Nie, J.; and Du, S. 2026. TriSim: Tri-Dimensional Similarity Modeling with Extreme Value The-ory for False-Negative Mitigation in Remote Sensing Image-Text Retrieval. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 23944–23954. Zheng, C.; Nie, J.; Yin, B.; Li, X.; Qian, Y.; and Wei, Z. 2025b. Frequency- and Spatial-Domain Saliency Network for Remote Sensing Cross-Modal Retrieval. IEEE Transac-tions on Geoscience and Remote Sensing , 63: 1–13. Zheng, Z.; Ma, M.; Wang, K.; Qin, Z.; Yue, X.; and You, Y. 2023. Preventing Zero-Shot Transfer Degradation in Contin-ual Learning of Vision-Language Models. In IEEE/CVF In-ternational Conference on Computer Vision , 19125–19136. Zhou, K.; Yang, J.; Loy, C. C.; and Liu, Z. 2022. Learning to Prompt for Vision-Language Models. International Journal of Computer Vision , 130(9): 2337–2348. Zhou, W.; Wu, H.; and Deng, P. 2025. Toward Efficient and Accurate Remote Sensing Image-Text Retrieval With a Coarse-to-Fine Approach. IEEE Geoscience and Remote Sensing Letters , 22: 1–5.

@@ -1,0 +1,391 @@
+Title: FRA-NBV: A Fast and Reflectivity-Aware Next-Best-View Strategy
+
+URL Source: https://arxiv.org/pdf/2608.01950v1
+
+Published Time: Tue, 04 Aug 2026 02:07:27 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+> IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED JULY, 2026 1
+
+# FRA-NBV: A Fast and Reflectivity-Aware Next-Best-View Strategy 
+
+G. F. Preziosa 1, E. Setti 1, M. Faroni 1, A. M. Zanchettin 1, and P. Rocco 1
+
+Abstract —Autonomous 3D reconstruction with depth sensors is strongly affected by reflective surfaces, which cause missing or unreliable measurements and reduce the effectiveness of conventional Next-Best-View (NBV) strategies. This limitation is particularly critical in industrial applications involving reflective components and low-cost, low-resolution depth sensing, where robustness to sensing failures is essential. This paper proposes a Fast Reflectivity-Aware Next-Best-View (FRA-NBV) strategy that explicitly addresses reflection-induced depth loss without relying on prior object models or assumptions on material reflectance, making it suitable for a wide range of industrial configurations. Reflective regions are identified from the spatial distribution of missing depth measurements and localized in three-dimensional space using an online ellipsoid-based representation of the object estimate. A recovery strategy then selects additional poses that modify the sensor’s angle of incidence to improve the likelihood of reconstructing the affected regions. Experiments on objects with different geometric and reflective complexity demonstrate that the approach significantly improves reconstruction coverage under realistic industrial conditions. 
+
+Index Terms —Perception for Grasping and Manipulation; RGB-D Perception; Perception-Action Coupling. 
+
+I. INTRODUCTION 
+
+# AUTONOMOUS 3D reconstruction is crucial in industrial environments characterized by flexibility and frequent reconfiguration. In such scenarios, robots should handle ob-jects with varying geometry and pose, making manual re-configuration impractical. To address these limitations, object reconstruction is typically achieved through multiple acquisi-tions from different sensor poses, allowing the sensing process to adapt to the observed object. This naturally leads to the Next-Best-View (NBV) problem, which focuses on selecting informative sensor poses for efficient and incremental 3D reconstruction [1]. In real industrial scenarios, not all objects are equally suited to depth-based measurements, as material properties and surface finishes—particularly those of metallic components commonly found in industrial environments—can severely degrade sensing quality. Specifically, depth sensors operate reliably on diffusely reflecting surfaces, whereas highly re-flective and specular materials often degrade measurement quality by inducing image saturation or low signal-to-noise ratio, leading to missing or unreliable depth measurements [2], [3]. This limitation is further amplified in scalability-oriented solutions, where low-cost, low-resolution depth sensors are adopted to reduce system complexity and deployment costs. Although such sensors can be used for 3D reconstruction [4], their larger noise and lower measurement reliability exacerbate the effects of challenging surface properties, leading to more 
+
+> 1The authors are with Politecnico di Milano, 20133 Milano, Italy (e-mail: giuseppefabio.preziosa@polimi.it). Digital Object Identifier (DOI): see top of this page.
+
+frequent reconstruction failures and reduced effectiveness of traditional NBV strategies. This paper deals with the need to identify surface regions that systematically degrade depth measurements and to ac-tively guide the reconstruction process toward their recovery. Existing solutions address this challenge either by relying on external coating procedures to improve sensing reliability [5], or by exploiting multi-view NBV strategies that compensate for missing data through sensor pose selection [2]. However, these approaches typically assume prior knowledge of object geometry or material properties, restricting their applicability to known scenarios. In contrast, we introduce a novel Fast Reflectivity-Aware Next-Best-View (FRA-NBV) strategy, with the following main contributions:  
+
+> •
+
+A novel method for identifying reflective regions by exploiting the spatial distribution of missing depth mea-surements, without relying on any prior knowledge of object geometry, material properties, or reflection models. The proposed approach leverages an online ellipsoid-based representation of the object estimate to localize missing measurements in three-dimensional space and infer their spatial extent. This compact representation enables reliable reasoning even with sparse and low-resolution depth sensors.  
+
+> •
+
+A recovery strategy that selects additional sensor poses aimed at increasing the probability of successfully acquir-ing the identified reflective regions. Since no assumptions are made on object geometry or material characteris-tics, recovery is driven by varying the sensor pose to induce different angles of incidence thereby modifying the interaction between the sensor and the surface and improving the likelihood of reconstructing previously missing geometry. Experimental results on objects with progressively increas-ing geometric and reflective complexity demonstrate the ef-fectiveness of the proposed framework. In highly reflective scenarios, FRA-NBV improves reconstruction coverage by up to 31% over the projection-based method and up to 56% over the entropy-based method, while remaining comparable on non-reflective objects. A video overview of the method, along with the reconstruction of both a reflective and a non-reflective object, is available at https://merlinlaboratory.github. io/FRA-NBV/. II. RELATED WORK The Next-Best-View problem addresses the selection of informative sensor poses for object reconstruction and has been studied since early works [6]–[8]. According to Lee et al. [9], prior NBV research can be decomposed into spatial representation, view search space, and view determination, arXiv:2608.01950v1 [cs.RO] 3 Aug 2026 2 IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED JULY, 2026 
+
+with research objectives increasingly focusing on computa-tional efficiency while meeting industrial constraints such as low-cost, low-resolution sensing and the presence of highly reflective objects. 
+
+1) Spatial Representation: It determines how acquired data are organized and updated. Among the most widely adopted approaches, volumetric representations discretize the envi-ronment into voxel grids, where each voxel encodes the occupancy probability. This formulation allows voxels to be classified as free, occupied, or unknown, enabling efficient updates, visibility reasoning, and the identification of frontier voxels for NBV planning [10]–[12]. Alternatively, surface-based approaches offer higher geometric accuracy at the cost of increased complexity, either relying on point clouds commonly used in learning-based NBV methods [13], [14], or on reconstructed meshes [15], [16]. More recently, implicit neural representations [17], [18] and 3D Gaussian Splatting (3DGS) [19]–[21] have emerged as alternatives to classical 3D representations, enabling continuous scene modeling. In prac-tice, voxel-based volumetric methods remain a common choice for NBV, providing a favorable trade-off between simplicity, efficiency, and integration. Following this formulation, in this work we adopt a voxel-based volumetric representation as the primary spatial model, continuously updated by integrating multi-view depth acquisitions. 
+
+2) View determination: It estimates the potential informa-tion gain associated with a candidate sensor pose and is closely tied to the adopted spatial representation. For a volumetric representation, this process is commonly formulated through utility functions that quantify the volumetric information gain [22]. Entropy-based formulations are widely adopted in this context [23], [24], often augmented with surface related terms [25]. In addition, quality-aware utility functions have also been proposed to address low-resolution and high-noise sensing conditions [26], while [4] specifically targets low-resolution sensors by prioritizing less-sampled regions and penalizing redundant views. However, information gain is predominantly evaluated via ray-casting, whose high computational cost has motivated a range of acceleration strategies, including efficient voxel traversal [27], hierarchical multi-resolution ray-casting [28], and ray tracing with local refinement [29]. Rather than accelerating ray-based evaluation, learning-based approaches aim to substitute ray-casting: NBV-Net [22] with a voxel-based 3D CNN, while PC-NBV [30] learns the utility of candidate views directly from the partial point cloud. Despite promis-ing results, these methods often require high computational resources and training on high-resolution datasets, limiting their applicability to low-resolution sensors. More recently, several works have improved computational efficiency by moving away from voxel-based ray-casting altogether and adopting continuous scene representations. In this context, methods based on 3DGS [20], [21] enable fast view evaluation by leveraging image-space projections, effectively bypassing volumetric ray traversal. However, these approaches rely pri-marily on RGB information, limiting their applicability in depth-only sensing scenarios. In contrast, other methods retain the advantages of voxel-based spatial representations while introducing a secondary, higher-level representation specifi-cally for view determination. In this setting, the voxel-based scene is approximated using an ellipsoid-based representation obtained via Gaussian Mixture Model (GMM) clustering [10]. This hybrid strategy accelerates view determination while preserving compatibility with pure depth sensors. Moreover, it enables the integration of sparse measurements typical of low-resolution sensing by filling density gaps and alleviating the redundancy inherent to voxel-based ray-casting. These con-siderations motivate the adoption of hybrid voxel–projection formulations in this work. Nevertheless, regardless of the adopted representation or view determination strategy, low-cost depth sensing remains highly sensitive to measurement noise, particularly in the presence of reflective surfaces, which continue to pose a fundamental challenge. 
+
+3) Reflective Surfaces: Reflectivity poses two main chal-lenges for NBV-based reconstruction: identifying regions af-fected by reflection-induced depth loss and selecting sensor poses that can reliably restore the missing geometry. Yang et al. [2] use a Phong-based reflection model to detect reflective regions and guide view selection. The method relies on CAD-derived surface hypotheses, which restrict applicability to known objects. Ouyang et al. [31] detect reflective areas from RGB images and restore missing depth with a trained neural network. The approach depends on a dedicated dataset and shows limited generalization. Lee et al. [3] infer surface reflectivity from infrared signal intensity in ToF cameras. However, reliable IR measurements are difficult to obtain with low-cost sensors. Finally, [21] explores multimodal sensing by combining vision and tactile feedback to recover regions that are difficult to reconstruct visually, such as reflective surfaces. However, tactile sensing is employed only as a post-processing step, after the visual reconstruction is largely completed. Consequently, large reflective regions can still dominate visual view selection, resulting in redundant sensor poses and reduced reconstruction efficiency. In summary, FRA-NBV extends PB-NBV [10] by intro-ducing two novel components: reflective-region identification and reflective-region restoration. Unlike prior reflective-aware approaches, the proposed method does not require CAD priors, material models, RGB information, or task-specific training data. III. P RELIMINARIES 
+
+The Next-Best-View problem is commonly formulated as a sequential decision process in which, at each iteration t, a finite set of candidate sensor poses Xt = {x1, x 2, . . . , x N } ⊂ 
+
+SE (3) is generated and evaluated through a utility function 
+
+U (x). The pose maximizing such utility is then selected to guide the next acquisition. In this work, we build upon the ellipsoid-based NBV frame-work originally introduced in [10], which replaces computa-tionally expensive ray-casting with a projection-based evalua-tion of clustered volumetric regions. We briefly summarize the framework adopted in [10] in terms of spatial representation (Sec. III-A), object approximation (Sec. III-B) and fast view sampling evaluation (Sec. III-C). PREZIOSA et al. : FRA-NBV: A FAST AND REFLECTIVITY-AWARE NEXT-BEST-VIEW STRATEGY 3
+
+A. Spatial Representation and Object Identification 
+
+To represent data from multi-view depth observations, a voxel-based structure is employed, in which each voxel with a resolution sv encodes the occupancy probability. As mea-surements are integrated over time, voxels are classified as free Vfr , occupied Vo, or uncertain Vu. Among uncertain voxels, frontier voxels Vf ⊂ V u are defined as those lying at the boundary between free and occupied space and represent the most informative regions for exploration. At iteration t,the object model Ot is extracted from the observed data by clustering the occupied voxels Vo, yielding a compact spatial representation of the object. The spatial extent of Ot
+
+is described by an Oriented Bounding Box (OBB) Bt, which provides a geometric support for view generation. 
+
+B. Ellipsoid Representation 
+
+A complementary description of the object estimate Ot
+
+is obtained by approximating its spatial structure with alimited number of ellipsoidal geometric primitives. Starting from the voxel-based representation, occupied Vo and frontier voxels Vf are clustered independently using GMM, yielding the cluster sets Co = {C ko }Ko 
+
+> k=1
+
+and Cf = {C kf }Kf
+
+> k=1
+
+. The numbers of mixture components Ko and Kf are selected automatically using the Bayesian Information Criterion (BIC), which enforces a trade-off between model complexity and data fidelity. This enables the representation to adapt to the evolving geometry of Ot while preventing overfitting due to an excessive number of small ellipsoids, as well as underfitting caused by too few, overly coarse components that would poorly approximate the object shape. Each cluster in Co
+
+and Cf is subsequently approximated by a minimum-volume enclosing ellipsoid, yielding the ellipsoid sets Eo = {E ko }Ko
+
+> k=1
+
+for the occupied regions and Ef = {E kf }Kf 
+
+> k=1
+
+for the frontier regions. 
+
+C. View Sampling and Projection-Based Evaluation 
+
+Candidate sensor poses are generated using a sampling-based strategy. Based on the current OBB estimate Bt, Npos 
+
+poses are sampled within a hemispherical region centered on it, with radius γ plus the half-diagonal of Bt, and eval-uated through a projection-based strategy that operates on the ellipsoidal representation introduced in Sec. III-B. For a candidate pose characterized by the camera projection matrix 
+
+P = K[R | t], the projection of an ellipsoid onto the image plane is obtained through: 
+
+Φ−1 = PQ −1P⊤, (1) where Φ denotes the conic corresponding to the projected ellipsoid in the image plane, and Q is the quadric matrix en-coding the ellipsoid’s spatial extent and orientation. The utility of a candidate sensor pose is computed by aggregating the weighted projected areas of frontier ellipsoids and penalizing those corresponding to occupied regions, 
+
+U (x) = X
+
+> Ef
+
+wj Aj − X
+
+> Eo
+
+wj Aj , (2) where Aj denotes the projected area of the j-th ellipsoid and 
+
+wj is a weighting term that accounts for occlusions by favoring ellipsoids whose centers are closer to the camera. Specifically, ellipsoids are ordered according to their distance from the camera, and higher weights are assigned to nearer ellipsoids, while farther ones receive progressively lower weights. The next best view is selected as the candidate maximizing the utility U (x).IV. P ROBLEM STATEMENT 
+
+In the classical Next-Best-View formulation, the objective is to maximize the reconstructed surface given a limited number of sensor poses, or equivalently to minimize the number of views required to achieve a desired reconstruction level. When dealing with highly reflective objects, reflective regions may cause missing depth measurements. If such missing data are treated as standard unexplored geometry, classical NBV strategies—based solely on maximizing object coverage (cf. Eq. (2))—tend to select redundant sensor poses that fail to resolve these regions, leading to inefficient reconstruc-tion. Prior work on reflective surface reconstruction typically exploits prior knowledge, such as CAD models, material properties, or explicit reflectance assumptions, to optimize the NBV process and identify reliable acquisition poses in advance [2]. In contrast, we consider the reconstruction of completely unknown objects, for which no prior information is available to analytically predict the most reliable sensor poses. Among the factors that remain directly controllable during acquisition, the incidence angle is therefore the most relevant one. Consequently, acquisition reliability must be modeled as an implicit, view-dependent property. In particular, given a sensor pose x and the set of depth measurements performed from the same sensor pose: Dt(x) = {D (i) 
+
+> t
+
+(x)}Nk
+
+> i=1
+
+, we denote by 
+
+F (Sk, Dt(x)) ∈ { 0, 1}, (3) the function that indicates whether a surface element Sk ⊂
+
+Ot is responsible for missing depth measurements under the selected sensor pose. Our goal is to approximate and guide view selection toward the set of surfaces Str (x), defined as: 
+
+Str (x) = {Sk ⊂ Ot | F (Sk, Dt(x)) = 1 } , (4) rather than treating missing measurements as standard unex-plored geometry. V. M ETHOD 
+
+The complete pipeline is illustrated in Fig. 1. At each acquisition step, the scene is modeled through two comple-mentary representations: a voxel-based occupancy structure (Fig. 1a1) and its ellipsoidal approximation (Fig. 1a2). These models are incrementally updated and enable the projection-based evaluation of candidate sensor poses (Fig. 1b), through the utility function defined in Eq. (2). As shown in Fig. 1c, acquiring depth measurements in the presence of reflective surfaces, often result in unreliable or missing data. For this reason, we extend [10] with two additional stages: we first detect reflective regions (Sec. V-A, Fig. 1c–e), and then use them to guide view planning (Sec. V-B, Fig. 1f). 4 IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED JULY, 2026  
+
+> Fig. 1. Overview of the FRA-NBV pipeline. A voxel-based model and its ellipsoidal approximation are maintained and updated for efficient view evaluation (a–b). After acquisition (c), reflective regions are detected from invalid depth measurements and localized in 3D (d–e). These regions guide a recovery strategy that samples tilted sensor poses to improve reconstruction (f). The pipeline components inherited from PB-NBV [10] are shown in black, while the novel reflectivity-aware modules introduced in this work are highlighted in turquoise.
+
+A. Identification of Reflective Regions 
+
+To identify reflective surface regions Str (ˆ x) associated with a fixed sensor pose x = ˆ x, we analyze missing depth values. In our setting, invalid depth measurements mainly originate from three causes: points lying outside the working range of the sensor, sensor noise, and reflective surfaces. Therefore, the objective of the proposed detector is not to label every missing depth measurement as reflective, but rather to identify persis-tent and spatially coherent invalid patterns that are compatible with reflection-induced sensing failures under the assumptions of our reconstruction scenario. To achieve this goal, a sequence of filtering stages is applied. The first stage aims at reducing the influence of isolated sensor noise by identifying pixels that are repeatedly invalid across the Nk depth acquisitions performed from the same pose. In particular, each depth acquisition D(i) 
+
+> t
+
+is represented as a depth map defined over the image domain Ω of size W × H,
+
+D(i) 
+
+> t
+
+= {z(i) 
+
+> u,v
+
+∈ R | (u, v ) ∈ Ω} (5) where z(i) 
+
+> u,v
+
+denotes the depth measurement associated with pixel location (u, v ) in the i-th acquisition. Missing or invalid depth measurements are represented by zero-valued entries in the depth map. Based on this, a pixel-wise invalidity ratio is computed across the Nk acquisitions as: 
+
+η(u, v ) = 1
+
+NkNkX
+
+> i=1
+
+I
+
+
+
+z(i) 
+
+> u,v
+
+= 0 
+
+
+
+, (6) where I(·) is the indicator function. Pixels whose invalidity ratio exceeds 0.5 are classified as frequently invalid, yielding the confidence map I:
+
+I = {(u, v ) ∈ Ω | η(u, v ) ≥ 0.5}. (7) The confidence map I may still contain invalid pixels caused by factors other than reflectivity, such as points outside the sensor working range. Therefore, a second 2D filtering stage exploits the current estimate of the object extent. To this end, as shown in Fig. 1d, the ellipsoidal representation of the object introduced in Sec. III-B is projected onto the image plane of the current sensor pose ˆx following the projection model described in Sec. III-C. The resulting binary image mask Io ⊂ Ω, obtained from the combined projections of the ellipsoids Eo ∪ E f , approximates the object silhouette under the current camera pose. Pixels outside the projected silhouette are discarded by intersecting the confidence map I
+
+with Io. However, the ellipsoidal approximation may slightly overestimate the object extent, causing some boundary pixels to be incorrectly associated with the object silhouette. These invalid measurements are more likely due to points beyond the sensor working range than to reflective effects. To mitigate this issue, a third filtering stage is required. Let N4(p) denote the 4-connected neighborhood of a pixel p = ( u, v ); a pixel is retained as a candidate reflective pixel if: 
+
+Ic := {p ∈ I ∩ I o | ∀ q ∈ N 4(p), q ∈ I o} . (8) At this stage, a final filtering stage exploits the ellipsoidal representation of the object to recover their three-dimensional location. For each pixel p = ( u, v ) ∈ I c, let 
+
+r(t) = cc + t dw, t > 0, (9) be a viewing ray, where cc ∈ R3 denotes the ray origin, corresponding to the camera optical center. The ray direction 
+
+dw ∈ R3 is derived from the image coordinates (u, v ) as follows: 
+
+dc =
+
+"
+
+u − cx
+
+fx
+
+, v − cy
+
+fy
+
+, 1
+
+#T
+
+, dw = Rcw dc. (10) PREZIOSA et al. : FRA-NBV: A FAST AND REFLECTIVITY-AWARE NEXT-BEST-VIEW STRATEGY 5
+
+where (fx, f y ) and (cx, c y ) denote the focal lengths and the optical center (in pixels), respectively, and Rcw is the rotation matrix that transforms vectors from the camera frame to the world frame. As depicted in Fig. 1e, the viewing ray r(t)
+
+is intersected with all ellipsoids Eo ∪ E f representing the object. Among all valid intersections, the closest one to the camera is selected, representing a plausible estimate of the surface point that would have been observed in the absence of reflective effects. Pixels whose rays do not intersect any ellipsoid, or whose first intersection occurs with an ellipsoid associated with occupied regions, are discarded. In this way, only points lying on frontier ellipsoids are retained. This step rejects pixels that are classified as reflective in the image plane but correspond to surface regions that have already been reconstructed from previous sensor poses. The remaining set of 3D points is grouped using the DBSCAN [32] algorithm, yielding a set of clusters Cr = {C kr }Kr 
+
+> k=1
+
+that correspond to spa-tially coherent reflective regions. Each cluster Ckr is enclosed within an OBB Bkr , producing a set of three-dimensional regions Br = {B kr }Kr 
+
+> k=1
+
+that provide a discrete, view-dependent estimate of the surface set Str (ˆ x).
+
+B. Reflective Surface Restoration 
+
+Once a set of reflective regions has been identified, the recovery process works as follows: (i) generation of candi-date sensor poses, (ii) definition of an acquisition order based on a utility function, and (iii) iterative execution until asufficient level of reconstruction is achieved. For the generation of recovery sensor poses, without prior knowledge of the target object, the incidence angle is varied to increase the likelihood of a reliable acquisition. Accordingly, four recovery poses with different incidence angles relative to the detected reflective region are sampled. This strategy is implemented by using the OBB of the detected reflective region to define a local surface frame for pose sampling. The OBB B∗ 
+
+> r
+
+∈ B r with the largest volume is selected. Let cr ∈ R3
+
+denote the center of the largest face of the selected bounding box B∗ 
+
+> r
+
+, and let nr ∈ R3 be the corresponding unit normal vector. We define an orthonormal basis on the tangent plane of the surface by selecting two unit vectors t1, t2 ∈ R3 that: 
+
+t⊤ 
+
+> 1
+
+nr = 0 , t⊤ 
+
+> 2
+
+nr = 0 , t⊤ 
+
+> 1
+
+t2 = 0 , t2 = nr × t1. (11) Then, four recovery camera positions Xr = {xir }4 
+
+> i=1
+
+are sampled according to a diamond-shaped layout in the tangent plane, each one with a center ok ∈ R3 defined as: 
+
+ok = cr + d nr + ρ (cos θk t1 + sin θk t2) , (12) with θk ∈ 0, π 
+
+> 2
+
+, π, 3π 
+
+> 2
+
+and where d > 0 controls the stand-off distance along the normal direction while ρ > 0 determines the lateral offset around the surface. The orientation of each recovery pose is defined by specifying the camera viewing direction zk as: 
+
+zk = cr − ok
+
+∥cr − ok∥ , (13) so that each pose is oriented toward the target center cr ,resulting in different angles of incidence with respect to the reflective surface. The choice of four candidate poses in a diamond-shaped layout is motivated by the need to provide angular diversity by acquiring the target region from suffi-ciently different positions and orientations, thereby increasing the probability of a successful depth acquisition. Other con-figurations providing comparable angular diversity could also be effective. As shown in Fig. 1f, for each candidate recovery pose in Xr , the scene is projected back into the image plane following the projection model introduced in Sec. III-C. In this case, in addition to the ellipsoidal representation of occupied 
+
+Eo and frontier regions Ef , the OBB B∗ 
+
+> r
+
+associated with the selected reflective surface is also projected. Its projection is obtained by projecting its vertices onto the image plane and computing the corresponding convex hull, yielding a polygonal approximation of area Ar .For the definition of acquisition order, starting from Eq. (2), an additional term is introduced explicitly biasing the selection toward sensor poses that maximize the visibility of the reflec-tive surface, while still accounting for occlusions and already observed regions: 
+
+Ur (x) = X
+
+> Ef
+
+wj Aj − X
+
+> Eo
+
+wj Aj + wj Ar (14) The recovery pose x∗ 
+
+> r
+
+∈ X r is selected as the candidate that maximizes the utility function Ur (x).After the acquisition, we iterate over the remaining recovery poses until a sufficient level of restoration is achieved. To regulate this process, a reconstruction threshold is introduced to achieve a trade-off between reconstruction coverage and acquisition efficiency, thus avoiding an excessive number of recovery views for a single reflective region. Starting from the selected reflective region B∗ 
+
+> r
+
+, an enlarged OBB Be∗ 
+
+> r
+
+is constructed by expanding B∗ 
+
+> r
+
+along each axis by twice the resolution of the volumetric discretization employed. The number of voxels contained in the volume of Be∗ 
+
+> r
+
+defines the maximum capacity Ncap . With each new acquisition, the number of newly occupied voxels added inside Be∗ 
+
+> r
+
+with respect to the initial missing data is computed and denoted as Nadded . Inspired by [31], we introduce the recovery index as: 
+
+Γ = Nadded 
+
+Ncap 
+
+, (15) which measures the degree of information recovery as afunction of the reconquered volume. The recovery process is considered successfully concluded when the restoration index exceeds the restoration threshold τrec .VI. E XPERIMENTS 
+
+The proposed FRA-NBV method was evaluated in compar-ison with two reference NBV strategies:  
+
+> •
+
+Ray-cast Entropy-based method (RE) [24]: A classical approach that selects sensor poses by maximizing volu-metric information gain through entropy reduction.  
+
+> •
+
+Projection-Based method (PB) [10]: A faster strategy that avoids ray-casting by approximating the object ge-ometry with a compact set of ellipsoids and evaluating candidate views through image-plane projections. 6 IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED JULY, 2026 
+
+(a)            
+
+> Parameter Value
+> Nmax 15
+> τstag 1% (for 5 acq.)
+> sv0.75 cm
+> Nk15
+> τrec 30%
+> γ20 cm
+> Npos 32
+> ρ10 cm
+> d10 cm
+
+(b)  
+
+> Fig. 2. (a) Experimental results with the graphs of reconstruction percentage achieved by the NBV algorithms. (b) Parameters used for the experiments. Objects have increasing reflectivity from Object A to D.
+
+Fig. 2a shows the four test objects used in the experiments. In particular, Object A is a non-reflective steel cuboid with simple geometry; Object B is a pneumatic valve featuring mixed materials and moderate geometric complexity, with limited reflective surfaces; Object C is a metallic object with inclined faces and medium reflectivity; Object D has multiple highly reflective steel fittings. For all methods, the reconstruction process terminates either after Nmax iterations or upon detection of stagnation, defined as a relative utility variation below τstag over consecutive acquisitions. The experimental parameters relevant to the evaluation are summarized in Fig. 2b. It is worth noting that, for the proposed FRA-NBV method, each NBV iteration includes the execution of the recovery procedure whenever it is activated. Therefore, recovery poses are not counted as additional iterations, but are integrated within the same NBV iteration. Under the experimental protocol described above, reconstruction performance was evaluated using the following metrics: (1) Recovery Activation Count (Sec. VI-B), (2) Final Reconstruction Coverage (Sec. VI-C), (3) Cumulative and Relative Recovery Contribution (Sec. VI-C), and (4) Average Iteration Time (Sec. VI-D). The definition of each metric and the corresponding experimental results are presented and discussed in the respective sections. 
+
+A. Experimental Setup 
+
+Experiments involved an ABB GoFa 12 manipulator equipped with an Intel RealSense D435i depth camera mounted on the end-effector. Although the sensor provides high-resolution depth and RGB data, all RGB streams were disabled to evaluate the proposed framework under limited perceptual conditions simulating a low-resolution hardware. In particular, depth acquisition was deliberately degraded by applying the maximum decimation factor and additional crop-ping, resulting in a final low resolution depth sensor of 60 ×40 
+
+pixels. An example of the reconstruction process for one of the objects, along with the full experimental setup, is shown in Fig. 3. Robot motions were planned with MoveIt! to ensure collision-free trajectories with respect to the robot, the scene geometry, and the online object-estimation boundaries. Since ambient illumination significantly affects depth measurements  
+
+> Fig. 3. Experimental setup.
+
+on reflective surfaces, controlled lighting conditions were adopted in all experiments. A set of fixed lamps was used to provide consistent illumination of the object workspace, ensuring repeatability across trials. 
+
+B. Recovery Activation Count 
+
+This section reports the average number of recovery acti-vations per reconstruction for FRA-NBV (Fig. 4a). The goal is to assess whether the recovery mechanism is selectively triggered by surface reflectivity, rather than being activated indiscriminately due to algorithmic artifacts. The results exhibit an increasing trend in the number of recovery activations as both the reflectivity and geometric complexity of the objects increase. For Object A and Object B, which are characterized by predominantly non-reflective surfaces, the average number of activations remains low, with only a few recoveries triggered per reconstruction. This be-havior indicates a limited presence of false positives. In these cases, recovery activations do not originate from reflective behavior; instead, they are mainly attributable to geometric and algorithmic effects. In particular, the ellipsoidal approximation may slightly overestimate the object extent, leading to the classification of boundary-adjacent regions as invalid. This effect is more evident for Object A , while for Object B 
+
+occasional activations can also be attributed to minor material inhomogeneities that introduce localized reflective effects. PREZIOSA et al. : FRA-NBV: A FAST AND REFLECTIVITY-AWARE NEXT-BEST-VIEW STRATEGY 7
+
+> Fig. 4. Experimental results (over 15 runs): (a) Number of recovery activations occurring during a complete reconstruction. (b) Reconstruction increment (%) provided by the recovery poses over the full reconstruction.
+
+Conversely, for the more reflective Object C and Object D, the recovery activation count increases significantly. This confirms that the proposed method is able to correctly identify and target regions affected by unreliable depth measurements caused by surface reflectivity. 
+
+C. Reconstruction Coverage and Recovery Contribution 
+
+We evaluate the final reconstruction percentage defined as the portion of the object surface reconstructed at the end of the process by comparing the final point cloud with the reference CAD model. Results are in Fig. 2a: for Object A 
+
+and Object B , which exhibit limited or no reflective properties, all methods achieve comparable reconstruction coverage, with FRA-NBV showing a slightly higher final percentage. This indicates that, in the absence of strong reflectivity effects, the proposed method remains competitive with classical NBV approaches. Object C shows a clear performance gap between FRA-NBV and the two baseline methods, consistently with the object’s moderate reflectivity. This gap becomes more evident for Object D , the most challenging scenario, where FRA-NBV outperforms the PB method by up to 31% and the RE method by approximately 56%. These results highlight the robustness of the proposed approach when dealing with highly reflective and geometrically complex objects. To better interpret these improvements, the cumulative recovery coverage gain was analyzed for the FRA-NBV method. This metric measures the increase in surface coverage provided by the recovery poses over the complete reconstruction. Results are shown in Fig. 4b. For Object A and Object B , recovery poses contribute around 10% of the final coverage. Conversely, for Object C and 
+
+Object D , the contribution increases up to approximately 30%. In all cases, the additional coverage introduced by recovery iterations is consistent with the improvements observed in the final reconstruction percentage. These results confirm that the higher reconstruction coverage achieved by FRA-NBV is directly associated with the introduction of recovery poses.         
+
+> Fig. 5. Per-view coverage increment ∆Ck=Ck−Ck−1as a function of the prior reconstruction level Ck−1. Boxplots compare standard PB views (blue) and FRA recovery views (orange). (a) Non-reflective object: similar contributions. (b) Reflective object: higher gain from recovery views. “X” marks indicate insufficient samples.
+
+However, recovery iterations require additional acquisitions, meaning that it is necessary to assess whether the reconstruc-tion improvement owe to a higher informative contribution of FRA-NBV targeting reflective regions. To address this point, we quantify the relative impact of each acquisition by measuring the percentage coverage increment produced by standard PB views and FRA recovery poses given the same initial reconstruction level. Let Ck denote the cumulative reconstruction percentage after the kth acquisition and define the per-view coverage increment as ∆Ck = Ck −Ck−1. Fig. 5 shows ∆Ck over the reconstruction coverage achieved prior to that view, Ck−1. For Object B (negligible reflectivity), the coverage increment provided by recovery acquisitions is comparable to that obtained from PB acquisitions across the entire reconstruction range. In contrast, for Object D (the most reflective), recovery acquisitions exhibit a statistically higher coverage increment than standard PB sensor poses. This sug-gests that the performance gap observed for highly reflective objects cannot be attributed merely to additional acquisitions, but rather to the recovery of otherwise unobservable surface regions. 
+
+D. Average Iteration Time 
+
+We measure the average time required to complete a single NBV iteration, including view selection, robot motion, and spatial representation update. For the FRA-NBV method, the iteration time includes the execution of the recovery sequence when triggered, from recovery view selection to the acquisition of the final recovery sensor pose. Table I shows that FRA-NBV has an average iteration time comparable to PB for Object A and Object B , which are characterized by limited or no reflectivity. As reflectivity increases, FRA-NBV’s iteration time grows because of the larger number of recovery activations. Nonetheless, a per-8 IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED JULY, 2026 
+
+TABLE I EXPERIMENTAL RESULTS : MEDIAN AND IQR OF RECONSTRUCTION TIME PER ACQUISITION [S]
+
+Object FRA PB RE 
+
+Object A 23.09 [18.84–25.79] 
+
+20.45 [18.81–26.11] 
+
+47.48 [45.65–48.70] Object B 25.28 [22.40–28.19] 
+
+21.72 [20.78–24.92] 
+
+51.76 [47.50–54.71] Object C 31.87 [29.40–38.01] 
+
+21.62 [20.64–22.52] 
+
+46.76 [45.66–48.01] Object D 33.10 [29.01–34.53] 
+
+16.51 [13.97–18.47] 
+
+46.66 [45.77–49.10] 
+
+formance gap remains between projection-based approaches (PB and FRA-NBV) and the RE method. The lower iteration times achieved by projection-based strategies confirm that projection-based view evaluation represents a solution for reducing the computational burden of NBV algorithm. VII. CONCLUSIONS We presented FRA-NBV for autonomous 3D reconstruction in the presence of reflective surfaces. In non-reflective scenar-ios, FRA-NBV achieves a reconstruction coverage compara-ble to standard NBV methods, while outperforming classical raycast-based exploration methods in terms of execution time. In highly reflective cases, FRA-NBV achieves up to 31% higher surface coverage compared to the PB baseline and up to 56% higher coverage with respect to classical raycast-based exploration strategies. Additional qualitative analyses were also conducted on concave geometries involving mutual reflections, showing that FRA-NBV remains less affected by these challenging configurations than the PB-NBV baseline; these results are available on the paper website at https: //merlinlaboratory.github.io/FRA-NBV/. Future work will ex-plore multimodal extensions integrating additional sensing modalities to further reduce reconstruction failures and support robust active perception. REFERENCES [1] B. Alsadik, H. A. Mahdi, and N. A. Abdulateef, “A structured review and taxonomy of next-best-view strategies for 3d reconstruction,” ISPRS Open Journal of Photogrammetry and Remote Sensing , 2025. [2] J. Yang and S. L. Waslander, “Next-best-view prediction for active stereo cameras and highly reflective objects,” in IEEE ICRA , 2022. [3] S. Lee, J. Kim, H. Lim, and S. C. Ahn, “Surface reflectance estimation and segmentation from single depth image of tof camera,” Signal Processing: Image Communication , 2016. [4] G. F. Preziosa, C. Castellano, A. M. Zanchettin, M. Faroni, and P. Rocco, “Low resolution next best view for robot packing,” IFAC-PapersOnLine ,2025, 14th IFAC Symposium on Robotics ROBOTICS. [5] D. Palousek, M. Omasta, D. Koutny, J. Bednar, T. Koutecky, and F. Dokoupil, “Effect of matte coating on 3d optical measurement accuracy,” Optical Materials , 2015. [6] J. Maver and R. Bajcsy, “Occlusions as a guide for planning the next view,” IEEE Trans. Pattern Analysis and Machine Intelligence , 1993. [7] R. Pito, “A solution to the next best view problem for automated surface acquisition,” IEEE Trans. Pattern Analysis and Machine Intelligence ,1999. [8] W. R. Scott, G. Roth, and J.-F. Rivest, “View planning for automated three-dimensional object reconstruction and inspection,” ACM Comput. Surv. , 2003. [9] I. D. Lee, J. H. Seo, and B. Yoo, “Autonomous view planning methods for 3d scanning,” Automation in Construction , 2024. [10] Z. Jia, Y. Li, Q. Hao, and S. Zhang, “Pb-nbv: Efficient projection-based next-best-view planning framework for reconstruction of unknown objects,” IEEE Robot. Autom. Lett. (RAL) , 2025. [11] F. Bissmarck, M. Svensson, and G. Tolt, “Efficient algorithms for next best view evaluation,” in IEEE/RSJ IROS , 2015. [12] M. Selin, M. Tiger, D. Duberg, F. Heintz, and P. Jensfelt, “Efficient autonomous exploration planning of large-scale 3-d environments,” 
+
+IEEE Robot. Autom. Lett. (RAL) , 2019. [13] Y. Han, I. H. Zhan, W. Zhao, and Y.-J. Liu, “A double branch next-best-view network and novel robot system for active object reconstruction,” in IEEE ICRA , 2022. [14] H. Dhami, V. D. Sharma, and P. Tokekar, “Pred-nbv: Prediction-guided next-best-view planning for 3d object reconstruction,” in IEEE/RSJ IROS , 2023. [15] S. Kriegel, T. Bodenm¨ uller, M. Suppa, and G. Hirzinger, “A surface-based next-best-view approach for automated 3d model completion of unknown objects,” in IEEE ICRA , 2011. [16] J. Cui, J. T. Wen, and J. Trinkle, “A multi-sensor next-best-view framework for geometric model-based robotics applications,” in IEEE ICRA , 2019. [17] Y. Ran, J. Zeng, S. He, J. Chen, L. Li, Y. Chen, G. Lee, and Q. Ye, “Neurar: Neural uncertainty for autonomous 3d reconstruction with implicit neural representations,” IEEE Robot. Autom. Lett. (RAL) , 2023. [18] L. Jin, X. Chen, J. R¨ uckin, and M. Popovi´ c, “Neu-nbv: Next best view planning using uncertainty estimation in image-based neural rendering,” in IEEE/RSJ IROS , 2023. [19] B. Kerbl, G. Kopanas, T. Leimk¨ uhler, and G. Drettakis, “3d gaussian splatting for real-time radiance field rendering.” ACM Trans. Graph. ,2023. [20] W. Jiang, B. Lei, and K. Daniilidis, “Fisherrf: Active view selection and uncertainty quantification for radiance fields using fisher information,” 
+
+arXiv , 2023. [21] M. Strong, B. Lei, A. Swann, W. Jiang, K. Daniilidis, and M. Kennedy, “Next best sense: Guiding vision and touch with fisherrf for 3d gaussian splatting,” in IEEE ICRA , 2025. [22] M. Mendoza, J. I. Vasquez-Gomez, H. Taud, L. E. Sucar, and C. Reta, “Supervised learning of the next-best-view for 3d object reconstruction,” 
+
+Pattern Recognition Letters , 2020. [23] Y. Yu and K. Gupta, “C-space entropy: A measure for view planning and exploration for general robot-sensor systems in unknown environments,” 
+
+Int. J. Robotics Res. , 2004. [24] C. Potthast and G. S. Sukhatme, “A probabilistic framework for next best view estimation in a cluttered environment,” J. Vis. Commun. Image Represent. , 2014. [25] S. Kriegel, C. Rink, T. Bodenm¨ uller, and M. Suppa, “Efficient next-best-scan planning for autonomous 3d surface reconstruction of unknown objects,” J. Real-Time Image Process. , 2015. [26] N. A. Massios and R. B. Fisher, “A best next view selection algorithm incorporating a quality criterion,” in British Machine Vision Conference (BMVC) , 1998. [27] J. Amanatides, A. Woo, et al. , “A fast voxel traversal algorithm for ray tracing.” in Eurographics , 1987. [28] J. I. V´ asquez-G´ omez, E. L¨ opez-Damian, and L. E. Sucar, “View plan-ning for 3d object reconstruction,” in IEEE/RSJ IROS , 2009. [29] J. I. Vasquez-Gomez, L. E. Sucar, and R. Murrieta-Cid, “Hierarchical ray tracing for fast volumetric next-best-view planning,” in IEEE Inter-national conference on computer and robot vision , 2013. [30] R. Zeng, W. Zhao, and Y.-J. Liu, “Pc-nbv: A point cloud based deep network for efficient next best view planning,” in IEEE/RSJ IROS , 2020. [31] J. Ouyang, D. Liu, P. Jia, X. Liu, X. Liu, and Y. Sun, “Nbv-hrr: Next best view planning network for highly reflective region restoration in robotic 3-d scanning,” IEEE/ASME Trans. Mechatronics , 2024. [32] D. Deng, “Dbscan clustering algorithm based on density,” in Int. Forum on Electrical Engineering and Automation , 2020.
