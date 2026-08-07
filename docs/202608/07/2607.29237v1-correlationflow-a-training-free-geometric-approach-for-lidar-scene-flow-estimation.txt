@@ -1,0 +1,1034 @@
+Title: CorrelationFlow: A Training-Free Geometric Approach for LiDAR Scene Flow Estimation
+
+URL Source: https://arxiv.org/pdf/2607.29237v1
+
+Published Time: Mon, 03 Aug 2026 00:51:39 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+> 1
+
+# CorrelationFlow: A Training-Free Geometric Approach for LiDAR Scene Flow Estimation 
+
+Minh-Quan Dao 1, Yancong Lin 2, Julie Stephany Berrio Perez 3, Holger Caesar 4
+
+> 1
+
+Nantes Université 2University of Nottingham 3University of Queensland 4TU Delft 
+
+Fig. 1: Overview of CorrelationFlow. Two consecutive LiDAR sweeps are projected to a BEV occupancy image, objects are isolated as spatio-temporal connected components, and each component’s motion is recovered as the translation that maximizes the normalized cross-correlation of its BEV footprint across time. The per-component velocity is propagated to all member points, yielding a dense scene flow field color-coded by speed and direction. 
+
+Abstract —LiDAR scene flow estimation has settled into amonoculture: nearly all recent methods share the same feed-forward architecture and the same family of self-supervised losses, inheriting each other’s assumptions, and each other’s blind spots. When those assumptions fail, as they do for sparse, distant, or fast-moving objects, every method built on them fails together, and adding parameters or simulated training data does not fix what the formulation itself gets wrong. This paper takes the opposite path. We present CorrelationFlow, a training-free geometric framework that reduces scene flow to two textbook operations: connected-component labeling and correlation maximization on bird’s-eye-view occupancy images. Objects are isolated as spatio-temporal connected components, their motions recovered as correlation peaks, and the resulting velocities propagated to all member points. However, this dense correlation evaluates every candidate displacement of every cluster and requires a window of past sweeps; therefore, we develop a sparse counterpart that operates on a single sweep pair by matching lightweight occupancy descriptors at boundary key points. Because nothing is trained, nothing is inherited: on the multi-domain test set of the Argoverse 2 2026 Scene Flow Challenge, spanning five datasets with heterogeneous sensors and platforms, CorrelationFlow ranked second among unsupervised methods and degrades most gracefully at long range—where the shared assumptions of learned methods break down. Our results suggest that a substantial share of the scene flow problem is solvable by classical computer vision, and that progress may require questioning the formulation, not scaling it. 
+
+Index Terms —Computer Vision for Transportation; Range Sensing; Autonomous Vehicle Navigation; Scene Flow; Point Cloud Processing. 
+
+I. I NTRODUCTION 
+
+# SCENE flow is the dense, three-dimensional motion field that maps every point of a source observation to its corresponding location in a temporally subsequent observa-tion [1]. For a vehicle navigating a dynamic environment, an accurate scene flow estimate answers two coupled questions simultaneously : What is moving and where is it moving to 
+
+and underpins downstream tasks such as open-world object discovery [2], motion forecasting [3], and dynamic occupancy mapping [4]. The last several years have seen scene flow estimation from LiDAR converge almost entirely on deep learning. Supervised feed-forward networks regress per-point flow directly from raw points or voxelized representations [5]–[8], while test-time optimization methods fit a flow field to each sweep pair using a neural prior [9]. These approaches deliver strong benchmark numbers, but inherit the well-known costs of supervised learning: they require large quantities of annotated LiDAR, which is expensive to produce and scarce relative to image data, they are sensitive to domain shift across sensors and environments, and optimization-based variants are far too slow for online use [10]. A growing body of work questions whether this machinery is necessary. Chodosh et al. [11] re-evaluate LiDAR scene flow on realistic data and find that classical Iterative Closest Point (ICP) removes ego-motion better than any learned component, and that most of the headline gains attributed to learning actually stem from non-learned pre- and post-processing, ground removal, and piecewise-rigid refinement. In the same spirit, simple supervised baselines that connect a detector to a tracker [12] match or exceed sophisticated networks once the evaluation is made to be class- and speed-aware. These results motivate a question that this paper takes to its logical conclusion: how far can a scene flow estimator go using only classical geometric operations, with no learning at all? 
+
+We answer with CorrelationFlow , a learning-free method that formulates scene flow estimation as the maximization of normalized cross-correlation between two images. The core intuition is that while a dynamic object’s position changes over a short time period, its point cloud appearance remains relatively constant. When two point clouds of the same object from neighboring time steps are projected to the Bird’s-Eye View (BEV), they produce two binary images where the same foreground cluster appears shifted by an amount proportional to the object’s 3D displacement. We estimate this shift by arXiv:2607.29237v1 [cs.CV] 31 Jul 2026 2
+
+finding the placement of the first image’s foreground cluster in the second image that maximizes pixel overlap. This shift directly provides the object’s 3D displacement, and under the rigid motion assumption, the displacement of every point on the object. Our contributions are threefold: (1) CorrelationFlow, afully learning-free method for LiDAR scene flow estimation that formulates the task as correlation maximization; (2) a new connected-components-based method for detecting spatio-temporal clusters in BEV point cloud projections; and (3) a keypoint-based variant that computes scene flow without prior cluster knowledge. CorrelationFlow ranked 2nd on the Argoverse2 Scene Flow Challenge (unsupervised track) at CVPR 2026. Our results show that data-centric approaches are not the only path forward. II. R ELATED WORK 
+
+A. Learning-based scene flow estimation 
+
+Scene flow was originally introduced as the 3D counterpart of optical flow [1]. Early learning-based methods for LiDAR scene flow, including [5], [13]–[15], directly regress point-wise motion from raw point clouds using feed-forward neural ar-chitectures. Subsequent work improves accuracy and efficiency through more computationally efficient network designs [16] and by incorporating motion rigidity priors into the learning process [17]. More recently, methods such as Flow4D [8] and DeltaFlow [18] have demonstrated that aggregating temporal information across multiple frames further improves scene flow estimation. Although these supervised approaches achieve state-of-the-art performance, they rely on large-scale annotated datasets for training. In contrast, our method requires no manually annotated scene flow labels. To alleviate the reliance on annotated data, self-supervised scene flow methods have attracted increasing attention [10], [19]–[22]. Most approaches combine a feed-forward architec-ture for efficient inference with unsupervised objectives that eliminate the need for ground-truth supervision. For instance, SeFlow [23] leverages cycle consistency losses [9] together with a PointPillars-style backbone. VoteFlow [21] adopts the same training objectives while introducing a backbone with an embedded rigid-motion prior, motivated by the prevalence of rigid-body motion in autonomous driving. TeFlow [22] further improves accuracy by temporal ensembling across multiple frames. A complementary direction explores pretraining on synthetic datasets to improve generalization to real-world data [24], [25]. Despite eliminating the need for manual anno-tations, these methods still require computationally expensive training on large-scale datasets. An alternative paradigm is test-time optimization, which removes the need for offline training altogether. Representa-tive methods [9], [26], [27] optimize a scene-specific model, typically a multi-layer perceptron, directly on each input sequence by minimizing unsupervised objectives such as cycle consistency. While this avoids dataset-scale training, it incurs substantial optimization cost during inference. In contrast, our method eliminates both large-scale training and per-scene optimization. 
+
+B. Learning-free scene flow estimation 
+
+A complementary, largely learning-free line of work exploits the piecewise-rigid nature of autonomous driving scenes by first partitioning the scene into object-level clusters and then estimating a single rigid motion for each cluster [11], [12], [28]–[31]. ICP-Flow [31] further highlights the effectiveness of this geometric prior through a carefully engineered pipeline, particularly for vehicle motion estimation. However, existing methods typically rely on density-based clustering, such as DBSCAN or HDBSCAN [32], [33], which is sensitive to point density, struggles with nearby objects, and requires sensor-specific parameter tuning. These limitations become more pronounced for sparse objects and crowded scenes. Our work preserves the piecewise-rigid prior while replacing density-based clustering with connected components on BEV occupancy maps, providing a parameter-light and density-robust grouping strategy. 
+
+C. Correlation in digital image processing 
+
+Correlation has been widely adopted in scene flow estima-tion [15], [21], [34] for template matching across temporal observations. Inspired by these approaches, we use correlation to identify collective motion of pixels in the BEV domain [35], [36]. Our method combines well-established components, in-cluding LiDAR BEV projection [37], connected-component analysis [38], [39], and distance transforms [40], without relying on learned features or descriptors. III. C ORRELATION FLOW 
+
+In this section, we first define the scene flow estimation problem. We then present the core components of the proposed method and its underlying assumptions through the example of estimating the scene flow of a single object. Finally, we generalize this formulation into a framework for estimating the scene flow of multiple objects.                   
+
+> (a) PO
+> t(blue) and PO
+> t+1 (red). (b) IO
+> t(blue) and IO
+> t+1 (red).
+> (c) PO
+> ttranslated by ft→t+1 and
+> PO
+> t+1 .
+> (d) IO
+> ttranslated by ∆and IO
+> t+1 .
+
+Fig. 2: Point cloud of a dynamic car at time step t (blue) and (t + 1)   
+
+> (red), expressed in the body frame of the ego vehicle at time step
+> (t+ 1) , and its projection onto the BEV (a, b). Translating the point cloud by the scene flow ft→t+1 , and correspondingly the image by
+> ∆, aligns the two time steps (c, d). 3
+
+A. Problem statement 
+
+Consider a 3D point p in the LiDAR point cloud, sampled from the surface of an object O. We define the body frame 
+
+E of the ego vehicle by placing its origin at the ego vehicle’s LiDAR sensor, with the X axis pointing along the vehicle’s heading direction and the Z axis pointing opposite to gravity. Let pE 
+
+> t
+
+∈ R3 denote the coordinates of p in E at the time step t, and let pE 
+
+> t+1
+
+∈ R3 denote the coordinates that the same physical surface point occupies at the consecutive time step (t + 1) . The scene flow ft→t+1 of p is defined as its displacement between the two time steps, expressed in the body frame of the ego vehicle at time (t + 1) :
+
+ft→t+1 =
+
+pE
+
+> t+1
+
+1
+
+
+
+− (TE
+
+> t+1
+
+)−1 · TE 
+
+> t
+
+·
+
+pE
+
+> t
+
+1
+
+
+
+(1) where TE 
+
+> t
+
+=
+
+ Rt tt
+
+01×3 1
+
+
+
+∈ SE (3) denotes the pose of the ego vehicle with respect to the global frame W at time step t, with Rt ∈ SO (3) and tt ∈ R3 being the rotational and translational components, respectively. The operator ·
+
+denotes matrix multiplication and [( pE 
+
+> t
+
+)⊤, 1] ⊤ ∈ R4 is the homogeneous coordinate of pE 
+
+> t
+
+.Eq. (1) implies that the ego-motion is compensated prior to the computation of scene flow. Consequently, the scene flow 
+
+ft→t+1 is non-zero only if the motion of the object O differs from that of the ego vehicle. We note that the scene flow defined in Eq. (1) is also referred to as residual flow in the literature [7], [22], [23], [41], [42]. Let Pt = {pj,t = ( xj,t , y j,t , z j,t )}Nt 
+
+> j=1
+
+denote the point cloud acquired at time step t, where Nt is the number of points. Given two consecutive ego-motion-compensated point clouds Pt and Pt+1 , our goal is to estimate the scene flow 
+
+fj,t →t+1 of every point pj,t ∈ Pt. We denote by Ft =
+
+{fj,t →t+1 }Nt 
+
+> j=1
+
+the set of scene flow vectors of all points in 
+
+Pt.
+
+B. Computing scene flow of one object 
+
+Let PO 
+
+> t
+
+⊂ Pt and PO 
+
+> t+1
+
+⊂ Pt+1 denote the points belonging to an object O at two consecutive time steps t and 
+
+(t + 1) . Following the convention introduced in the previous section, both point clouds are compensated for ego-motion and thus expressed in the body frame of the ego vehicle at time step (t + 1) . We assume that objects undergo rigid and predominantly planar motion, i.e., translation in the horizontal plane and rotation about the gravity axis, which holds for most traffic participants in autonomous driving scenarios [6], [28], [29], [43]. Consequently, all points in PO 
+
+> t
+
+share the same scene flow ft→t+1 = [ fx, f y , f z ]⊤ ∈ R3 To estimate the scene flow 
+
+ft→t+1 of PO 
+
+> t
+
+, we orthogonally project the point clouds onto 2D planes (e.g., the horizontal plane), which we refer to as 
+
+views . We choose this approach because planar rigid motion is equivariant under such projections. Moreover, the resulting 2D representation enables the analysis of point clouds with image processing tools. Since ft→t+1 has three components while each view only allows the estimation of a 2D vector, at least two views are required. For clarity, we present the estimation of f using two mutually orthogonal views: the BEV and the sectional view. The BEV is the projection onto the plane spanned by the X and Y axes of the body frame of the ego vehicle at time step (t + 1) . The sectional view is the projection onto the vertical plane aligned with the object O’s heading direction. The BEV provides the horizontal components [fx, f y ]⊤, while the sectional view additionally recovers the vertical component 
+
+fz .We start with the BEV to estimate the horizontal compo-nents [fx, f y ]⊤ of ft→t+1 . The orthogonal projection of the 3D point p = [ px, p y , p z ]T onto the BEV is given by 
+
+u =
+
+ (px, p y ) − (p− 
+
+> x
+
+, p − 
+
+> y
+
+)
+
+s
+
+
+
+, (2) where s is the quantization factor in meters, ⌊·⌋ is the element-wise floor operator and the vector (p− 
+
+> x
+
+, p − 
+
+> y
+
+) denotes the lower bound of the region of interest in the horizontal plane. The quantization factor s discretizes the BEV plane into a 2D grid of H × W cells, with 
+
+H =
+
+ p+ 
+
+> y
+
+− p−
+
+> y
+
+s
+
+
+
++ 1 , W =
+
+ p+ 
+
+> x
+
+− p−
+
+> x
+
+s
+
+
+
++ 1 . (3) Each cell, referred to as a pixel, has the size of s × s. We assign the value 1 to pixels occupied by at least one projected point and 0 to free pixels, turning the projection of the point cloud PO 
+
+> t
+
+into a binary image IO 
+
+> t
+
+∈ { 0, 1}H×W . Since the same region of interest is imposed on both point clouds, the two images IO 
+
+> t
+
+and IO 
+
+> t+1
+
+have the same dimensions. Following the projection of individual points in Eq. (2), the scene flow ft→t+1 projects onto the BEV as ∆ = [∆ x, ∆y ]⊤ ∈
+
+Z2, given by 
+
+∆ = [fx, f y ]⊤/s  . (4) Since ft→t+1 translates every point pj,t ∈ P O 
+
+> t
+
+to its correspon-dence in PO 
+
+> t+1
+
+(Fig. 2c), translating IO 
+
+> t
+
+by ∆ approximately maximizes the overlap between its foreground and that of IO
+
+> t+1
+
+(Fig. 2d). Here, we assume that the inter-frame rotation of the object is negligible, which holds at typical LiDAR frame rates: even at a high yaw rate of 30 ◦/s, an object rotates by merely 
+
+3◦ between two frames captured at 10 Hz. Moreover, the alignment is only approximate due to the non-additivity of the floor operator, which causes a quantization error of at most one pixel per direction. Consequently, estimating the horizontal components of ft→t+1 reduces to finding the 2D translation 
+
+∆ that maximizes the overlap between the foregrounds of the two images. We used normalized cross-correlation (NCC) [44] to mea-sure the overlap in the foreground between the two binary images, with IO 
+
+> t
+
+serving as a template that slides over IO
+
+> t+1
+
+.Let u = [ ux, u y ]⊤ ∈ Z2 denote the coordinates of a pixel of 
+
+IO
+
+> t+1
+
+. The NCC score R(ux, u y ) is computed over the H × W
+
+neighborhood of u as 
+
+R(ux, u y ) = 
+
+> H−1
+
+P 
+
+> r=0
+> W−1
+
+P
+
+> c=0
+
+IO 
+
+> t
+
+(r, c ) IO
+
+> t+1
+
+(euy + r, eux + c)
+
+sH−1P 
+
+> r=0
+> W−1
+
+P
+
+> c=0
+
+IO 
+
+> t
+
+(r, c )2
+
+sH−1P 
+
+> r=0
+> W−1
+
+P
+
+> c=0
+
+IO
+
+> t+1
+
+(euy + r, eux + c)2
+
+, (5) 4
+
+where (eux, euy ) = ( ux − ⌊ W/ 2⌋, u y − ⌊ H/ 2⌋) is the top-left corner of the neighborhood. The pixels of the neighborhood that fall outside the image border are set to 0, which is equivalent to zero-padding IO 
+
+> t+1
+
+on all four sides. 
+
+Algorithm 1: Estimating the scene flow of one object in one view 
+
+Data: Point clouds PO 
+
+> t
+
+and PO 
+
+> t+1
+
+of one object at two consecutive time steps and the chosen view 
+
+Result: Components of scene flow in the chosen view 
+
+Function scene_flow_in_1view( PO 
+
+> t
+
+, PO
+
+> t+1
+
+, view) :
+
+IO 
+
+> t
+
+← projection of Pt onto view using Eq. (2) 
+
+IO 
+
+> t+1
+
+← projection of Pt+1 onto view using Eq. (2) 
+
+/* evaluate the NCC of the H × W
+
+neighborhood of each pixel of 
+
+IO 
+
+> t+1
+
+with IO 
+
+> t
+
+*/ 
+
+R ← a matrix of size H × W filled with 0 with 
+
+H, W being the height and width of IO
+
+> t+1
+
+for uy ∈ [0 , H [ do for ux ∈ [0 , W [ do 
+
+R[uy , u x] ← R(ux, u y ) with R(ux, u y )
+
+defined in Eq. (5) 
+
+// R[ux, u y ] denote the cell at line uy , column ux of the matrix R
+
+end end 
+
+/* compute the components of scene flow in the chosen view */ 
+
+[u∗
+
+> x
+
+, u ∗ 
+
+> y
+
+] ←− arg max   
+
+> (ux,u y)∈[0 ,W [×[0 ,H [
+
+R∆ = [ u∗
+
+> x
+
+, u ∗ 
+
+> y
+
+] − ⌊ W 
+
+> 2
+
+⌋, ⌊ H 
+
+> 2
+
+⌋
+
+return ∆ × s with s is the quantization factor 
+
+end 
+
+An advantage of the NCC is that it is bounded in [0 , 1] ,with 0 indicating no overlap and 1 maximum overlap. Fig. 3 shows the NCC map, i.e., the value of R at every pixel of IO
+
+> t+1
+
+. The map exhibits a distinct peak at u∗ =arg max (ux,u y ) R(ux, u y ), which indicates where the center of IO 
+
+> t
+
+should be placed in IO 
+
+> t+1
+
+to maximize the foreground overlap. The BEV projection ∆ of the scene flow ft→t+1 is therefore the displacement of this center, i.e., the difference between u∗ and the center of IO 
+
+> t
+
+:
+
+∆ = u∗ − [ ⌊W/ 2⌋, ⌊H/ 2⌋ ]T . (6) Following Eq. (4), the horizontal components of ft→t+1 are recovered as [fx, f y ]⊤ ≈ s · ∆. The estimation of the flow components in a single view is summarized in Alg. 1. To obtain the vertical component fz of ft→t+1 , we construct the sectional view as follows. First, the heading direction of the object in the BEV is computed from the estimated horizontal components as θ = atan2( fy , f x). Next, PO 
+
+> t
+
+is compensated for the horizontal motion of the object by translating it by 
+
+[fx, f y , 0] ⊤. Both point clouds are then rotated about the Z axis of the body frame by −θ, aligning the object’s heading 
+
+Fig. 3: NCC map of IO 
+
+> t+1
+
+with respect to the template IO 
+
+> t
+
+, rendered as a surface over the pixel coordinates (ux, u y ). The map exhibits a single distinct peak at u∗, indicating the placement of the template that maximizes the foreground overlap. The BEV projection of the scene flow follows from the offset of this peak via Eq. (6). 
+
+direction with the X axis. Finally, Alg. 1 is applied with the X–Z plane as the chosen view, yielding fz . The complete procedure for estimating the scene flow ft→t+1 of one object is summarized in Alg. 2. 
+
+Algorithm 2: Estimating the scene flow of one object in 3D 
+
+Data: Point clouds PO 
+
+> t
+
+and PO 
+
+> t+1
+
+of one object at two consecutive time steps and the chosen view 
+
+Result: scene flow ft→t+1 = [ fx, f y , f z ]
+
+Function scene_flow_1obj( PO 
+
+> t
+
+, PO
+
+> t+1
+
+):
+
+[fx, f y ] ← scene_flow_in_1view( PO 
+
+> t
+
+, PO
+
+> t+1
+
+,view= BEV )Translate PO 
+
+> t
+
+by [fx, f y , 0] 
+
+θ ← − arctan( fy , f x)
+
+Rotate the two point clouds PO 
+
+> t
+
+and PO 
+
+> t+1
+
+around the Z axis of the ego vehicle’s frame by θ
+
+[f ′
+
+> x
+
+, f z ] ← scene_flow_in_1view( PO 
+
+> t
+
+, PO
+
+> t+1
+
+,view= X-Z )
+
+fx ← fx + f ′ 
+
+> x
+
+· cos( −θ)
+
+fy ← fy + f ′ 
+
+> x
+
+· sin( −θ)
+
+return [fx, f y , f z ]
+
+end 
+
+C. Computing scene flow of multiple objects 
+
+The previous section relies on the rigidity assumption to formulate the estimation of the scene flow of a single object, given its point clouds PO 
+
+> t
+
+and PO
+
+> t+1
+
+, as the maximization of the NCC between their projected images. To extend this for-mulation to the point clouds Pt and Pt+1 of the entire scene, we partition them into spatio-temporal clusters {G i}Mi=1 , where each cluster Gi = Pit ∪P it+1 groups the points originating from the same physical object, with Pit ⊂ P t and Pit+1 ⊂ P t+1 
+
+being its points at time steps t and (t + 1) , respectively. By construction, the points within a cluster respect the rigidity assumption. Once the clusters are found, Alg. 2 is applied to each cluster individually to obtain its scene flow. The construction of these spatio-temporal clusters is detailed in the next section. The full pipeline of CorrelationFlow is summarized in Alg. 3 5
+
+Algorithm 3: Scene flow by correlation maximization 
+
+Data: A point cloud sequence 
+
+S = {P t−h, . . . , Pt, Pt+1 }
+
+Result: Scene flow Ft
+
+Partition the aggregation of Pt and Pt+1 into a set of spatio-temporal clusters {G i = Pit ∪ P it+1 } with Pit
+
+and Pit+1 containing points of the cluster i at time step t and (t + 1) respectively 
+
+Ft ← ∅ 
+
+for each cluster Gi do 
+
+/* estimate the cluster’s scene flow */ 
+
+f it→t+1 ← scene_flow_1obj (Pit , Pit+1 )
+
+/* assign f it→t+1 to points of Pit */ 
+
+Ft ← F t ∪ f it→t+1  
+
+> |P it|
+> j=1
+
+end return Ft
+
+IV. C OMPONENTS OF CORRELATION FLOW 
+
+This section presents the components that refine the core formulation of Sec. III, each addressing a specific failure mode identified above. 
+
+A. Spatio-temporal clustering using connected components 
+
+We propose a spatio-temporal clustering approach that pro-cesses an entire point cloud sequence in a single pass with minimal hyperparameters. Our method builds upon the notion of connectivity in binary images: a pixel v is connected to a pixel u if v lies in the immediate neighborhood of 
+
+u, which comprises the four orthogonally adjacent pixels and, optionally, the four diagonally adjacent ones. The key observation is twofold. First, in the BEV at a given time step, the parts of an object form a connected region, as illustrated in Fig. 2b. Second, after ego-motion compensation, the footprints of the same object at consecutive time steps overlap or adjoin, and are thus also connected. Based on these observations, we identify spatio-temporal clusters in a point cloud sequence 
+
+S = {P t−h, . . . , Pt, Pt+1 } in four steps: 1) compensating every point cloud in S for ego-motion, 2) aggregating the compensated point clouds into a single point cloud Pagg ,3) projecting Pagg onto the BEV using Eq. (2) to obtain the binary image Iagg ,4) extracting connected components from Iagg using the algorithm of [45]. Each connected component Ci is a binary image of the same size as Iagg , whose foreground pixels are directly or transitively connected to each other but not to the remaining foreground of Iagg . Fig. 4 shows two connected components identified in a binary image. Occlusion and sparsity, which are inherent in LiDAR point clouds, can split large or distant objects into disjoint parts in the BEV. To bridge such gaps, we apply morphological dilation with a 3×3 structuring element of ones, 13×3, to Iagg C1
+
+C2  
+
+> in C2only under 8-connectivity
+
+Fig. 4: Two connected components C1 and C2 of a binary image. Foreground pixels are grouped into a component if they are directly or transitively connected. The dashed pixel touches C2 only diagonally and is included in the component only under 4-connectivity. 
+
+Fig. 5: Effect of dilation on the clustering of an object with disjoint parts. Top: point cloud of a vehicle whose BEV footprint is split by occlusion and sparsity, at time step t (blue) and (t+1) (red). Middle: the aggregated image Iagg and its connected components; the disjoint parts yield three separate components. Bottom: the dilated Iagg and its connected components; the dilation bridges the gaps, merging the object into a single component. 
+
+before extracting connected components. Fig. 5 compares the clustering of an object with disjoint parts on the original image 
+
+Iagg and on its dilated version: the dilation inserts foreground pixels between the two parts of the vehicle, merging them into a single connected component. The dilation can also falsely join nearby objects, producing abnormally large connected components. To address this, we add a validation step to the clustering: if the longer side of the bounding box of a connected component Ci exceeds a threshold dmax , reflecting the maximum expected object size, the component is eroded with the same structuring element 13×3 to remove most of the pixels introduced by the dilation. Connected components are then re-extracted from the eroded component image IC
+
+> agg
+
+. The complete spatio-temporal clustering procedure is summarized in Alg. 4. 
+
+B. Leveraging past point clouds 
+
+Each cluster Gi identified by Alg. 4 contains the 3D points of an object across the time steps {t − h, . . . , t, t + 1 }. For any pair of time steps (m, n ) with m < n and m, n ∈ { t −
+
+h, . . . , t + 1 }, Alg. 2 can estimate the displacement fm→n of the cluster from time step m to n. Assuming the object moves with constant velocity throughout the sequence, dividing fm→n6
+
+Algorithm 4: Spatio-temporal clustering using con-nected components 
+
+Data: A point cloud sequence 
+
+S = {P t−h, . . . , Pt, Pt+1 }
+
+Result: The set of spatio-temporal clusters Gi = Pit−h ∪ · · · ∪ P it ∪ P it+1 such that S = S 
+
+> i
+
+Gi
+
+/* ego motion compensation &aggregation */ 
+
+Pagg ← ∅ 
+
+for Pk in S do 
+
+Transform Pi to the frame of Pt+1 
+
+Pagg ← P agg ∪ P i
+
+end 
+
+Iagg ← projection of Pagg to the BEV plane Dilate Iagg using 13×3 kernel 
+
+D := Ci ← connected components in Iagg 
+
+/* Ci is a binary image of the same size as Iagg */ /* validation of connected components */ 
+
+Dnew ← ∅ 
+
+for each connected component Ci in D do 
+
+(h, w ) ← the size of the bounding box of foreground pixels of Ci
+
+if h > d max or w > d max then 
+
+Erode Ci using 13×3 kernel 
+
+Dnew ← D new ∪ detected connected components in the eroded Ci
+
+Remove Ci from D
+
+end end 
+
+D ← D ∪ D new 
+
+/* assign points to clusters */ 
+
+for each connected component Ci in D do 
+
+Gi ← ∅ 
+
+for each 3D point p ∈ S do 
+
+Gi ← G i ∪ p if the projection of p to the BEV (Eq. (2)) is a foreground of Ci
+
+end end return Gi = Pit−h ∪ · · · ∪ P it ∪ P it+1 
+
+by the number of elapsed time steps (n−m) yields an estimate of the scene flow ft→t+1 . Consequently, multiple pairs (m, n )
+
+provide multiple estimates of ft→t+1 , which can be pooled to reduce the error of any individual estimate. Pairs for which the cluster is empty at m are skipped. In our implementation, we compute fm→t+1 for every m ∈ { t − h, . . . , t }, i.e., from each past time step to the most recent one, normalize each vector by (t + 1 − m), and pool the normalized estimates by taking the median of their magnitudes and orientations separately. 
+
+C. Multi-scale strategy 
+
+Fast-moving objects can travel farther than their own foot-print between time steps, leaving their BEV instances discon-nected and thus split by the clustering. To handle such objects, we employ a coarse-to-fine strategy, illustrated in Fig. 6. We first apply Alg. 3 at a coarse resolution, i.e., with a large pixel size s, where the footprints of the same object are more likely to be connected. We then translate Pt by the estimated flow and repeat the process at progressively finer resolutions until the best resolution is reached. 
+
+Fig. 6: Coarse-to-fine estimation for fast-moving objects: the flow estimated at each pixel size s warps Pt (blue) toward Pt+1 (red) before the next, finer level. 
+
+V. C ORRELATION FLOW -K EYPOINTS 
+
+The key component of CorrelationFlow described in Sec. III is the identification of spatio-temporal clusters in the input point clouds. Together with the rigid-motion assumption, the clusters provide a strong constraint on the estimation: all points of a cluster must share the same scene flow. A number of works exploit the same constraint to estimate or refine scene flow [21], [28], [30], [31]. However, clustering itself is a challenging and error-prone step: as discussed in Sec. II, its quality degrades for sparse, distant, or nearby objects, and errors in the cluster assignment propagate directly to the estimated flow. This observation leads us to question whether explicit clustering is necessary for scene flow estimation. We therefore develop a variant of CorrelationFlow, referred to as CorrelationFlow-KeyPoints, that removes the clustering step of Alg. 3 and estimates the motion of individual points instead. As an additional benefit, this variant operates on a single sweep pair and thus requires no temporal window. Formally, given the BEV images It and It+1 of the point clouds Pt and Pt+1 , we seek the displacement of every occu-pied pixel of It. To this end, we follow the classical sparse-matching pipeline for optical flow, which consists of four steps: (i) detecting key points in It and It+1 , (ii) computing a descriptor for each key point, (iii) matching the key points of It to those of It+1 via their descriptors, and (iv) taking the coordinate difference between each key point of It and its correspondence in It+1 as the displacement. The remainder of this section details our implementation of these steps. 7
+
+Fig. 7: Identification of key points in the BEV image It of a car. Left: the binary image It. Middle: the distance transform of It, i.e., the distance of each foreground pixel to the nearest background pixel. Right: key points (orange), selected as the boundary pixels of the foreground. 
+
+A. Keypoints 
+
+We define key points as the pixels on the boundary of an object’s BEV footprint. Their identification, illustrated in Fig. 7, proceeds in three steps. First, Pt is projected onto the BEV using Eq. (2) to obtain the binary image It, in which foreground pixels (value 1) contain at least one projected point and background pixels (value 0) are free. Second, we compute the distance transform of It, i.e., the distance of each foreground pixel to the nearest background pixel. Finally, the key points are selected as the foreground pixels whose distance to the background equals 1, i.e., the pixels forming the boundary of the foreground. We note that the density of key points adapts to the structure of the scene: for large, densely sampled objects, only the boundary pixels are retained, whereas for sparse, distant objects, whose footprints are thin, most foreground pixels qualify as key points. This behavior is desirable, as it concentrates the matching on the pixels that carry geometric information while naturally preserving coverage of sparsely observed objects. 
+
+B. Descriptor 
+
+Given a key point k = ( kx, k y ) in the BEV image It, its descriptor d ∈ { 0, 1}L2
+
+is the L × L patch of It centered at k,flattened into a vector, where L is an odd number to ensure a well-defined center pixel. Patches exceeding the image border are zero-padded, consistent with the convention of Sec. III. The descriptor is thus a binary vector encoding the occupancy pattern in the key point’s neighborhood. Its computation is illustrated in Fig. 8. 
+
+C. Matching keypoints 
+
+Let Kt and Kt+1 denote the sets of key points identified in 
+
+It and It+1 , respectively. To compute the displacement of the key points in Kt, we establish correspondences between the two sets. The similarity between two key points kt,i ∈ K t and 
+
+kt+1 ,j ∈ K t+1 is measured by the normalized correlation of their descriptors, 
+
+R(dt,i , dt+1 ,j ) = d⊤
+
+> t,i
+
+dt+1 ,j 
+
+∥dt,i ∥ ∥ dt+1 ,j ∥ , (7) 
+
+Fig. 8: Descriptor of a key point in the BEV image It. The descriptor of the key point (orange star) is the L × L patch of It centered at the key point (orange square), shown enlarged on the right with its binary values. 
+
+where ∥ · ∥ denotes the Euclidean norm. The correspondence of kt,i is the key point kt+1 ,j ∗ whose descriptor correlates most strongly with dt,i :
+
+j∗ = arg max 
+
+> j
+
+R(dt,i , dt+1 ,j ). (8) To reject false matches, we apply Lowe’s ratio test [46]: a match is accepted only if the correlation of the best match exceeds that of the second-best match by a sufficient margin, i.e., R(dt,i , dt+1 ,j ∗ ) > ρ · R(dt,i , dt+1 ,j ∗∗ ), where j∗∗ is the second-best match and ρ > 1 the ratio threshold. 
+
+D. From sparse scene flow to dense scene flow 
+
+The sparse key-point flow is densified under the piecewise-rigidity assumption. We extract connected components from the BEV image It and assign to every point of a component the median flow of the matched key points it contains. Assigning a single flow per component assumes translational motion within each component, consistent with the negligible inter-frame rotation established in Sec. III. Points in components containing no accepted matches are assigned zero flow. This step turns the sparse set of confident correspondences into a dense flow field over all points of Pt.VI. E XPERIMENTS 
+
+We begin with an ablation study to assess the impact of each component of CorrelationFlow. We then compare our method against state-of-the-art approaches to demonstrate its effectiveness. 
+
+Datasets. For our ablation study, we use the Argoverse 2 Sensor dataset [47], which was collected using two roof-mounted 32-beam LiDARs. The dataset consists of 1,000 sequences, split into 700 for training, 150 for validation, and 150 for testing. Each sequence lasts approximately 15 s and contains point clouds captured at 10 Hz. The comparison of CorrelationFlow to state-of-the-art unsupervised methods is carried out using the test set of AV2 2026 Multi-Dataset Scene Flow Challenge [48]. This test set comprises 9,613 point clouds sourced from five datasets: AEVA [49], Argoverse 2 [47], nuScenes [50], TruckScenes [51], and Waymo Open Dataset [52]. It is designed to assess how a single method generalizes across heterogeneous LiDAR sensors, vehicle plat-forms, and geographic regions, without per-dataset tuning. 8
+
+Metrics. We measure performance using the Dynamic Bucket-Normalized End Point Error (EPE) [53] in all experi-ments. The standard EPE measures the Euclidean distance in meters between predicted and ground-truth flow vectors. The Dynamic Bucket-Normalized EPE extends this by grouping points into object classes and speed buckets, then normalizing the error for dynamic points by their bucket’s speed. This class-aware, speed-normalized metric emphasizes the frac-tion of motion correctly captured rather than absolute error, enabling fair comparisons across object classes with vastly different speeds, such as vehicles and pedestrians. We report results for four classes: regular cars (CAR), other vehicles (OTHER), pedestrians (PED.), and wheeled vulnerable road users (VRU). All evaluations are conducted within a 70 m ×
+
+70 m area centered on the ego vehicle. 
+
+A. Ablation study 
+
+We assess four key components of our method: the necessity of an additional view to measure the Z-component of scene flow, the effectiveness of our clustering method based on connected components, the benefit of incorporating past point clouds, and the improvement achieved through the multi-scale strategy. It should be noted that the reported execution times were obtained on a machine executing multiple threads in parallel. Consequently, the absolute timings do not represent the fastest possible execution, and our comparison instead emphasizes the relative differences between methods. 
+
+Impact of pixel size. Tab. I shows the evolution of scene flow error with respect to the pixel size of the BEV image of input point clouds. We can observe that increasing the pixel size reduces the execution time. This is explained by the reduction of the size of the BEV image and the linear complexity of the connected components algorithm [45] with respect to the input image size that we use to detect spatio-temporal clusters in input point clouds. A too small pixel size of 0.05 m makes every object too fragmented to cluster precisely. This results in a high error for every class. As the pixel size increases from 0.1 m to 0.4 m , the error of medium to large object classes (e.g., CAR, and OTHER) reduces because it is easier to detect their clusters entirely. On the other hand, the error of pedestrian increases because they occupy less pixels, thus making them harder to be clustered. Moreover, even if their clusters are correctly identified, a reduced number of pixels increases the difficulty of scene flow estimation through NCC maximization as there are multiple maxima. As the pixel size 0.1 m strikes a better balance between the error of small objects (PED.) and large objects (CAR, OTHER), we set the pixel size to this value for all subsequent experiments. 
+
+Impact of views. The first experiment evaluates the con-tribution of each view to estimation accuracy. As shown in Tab. II, adding the sectional view to compute the Z-component of the flow yields only a marginal change in error. However, this additional view requires an extra NCC maximization per cluster (Alg. 1), increasing the flow estimation time by 56 .6% .Furthermore, most driving scenes occur in flat environments, where objects of interest (vehicles, pedestrians, and VRUs) exhibit minimal vertical motion. For these reasons, we retain                                  
+
+> Pixel Dynamic Bucket-Normalized EPE ↓Exec. size (m) CAR OTHER PED. VRU Mean Time (s) 0.05 0.5116 0.5350 0.4778 0.5371 0.5154 1.6537 0.1 0.3093 0.3458 0.3746 0.3799 0.3524 0.4674 0.2 0.2476 0.3008 0.5065 0.3324 0.3468 0.2237 0.4 0.2815 0.3539 0.8474 0.5750 0.5145 0.1436
+
+TABLE I: Impact of the pixel size on the estimation accuracy, measured by the mean Dynamic Bucket-Normalized EPE (lower is better) on the Argoverse 2 validation split. 
+
+only the BEV in the base version of CorrelationFlow, which serves as the foundation for all subsequent experiments.                     
+
+> View Dynamic Bucket-Normalized EPE ↓Flow Est. CAR OTHER PED. VRU Mean Time (s) BEV 0.3093 0.3458 0.3746 0.3799 0.3524 0.1943 +Sectional +0.0004 -0.0003 -0.0005 +0.0055 +0.0013 +0.1099
+
+TABLE II: Impact of the views on the estimation accuracy, measured by the mean Dynamic Bucket-Normalized EPE (lower is better) on the Argoverse 2 validation split. 
+
+Impact of the clustering method. Existing unsupervised methods typically use density-based algorithms like DBSCAN or HDBSCAN for spatio-temporal clustering, either during training [22], [23], [41], [54] or at inference [31]. To evaluate our connected-component-based clustering, we replace the clustering module of CorrelationFlow with HDBSCAN while keeping the rest of the pipeline unchanged. As shown in Tab. III, HDBSCAN reduces the mean scene flow error by 
+
+7.8% (from 0.3524 to 0.3247) but increases clustering time by a factor of 10. However, as we demonstrate in later experiments, the performance of CorrelationFlow with our clustering method improves significantly when incorporating past point clouds, without increasing clustering time. This is because our clustering algorithm, which uses the connected components method of [45], has a constant complexity with respect to the number of points, as it depends only on the size of the BEV image. In contrast, HDBSCAN [55] has a complexity of O(N log N ), where N is the number of points. Consequently, our method scales better and is more suitable for optimization toward real-time performance. We want to notice that the execution time is measured on a machine that evaluates multiple threads in parallel, so the absolute execution time does not represent the fastest possible execution of the algorithm. Instead, we focus on the comparison of the execution time between two clustering methods.                     
+
+> Clustering Dynamic Bucket-Normalized EPE ↓Clustering Method CAR OTHER PED. VRU Mean Time (s) Connected 0.3093 0.3458 0.3746 0.3799 0.3524 0.2731 component-based (ours) HDBSCAN 0.2304 0.3853 0.3669 0.3161 0.3247 2.7521
+
+TABLE III: Impact of the clustering method on the mean Dynamic Bucket-Normalized EPE (lower is better). 
+
+Impact of past point clouds. We evaluate the benefit of using past point clouds as described in Sec. IV-B. Scene flow is estimated for every pair of point clouds collected at (t − k)
+
+and (t + 1) , with k ranging from 0 to h. The results are then 9
+
+pooled to produce the final estimate. In this experiment, we use the base version of CorrelationFlow and vary h from 0 to 8.Fig. 9 shows the mean error as a function of h. Increasing 
+
+h reduces the error for all object classes, with the largest reduction occurring between h = 0 (the minimum required for flow estimation) and h = 2 ; beyond h = 2 , the gains diminish. We attribute this improvement to two effects. First, aggregating more past point clouds makes small and slow-moving objects, such as pedestrians, more visible in the BEV. As a result, it is less difficult to precisely identify their spatio-temporal cluster. Second, additional past point clouds provide multiple estimates of the scene flow ft→t+1 , and pooling these estimates reduces the overall error. 
+
+0 1 2 3 4 5 6 7 8 9
+
+0.1
+
+0.15 
+
+0.2
+
+0.25 
+
+0.3
+
+0.35 
+
+0.4
+
+Number of past point clouds Dynamic Bucket-Normalized EPE Car Pedestrian VRU Other Fig. 9: Mean Dynamic Bucket-Normalized EPE (lower is better) as a function of the number of past point clouds h, per object class, on the Argoverse 2 validation split. The error decreases for every class, with the largest gains between h = 0 and h = 3 .
+
+Impact of the multi-scale strategy. Building on the previ-ous experiment where the base model was enabled to use past point clouds, we now evaluate the benefit of the coarse-to-fine strategy described in Sec. IV. Fig. 10 reports the mean error per object class as the number of scales varies from 1 to 5, for 
+
+h ∈ { 0, 2, 4}. These three values of h are chosen based on the previous experiment: h = 0 is the minimum required for flow estimation, the largest improvement occurs between h = 0 and 
+
+h = 2 , and the best performance is achieved at h = 4 For all classes, the lowest error is consistently achieved with h = 4 
+
+at every scale. With h = 0 , increasing the number of scales reduces the error, with the most significant reduction occurring when the number of scales increases from 1 to 2. The rate of reduction diminishes as the number of scales exceeds 3.Compared to h = 0 , the error reduction with higher values of 
+
+h (e.g., 2 or 4) is smaller as the number of scales increases. A common trend across all values of h is that the error for the Other class, which comprises large vehicles, decreases linearly with the number of scales. Such a decrease indicates the effectiveness of the multi-scale strategy in identifying the entirety of large objects. 
+
+Necessity of clustering – CorrelationFlow-Keypoint 
+
+We compare the keypoint-based variant of CorrelationFlow against the original version to assess whether explicit spatio-temporal clustering is necessary for accurate scene flow es-timation. Recall that CorrelationFlow-Keypoint operates on a single sweep pair and therefore does not exploit past point clouds; thus, the relevant baseline is CorrelationFlow at h = 0 .The results in Tab. IV show that, when the sparse keypoint flow is densified using connected components, the keypoint variant achieves a mean Dynamic Bucket-Normalized EPE of 
+
+0.2845 , improving over the dense CorrelationFlow at h = 0 
+
+(0.3524 ) by 19 .3% and nearly matching its best configuration at h = 4 (0.2792 ), despite relying on a single sweep pair rather than a temporal window. The gain is consistent across the CAR ( 0.1701 vs. 0.3093 ), OTHER ( 0.2633 vs. 0.3458 ), and VRU ( 0.2647 vs. 0.3799 ) classes; the pedestrian class is the sole exception ( 0.4401 vs. 0.3746 ), as thin, sparsely sampled pedestrian footprints provide few repeatable boundary keypoints and thus fewer confident matches. These results indicate that explicit clustering is not a pre-requisite for competitive scene flow: matching lightweight boundary descriptors on a single sweep pair recovers most of the accuracy that the dense variant obtains only after aggregating several past sweeps. However, the densification strategy is decisive. Replac-ing the connected-component densification with a nearest-neighbor assignment degrades the mean EPE from 0.2845 to 
+
+0.5512 , nearly doubling the error in every class. This confirms that propagating the sparse keypoint flow under the piecewise-rigidity prior, assigning each connected component the median flow of the matched keypoints it contains, is essential to turning reliable but sparse correspondences into an accurate dense flow field, whereas a purely geometric nearest-neighbor densification discards the rigidity structure and propagates matching errors.                          
+
+> Method Dynamic Bucket-Normalized EPE ↓
+> CAR OTHER PED. VRU Mean Connected components 0.1701 0.2633 0.4401 0.2647 0.2845 Nearest neigh-bor 0.3398 0.5845 0.8286 0.4519 0.5512 CorrelationFlow (h= 0 )0.3093 0.3458 0.3746 0.3799 0.3524 CorrelationFlow (h= 4 )0.2269 0.2491 0.3044 0.3363 0.2792
+
+TABLE IV: Performance of CorrelationFlow-Keypoint with two different methods for upsampling sparse scene flow of keypoints to dense scene flow using connected components and nearest neighbor. 
+
+B. Comparison to other unsupervised methods 
+
+We compare CorrelationFlow and its key-point-based vari-ant, CorrelationFlow-Keypoints, against state-of-the-art unsu-pervised methods on the test set of the Argoverse 2 2026 Multi-Dataset Scene Flow Challenge. As described in Sec. VI, this test set contains 9,613 point clouds drawn from five source datasets (AEVA, Argoverse 2, nuScenes, TruckScenes, and Waymo Open Dataset), spanning heterogeneous LiDAR sen-sors, vehicle platforms, and geographic regions; a method must therefore generalize across domains rather than fit a single sensor configuration, which is precisely the setting where a 10     
+
+> 12345
+> 0
+> 0.1
+> 0.15
+> 0.2
+> 0.25
+> 0.3
+> 0.35
+> 0.4
+> Number of scales
+> Dynamic Bucket-Normalize EPE
+
+Car        
+
+> h= 0
+> h= 2
+> h= 4
+> 12345
+> 0
+> 0.1
+> 0.15
+> 0.2
+> 0.25
+> 0.3
+> 0.35
+> 0.4
+> Number of scales
+
+Pedestrian        
+
+> h= 0
+> h= 2
+> h= 4
+> 12345
+> 0
+> 0.1
+> 0.15
+> 0.2
+> 0.25
+> 0.3
+> 0.35
+> 0.4
+> Number of scales
+
+VRU        
+
+> h= 0
+> h= 2
+> h= 4
+> 12345
+> 0
+> 0.1
+> 0.15
+> 0.2
+> 0.25
+> 0.3
+> 0.35
+> 0.4
+> Number of scales
+
+Other    
+
+> h= 0
+> h= 2
+> h= 4
+
+Fig. 10: Mean Dynamic Bucket-Normalized EPE (lower is better) as a function of the number of scales in the coarse-to-fine strategy. Each panel shows one object class; each line corresponds to a number of past point clouds h ∈ { 0, 2, 4}.
+
+training-free approach is expected to shine. Our comparison in-cludes six baselines: SeFlow [23], [54], a self-supervised feed-forward network trained with cycle-consistency objectives on a PointPillars-style backbone; SeFlow++ [ ?], its improved successor; TeFlow [22], which adds temporal ensembling across multiple frames; VoteFlow [21], which embeds a rigid-motion prior in the backbone; SSF [41], which targets sparse long-range scene flow; and RVLoss [ ?].All baselines are self-supervised: they require no manual annotations but rely on large-scale training, whereas our methods require neither train-ing nor labels. We exclude SynFlow [25] from the comparison: although it avoids manual annotation, it is trained with full supervision on massive synthetic data, and its performance thus reflects the scale of simulation rather than progress in unsupervised scene flow estimation. Fig. 12 breaks the comparison down by range, reporting the error separately for points within 0– 35 m and 35– 70 m 
+
+of the ego vehicle. In short range, the RVLoss and TeFlow learned baselines are the strongest in three of the four datasets. However, in long range, the picture reverses: RVLoss and TeFlow collapse to errors of 0.87–0.91 on every data set, and the SeFlow family degrades to 0.65–0.77, while both of our variants degrade gracefully, CorrelationFlow is best on AEVA, CorrelationFlow-Keypoints on TruckScenes, and both are sec-ond only to SSF on AV2 and Waymo. The range-robustness of SSF’s is expected, as it is explicitly designed for sparse long-range flow [41]; that our training-free estimators match or exceed it on two of four datasets underlines the range-robustness of the footprint-level correlation, which aggregates evidence over an object’s entire footprint rather than per-point features. Notably, CorrelationFlow-Keypoints degrades less than the dense variant at long range: for sparse footprints, nearly all pixels qualify as key points, and the ratio test rejects ambiguous matches, trading coverage for reliability where the dense correlation is weakest. VII. L IMITATIONS 
+
+CorrelationFlow inherits the consequences of its assump-tions, stated in Secs. III and IV. First, the BEV projection in the base version discards vertical motion and conflates points at different heights within a pixel; the sectional view recovers the vertical component, but at additional cost and only under the planar-motion assumption. Second, the piecewise-rigidity model ties the accuracy to the quality of the clustering: under-segmentation, i.e., nearby objects merged into one component, yields a single averaged motion for distinct objects, while over-segmentation fragments the flow of a single object. Both failure modes are governed by the pixel size s, the dilation, and the connectivity, and although the validation step of Sec. IV-A mitigates the former, neither is fully eliminated. Third, both variants estimate translation only: the dense variant assigns one displacement per component and the key-point variant one median displacement, so intra-frame rotation and articulation are not captured; this is benign at typical frame rates but degrades for long temporal baselines, where the constant-velocity assumption of Sec. IV-B also weakens for accelerating or turning objects. Fourth, the key-point variant additionally depends on the presence of repeatable boundary structure and on the gating radius; featureless or heavily occluded footprints yield few confident matches, and the corresponding components conservatively receive zero flow. Finally, like all classical pipelines, the method presumes accurate ego-motion compensation; pose errors translate directly into spurious flow, particularly for distant points where small rotational errors cause large displacements. VIII. C ONCLUSION 
+
+We presented CorrelationFlow, a training-free family of LiDAR scene flow estimators that reduces the task to two clas-sical operations: image correlation and connected-component labeling on a bird’s-eye-view occupancy projection. The dense variant recovers per-component motion by correlation maxi-mization over a temporal window, robustified by a median over multiple baselines; the key-point variant, CorrelationFlow-Keypoints, operates on a single sweep pair by matching bound-ary key points derived from the distance transform, filtered by Lowe’s ratio test, and propagating their flow within connected components. Neither variant requires training data, labels, or learned parameters and both expose a single interpretable correlation operation at their core. In the Argoverse 2 2026 Multi-Dataset Scene Flow Challenge, CorrelationFlow ranked second on the unsupervised track, demonstrating that classical geometric operations remain competitive with learned methods across heterogeneous sensors and platforms. Consistent with 11 
+
+Overall AEVA AV2 nuScenes TruckScene Waymo 
+
+0.1
+
+0.3
+
+0.5
+
+0.7
+
+0.9
+
+> Dynamic Bucket-Normalized EPE
+
+CorrelationFlow SSF CorrelationFlow-Keypoint RVLoss TeFlow SeFlow++ VoteFlow SeFlow 
+
+Fig. 11: Comparison against state-of-the-art unsupervised methods on the test set of the Argoverse 2 2026 Multi-Dataset Scene Flow Challenge, measured by the mean Dynamic Bucket-Normalized EPE (lower is better), overall and per source dataset. Each dataset’s error is averaged over the short (0– 35 m ) and long (35– 70 m ) ranges. 
+
+recent re-evaluations of LiDAR scene flow [53], we argue that such transparent baselines are valuable both as practical, reproducible estimators and as a yardstick for how much of the problem is solvable without learning. Future work includes lifting the ground-plane restriction through multi-height occupancy slices, modeling per-component rotation, and coupling the two variants more tightly, e.g., by using key-point matches to seed or verify the dense correlation. REFERENCES [1] S. Vedula, S. Baker, P. Rander, R. Collins, and T. Kanade, “Three-dimensional scene flow,” in Proceedings of the Seventh IEEE Interna-tional Conference on Computer Vision , vol. 2, 1999, pp. 722–729 vol.2. [2] T. Lentsch, H. Caesar, and D. M. Gavrila, “UNION: Unsupervised 3D object detection using object appearance-based pseudo-classes,” in 
+
+Advances in Neural Information Processing Systems (NeurIPS) , vol. 37, 2024, pp. 22 028–22 046. [3] M. Najibi, J. Ji, Y. Zhou, C. R. Qi, X. Yan, S. Ettinger, and D. Anguelov, “Motion inspired unsupervised perception and prediction in autonomous driving,” in European Conference on Computer Vision . Springer, 2022, pp. 424–443. [4] R. Asghar, W. Liu, L. Rummelhard, A. Spalanzani, and C. Laugier, “Flow-guided motion prediction with semantics and dynamic occupancy grid maps,” in 2024 IEEE 27th International Conference on Intelligent Transportation Systems (ITSC) . IEEE, 2024, pp. 3160–3165. [5] X. Liu, C. R. Qi, and L. J. Guibas, “Flownet3d: Learning scene flow in 3d point clouds,” CVPR , 2019. [6] P. Jund, C. Sweeney, N. Abdo, Z. Chen, and J. Shlens, “Scalable scene flow from point clouds in the real world,” IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 1589–1596, 2021. [7] Q. Zhang, Y. Yang, H. Fang, R. Geng, and P. Jensfelt, “DeFlow: Decoder of scene flow network in autonomous driving,” in 2024 IEEE International Conference on Robotics and Automation (ICRA) , 2024, pp. 2105–2111. [8] J. Kim, J. Woo, U. Shin, J. Oh, and S. Im, “Flow4d: Leveraging 4d voxel network for lidar scene flow estimation,” IEEE Robotics and Automation Letters , vol. 10, no. 4, pp. 3462–3469, 2025. [9] X. Li, J. Kaesemodel Pontes, and S. Lucey, “Neural scene flow prior,” 
+
+Advances in Neural Information Processing Systems , vol. 34, 2021. [10] K. Vedder, N. Peri, N. Chodosh, I. Khatri, E. Eaton, D. Jayaraman, Y. L. D. Ramanan, and J. Hays, “ZeroFlow: Fast Zero Label Scene Flow via Distillation,” International Conference on Learning Representations (ICLR) , 2024. [11] N. Chodosh, D. Ramanan, and S. Lucey, “Re-evaluating lidar scene flow,” in 2024 IEEE/CVF Winter Conference on Applications of Com-puter Vision (WACV) , 2024, pp. 5993–6003. [12] I. Khatri, K. Vedder, N. Peri, D. Ramanan, and J. Hays, “I can’t believe it’s not scene flow!” in Computer Vision – ECCV 2024: 18th European Conference, Milan, Italy, September 29 – October 4, 2024, Proceedings, Part XVIII . Berlin, Heidelberg: Springer-Verlag, 2024, p. 242–257. [Online]. Available: https://doi.org/10.1007/978-3-031-72649-1_14 [13] A. Behl, D. Paschalidou, S. Donné, and A. Geiger, “Pointflownet: Learning representations for rigid motion estimation from point clouds,” in CVPR , 2019. [14] X. Gu, Y. Wang, C. Wu, Y. J. Lee, and P. Wang, “Hplflownet: Hierarchical permutohedral lattice flownet for scene flow estimation on large-scale point clouds,” in Computer Vision and Pattern Recognition (CVPR), 2019 IEEE International Conference on , 2019. [15] W. Wu, Z. Y. Wang, Z. Li, W. Liu, and L. Fuxin, “Pointpwc-net: Cost volume on point clouds for (self-) supervised scene flow estimation,” in 
+
+European Conference on Computer Vision . Springer, 2020, pp. 88–107. [16] P. Jund, C. Sweeney, N. Abdo, Z. Chen, and J. Shlens, “Scalable scene flow from point clouds in the real world,” IEEE Robotics and Automation Letters , vol. 7, no. 2, pp. 1589–1596, 2022. [17] S. Huang, Z. Gojcic, J. Huang, A. Wieser, and K. Schindler, “Dynamic 3d scene analysis by point cloud accumulation,” in ECCV , 2022. [18] Q. Zhang, X. Zhu, Y. Zhang, Y. Cai, O. Andersson, and P. Jensfelt, “Deltaflow: An efficient multi-frame scene flow estimation method,” in 
+
+NeurIPS , 2025. [19] S. Andreas Baur, D. Josef Emmerichs, F. Moosmann, P. Pinggera, B. Ommer, and A. Geiger, “Slim: Self-supervised lidar scene flow and motion segmentation,” in 2021 IEEE/CVF International Conference on Computer Vision (ICCV) , 2021, pp. 13 106–13 116. [20] H. Mittal, B. Okorn, and D. Held, “Just go with the flow: Self-supervised scene flow estimation,” in CVPR , 2020. [21] Y. Lin, S. Wang, L. Nan, J. Kooij, and H. Caesar, “Voteflow: Enforcing local rigidity in self-supervised scene flow,” in Proceedings of the Computer Vision and Pattern Recognition Conference , 2025, pp. 17 155– 17 164. [22] Q. Zhang, C. Jiang, X. Zhu, Y. Miao, Y. Zhang, O. Andersson, and P. Jensfelt, “TeFlow: Enabling multi-frame supervision for self-supervised feed-forward scene flow estimation,” in CVPR , 2026. [23] Q. Zhang, Y. Yang, P. Li, O. Andersson, and P. Jensfelt, “Seflow: A self-supervised scene flow method in autonomous driving,” in European Conference on Computer Vision . Springer, 2024, pp. 353–369. [24] Z. Jin, Y. Lei, N. Akhtar, H. Li, and M. Hayat, “Deformation and cor-respondence aware unsupervised synthetic-to-real scene flow estimation for point clouds,” in CVPR , 2022. [25] Q. Zhang, X. Zhu, C. Jiang, and P. Jensfelt, “Synflow: Scaling up lidar scene flow estimation with synthetic data,” arXiv preprint arXiv:2604.09411 , 2026. 12 
+
+0-35m 35-70m 
+
+0.1
+
+0.3
+
+0.5
+
+0.7
+
+0.9
+
+> Dynamic Bucket-Normalized EPE
+
+AEVA 
+
+CorrelationFlow SSF CorrelationFlow-Keypoint 
+
+RVLoss TeFlow SeFlow++ 
+
+VoteFlow SeFlow 
+
+0-35m 35-70m 
+
+0.1
+
+0.3
+
+0.5
+
+0.7
+
+0.9
+
+AV2 
+
+0-35m 35-70m 
+
+0.1
+
+0.3
+
+0.5
+
+0.7
+
+0.9
+
+> Dynamic Bucket-Normalized EPE
+
+TruckScene 
+
+0-35m 35-70m 
+
+0.1
+
+0.3
+
+0.5
+
+0.7
+
+0.9
+
+Waymo 
+
+Fig. 12: Mean Dynamic Normalized EPE (lower is better) at short (0– 35 m ) and long (35– 70 m ) range on the Multi-Dataset Scene Flow Challenge test set. Most learned baselines degrade sharply at long range; our variants remain robust. 
+
+[26] K. Vedder, N. Peri, I. Khatri, S. Li, E. Eaton, M. Kocamaz, Y. Wang, Z. Yu, D. Ramanan, and J. Pehserl, “Neural eulerian scene flow fields,” in ICLR , 2025. [27] D. T. Hoffmann, S. H. Raza, H. Jiang, D. Tananaev, S. Klingenhoefer, and M. Meinke, “Floxels: Fast unsupervised voxel based scene flow estimation,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2025, pp. 22 328–22 337. [28] A. Dewan, T. Caselitz, G. D. Tipaldi, and W. Burgard, “Rigid scene flow for 3d lidar scans,” in 2016 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , 2016, pp. 1765–1770. [29] Z. Gojcic, O. Litany, A. Wieser, L. J. Guibas, and T. Birdal, “Weakly supervised learning of rigid 3d scene flow,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2021, pp. 5692–5703. [30] R. Li, C. Zhang, G. Lin, Z. Wang, and C. Shen, “Rigidflow: Self-supervised scene flow learning on point clouds by local rigidity prior,” in CVPR , 2022. [31] Y. Lin and H. Caesar, “ICP-Flow: Lidar scene flow estimation with icp,” in CVPR , 2024. [32] R. J. Campello, D. Moulavi, and J. Sander, “Density-based clustering based on hierarchical density estimates,” in Pacific-Asia conference on knowledge discovery and data mining , 2013. [33] L. McInnes, J. Healy, and S. Astels, “hdbscan: Hierarchical density based clustering,” The Journal of Open Source Software , 2017. [34] Y. Wei, Z. Wang, Y. Rao, J. Lu, and J. Zhou, “Pv-raft: Point-voxel corre-lation fields for scene flow estimation of point clouds,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,2021, pp. 6954–6963. [35] D. S. Bolme, J. R. Beveridge, B. A. Draper, and Y. M. Lui, “Visual object tracking using adaptive correlation filters,” in Proceedings of the IEEE Computer Society Conference on Computer Vision and Pattern Recognition (CVPR) , 2010, pp. 2544–2550. [36] J. F. Henriques, R. Caseiro, P. Martins, and J. Batista, “High-speed tracking with kernelized correlation filters,” IEEE Transactions on Pattern Analysis and Machine Intelligence , vol. 37, no. 3, pp. 583–596, 2015. [37] A. H. Lang, S. Vora, H. Caesar, L. Zhou, J. Yang, and O. Beijbom, “Pointpillars: Fast encoders for object detection from point clouds,” in 
+
+2019 IEEE/CVF Conference on Computer Vision and Pattern Recogni-tion (CVPR) , 2019, pp. 12 689–12 697. [38] H. Samet and M. Tamminen, “Efficient component labeling of images of arbitrary dimension represented by linear bintrees,” IEEE transactions on pattern analysis and machine intelligence , vol. 10, no. 4, pp. 579– 586, 1988. [39] C. Sautier, G. Puy, A. Boulch, R. Marlet, and V. Lepetit, “Is clustering enough for lidar instance segmentation? a state-of-the-art training-free baseline,” in 2026 International Conference on 3D Vision (3DV) . IEEE, 2026, pp. 1833–1843. [40] G. Borgefors, “Distance transformations in digital images,” Computer vision, graphics, and image processing , vol. 34, no. 3, pp. 344–371, 1986. [41] A. Khoche, Q. Zhang, L. P. Sánchez, A. Asefaw, S. S. Mansouri, and P. Jensfelt, “Ssf: Sparse long-range scene flow for autonomous driving,” in 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 2025, pp. 6394–6400. [42] A. Khoche, Q. Zhang, Y. Cai, S. S. Mansouri, and P. Jensfelt, “Dogflow: Self-supervised lidar scene flow via cross-modal doppler guidance,” 
+
+IEEE Robotics and Automation Letters , 2026. [43] P. Wu, S. Chen, and D. N. Metaxas, “Motionnet: Joint perception and motion prediction for autonomous driving based on bird’s eye view maps,” in IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2020, pp. 11 385–11 395. [44] J. P. Lewis, “Fast normalized cross-correlation,” in Vision Interface ,vol. 10, no. 1, 1995, pp. 120–123. [45] F. Bolelli, S. Allegretti, and C. Grana, “Connected components labeling on bitonal images,” in International Conference on Image Analysis and Processing . Springer, 2022, pp. 347–357. [46] D. G. Lowe, “Distinctive image features from scale-invariant keypoints,” 
+
+International Journal of Computer Vision , vol. 60, p. 91–110, 2004. [47] B. Wilson, W. Qi, T. Agarwal, J. Lambert, J. Singh, S. Khandelwal, B. Pan, R. Kumar, A. Hartnett, J. K. Pontes, D. Ramanan, P. Carr, and J. Hays, “Argoverse 2: Next generation datasets for self-driving perception and forecasting,” in Proceedings of the Neural Informa-tion Processing Systems Track on Datasets and Benchmarks (NeurIPS Datasets and Benchmarks 2021) , 2021. [48] S. Li, Q. Zhang, I. Khatri, K. Vedder, D. Ramanan, and N. Peri, “Uniflow: Towards zero-shot lidar scene flow for autonomous vehicles via cross-domain generalization,” 2025. [Online]. Available: https://arxiv.org/abs/2511.18254 [49] G. N. Narasimhan, H. Vhavle, K. B. Vishvanatha, and J. Reuther, “Aevascenes: A dataset and benchmark for fmcw lidar perception,” 2025. [Online]. Available: https://scenes.aeva.com/ [50] H. Caesar, V. Bankiti, A. H. Lang, S. Vora, V. E. Liong, Q. Xu, A. Krishnan, Y. Pan, G. Baldan, and O. Beijbom, “nuscenes: Amultimodal dataset for autonomous driving,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2020, pp. 11 621–11 631. [51] F. Fent, F. Kuttenreich, F. Ruch, F. Rizwin, S. Juergens, L. Lechermann, C. Nissler, A. Perl, U. Voll, M. Yan et al. , “Man truckscenes: A multimodal dataset for autonomous trucking in diverse conditions,” 
+
+NeurIPS , 2024. [52] P. Sun, H. Kretzschmar, X. Dotiwalla, A. Chouard, V. Patnaik, P. Tsui, J. Guo, Y. Zhou, Y. Chai, B. Caine et al. , “Scalability in perception for autonomous driving: Waymo open dataset,” in CVPR , 2020. [53] I. Khatri, K. Vedder, N. Peri, D. Ramanan, and J. Hays, “I Can’t Believe It’s Not Scene Flow!” in European Conference on Computer Vision (ECCV) . Springer, 2024, pp. 242–257. [54] Q. Zhang, A. Khoche, Y. Yang, L. Ling, S. S. Mansouri, O. Andersson, and P. Jensfelt, “Himo: High-speed objects motion compensation in point clouds,” IEEE Transactions on Robotics , 2025. [55] L. McInnes and J. Healy, “Accelerated hierarchical density based cluster-ing,” in 2017 IEEE international conference on data mining workshops (ICDMW) . IEEE, 2017, pp. 33–42.

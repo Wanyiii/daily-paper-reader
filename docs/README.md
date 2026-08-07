@@ -41,7 +41,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-05</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-07</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 21 篇</strong>
@@ -51,7 +51,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>8</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-05 22:35:17 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-07 02:38:04 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读21篇论文，重点聚焦文本引导图像融合与混合现实机器人编程两大高影响力突破。最值得关注的是《Unleashing the Power of Text》与《ORCESTRA》均获9.0高分，前者用文本引导解决复杂退化图像融合，后者将VLM接入MR实现视觉机器人编程。普通读者可优先深读这两篇高分论文，速读方向可关注空间数据整合与农田分割智能体。</p>
+<p>今日共读21篇，聚焦3D视觉语言与多模态推理，精选2篇高分精读。最值得关注：Qwen-3D统一空间理解与TriCLE三模态边缘聚类，均为9.0分突破。建议普通读者优先精读这两篇，速读可看MoRoute动态路由视频生成与SSTG-Nav导航。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -74,9 +74,9 @@
     <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Unleashing the Power of Text: Text-Guided Flow Matching for Image Fusion under Complex Degradations">Unleashing the Power of Text: Text-Guided Flow Matching for Image Fusion under Complex Degradations</span></li><li><span class="dpr-home-dashboard-paper-title" title="ORCESTRA: VLM-driven Visual Robot programming in Mixed Reality">ORCESTRA: VLM-driven Visual Robot programming in Mixed Reality</span></li><li><span class="dpr-home-dashboard-paper-title" title="Driver2Map: Imitating Human Driving for Online High-Definition Map Construction">Driver2Map: Imitating Human Driving for Online High-Definition Map Construction</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Qwen-3D: A Generalist 3D Vision-Language Model for Spatial Understanding">Qwen-3D: A Generalist 3D Vision-Language Model for Spatial Understanding</span></li><li><span class="dpr-home-dashboard-paper-title" title="TriCLE: Tri-Modal Vision-Language Reasoning for Edge-Deployed Fine-Grained Clustering">TriCLE: Tri-Modal Vision-Language Reasoning for Edge-Deployed Fine-Grained Clustering</span></li><li><span class="dpr-home-dashboard-paper-title" title="Multimodal Alignment Through Joint Kernel Entropic Gromov--Wasserstein Optimal Transport">Multimodal Alignment Through Joint Kernel Entropic Gromov--Wasserstein Optimal Transport</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>4</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>4</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>4</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,9 +87,9 @@
     <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="UrbanTrace: LLM-Assisted Discovery and Semantics-Aware Integration of Spatial Data">UrbanTrace: LLM-Assisted Discovery and Semantics-Aware Integration of Spatial Data</span></li><li><span class="dpr-home-dashboard-paper-title" title="Think with Extra-Image: A Farmland Segmentation Agent Driven by Spatio-Temporal Information Gain">Think with Extra-Image: A Farmland Segmentation Agent Driven by Spatio-Temporal Information Gain</span></li><li><span class="dpr-home-dashboard-paper-title" title="Beyond Visual Ambiguity: Guiding Robust Monocular Depth Estimation in Challenging Scenarios via Detailed Long Captions">Beyond Visual Ambiguity: Guiding Robust Monocular Depth Estimation in Challenging Scenarios via Detailed Long Captions</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="MoRoute: Dynamic Routing for In-Context Multimodal Video Generation">MoRoute: Dynamic Routing for In-Context Multimodal Video Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="SSTG-Nav: Metric-Grounded Spatial-Semantic Topological Graphs for Reusable Object Navigation">SSTG-Nav: Metric-Grounded Spatial-Semantic Topological Graphs for Reusable Object Navigation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Through the LENS: Local Geometric Decomposition of Vision-Language Model Representations">Through the LENS: Local Geometric Decomposition of Vision-Language Model Representations</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">multimodal <strong>7</strong></span><span class="dpr-home-dashboard-tag">d-vision <strong>3</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">multimodal <strong>7</strong></span><span class="dpr-home-dashboard-tag">d-vision <strong>5</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
 </section>
 </div>
 
