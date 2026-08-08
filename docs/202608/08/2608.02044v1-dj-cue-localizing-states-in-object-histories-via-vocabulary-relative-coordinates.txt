@@ -1,0 +1,1384 @@
+Title: Déjà Cue: Localizing States in Object Histories via Vocabulary-Relative Coordinates
+
+URL Source: https://arxiv.org/pdf/2608.02044v1
+
+Published Time: Tue, 04 Aug 2026 02:48:28 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# Déjà Cue: Localizing States in Object Histories via Vocabulary-Relative Coordinates 
+
+## Haofan Cao 1,2 , Zhichao You 1∗, Yunkai Yang 1,2 , Liang Guo 1, Jie Wang 1, Chongshou Li 1
+
+> 1
+
+Southwest Jiaotong University, Chengdu, China 
+
+> 2
+
+University of Leeds, Leeds, UK haofan.cao@my.swjtu.edu.cn, pwkl5619@leeds.ac.uk 
+
+Abstract 
+
+Tracking links observations of the same object through vi-sual change, yet cannot by itself determine when the ob-ject is empty or filled, intact or cut. We formulate identity-conditioned state-moment retrieval: given a tracked-object history and alternative state descriptions, localize an inter-val in which each described state holds. Absolute image-text similarity scores descriptions independently; because every visible frame depicts the same target, shared object compat-ibility can obscure the state evidence needed to identify the target interval. The alternatives provide the missing reference: evidence for one state should be measured against the oth-ers. We introduce Déjà Cue, a training-free framework that turns these alternatives into a vocabulary-relative coordinate system. It subtracts their state-balanced centroid from each description, calibrates frame scores, and scans multiple dura-tions within contiguous visible runs using a frozen encoder. On 78 VOST histories, holding the temporal scan fixed and changing only the query reference nearly doubles R@1 at tIoU 0.5 from 10.3% to 20.5% and raises Top-1 tIoU from 16.0% to 21.5%. Candidate-rank analyses show that vocabulary-relative queries rank useful intervals higher within the same candidate set. Related state descriptions can therefore serve as an object-specific, query-time coordinate system for reading frozen vi-sual representations. 
+
+## 1 Introduction 
+
+Persistent visual representations organize video into object histories, yet identity continuity alone does not reveal when each semantic state holds. We study identity-conditioned state-moment retrieval : given a tracked-object history and a closed, state-grouped vocabulary of sibling descriptions, lo-calize one temporal interval for each description (Figure 1). Object association fixes what persists; the jointly supplied sibling set specifies the state distinctions that retrieval must resolve. Absolute image–text similarity conflates state distinctions with compatibility shared by all siblings. A conventional readout scores each description independently even though siblings repeat category, material, and context terms and every frame depicts the same tracked identity. Let ¯zo,q be the normalized embedding of query q and co the state-balanced vocabulary centroid. For a normalized visual feature yt,
+
+y⊤ 
+
+> t
+
+¯zo,q = y⊤ 
+
+> t
+
+(¯ zo,q − co) + y⊤ 
+
+> t
+
+co. (1) 
+
+> ∗
+
+Corresponding author. Pre-state:    
+
+> whole potato
+> Tracked Object History Query-Moment Alignment
+> Post-state:
+> cut potato
+> State query:
+> “cut potato”
+> high
+> alignment
+> Localized state moment
+
+Figure 1: Identity-conditioned state-moment retrieval local-izes [a, b ], where the tracked target exhibits query q (“ cut potato ”); the projection depicts framewise query–moment alignment. The first term measures support for q above the sibling aver-age; the second is shared by every sibling at frame t. Temporal variation in the shared term can elevate a broadly object-compatible frame regardless of the state it depicts. The vo-cabulary therefore supplies an object-specific contrast origin, converting a list of queries into the reference needed for state discrimination. Because the origin depends on the sibling set, one descrip-tion can induce different directions under different alterna-tives. Raw-versus-cut and peeled-versus-unpeeled vocabu-laries request distinct visual contrasts for the same potato. The coordinate represents this object-specific distinction at inference time; a corpus-level origin cannot. 
+
+Déjà Cue realizes this contrast by averaging descriptions within each state, weighting states equally in co, and normal-izing each residual ¯zo,q − co into a vocabulary-relative query direction (Figure 2). This coordinate is invariant to a common embedding translation and exact within-state duplication. Median–MAD calibration then rescales frame responses, and a run-constrained multiscale scan retrieves unknown-duration intervals while respecting visibility gaps. Matched coordinate variants leave every other component unchanged, identifying the origin responsible for the retrieval gain. On 78 VOST histories, changing only the query origin improves R@1 at tIoU 0.5 by 10.3 points and Top-1 tIoU by 5.5 points; both paired 95% bootstrap intervals exclude zero. The gain persists across four SigLIP 2 prompts and an arXiv:2608.02044v1 [cs.CV] 3 Aug 2026 unnormalized-sum readout, while shared candidates reach 93.5% oracle Top-1 tIoU and vocabulary-relative scores rank useful windows earlier. Sibling-state permutation and within-run shifts reduce retrieval, linking the effect to semantic assignment and temporal order. Our contributions are: 
+
+• We formulate state-moment retrieval over persistent ob-ject histories, where a complete sibling vocabulary de-fines the distinctions to localize. 
+
+• We introduce Déjà Cue, which centers each query on a state-balanced sibling vocabulary and localizes its evi-dence inside observed runs, using frozen features and no task-specific training. 
+
+• We establish the query-origin effect on a pre/post VOST benchmark through matched-coordinate comparisons, prompt and readout variants, candidate ranking, and se-mantic and temporal perturbations. 
+
+## 2 Related Work 
+
+Object states and persistent histories. Persistent object histories require both semantic change and identity conti-nuity. Object-state methods discover state-changing actions (Souček et al. 2022), preserve identity through transforma-tions (Yu et al. 2023), recognize open-world changes (Xue, Ashutosh, and Grauman 2024), predict interaction-induced changes (Zameni, Shen, and Elhamifar 2025), or segment spatially progressing transformations (Mandikal et al. 2026). Dynamic scene models maintain content through deforma-tion and topology change (Park et al. 2021; Luiten et al. 2024), while language fields attach open-vocabulary seman-tics to static and dynamic scenes (Kerr et al. 2023; Qin et al. 2024; Li et al. 2025; Xu et al. 2026). We take a tracked his-tory as input and retrieve when each member of its jointly supplied state vocabulary holds. 
+
+Temporal grounding. Temporal language grounding pro-vides the closest localization machinery. Supervised methods learn proposal interactions and boundaries (Lei, Berg, and Bansal 2021; Jang et al. 2023; Lin et al. 2023; Yan et al. 2023; Xiao et al. 2024; Sun et al. 2024; Yang et al. 2024), with query-dependent and object-centric variants condition-ing on a sentence or relevant tracklets (Moon et al. 2023, 2026b,a; Li et al. 2026). Scalable and multimodal systems refine the search space or enrich query semantics (Mu, Mo, and Li 2024; Sun et al. 2025; Tang et al. 2025; An and Grau-man 2026; Pramanick et al. 2025; Zhang et al. 2026; Halbe et al. 2026), while training-free approaches combine frozen priors, captions, or multimodal language models with pro-posal scoring and temporal postprocessing (Luo et al. 2024; Zheng et al. 2024; Xu et al. 2025; Jeon et al. 2026; Diwan, Peng, and Mooney 2023; Jeon et al. 2025). These meth-ods generally encode each sentence independently; identity-conditioned retrieval instead uses the complete sibling set to define every query coordinate. 
+
+Relative embedding geometry. Embedding corrections derive reference origins from corpus means or dominant di-rections (Mu, Bhat, and Viswanath 2018), negative-set statis-tics, broad concept vocabularies, or modality-level geometry (Zhou et al. 2023; Bhalla et al. 2024; Levi and Gilboa 2025). Such references are global and independent of the state alter-natives supplied for a particular object. Déjà Cue uses those alternatives as conditioning context, forming a state-balanced origin for each history so that every score measures support for q relative to its siblings. It requires no cross-history statis-tics and is invariant to exact within-state duplication. 
+
+## 3 Problem Formulation 
+
+Identity-conditioned state-moment retrieval maps a tracked-object history and a closed, state-grouped sibling vocabulary to one interval per description. For object history o, let xo,t ∈
+
+Rd be the tracked-object embedding at frame t, vo,t ∈ { 0, 1}
+
+indicate an observed target, and zo,q ∈ Rd encode description 
+
+q ∈ { 1, . . . , Q o}. The supplied partition Πo = {Q o,s }So
+
+> s=1
+
+groups descriptions into So ≥ 2 sibling states. Visual and text embeddings share a frozen encoder space. The input is 
+
+Xo = {xo,t }Tt=1 , Vo = {vo,t }Tt=1 ,Zo = {zo,q }Qo
+
+> q=1
+
+, Πo = {Q o,s }So
+
+> s=1
+
+, (2) Here Πo records the grouping of descriptions into sibling states. Frame labels, reference intervals, occurrence order, and event anchors remain unknown. The output is an inclu-sive window ˆwo,q = [ˆ ao,q , ˆbo,q ] for every q.Each output represents one occurrence. Any observed oc-currence satisfying q is semantically valid; evaluation desig-nates one reference for deterministic scoring, and the input omits that designation. All queries share the object associ-ation and complete vocabulary Zo. Frames with vo,t = 0 
+
+retain their temporal indices but contribute no evidence. An 
+
+observed run is a maximal contiguous interval with vo,t = 1 ,and every prediction lies within one run. 
+
+## 4 Method 
+
+Déjà Cue first expresses each description against its state-balanced siblings, then calibrates the resulting frame evi-dence and searches multiple durations within observed runs (Figure 2). The first stage changes the semantic reference; the second resolves response scale, visibility gaps, and un-known duration without changing that reference. Supplemen-tary Section A derives the coordinate and scan properties. 
+
+4.1 Vocabulary-Relative State Coordinates 
+
+Unequal numbers of paraphrases should not give one sibling state greater influence over the query origin. We first ℓ2-normalize every observed frame and description: 
+
+¯xo,t = xo,t 
+
+∥xo,t ∥2
+
+, ¯zo,q = zo,q 
+
+∥zo,q ∥2
+
+. (3) We then average within each state before averaging the state prototypes: 
+
+μzo,s = 1
+
+|Q o,s |
+
+X
+
+> q∈Q o,s
+
+¯zo,q , co = 1
+
+SoSoX
+
+> s=1
+
+μzo,s . (4) This two-level average assigns every state weight 1/S o, inde-pendent of its number of paraphrases. Adding a state changes Target-lineage 
+
+> frame & masks
+> SigLIP 2
+> Image
+> Tower
+> ···
+> SigLIP 2
+> Text
+> Tower
+> ···
+> Prompt
+> Ensemble
+> Sibling state
+> descriptions
+> State-Balanced
+> Origin
+> Direction
+> Normalization
+> Vocabulary-Relative Coordinate
+> Direction
+> Normalization
+> Trajectory-Centered Coordinate
+> Robust Calibration
+> Robust Scale
+> Run-wise Local Smoothing
+> Multiscale
+> Window Scan
+> Adaptive
+> Peak Expansion
+> Predicted State Window
+> Vision Text
+
+Figure 2: Overview of Déjà Cue. Each description is expressed relative to the state-balanced sibling centroid and scored against target-lineage frames. Robust scaling and run-wise smoothing calibrate the responses before a multiscale search selects a window within one observed run. Dotted paths show the trajectory-centered and adaptive-peak variants evaluated in ablations. the requested distinction, whereas repeating a description within one state leaves its influence unchanged. Each de-scription is expressed relative to this state-balanced centroid, 
+
+euo,q = ¯ zo,q − co, (5) and normalized into a query direction: 
+
+uo,q =
+
+euo,q /∥euo,q ∥2, ∥euo,q ∥2 > τ, 
+
+¯zo,q , otherwise . (6) We set τ = 10 −8; the fallback covers a query that is indis-tinguishable from its sibling centroid. State-balanced projection removes a shared translation ex-actly. Let ¯Mo = [ μzo, 1, . . . , μ zo,S o ] and Po = I − S−1 
+
+> o
+
+11 ⊤.The centered prototypes Go = ¯MoPo are invariant to any common offset δ ∈ Rd because 
+
+( ¯Mo + δ1⊤)Po = ¯MoPo. (7) The projection is zero-sum and preserves pairwise descrip-tion differences before normalization. For any visual vector 
+
+y, define ao,q (y) = y⊤ ¯zo,q . Then 
+
+y⊤ euo,q = ao,q (y) − 1
+
+SoSoX
+
+> s=1
+
+1
+
+|Q o,s |
+
+X
+
+> j∈Q o,s
+
+ao,j (y). (8) The score is therefore similarity to q relative to the state-balanced sibling average. A frame ranks highly when it fa-vors q over that average; compatibility shared by every sib-ling cancels. Direction normalization preserves this contrast orientation while equalizing residual magnitudes. The geometry is especially transparent for two states. Their centered prototypes are opposite directions, μzo, 1 − co =(μzo, 1 − μzo, 2)/2 and μzo, 2 − co = −(μzo, 1 − μzo, 2)/2, so evi-dence is read along the semantic axis joining the alternatives. With more states, each prototype is contrasted against their barycenter. Description-level residuals preserve paraphrase-specific variation around these state-level directions. Frame evidence uses the normalized visual features di-rectly: 
+
+ro,t = ¯ xo,t , eo,q,t = r⊤
+
+> o,t
+
+uo,q . (9) For a complementary history-relative visual coordinate, we subtract the coordinate-wise trajectory median 
+
+po = median  
+
+> t:vo,t =1
+
+¯xo,t ,rtraj  
+
+> o,t
+
+= ¯xo,t − po
+
+max( ∥¯xo,t − po∥2, 10 −12 ) . (10) The dual variant retains uo,q and substitutes rtraj  
+
+> o,t
+
+, giving 
+
+edual  
+
+> o,q,t
+
+= ( rtraj  
+
+> o,t
+
+)⊤uo,q . (11) The trajectory-only ablation instead pairs rtraj  
+
+> o,t
+
+with ¯zo,q ,while the matched absolute baseline uses (¯ xo,t , ¯zo,q ). These four coordinate systems differ only in their visual or query origin. 
+
+4.2 Run-Constrained Temporal Localization 
+
+Temporal localization must accommodate query-specific score scales, visibility gaps, and unknown state duration. Median–MAD standardization first calibrates each response over observed frames: 
+
+mo,q = median  
+
+> t:vo,t =1
+
+eo,q,t , (12) 
+
+so,q = max 
+
+
+
+1.4826 median  
+
+> t:vo,t =1
+
+|eo,q,t − mo,q |, 10 −3
+
+
+
+,
+
+(13) 
+
+go,q,t = ( eo,q,t − mo,q )/s o,q .
+
+The median defines the response of a typical observed frame, while the MAD measures its robust temporal spread. Posi-tive standardized values therefore indicate evidence above the history-specific background without allowing a few ex-treme frames to determine the scale. When the MAD floor is inactive, this calibration is invariant to every positive affine transformation e′ 
+
+> o,q,t
+
+= αe o,q,t + β, α > 0: the median becomes αm o,q + β, while the MAD and centered resid-ual both scale by α, giving g′ 
+
+> o,q,t
+
+= go,q,t . Window ranking therefore depends on the temporal response pattern, not its offset or positive scale. The 10 −3 floor prevents unstable divi-sion for a nearly constant response; the τ branch analogously retains the absolute query when sibling contrast vanishes. Local smoothing then aggregates support independently in-side each observed run. For an odd support width k, let 
+
+rk = ( k −1) /2 and J(k) 
+
+> R
+
+(t) = {j ∈ Z : |j| ≤ rk, t +j ∈ R}
+
+for frame t in run R, with hj = 1 /k :
+
+ego,q,t =
+
+P  
+
+> j∈J(k)
+> R(t)
+
+hj go,q,t +j
+
+qP   
+
+> j∈J(k)
+> R(t)
+
+h2
+
+> j
+
+. (14) Support contracts at run boundaries, and active-tap normal-ization keeps its noise scale comparable. Under independent equal-variance frame noise, the denominator is the active fil-ter’s standard deviation; shortened boundary kernels there-fore remain comparable with interior kernels. Evidence next to a visibility gap can compete without mixing observations across that gap. Finally, a multiscale search handles unknown state dura-tion. A geometric 1.5× schedule selected on development histories supplies 33 lengths; at evaluation, every fitting length is enumerated at every start within each observed run. A window w = [ a, b ] of length ℓ = b − a + 1 receives 
+
+S(o, q, w ) = 1
+
+√ℓ
+
+> b
+
+X
+
+> t=a
+
+ego,q,t . (15) The prediction is ˆwo,q = arg max w S(o, q, w ), with ties re-solved by earliest start and then earliest end. If positive ev-idence of mean μ persists for L frames, the expected score grows as μ√ℓ up to L and decays as μL/ √ℓ beyond it. Prefix sums evaluate the schedule in O(T log T ) time per query. Calibration removes query-specific offset and scale, ob-served runs enforce visibility, and the geometric schedule accommodates unknown duration. None introduces a learned boundary prior or temporal supervision. 
+
+## 5 Experiments 
+
+5.1 Evaluation Setting 
+
+Evaluation uses a primary VOST comparison and a sepa-rate seven-history low-data study. The VOST set varies the query coordinate while holding temporal decoding fixed; the second set compares frozen readouts and adapted decoders across endpoint, interior, recurrent, and progressive states. Five disjoint development histories choose temporal settings and the trajectory-centered visual extension, and supply the adapted decoders’ training records. All choices are fixed be-fore either evaluation. 
+
+VOST pre/post evaluation. We derive a benchmark of ob-ject transformations from VOST (Tokmakov, Li, and Gaidon 2023). With seed 3407, round-robin sampling selects 100 histories, balances actions and target nouns, and includes at most one source sequence per action–object pair across the original training and validation splits. We define two descriptions for each pre- and post-state before annotation. Two annotators independently label every frame, reconcile all disagreements, and remain blind to method scores. Seventy-eight histories contain at least five stable frames on both sides of a pre–transition–post event; the remaining 22 contain no such event. The earliest event defines the reference pre- and post-state episodes, yielding 156 states and 312 descriptions. Evaluation credits these event-adjacent episodes. Recurrence creates additional valid occurrences in 13 pre-states and 20 post-states, as illustrated in Supplementary Section B. 
+
+Features and queries. Native RGB frames, target-lineage masks, and temporal indices define each history. Every vis-ible target is cropped around the union of its lineage masks with 20% padding, with pixels outside the mask set to neu-tral RGB 127. Frozen SigLIP 2 base-patch16-224 encodes crops and descriptions as unit-normalized 768-dimensional features. The default text feature averages and renormalizes the raw description, “a photo of [description],” and “the [de-scription].” The method receives the description-to-state par-tition; framewise state labels, reference intervals, and event order remain hidden. 
+
+Metrics and matched comparisons. Temporal IoU com-pares inclusive predicted and reference intervals. R@1 θ is the percentage of descriptions whose selected window reaches tIoU θ; Top-1 tIoU averages overlap before thresholding. Both metrics average descriptions within states, states within histories, histories within duplicate-aware source compo-nents, and finally the 78 components uniformly. Confidence intervals use 10,000 component-bootstrap samples; paired tests use 100,000 sign-flip assignments with Holm correction within each stated family. Coordinate variants share crops, features, calibration, observed runs, enumerated windows, and tie breaking, leaving the visual or query origin as the sole difference. The development histories select support width k = 3 ,the 33-length schedule, and the trajectory-centered visual extension. These settings remain unchanged on VOST. An adaptive-peak readout independently selects a threshold from 
+
+{0.2, 0.3, . . . , 0.8} using absolute coordinates on the same development set, then applies the selected ratio 0.3 to both Method R@1 .3 R@1 .5 Top-1 tIoU 
+
+> Simple zero-shot readouts
+> Mean-window cosine (abs.) 0.6 [0.0,1.6] 0.0 [0.0,0.0] 2.4 [1.8,3.0] 3-frame boxcar (abs.) 0.0 [0.0,0.0] 0.0 [0.0,0.0] 1.7 [1.3,2.2] Max-frame window (abs.) 29.2 [23.7,34.6] 18.3 [13.5,23.4]
+> 23.0
+> [19.7,26.3]
+> Adaptive peak expansion (dev.-selected)
+> Absolute coords. 14.1 [9.9,18.6] 8.3 [4.8,12.2] 11.2 [8.6,14.1] Vocab-relative 19.2 [14.7,23.7] 12.2 [8.3,16.3] 15.0 [12.2,17.9]
+> Matched run-constrained scans
+> Absolute coords. 23.1 [17.6,28.8] 10.3 [6.1,14.7] 16.0 [13.0,19.3] Traj.-centered 24.0 [18.6,29.8] 11.9 [7.4,16.7] 16.3 [13.2,19.6]
+> Déjà Cue (Ours) 30.4
+> [24.7,36.5]
+> 20.5
+> [15.7,25.6] 21.5 [18.1,25.2] + traj. center (dev.)
+> 30.4
+> [24.7,36.5] 18.9 [14.4,23.7] 21.1 [17.8,24.7]
+
+Table 1: State-moment retrieval on 78 VOST histories (%, 
+
+↑). First lines are source-component means; second lines are 95% bootstrap intervals. All rows share frozen features, descriptions, and observed runs. query coordinates. Prompt and duration-score variants reuse the visual features and temporal settings. 
+
+Seven-history low-data evaluation. The second evalua-tion combines four reconstructed endpoint-dominated histo-ries with three held-out histories spanning interior fill, recur-ring hand configurations, and progressive slicing. SAM 2 supplies identity masks (Ravi et al. 2025), and frozen SigLIP 2 base-patch16-224 supplies 768-dimensional im-age and text features (Tschannen et al. 2025). The collection contains 16 states, 32 descriptions, 59 episodes, and 4035 observed frames. 
+
+5.2 Which Coordinate Drives Retrieval? 
+
+Under matched scanning, Déjà Cue improves reference-episode retrieval by 7.4 points in R@1 at tIoU 0.3 (95% interval [0.6,14.1]), 10.3 points at 0.5 ([4.5,16.0]), and 5.5 points in Top-1 tIoU ([1.9,9.2]; Table 1). The R@1-at-0.5
+
+gain remains significant after Holm correction ( p = 0 .004 ). Under adaptive peak expansion, vocabulary-relative queries also improve Top-1 tIoU by 3.8 points ([0.5,7.1]). The max-frame readout exposes a duration trade-off. It attains the highest Top-1 tIoU point estimate, 23.0% versus 21.5% for Déjà Cue, while Déjà Cue reaches higher R@1 at tIoU 0.5 (20.5% versus 18.3%). Thus Déjà Cue more often clears the designated overlap threshold, whereas max-frame yields the higher mean overlap. The 2 × 2 coordinate ablation attributes the gain to the query origin. Trajectory centering alone changes R@1 at 
+
+0.5 by 1.6 points ([-0.3,3.8]) and Top-1 tIoU by 0.3 points ([-0.7,1.5]). Adding the same visual origin to vocabulary-relative queries changes these metrics by -1.6 ([-4.2,1.0]) and 
+
+Figure 3: Paired VOST coordinate effects. (a) Ordered source-component changes in R@1 at tIoU 0.5 for Déjà Cue versus the matched absolute scan; n=78. (b) Aggregate changes for Déjà Cue versus absolute coordinates (orange) and after adding the trajectory-centered coordinate (blue). Points are source-component means; lines are 95% boot-strap intervals. All changes are reported in percentage points (pp). -0.4 points ([-1.9,1.0]; Figure 3). Both visual-origin intervals include zero; the query-origin intervals lie above it. The paired effect spans the evaluation: 31 of 78 source components improve in R@1 at 0.5, 36 tie, and 11 decline. Thus 67 components are nondecreasing, and improvements outnumber declines by nearly three to one. 
+
+Qualitative effect. The three examples in Figure 4 show the same change under matched candidates. Absolute co-ordinates place the chopped-state prediction late and select nonoverlapping intervals for the detached motor and single-deck queries. Vocabulary-relative coordinates move the ref-erence episodes ahead of those alternatives, raising Top-1 tIoU to 0.62, 0.82, and 0.83. Identical observed runs, dura-tion grids, and target features attribute these corrections to semantic evidence ordering. 
+
+5.3 Evidence Ordering and Readout Robustness 
+
+The query-origin gain persists across language and readout choices. All four prompts yield positive paired intervals for R@1 at 0.5 and Top-1 tIoU (Table 2). The unnormalized sum improves both coordinate variants over the square-root score, while Déjà Cue retains gains of 9.3 R@1 points ([3.2,15.7]; Holm–3 p = 0 .009 ) and 6.4 Top-1 points ([2.9,10.1]). The coordinate benefit therefore extends across the tested prompts and duration preferences. Duration does not confine the gain to a single scale. Query 1: chopped bok choy                   
+
+> pre [0,7] transition [8,20] post [21,75]
+> Reference
+> Absolute
+> Déjà Cue (Ours)
+> tIoU
+> -
+> 0.200
+> 0.618
+> t = 5 | pre t = 14 | trans. t = 42 | post t = 65 | post
+> [21,75]
+> [42,75]
+> [65,75]
+> Query 2: motor unit separated from the chopper attachment
+> pre [0,15] [16,21] post [22,66]
+> Reference
+> Absolute
+> Déjà Cue (Ours)
+> tIoU
+> -
+> 0.000
+> 0.822
+> [22,66]
+> [30,66]
+> [10,19]
+> t = 2 | pre t = 30 | post t = 60 | post t = 20 | trans.
+> Query 3: playing cards in one deck
+> [0,14] transition [15,41] post [42,159]
+> Reference
+> Absolute
+> Déjà Cue (Ours)
+> tIoU
+> -
+> 0.000
+> 0.833
+> [0,14]
+> [0,17]
+> [139,159]
+> t = 5 | pre t = 90 | post t = 149 | post t = 28 | trans.
+
+Figure 4: Qualitative query-coordinate gains on three VOST histories. Each row aligns sampled target-lineage frames with the reference and predictions from matched absolute coordi-nates and Déjà Cue. Vocabulary-relative coordinates improve Top-1 tIoU from 0.20 to 0.62 for chopped bok choy, 0.00 to 0.82 for the detached blender, and 0.00 to 0.83 for cards in one deck. Frames are sampled for visualization; intervals are decoded from the complete observed histories, and the mid-dle bands denote semantic transitions. Vocabulary-relative scoring improves R@1 in every quartile, including both the shortest and longest reference episodes (Table 3). Because descriptions from the same history share data, these strata are descriptive; the paired source-component analysis above provides the confidence intervals and significance test. State balancing also provides exact invariance to repeated wording. Multiplying one sibling state’s description count by 2, 4, or 8 changes 13–16 selected windows under query-uniform centering and none under the proposed centroid. This behavior matches the zero-sum projection in Sec-tion 4.1: duplicate descriptions cannot increase a state’s weight. The fixed candidate set covers the reference episodes well, reaching 93.5% oracle Top-1 tIoU under either coordinate (Table 4). Vocabulary-relative scoring brings useful candi-dates forward: MRR .5 rises by 10.0 points ([4.5,15.5]; Holm– 
+
+Setting Abs./Ours ∆ R@1 .5 ∆ Top-1 tIoU 
+
+SigLIP 2 prompt; square-root score 
+
+Raw 9.9/18.9 +9.0 [4.2,14.1] +6.0 [2.4,9.6] Photo 11.2/19.2 +8.0 [2.9,13.1] +5.0 [1.7,8.5] Definite 9.6/19.9 +10.3 [4.5,16.0] +4.6 [0.9,8.4] Ensemble 10.3/20.5 +10.3 [4.5,16.0] +5.5 [1.9,9.2] 
+
+Duration score; ensemble prompt 
+
+Unnormalized sum 15.7/25.0 +9.3 [3.2,15.7] +6.4 [2.9,10.1] 
+
+Table 2: Robustness of the query-coordinate gain on 78 VOST histories (%, ↑). “Abs./Ours” reports R@1 at tIoU 0.5; each 
+
+∆ is Déjà Cue minus the matched absolute scan, with a paired 95% bootstrap interval on the second line. 
+
+Duration Count Absolute Déjà Cue ∆
+
+Q1, shortest 82 7.3 8.5 +1 .2
+
+Q2 74 9.5 25.7 +16 .2
+
+Q3 78 12.8 23.1 +10 .3
+
+Q4, longest 78 11.5 25.6 +14 .1
+
+Table 3: R@1 at tIoU 0.5 by reference-duration quartile (%, 
+
+↑). Counts are descriptions; rows are query-level summaries. 3 p = 0 .002 ), R@10 .5 by 9.3 points ([3.2,15.4]; Holm– 3 p = 0 .011 ), and the normalized best candidate moves 7.4 points earlier (paired change -7.4; [-12.5,-2.3]; Holm–3 
+
+p = 0 .011 ). Shared oracle coverage fixes the search space, so all three gains arise from evidence ordering. 
+
+5.4 Low-Data Adaptation and Perturbations 
+
+The seven-history study compares the frozen scan with learned adaptation from scarce positives. Each decoder re-ceives the same 86 records, frozen object-local features, tem-poral coordinates, and vocabulary-relative text while retain-ing its proposal and boundary heads. Training uses five de-velopment histories for 200 epochs under seeds 3407–3409; all seven evaluation histories remain unseen. Without task-specific weights, Déjà Cue exceeds the strongest adapted-decoder point estimate by 1.2 points in R@1 at 0.3, 3.1 at 0.5, and 7.2 in Top-1 tIoU (Table 5). Sup-plementary Section D gives all decoders, seeds, and paired comparisons. 
+
+Coordinate MRR .5 R@10 .5 Best rank ↓ Sel./oracle Absolute 13.3 19.2 44.8 16.0/93.5 
+
+Déjà Cue 23.3 28.5 37.4 21.5 /93.5 
+
+Table 4: Ranking the shared 33-length VOST candidate set (%, ↑ unless marked). Selected/oracle reports Top-1 tIoU for the chosen and best-available candidates; normalized best rank maps the oracle candidate’s rank to [0 , 100] .Method R@1 .3 R@1 .5 Top-1 tIoU Mean pool (vocab.) 0.0 0.0 1.1 Sim-DETR (adapted) 44.0 ±8.3 30.2 ±7.3 28.7 ±1.4    
+
+> Déjà Cue (Ours) 45.2 33.3 35.9
+
+Table 5: Low-data decoder comparison on seven histories (%, ↑). Sim-DETR (Tang et al. 2025) is the strongest of eight adapted decoders by R@1 .5; its row is mean ± sample stan-dard deviation over three seeds. Déjà Cue and mean pooling use frozen features and no learned weights. Retrieval depends on sibling assignments and frame or-der. Exchanging descriptions across states reduces leave-one-history-out R@1 at 0.5 from 53.3% to 3.3%. Eight non-identity circular shifts preserve per-run features, score marginals, visibility, and candidates while changing tempo-ral alignment; mean R@1 falls from 43.8% to 14.1%. The drops link successful retrieval to sibling semantics and tem-poral alignment. 
+
+Efficiency. The run-wise prefix-sum scan costs O(T log T )
+
+time and O(T ) memory. With precomputed features, each query takes 15.2 ms on an RTX 4090 and requires no task-specific training. 
+
+## 6 Discussion 
+
+The sibling set changes how fixed temporal candidates are or-dered. Paired intervals for trajectory centering include zero, whereas every tested prompt preserves the query-origin gain. The shared candidates reach 93.5% oracle Top-1 tIoU, yet vocabulary-relative scores rank useful windows earlier; per-turbing sibling assignments or time sharply reduces retrieval. The semantic alternatives are therefore the effective condi-tioning signal. The coordinate ablation reveals a useful asymmetry. Sib-ling descriptions name the alternatives to distinguish, so their centroid aligns with the semantic decision. A trajectory me-dian summarizes an unlabeled mixture shaped by state du-ration, visibility, and recurrence. It need not align with that decision, explaining the consistent query-origin gain. The oracle and rank statistics separate temporal coverage from semantic ordering. The shared candidates reach 93.5% oracle Top-1 tIoU under either coordinate, while the selected score rises from 16.0% to 21.5%. Vocabulary-relative queries raise MRR .5 from 13.3% to 23.3% and R@10 .5 from 19.2% to 28.5%. The coordinate therefore advances useful windows within an already broad search space. The remaining oracle gap identifies evidence ranking and recurrence modeling as the main opportunities beyond candidate enumeration. The temporal objective exposes a complementary trade-off. Square-root normalization rewards sustained support without favoring the longest interval by construction. Max-frame selection produces the highest mean Top-1 tIoU, whereas Déjà Cue more often exceeds tIoU 0.5; the un-normalized sum improves both coordinates while preserving their difference. Positive gains in all four duration quartiles further separate the query-origin effect from a preference for one temporal scale. The formulation extends algebraically beyond binary vo-cabularies. While the main VOST benchmark evaluates bi-nary pre/post states, the seven-history extension adds two three-state histories to exercise this capability. With two states, centering places their prototypes on opposite sides of a single semantic axis. With So > 2, each state is mea-sured against the barycenter of all supplied alternatives, while state-balanced averaging prevents unequal paraphrase counts from moving that origin. This geometry supports multi-state retrieval directly, although interactions among closely related or irrelevant alternatives require further empirical study. The semantic and temporal perturbations delimit this in-terpretation. Swapping sibling assignments reduces R@1 at 
+
+0.5 from 53.3% to 3.3%, and within-run shifts reduce it from 43.8% to 14.1% while preserving feature multisets and visibility. These changes show that retrieval depends on the supplied state grouping and frame order. Conducted on five development histories and four reconstructed histories, re-spectively, they support this dependency claim without esti-mating its prevalence across the full VOST evaluation. The vocabulary acts as a query-time task specification. Adding or removing a state rotates every query direction because it changes the requested distinction. Exact within-state duplication leaves the centroid unchanged, preventing annotation frequency from changing that distinction. Each history is encoded once, and a new vocabulary requires only text embeddings and frame scoring. Our evidence covers bi-nary pre/post vocabularies with SigLIP 2; broader multi-state vocabularies, noisier lexical alternatives, and other encoders remain open tests of the same geometry. The formulation assumes target masks, a closed vocab-ulary, and one interval per description. Recurrence creates additional valid occurrences in 13 pre-states and 20 post-states, so a single designated episode can understate seman-tic validity even when it supports deterministic comparison. Multi-reference evaluation and multi-occurrence decoding would represent these histories directly. Vocabularies con-taining an absent state additionally require a null criterion, while imperfect masks require joint treatment of association and state evidence. 
+
+## 7 Conclusion 
+
+A sibling vocabulary can serve as the coordinate system for reading a tracked visual history. Déjà Cue subtracts its state-balanced centroid from each description, then locates evidence with robust run-constrained scanning. On 78 VOST histories, this training-free coordinate improves the matched absolute scan by 10.3 R@1 points at tIoU 0.5 and 5.5 Top-1 tIoU points. Ablations, candidate ranks, and semantic and temporal perturbations connect the gain to better ordering of shared candidates. Adaptive peak expansion and unnormal-ized duration scoring preserve the coordinate gain, separating the semantic reference from a particular temporal objective. The same coordinate can therefore complement richer tem-poral decoders when supervision is available. More broadly, related queries can define how a frozen representation is read; discovered identities, richer vocabularies, and recur-rent states are the next settings. References 
+
+An, J.; and Grauman, K. 2026. HieraMamba: Video Tem-poral Grounding via Hierarchical Anchor-Mamba Pooling. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 16954–16965. Bhalla, U.; Oesterling, A.; Srinivas, S.; Calmon, F. P.; and Lakkaraju, H. 2024. Interpreting CLIP with Sparse Lin-ear Concept Embeddings (SpLiCE). In Advances in Neural Information Processing Systems , volume 37, 84298–84328. Curran Associates, Inc. Diwan, A.; Peng, P.; and Mooney, R. 2023. Zero-shot Video Moment Retrieval With Off-the-Shelf Models. In Proceed-ings of The 1st Transfer Learning for Natural Language Pro-cessing Workshop , volume 203 of Proceedings of Machine Learning Research , 10–21. PMLR. Halbe, S.; Puranik, B.; Unnikrishnan, J.; Thakkar, K.; Bhat, V.; and Parag, T. 2026. VeRVE: Versatile Retrieval for Videos via Unified Embeddings. arXiv:2601.12193. Jang, J.; Park, J.; Kim, J.; Kwon, H.; and Sohn, K. 2023. Knowing Where to Focus: Event-aware Transformer for Video Grounding. In Proceedings of the IEEE/CVF Inter-national Conference on Computer Vision , 13846–13856. Jeon, M.; Yang, J.; Han, S.; Hwang, J.; Yoon, S.; Kim, J.; and Kim, J. 2025. Point to Span: Zero-Shot Moment Retrieval for Navigating Unseen Hour-Long Videos. arXiv:2512.10363. Jeon, M.; Yoon, S.; Kim, J.; and Kim, J. 2026. GranAlign: Granularity-Aware Alignment Framework for Zero-shot Video Moment Retrieval. Proceedings of the AAAI Con-ference on Artificial Intelligence , 40(7): 5287–5295. Kerr, J.; Kim, C. M.; Goldberg, K.; Kanazawa, A.; and Tan-cik, M. 2023. LERF: Language Embedded Radiance Fields. In Proceedings of the IEEE/CVF International Conference on Computer Vision , 19729–19739. Lei, J.; Berg, T. L.; and Bansal, M. 2021. Detecting Moments and Highlights in Videos via Natural Language Queries. In 
+
+Advances in Neural Information Processing Systems , vol-ume 34, 11846–11858. Curran Associates, Inc. Levi, M. Y.; and Gilboa, G. 2025. The Double-Ellipsoid Ge-ometry of CLIP. In Proceedings of the 42nd International Conference on Machine Learning , volume 267 of Proceed-ings of Machine Learning Research , 33999–34019. PMLR. Li, W.; Zhou, R.; Zhou, J.; Song, Y.; Herter, J.; Qin, M.; Huang, G.; and Pfister, H. 2025. 4D LangSplat: 4D Language Gaussian Splatting via Multimodal Large Language Models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 22001–22011. Li, Z.; Wong, Y.; Yamazaki, S.; Liu, J.; and Kankanhalli, M. 2026. Object-Centric Framework for Video Moment Retrieval. Proceedings of the AAAI Conference on Artificial Intelligence , 40(8): 6771–6779. Lin, K. Q.; Zhang, P.; Chen, J.; Pramanick, S.; Gao, D.; Wang, A. J.; Yan, R.; and Shou, M. Z. 2023. UniVTG: Towards Unified Video-Language Temporal Grounding. In 
+
+Proceedings of the IEEE/CVF International Conference on Computer Vision , 2794–2804. Luiten, J.; Kopanas, G.; Leibe, B.; and Ramanan, D. 2024. Dynamic 3D Gaussians: Tracking by Persistent Dynamic View Synthesis. In International Conference on 3D Vision ,800–809. Luo, D.; Huang, J.; Gong, S.; Jin, H.; and Liu, Y. 2024. Zero-Shot Video Moment Retrieval From Frozen Vision-Language Models. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision , 5464–5473. Mandikal, P.; Nagarajan, T.; Stoken, A.; Xue, Z.; and Grau-man, K. 2026. SPOC: Spatially-Progressing Object State Change Segmentation in Video. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision , 3504–3513. Moon, S.; Lee, S.; Seo, J.; and Im, S. 2026a. CVA: Context-aware Video-text Alignment for Video Temporal Grounding. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 17578–17587. Moon, W.; Hyun, S.; Lee, S.; and Heo, J.-P. 2026b. Correlation-guided calibration of query dependency for video temporal grounding. Pattern Recognition , 174: 112984. Moon, W.; Hyun, S.; Park, S.; Park, D.; and Heo, J.-P. 2023. Query-Dependent Video Representation for Moment Retrieval and Highlight Detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 23023–23033. Mu, F.; Mo, S.; and Li, Y. 2024. SnAG: Scalable and Ac-curate Video Grounding. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,18930–18940. Mu, J.; Bhat, S.; and Viswanath, P. 2018. All-but-the-Top: Simple and Effective Postprocessing for Word Representa-tions. In International Conference on Learning Representa-tions .Park, K.; Sinha, U.; Hedman, P.; Barron, J. T.; Bouaziz, S.; Goldman, D. B.; Martin-Brualla, R.; and Seitz, S. M. 2021. HyperNeRF: A Higher-Dimensional Representation for Topologically Varying Neural Radiance Fields. ACM Transactions on Graphics , 40(6): 238:1–238:12. Pramanick, S.; Mavroudi, E.; Song, Y.; Chellappa, R.; Tor-resani, L.; and Afouras, T. 2025. Enrich and Detect: Video Temporal Grounding with Multimodal LLMs. In Proceed-ings of the IEEE/CVF International Conference on Computer Vision , 24297–24308. Qin, M.; Li, W.; Zhou, J.; Wang, H.; and Pfister, H. 2024. LangSplat: 3D Language Gaussian Splatting. In Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 20051–20060. Ravi, N.; Gabeur, V.; Hu, Y.-T.; Hu, R.; Ryali, C.; Ma, T.; Khedr, H.; Rädle, R.; Rolland, C.; Gustafson, L.; Mintun, E.; Pan, J.; Alwala, K. V.; Carion, N.; Wu, C.-Y.; Girshick, R.; Dollár, P.; and Feichtenhofer, C. 2025. SAM 2: Segment Anything in Images and Videos. In International Conference on Learning Representations , volume 2025, 28085–28128. Souček, T.; Alayrac, J.-B.; Miech, A.; Laptev, I.; and Sivic, J. 2022. Look for the Change: Learning Object States and State-Modifying Actions From Untrimmed Web Videos. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vi-sion and Pattern Recognition , 13956–13966. Sun, H.; Zhou, M.; Chen, W.; and Xie, W. 2024. TR-DETR: Task-Reciprocal Transformer for Joint Moment Retrieval and Highlight Detection. Proceedings of the AAAI Conference on Artificial Intelligence , 38(5): 4998–5007. Sun, X.; Wang, L.; Zhou, S.; Shi, L.; Xia, K.; Liu, M.; Wang, Y.; and Hua, G. 2025. Moment Quantization for Video Tem-poral Grounding. In Proceedings of the IEEE/CVF Interna-tional Conference on Computer Vision , 20137–20146. Tang, J.; Wei, Z.; Zhu, Y.; Shi, C.; Li, G.; Lin, L.; and Yang, S. 2025. Sim-DETR: Unlock DETR for Temporal Sentence Grounding. In Proceedings of the IEEE/CVF International Conference on Computer Vision , 22760–22771. Tokmakov, P.; Li, J.; and Gaidon, A. 2023. Breaking the “Object” in Video Object Segmentation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 22836–22845. Tschannen, M.; Gritsenko, A.; Wang, X.; Naeem, M. F.; Alabdulmohsin, I.; Parthasarathy, N.; Evans, T.; Beyer, L.; Xia, Y.; Mustafa, B.; Hénaff, O.; Harmsen, J.; Steiner, A.; and Zhai, X. 2025. SigLIP 2: Multilingual Vision-Language Encoders with Improved Semantic Understanding, Localiza-tion, and Dense Features. arXiv:2502.14786. Xiao, Y.; Luo, Z.; Liu, Y.; Ma, Y.; Bian, H.; Ji, Y.; Yang, Y.; and Li, X. 2024. Bridging the Gap: A Unified Video Com-prehension Framework for Moment Retrieval and Highlight Detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 18709–18719. Xu, Y.; Miao, Q.; Quan, J.; Yang, W.; Li, Z.; and Luo, Y. 2026. LangField4D: Learning Identity-Adaptive and Spatio-Temporal Continuous 4D Language Fields for Dy-namic Scenes. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 9558–9569. Xu, Y.; Sun, Y.; Zhai, B.; Li, M.; Liang, W.; Li, Y.; and Du, S. 2025. Zero-shot Video Moment Retrieval via Off-the-shelf Multimodal Large Language Models. Proceedings of the AAAI Conference on Artificial Intelligence , 39(9): 8978– 8986. Xue, Z.; Ashutosh, K.; and Grauman, K. 2024. Learning Object State Changes in Videos: An Open-World Perspective. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 18493–18503. Yan, S.; Xiong, X.; Nagrani, A.; Arnab, A.; Wang, Z.; Ge, W.; Ross, D.; and Schmid, C. 2023. UnLoc: A Unified Frame-work for Video Localization Tasks. In Proceedings of the IEEE/CVF International Conference on Computer Vision ,13623–13633. Yang, J.; Wei, P.; Li, H.; and Ren, Z. 2024. Task-Driven Exploration: Decoupling and Inter-Task Feedback for Joint Moment Retrieval and Highlight Detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pat-tern Recognition , 18308–18318. Yu, J.; Li, X.; Zhao, X.; Zhang, H.; and Wang, Y.-X. 2023. Video State-Changing Object Segmentation. In Proceedings of the IEEE/CVF International Conference on Computer Vi-sion , 20439–20448. Zameni, P.; Shen, Y.; and Elhamifar, E. 2025. MOSCATO: Predicting Multiple Object State Change Through Actions. In Proceedings of the IEEE/CVF International Conference on Computer Vision , 11600–11611. Zhang, J.; Wang, T.; Ge, Y.; Ge, Y.; Li, X.; and Wang, L. 2026. TimeLens: Rethinking Video Temporal Grounding with Multimodal LLMs. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,10419–10429. Zheng, M.; Cai, X.; Chen, Q.; Peng, Y.; and Liu, Y. 2024. Training-Free Video Temporal Grounding Using Large-Scale Pre-trained Models. In Computer Vision – ECCV 2024 ,20–37. Springer Nature Switzerland. Zhou, Y.; Ren, J.; Li, F.; Zabih, R.; and Lim, S.-N. 2023. Test-Time Distribution Normalization for Contrastively Learned Visual-language Models. In Advances in Neural Informa-tion Processing Systems , volume 36, 47105–47123. Curran Associates, Inc. Déjà Cue: Localizing States in Object Histories via Vocabulary-Relative Coordinates 
+
+## Code: https://github.com/HaofanCao/DejaCue 
+
+# Appendix 
+
+## A Detailed Method Derivations 
+
+State-balanced text centering defines the vocabulary-relative query coordinate; trajectory centering supplies the development-selected dual variant. Both feed the same ro-bust calibration and multiscale window statistic. Indices o, t, q, and s denote history, frame, description, and sibling state. The embedding dimension is d, the sequence length is T , Qo and So count descriptions and sibling states, and vo,t indicates observation. Normalized visual and text embeddings are ¯xo,t , ¯zo,q ∈ Rd. Vectors are columns, In is the n × n identity, and 1n is the length-n all-ones vector. Co-ordinate identities are algebraic; expectations and variances use only the stated working noise models. 
+
+A.1 State-Balanced Origin and Projection Geometry 
+
+Let st o(q) ∈ { 1, . . . , S o} denote the sibling state contain-ing description q. Assign each description the state-balanced weight 
+
+πo,q = 1
+
+So|Q o, st o(q)| ,
+
+> Qo
+
+X
+
+> q=1
+
+πo,q = 1
+
+SoSoX
+
+> s=1
+
+1
+
+|Q o,s |
+
+X
+
+> q∈Q o,s
+
+1 = 1 . (1) Because the state sets form a nonempty partition, the weights sum to one and each state carries total weight 1/S o.The vocabulary origin is the weighted least-squares cen-troid. Define 
+
+Jo(c) = 
+
+> Qo
+
+X
+
+> q=1
+
+πo,q ∥¯zo,q − c∥22,co = arg min 
+
+> c∈Rd
+
+Jo(c). (2) Using P 
+
+> q
+
+πo,q = 1 , its gradient and Hessian are 
+
+∇J o(c) = 2 
+
+> Qo
+
+X
+
+> q=1
+
+πo,q (c − ¯zo,q ) = 2 c −
+
+> Qo
+
+X
+
+> q=1
+
+πo,q ¯zo,q 
+
+!
+
+,
+
+(3) 
+
+∇2Jo(c) = 2 Id. (4) The positive-definite Hessian makes Jo strictly convex, so its stationary point is the unique minimizer: 
+
+co =
+
+> Qo
+
+X
+
+> q=1
+
+πo,q ¯zo,q = 1
+
+SoSoX
+
+> s=1
+
+1
+
+|Q o,s |
+
+X
+
+> q∈Q o,s
+
+¯zo,q . (5) The origin is therefore the arithmetic mean of the state pro-totypes, giving every sibling state equal influence. A description-axis projection applies this centering to all descriptions at once. Collect the weights and normalized descriptions as 
+
+πo = [ πo, 1, . . . , π o,Q o ]⊤ ∈ RQo ,
+
+¯Zo = [¯ zo, 1, . . . , ¯zo,Q o ] ∈ Rd×Qo ,Ho = IQo − πo1⊤ 
+
+> Qo
+
+. (6) Because ¯Zoπo = co, right multiplication by Ho subtracts the same origin from every description: 
+
+eUo = ¯ZoHo = ¯Zo − ( ¯Zoπo)1⊤ 
+
+> Qo
+
+= ¯Zo − co1⊤ 
+
+> Qo
+
+. (7) The qth column is the vocabulary-relative residual euo,q =¯zo,q − co. Using 1⊤ 
+
+> Qo
+
+πo = 1 gives 
+
+H2 
+
+> o
+
+= IQo − 2πo1⊤ 
+
+> Qo
+
++ πo(1⊤ 
+
+> Qo
+
+πo)1⊤ 
+
+> Qo
+
+= Ho,Hoπo = 0 , 1⊤ 
+
+> Qo
+
+Ho = 0 . (8) Thus Ho is idempotent. It fixes every coefficient vector a
+
+satisfying 1⊤ 
+
+> Qo
+
+a = 0 and annihilates πo, so its range is the zero-sum subspace and its kernel is span {πo}. It is generally an oblique, rather than orthogonal, projection because the state-balanced weights need not be uniform. The identity 
+
+eUoπo = 0 states that the weighted residual mean is zero. Three exact consequences follow. First, for any δ ∈ Rd,adding the same offset to every normalized description has no effect: 
+
+( ¯Zo + δ1⊤ 
+
+> Qo
+
+)Ho = ¯ZoHo + δ(1⊤ 
+
+> Qo
+
+Ho) = ¯ZoHo. (9) Second, subtracting a common origin preserves all pairwise description differences before direction normalization: 
+
+(¯ zo,q − co) − (¯ zo,j − co) = ¯ zo,q − ¯zo,j . (10) Absolute Coordinates 
+
+> whole potato
+> cut potato
+> peeled
+> potato
+> boiled potato
+> Vocabulary-Relative Coordinates
+> centroid
+> whole potato
+> cut potato
+> peeled
+> potato
+> boiled potato
+
+Figure 1: Geometry intuition. Absolute queries retain ob-ject and context compatibility shared across sibling states, whereas Déjà Cue subtracts the state-balanced vocabulary centroid co, exposing state-specific contrast directions. Third, suppose every description in state s is replicated uniformly ρs ∈ N+ times. The recomputed state mean is 
+
+1
+
+ρs|Q o,s |
+
+X
+
+> q∈Q o,s
+> ρs
+
+X
+
+> i=1
+
+¯zo,q = μzo,s . (11) Hence every state mean, co, and each original residual remain unchanged. This invariance covers uniform replication within a state; genuinely new or asymmetrically added descriptions can change its mean. At the state-prototype level, the corresponding centering operator is the orthogonal projector 
+
+¯Mo = [ μzo, 1, . . . , μ zo,S o ], Po = ISo − S−1 
+
+> o
+
+1So 1⊤ 
+
+> So
+
+.
+
+(12) Because P ⊤ 
+
+> o
+
+= Po and P 2 
+
+> o
+
+= Po, it is the orthogonal projec-tor onto the state-coefficient subspace {a ∈ RSo : 1⊤ 
+
+> So
+
+a =0}. Its output Go = ¯MoPo is the unique closest prototype matrix whose columns sum to zero: 
+
+Go = arg min 
+
+> G∈Rd×So
+
+12 ∥G − ¯Mo∥2 
+
+> F
+
+s.t. G1So = 0 . (13) To verify the constrained optimum explicitly, introduce a multiplier λ ∈ Rd and the Lagrangian 
+
+L(G, λ ) = 12 ∥G − ¯Mo∥2 
+
+> F
+
++ λ⊤G1So . (14) Stationarity and feasibility give 
+
+G − ¯Mo + λ1⊤ 
+
+> So
+
+= 0 ,λ = S−1 
+
+> o
+
+¯Mo1So = co,G = ¯Mo − co1⊤ 
+
+> So
+
+= ¯MoPo. (15) Strict convexity on the affine feasible set makes this solu-tion unique. The prototype-level orthogonal projection and description-level oblique projection share the same state-balanced origin co but act on different column spaces. Finally, let y ∈ Rd and define ao,j (y) = y⊤ ¯zo,j . The unnormalized residual score is 
+
+y⊤ euo,q = ao,q (y) −
+
+> Qo
+
+X
+
+> j=1
+
+πo,j ao,j (y)= ao,q (y) − 1
+
+SoSoX
+
+> s=1
+
+1
+
+|Q o,s |
+
+X
+
+> j∈Q o,s
+
+ao,j (y). (16) Thus the residual score compares query similarity with the state-balanced sibling average. Whenever ∥euo,q ∥2 > τ , di-rection normalization divides this contrast by a positive num-ber and preserves its sign. Residuals at or below τ instead use the absolute direction ¯zo,q , avoiding division by a near-zero norm. 
+
+A.2 Unified Coordinate Variants 
+
+Let Io = {t : vo,t = 1 } be the nonempty set of observed frames. The visual origin po is a coordinate-wise median, equivalently an ℓ1 location estimator: 
+
+po ∈ arg min 
+
+> p∈Rd
+
+X
+
+> t∈I o
+
+∥¯xo,t − p∥1, (17) because, writing ν for a feature coordinate, 
+
+X
+
+> t∈I o
+
+∥¯xo,t − p∥1 =
+
+> d
+
+X
+
+> ν=1
+
+X
+
+> t∈I o
+
+|¯xo,t,ν − pν |. (18) Each scalar term is minimized when no more than half of the observations lie strictly on either side of pν , which is precisely the median condition. When the sample count is even, any point in the scalar median interval is a valid mini-mizer; any fixed coordinate-wise median convention selects one such point. The absolute and trajectory-centered visual coordinates are 
+
+rabs  
+
+> o,t
+
+= ¯ xo,t , rtraj  
+
+> o,t
+
+= ¯xo,t − po
+
+max( ∥¯xo,t − po∥2, 10 −12 ) ,
+
+(19) respectively. The second vector has unit norm whenever 
+
+∥¯xo,t − po∥2 ≥ 10 −12 ; below that numerical safeguard its norm is at most one, and it is exactly zero when ¯xo,t = po.For text, use the residual euo,q = ¯ zo,q − co with thresh-old τ = 10 −8. The absolute and vocabulary-relative query coordinates are 
+
+uabs  
+
+> o,q
+
+= ¯ zo,q , (20) 
+
+uvocab  
+
+> o,q
+
+=
+
+euo,q /∥euo,q ∥2, ∥euo,q ∥2 > τ, 
+
+¯zo,q , otherwise . (21) For a ∈ { abs , traj } and b ∈ { abs , vocab }, all coordinate ablations use the same evidence function 
+
+e(a,b ) 
+
+> o,q,t
+
+= ( rao,t )⊤ubo,q . (22) The absolute baseline uses (abs , abs) . The trajectory-only ablation uses (traj , abs) , Déjà Cue uses the vocabulary-relative pair (abs , vocab) , and the development-selected dual variant uses (traj , vocab) . The Déjà Cue correspondence is 
+
+ro,t = rabs  
+
+> o,t
+
+, uo,q = uvocab  
+
+> o,q
+
+, eo,q,t = e(abs ,vocab)  
+
+> o,q,t
+
+.
+
+(23) The trajectory-centered dual variant is 
+
+rdual  
+
+> o,t
+
+= rtraj  
+
+> o,t
+
+, udual  
+
+> o,q
+
+= uvocab  
+
+> o,q
+
+,edual  
+
+> o,q,t
+
+= e(traj ,vocab)  
+
+> o,q,t
+
+. (24) Consequently, every coordinate comparison changes only the chosen visual and query origins; features, visibility, temporal candidates, calibration, and the downstream readout remain fixed. The downstream derivations use the unadorned core response eo,q,t ; they apply unchanged to the dual variant after substituting edual 
+
+> o,q,t
+
+.
+
+A.3 Robust Calibration and Local Support 
+
+For a fixed query (o, q ), calibration uses only its observed responses. To separate the MAD from its numerical floor, write 
+
+mo,q = median 
+
+> t∈I o
+
+eo,q,t ,
+
+bso,q = 1 .4826 median 
+
+> t∈I o
+
+|eo,q,t − mo,q |,so,q = max( bso,q , 10 −3), go,q,t = eo,q,t − mo,q 
+
+so,q 
+
+.
+
+(25) The standardized response is invariant to any positive affine change when the scale floor is inactive. Let e′ 
+
+> o,q,t
+
+= αe o,q,t +
+
+β with α > 0 and β ∈ R, and let primed statistics be recom-puted from e′. Positive affine equivariance of the median and absolute deviation gives 
+
+m′ 
+
+> o,q
+
+= αm o,q + β, 
+
+|e′ 
+
+> o,q,t
+
+− m′ 
+
+> o,q
+
+| = α|eo,q,t − mo,q |,
+
+bs′ 
+
+> o,q
+
+= αbso,q . (26) If bso,q > 10 −3 and αbso,q > 10 −3, then so,q = bso,q and 
+
+s′ 
+
+> o,q
+
+= αbso,q . Therefore 
+
+g′ 
+
+> o,q,t
+
+= αe o,q,t + β − (αm o,q + β)
+
+αbso,q 
+
+= go,q,t . (27) The factor 1.4826 calibrates the MAD to the Gaussian stan-dard deviation. If Z ∼ N (0 , 1) and Φ is the standard-normal cumulative distribution function, let cN be the population median of |Z|. Then 
+
+Pr( |Z| ≤ cN ) = 2Φ( cN ) − 1 = 12 ,cN = Φ −1(0 .75) ≃ 0.67449 .
+
+(28) Thus 1/c N ≃ 1.4826 , making the population MAD equal to the Gaussian standard deviation. The floor handles nearly constant responses and deliberately relaxes exact scale in-variance only in that degenerate regime. The local-support denominator preserves marginal noise variance even when the kernel contracts at a run boundary. For an odd support width k, a frame t in observed run R, and radius rk = ( k − 1) /2, define 
+
+J(k) 
+
+> R
+
+(t) = {j ∈ Z : |j| ≤ rk, t + j ∈ R},nR,t = |J(k) 
+
+> R
+
+(t)| ≥ 1. (29) Since the uniform weights are hj = 1 /k on the active offsets, 
+
+ego,q,t =
+
+k−1 P  
+
+> j∈J(k)
+> R(t)
+
+go,q,t +j
+
+pnR,t /k 2
+
+= 1
+
+√nR,t 
+
+X 
+
+> j∈J(k)
+> R(t)
+
+go,q,t +j .
+
+(30) Under the local working model go,q,t = μ + ξt, the ξt inside a run are independent with E[ξt] = 0 and Var( ξt) = 1 . The aggregate moments are 
+
+E[ego,q,t ] = 1
+
+√nR,t 
+
+X 
+
+> j∈J(k)
+> R(t)
+
+μ = μ√nR,t ,
+
+Var( ego,q,t ) = 1
+
+nR,t 
+
+X 
+
+> j∈J(k)
+> R(t)
+
+Var( ξt+j ) = 1 . (31) Thus a shorter boundary kernel accumulates less signal but does not receive an artificially smaller marginal noise vari-ance merely because fewer taps are active. Because every offset in J(k) 
+
+> R
+
+(t) remains inside the same maximal observed run, neither signal nor noise is propagated across a missing observation. 
+
+A.4 Window Statistic, Duration Preference, and Complexity 
+
+First isolate the duration normalization from smoothing-induced correlation. Fix a query (o, q ), let the target interval 
+
+w⋆ of length L lie inside one observed run, and consider a candidate w in that run with length ℓ = |w|. Under the independent-evidence working model 
+
+ego,q,t = μ1[t ∈ w⋆] + ϵt, μ > 0, (32) the residuals ϵt are independent, zero mean, and unit vari-ance. This model is exact for k = 1 and isolates dura-tion normalization when k > 1; the resulting short-range covariance is derived separately. Define the overlap length 
+
+η(w) = |w ∩ w⋆|. Substitution into the normalized window score gives 
+
+S(o, q, w ) = μη (w)
+
+√ℓ + 1
+
+√ℓ
+
+X
+
+> t∈w
+
+ϵt. (33) Consequently, 
+
+E[S(o, q, w )] = μη (w)
+
+√ℓ ,
+
+Var( S(o, q, w )) = 1
+
+ℓ
+
+X
+
+> t∈w
+
+Var( ϵt) = 1 . (34) Since η(w) ≤ min( ℓ, L ),
+
+E[S(o, q, w )] ≤
+
+μ√ℓ, ℓ ≤ L, μL/ √ℓ, ℓ ≥ L. (35) The upper bound increases up to ℓ = L and decreases af-terward, reaching μ√L only for a length-matched candidate with complete overlap. Square-root normalization therefore removes the linear preference for long sums while retaining the √L gain from sustained evidence. For k > 1, adjacent locally aggregated responses share raw noise samples. Applying the working noise model to Equation 30 gives the noise component at any t ∈ R:
+
+ζt = 1
+
+√nR,t 
+
+X 
+
+> j∈J(k)
+> R(t)
+
+ξt+j . (36) For a fixed candidate w = [ a, b ], let Σw ∈ Rℓ×ℓ be the covariance matrix of (ζa, . . . , ζ b). The exact score variance is the variance of their normalized sum: 
+
+Var( S(o, q, w )) = 1
+
+ℓ 1⊤ 
+
+> ℓ
+
+Σw1ℓ. (37) Away from run boundaries, nR,t = k and the active offsets are −rk, . . . , r k. At temporal lag ∆ ≥ 0, the full-support sums for ζt and ζt+∆ share k − ∆ raw samples when ∆ < k 
+
+and none otherwise. Independence of the ξt therefore yields 
+
+γ∆ = Cov( ζt, ζ t+∆ ) = 
+
+(k − ∆) /k, 0 ≤ ∆ < k, 
+
+0, ∆ ≥ k. (38) In the full-support interior case, Σw is Toeplitz with entries determined by Equation 38. At each positive lag ∆, its two off-diagonals contain 2( ℓ − ∆) entries, giving 
+
+Var( S) = 1 + 2
+
+ℓ
+
+> min( k−1,ℓ −1)
+
+X
+
+> ∆=1
+
+(ℓ − ∆) k − ∆
+
+k . (39) For fixed k, the large-window limit is 
+
+lim  
+
+> ℓ→∞
+
+Var( S) = 1 + 2 
+
+> k−1
+
+X
+
+> ∆=1
+
+k − ∆
+
+k = k. (40) Thus smoothing introduces short-range correlation, but the normalized score variance approaches a constant rather than growing with candidate duration. The covariance quadratic form remains exact near run boundaries, whereas the station-ary Toeplitz simplification requires full support. Finally, every score is evaluated in constant time after a cumulative sum. For run R = [ aR, b R], define the query-specific cumulative evidence 
+
+Co,q,R (t) = 
+
+> t
+
+X
+
+> j=aR
+
+ego,q,j , (41) 
+
+S(o, q, [a, b ]) = Co,q,R (b) − Co,q,R (a − 1) 
+
+√b − a + 1 , (42) for every candidate [a, b ] ⊆ R, with Co,q,R (aR − 1) = 0 .Starting from ℓ1 = 1 , the duration grid follows 
+
+ℓm+1 = min( T, max {ℓm + 1 , round(1 .5ℓm)}) . (43) Let D be the number of generated lengths. Before the final cap at T , once ℓm ≥ 2,
+
+ℓm+1 ≥ round(1 .5ℓm) ≥ 1.5ℓm − 0.5 ≥ 54 ℓm. (44) Hence D ≤ 2 + ⌈log 5/4 T ⌉ = O(log T ). For a fixed length 
+
+ℓ, the number of valid starts across all observed runs is 
+
+Nℓ = X
+
+> R
+
+max {| R| − ℓ + 1 , 0} ≤ X
+
+> R
+
+|R| ≤ T. (45) Building all run-wise cumulative sums costs O(T ) time and memory, and enumerating every start at all D lengths costs 
+
+O(T D ) = O(T log T ) time per query. Because both cu-mulative sums and candidates are defined run by run, the missing-observation constraint is enforced by construction rather than by post-processing. 
+
+## B VOST Protocol and Extended Analyses 
+
+Recurrence makes a semantically valid retrieval temporally ambiguous when the same state occurs more than once. The main-paper VOST evaluation resolves this ambiguity with a designated event and matched temporal search; lexical-stability, candidate-coverage, duration-scoring, and ranking analyses then identify the source of the observed gains. 
+
+B.1 Designated Episodes and Recurrence 
+
+Using seed 3407, round-robin sampling selects 100 histo-ries while balancing actions and target nouns and admitting at most one source sequence per action–object pair across VOST’s training and validation splits (Tokmakov, Li, and Gaidon 2023). Each pre- and post-state receives two de-scriptions before frame annotation. Two annotators indepen-dently label every tracked-lineage frame as pre-state, transi-tion, post-state, or unobserved; disagreements are reconciled to consensus. A qualifying event requires at least five stable frames on each side of a transition. The 78 qualifying histo-ries yield 312 descriptions, while the remaining 22 contain no qualifying event. When several events qualify, the earliest supplies the designated pre- and post-state references used by the single-reference metric. The designated-event rule exposes a limitation under re-currence. One history, for example, contains three observed pre-state runs: a generic pre-state query may correctly re-trieve an earlier compatible run, although tIoU credits only the event-adjacent reference. Across the evaluation, 13 his-tories contain multiple observed pre-state runs and 20 con-tain multiple post-state runs. Accordingly, the metric tar-gets event-adjacent localization and leaves other semantically valid occurrences uncredited. 
+
+B.2 Features, Queries, and Aggregation 
+
+The VOST and seven-history evaluations preserve native RGB frames, target-lineage masks, and original temporal in-dices. Each visible target frame is cropped around the union of its lineage masks with 20% padding, and pixels outside the mask are set to 127 in every RGB channel. SigLIP 2 base-patch16-224 produces unit-normalized 768-dimensional vi-sual and text embeddings (Tschannen et al. 2025). Each text feature averages and renormalizes three encodings: the de-scription itself, “a photo of [description],” and “the [descrip-tion].” Inference is conditioned on the descriptions and their sibling-state grouping; framewise state labels and reference intervals are reserved for evaluation. To isolate coordinate origin, all variants share target fea-tures, observed runs, and the 33 candidate lengths generated by Equation 43: 
+
+L = {1, 2, 3, 4, 6, 9, 10 , 11 , 14 , 18 , 20 ,
+
+21 , 25 , 26 , 27 , 28 , 30 , 32 , 34 , 37 , 46 , 48 , 49 ,
+
+52 , 59 , 72 , 108 , 110 , 162 , 168 , 243 , 364 , 483 }.
+
+Metrics average the two descriptions within each state, the two states within each history, histories within duplicate-aware source components, and source components uni-formly. The 78 qualifying histories each form one source component. Bootstrap and paired sign-flip inference operate at this component level. 
+
+B.3 Integrated Retrieval Diagnostics 
+
+Figure 2 distinguishes lexical sensitivity, search coverage, and duration preference. Exact duplication leaves the coordi-nate unchanged, yet natural paraphrases rotate the state resid-ual: vocabulary-relative queries yield 13.3% mean window overlap and 2.6% exact endpoint agreement across same-state description pairs, compared with 63.1% and 32.1% for absolute coordinates. Exact duplication invariance therefore does not imply paraphrase invariance. The shared candidate set reaches 93.5% oracle Top-1 tIoU under every coordinate system, locating the remaining er-ror in evidence ordering rather than temporal coverage. For the trajectory-centered extension, replacing the square-root statistic with an unnormalized sum raises R@1 .5 from 18.9% to 23.4% and Top-1 tIoU from 21.1% to 27.0%; the paired square-root-minus-sum Top-1 interval is [-8.2,-3.5] points. 
+
+B.4 Readout Robustness and Candidate Ordering 
+
+The adaptive readout operates on the multiscale scan’s smoothed, median–MAD standardized frame evidence. For each query, it selects the earliest global maximum and ex-pands in both directions within the same observed run while evidence remains at least α times the peak; a nonpositive maximum returns one frame. Absolute-coordinate perfor-mance on the five development histories selects α = 0 .3
+
+from {0.2, 0.3, . . . , 0.8} by R@1 at tIoU 0.5, Top-1 tIoU, and R@1 at 0.3, in that order. This readout adapts peak-to-span generation (Jeon et al. 2025) to object-local histories.                             
+
+> Normalization Coordinate R@1 .3R@1 .5Top-1 tIoU Square root Absolute 23.1 10.3 16.0 Square root Déjà Cue 30.4 20.5 21.5 Square root + trajectory 30.4 18.9 21.1 Sum Absolute 28.8 15.7 21.1 Sum Déjà Cue 37.8 25.0 27.5 Sum + trajectory 38.1 23.4 27.0
+
+Table 1: VOST coordinate–normalization sensitivity with a fixed 33-length schedule (%, ↑). The development histories select the square-root statistic and duration grid used by the primary comparison. With unnormalized duration scoring, Déjà Cue still improves on absolute coordinates by 9.0 points on R@1 .3 ([3.2,14.7]), 9.3 points on R@1 .5 ([3.2,15.7]), and 6.4 points on Top-1 tIoU ([2.9,10.1]). The corresponding Holm–3 p-values are 0.009, 0.009, and 0.003. Thus the positive coordinate effect persists when duration scoring changes and all other temporal settings remain fixed.             
+
+> Coordinate MRR/R@10 Norm. best rank Selected/oracle Absolute 13.3/19.2 44.8 16.0/93.5
+> Déjà Cue 23.3/28.5 37.4 21.5/93.5 + trajectory 22.0/28.5 37.7 21.1/93.5
+
+Table 2: Candidate ranking on 78 VOST histories (%). MRR .5 and R@10 .5 denote reciprocal rank and recall within the top ten ( ↑); selected/oracle denotes chosen and best-available tIoU ( ↑). Normalized best rank maps the highest-overlap candidate’s zero-based rank to [0 , 100] (↓). Déjà Cue raises MRR .5 by 10.0 points (95% source-component bootstrap interval [4.5,15.5], Holm–3 p = 0 .002 )and R@10 .5 by 9.3 points ([3.2,15.4], Holm–3 p = 0 .011 ). The normalized best-overlap rank changes by -7.4 points ([-12.5,-2.3]): the highest-overlap candidate appears earlier in the ranking, although it remains far from rank one on average. 
+
+Figure 2: VOST retrieval behavior. (a) Same-state natural-paraphrase consistency; filled/open markers denote window over-lap/exact endpoints. (b) Selected and candidate-oracle Top-1 tIoU use the same marker convention. (c) Duration-score normal-ization for the trajectory-centered extension; R/T denote R@1 at tIoU 0.5/Top-1 tIoU. Values are means over 78 histories. C Seven-History Evaluation Design and Coordinate Results 
+
+VOST evaluates binary event-adjacent states; the seven-history study extends the frozen coordinate to interior, re-current, and progressive state topologies. The same histories support the low-data decoder comparison in Section D. 
+
+C.1 Cohorts and Shared Protocol 
+
+Five development histories contain 13 states, 26 descriptions, and 46 distinct episodes. They select the support width, dura-tion schedule, and trajectory-centered extension, and provide the 86 positive records used to train adapted decoders. The seven evaluation histories remain unseen during selection and training. Four reconstructed endpoint-dominated histo-ries contribute 8 states and 8 episodes; three independently held-out histories contribute 8 states and 51 episodes span-ning interior, recurrent, and progressive state structure. Every method receives the same target masks, object-local crops, SigLIP 2 features, state-grouped vocabularies, and ob-served runs. The frozen coordinate variants scan the same 33 candidate lengths and differ only in coordinate origin. Adapted decoders receive the shared visual features, normal-ized temporal coordinates, and vocabulary-relative text. Ref-erence intervals are defined independently of method scores and enter only evaluation; transition and unknown-visibility frames remain unlabeled. Metrics first average descriptions within states, then states within histories, finally histories uniformly. Recurrent histo-ries credit any annotated occurrence, whereas VOST credits only the designated event-adjacent episode (Section B). 
+
+C.2 Held-Out Histories with Diverse State Topologies 
+
+The three held-out histories instantiate state topologies ab-sent from the endpoint-dominated reconstructions. Coffee-martini represents interior states through three fill levels in one Neu3D camera. Cross-hands represents recurrence through 24 open and 20 clasped episodes after ambiguous or unobserved frames are excluded. Slice-banana represents progressive change through intact, partly sliced, and two mostly sliced episodes separated by a visibility gap. Of the 1883 frames selected for annotation, 1700 retain stable target masks and enter feature extraction.            
+
+> History S/E Absolute Déjà Cue + traj. coffee-martini 3/3 33.3/32.8 33.3/28.2 33.3/31.9 cross-hands 2/44 50.0/52.3 25.0/30.9 0.0/32.7 slice-banana 3/4 33.3/23.8 0.0/11.1 0.0/11.1 Held-out three 8/51 38.9/36.3 19.4/23.4 11.1/25.2 Reconstructed four 8/8 31.2/31.1 43.8/45.3 43.8/44.7
+
+Table 3: Coordinate results across the seven-history evalu-ation (%, ↑). Rows list the three held-out histories and the held-out and reconstructed cohort aggregates. S/E denotes states/episodes; cells give R@1 .5 / Top-1 tIoU. The coordinate effect changes with state topology. On the reconstructed endpoint-dominated histories, Déjà Cue raises R@1 .5 from 31.2% to 43.8% and Top-1 tIoU from 31.1% to 45.3%. On the independently held-out interior, recurrent, and progressive histories, it trails absolute coordinates in both R@1 .5 (19.4% versus 38.9%) and Top-1 tIoU (23.4% versus 36.3%); trajectory centering does not close this gap. High candidate-oracle tIoU on cross-hands (100.0%) and slice-banana (95.5%) locates the main failure in evidence ordering rather than candidate coverage. The corresponding vocabularies and reference intervals appear in Section F.3. 
+
+## D Low-Data Decoder Adaptation 
+
+Can low-data decoders trained on 86 development records improve on frozen vocabulary-relative retrieval? We evaluate eight architectures across three seeds and pair their history-level predictions with the deterministic Déjà Cue scan. 
+
+D.1 Shared Adaptation Protocol 
+
+Each training record pairs one positive observed run with a target description and supplies the remaining sibling descrip-tions as context. Text tokens use state-balanced vocabulary-relative coordinates, and every evaluation query receives its complete sibling vocabulary. Video inputs combine the frozen object-local features used by Déjà Cue with nor-malized temporal coordinates. This common representation leaves each decoder’s native proposal, matching, and bound-ary mechanisms unchanged. Training uses 86 positive records from the 5 development histories. Every model runs for 200 epochs with determin-istic architecture-compatible batches capped at 20 records, learning rate 10 −4, weight decay 10 −4, and gradient clipping at 0.1; all 86 records are covered in every epoch. Sim-DETR reduces the learning rate after epoch 100. We evaluate the epoch-200 checkpoint for seeds 3407, 3408, and 3409. 
+
+D.2 All Decoders and Seed Variation 
+
+Sim-DETR gives the strongest adapted mean, yet the frozen method retains the highest aggregate point estimate on all three metrics.                                
+
+> (a) Three-seed summary
+> Method R@1 .3R@1 .5Top-1 tIoU Moment-DETR 23.8 ±7.1 11.1 ±6.0 15.1 ±2.7 QD-DETR 19.0 ±8.2 12.7 ±3.6 17.3 ±2.9 EaTR 25.8 ±10.7 8.7 ±3.6 15.5 ±2.2 CG-DETR 31.0 ±17.2 14.3 ±8.2 19.0 ±5.7 UVCOM 27.8 ±17.9 11.5 ±11.9 16.6 ±8.0 TR-DETR 42.1 ±1.4 20.2 ±4.1 28.2 ±1.9 TaskWeave 34.1 ±2.7 21.0 ±6.8 23.8 ±5.1 Sim-DETR 44.0 ±8.3 30.2 ±7.3 28.7 ±1.4
+> Frozen Déjà Cue 45.2 33.3 35.9
+
+Table 4: Seven-history decoder comparison (%, ↑). Learned rows report the mean ± sample standard deviation of seed-wise seven-history macro means over seeds 3407–3409. The frozen row is deterministic. All learned decoders use the same 86 records, frozen inputs, vocabulary-relative text. R@1 .5 Top-1 tIoU Decoder Venue ∆ 95% interval p/Holm ∆ 95% interval p/Holm Moment-DETR(Lei, Berg, and Bansal 2021) NeurIPS 2021 22.2 [−5.2, 45 .6] .203/1.000 20.8 [1 .7, 37 .4] .125/.875 QD-DETR (Moon et al. 2023) CVPR 2023 20.6 [−2.0, 40 .1] .219/1.000 18.6 [−0.8, 34 .7] .141/.875 EaTR (Jang et al. 2023) ICCV 2023 24.6 [6 .7, 40 .1] .156/1.000 20.4 [5 .9, 32 .1] .094/.750 CG-DETR (Moon et al. 2026) P.R. 2026 19.0 [1 .2, 32 .1] .188/1.000 16.9 [−1.1, 30 .8] .141/.875 UVCOM (Xiao et al. 2024) CVPR 2024 21.8 [2 .8, 36 .9] .125/1.000 19.3 [2 .5, 31 .1] .125/.875 TR-DETR (Sun et al. 2024) AAAI 2024 13.1 [−9.5, 33 .3] .344/1.000 7.7 [−9.0, 23 .2] .438/.875 TaskWeave (Yang et al. 2024a) CVPR 2024 12.3 [−7.1, 30 .2] .328/1.000 12.2 [−4.7, 26 .1] .234/.875 Sim-DETR (Tang et al. 2025) ICCV 2025 3.2 [−19 .8, 27 .0] .875/1.000 7.3 [−9.7, 22 .3] .422/.875 
+
+Table 5: Paired comparisons between frozen vocabulary-relative Déjà Cue and all adapted decoders (percentage points, ↑). ∆
+
+is Déjà Cue minus the three-seed decoder mean within each history. Intervals are cohort-stratified history-bootstrap intervals; 
+
+p/Holm gives the exact sign-flip value and its Holm–8 adjustment. Deltas use unrounded history-level values. 
+
+D.3 Paired Comparisons to the Frozen Method 
+
+Seed-wise predictions are averaged within each history be-fore pairing with deterministic Déjà Cue predictions. The four reconstructed histories and three held-out histories are resampled within cohort for 10,000 bootstrap replicates; ex-act two-sided sign-flip tests treat the seven histories as inde-pendent units. R@1 .5 and Top-1 tIoU form separate Holm–8 families. All eight mean gaps favor the frozen method on both met-rics, but the seven-history sample leaves substantial paired uncertainty and no comparison survives Holm correction. Sim-DETR is the strongest adapted decoder by R@1 .5; the corresponding gaps are 3.2 R@1 .5 points and 7.3 Top-1 tIoU points. Section C isolates coordinate origin; the present anal-ysis compares learned temporal decoding with the frozen scan. 
+
+## E Robustness and Boundary Conditions 
+
+Using the trajectory-centered extension with development-selected temporal settings, we vary vocabulary composition, duration scoring, visibility, and recurrence to test the main paper’s evidence-ordering interpretation. 
+
+E.1 Vocabulary Composition and Residual Scaling 
+
+Raw and unit-normalized vocabulary residuals produce the same 32 windows because every query response is subse-quently standardized by its own positive MAD scale. The raw residual norms span 0.157–0.350 (median 0.241). This invariance applies to within-query candidate ordering; resid-ual magnitudes remain incomparable across descriptions. Exact duplication and genuine vocabulary growth have distinct effects. State-balanced centering is invariant to du-plicate descriptions, whereas new paraphrases can rotate query directions. Adding four human-written descriptions to each reconstructed state (32 total) yields 43.8% R@1 .5,40.9% Top-1 tIoU, and 96.9% identity accuracy on the new queries. Duplication factors 2, 4, and 8 change 13–16 tar-get windows under query-uniform centering and none un-der state-balanced centering. State balancing removes count bias; one-sided paraphrase additions shift the state prototype as predicted by the set-conditioned geometry.                                    
+
+> (a) New-description performance
+> Vocabulary extension R@1 .5Top-1 Residual norm Symmetric, +4 per state 43.8 40.9 0.298 One state, +1 37.5 42.2 0.275 One state, +2 50.0 44.3 0.309 One state, +4 43.8 40.1 0.320
+> (b) Original-window stability
+> Vocabulary extension tIoU Exact Symmetric, +4 per state 87.2 50.0 One state, +1 99.5 81.2 One state, +2 88.4 65.6 One state, +4 93.7 71.9
+
+Table 6: Sensitivity to vocabulary composition for the trajectory-centered extension on the reconstructed four-history evaluation (%, ↑, except residual norm). Panel (a) evaluates the added descriptions; panel (b) compares predic-tions for the original descriptions before and after extension. One-sided rows average both choices of which sibling state receives the additions. The one-sided results are non-monotonic in the num-ber of added descriptions: adding two per selected state gives the highest new-description R@1 and Top-1 point esti-mates, while adding one preserves the original windows most closely. On these four histories, vocabulary composition and description count jointly control the effective sibling-relative directions. 
+
+E.2 Duration and Score Normalization 
+
+Duration preference is jointly determined by candidate spac-ing and the window statistic. Table 7 crosses geometric ratios 
+
+1.25 , 1.5, and 2.0 with sum, square-root, and mean normal-ization for the trajectory-centered extension. Development performance selects the 1.5× square-root schedule. The un-normalized sum gives the highest seven-history point esti-mates, while the arithmetic mean removes the benefit of sus-tained evidence. A single-scale scan using only the median development duration falls to 11.9% R@1, demonstrating the value of multiscale aggregation independently of coordinate Schedule and score R@1 .3 R@1 .5 Top-1                   
+
+> 1.25 ×, sum/ √ℓ50.0 29.8 38.7
+> 1.5×, sum/ √ℓ48.8 29.8 36.4
+> 2.0×, sum/ √ℓ52.4 33.3 35.2
+> 1.5×, unnormalized sum 58.3 38.1 39.6
+> 1.5×, arithmetic mean 0.0 0.0 1.0 Single median duration 17.9 11.9 17.0
+
+Table 7: Duration-grid and score-normalization sensitivity of the trajectory-centered extension on the seven-history evalu-ation (%, ↑). The first three rows vary the grid under square-root scoring; the next two vary the statistic on the 1.5× grid. The single-scale row uses one median development duration. choice. Synthetic sequences isolate length normalization from vision–language feature quality. We simulate 192-frame se-quences containing one positive interval of duration 8, 12, 20, 32, or 48. The design crosses three signal levels, inde-pendent or AR(1)-correlated noise, grid bases 4–6, and geo-metric ratios 1.25, 1.5, and 2.0. Every cell uses the retrieval method’s integer duration schedule, three-frame smoothing, and median–MAD standardization. Table 8 averages 270 de-sign cells with 400 paired noise realizations per noise condi-tion. Relative to an unnormalized sum, square-root normal-ization improves R@1 .5 by 19.6 percentage points (paired Monte Carlo 95% interval, 18.8–20.3) and Top-1 tIoU by 10.7 points (10.3–11.1). The corresponding gains over an arithmetic mean are 46.5 points (46.0–47.1) and 32.8 points (32.5–33.1). These intervals capture Monte Carlo variation only. The ordering also varies with duration: the mean has slightly higher R@1 .5 at duration 8, while the unnormalized sum is strongest at duration 48. Aggregated over all simu-lated conditions, square-root normalization gives the highest accuracy and lowest duration error. 
+
+E.3 Missing Observations, Ranking, and Association Errors 
+
+Visibility loss fragments temporal search, whereas associa-tion errors corrupt its evidence. Table 9 quantifies both effects on the reconstructed histories; the ranking diagnostics below then locate the remaining error within fixed candidate set. Random missing observations hurt primarily by fragment-ing candidate runs. Using seeds 3407–3409 and the original temporal indices, strict runs split at every missing frame, whereas bridged runs let a candidate cross a missing position             
+
+> Window statistic R@1 .5Top-1 Duration error Sum/ √ℓ57.7 50.8 9.60
+> Unnormalized sum 38.1 40.1 30.27 Arithmetic mean 11.1 18.0 18.95
+
+Table 8: Synthetic duration-normalization study, averaged uniformly over 270 design cells (%, ↑; duration error in frames, ↓).                    
+
+> Perturbation ∆Top-1 ∆R@1 .5∆Identity Random missing observations, 10% −32 .2−37 .5−10 .4
+> Contiguous missing span, 10% −6.5−12 .50.0
+> 25% frames, 50% distractor mix +0 .30.00.0
+> All frames, full distractor mix −10 .6−8.30.0
+> Identity switch after 50% −3.50.00.0
+
+Table 9: Tracking perturbations on the reconstructed four-history subset (absolute change from the unperturbed trajectory-centered extension, percentage points). Three per-turbation seeds are averaged. with zero evidence there. Figure 3a–b shows that strict seg-mentation sharply reduces selected-window accuracy, while bridging remains close to the unperturbed result. Randomly missing frames are most damaging because they fragment observed runs and eliminate long candidates; one contiguous gap removes less of the search space. Full dis-tractor mixing lowers Top-1 tIoU by 10.6 points, while partial mixing leaves all three metrics unchanged and the halfway identity switch changes only Top-1 tIoU. These perturbations cover feature mixing and synthetic switches; pixel-level mask drift and natural tracker switches fall outside their scope. Repeating the candidate-ranking analysis on the seven-history evaluation uses the shared duration generator and every valid start. MRR .5 is the reciprocal rank of the first candidate reaching tIoU 0.5, with zero assigned when none exists; R@10 .5 is the fraction of states with a qualifying candidate among the first ten. The candidate oracle is the highest tIoU anywhere in the set. Déjà Cue raises R@10 .5
+
+from 34.5% to 42.9%, while MRR .5 remains 35.7%. Adding trajectory centering leaves R@10 .5 at 42.9% and changes MRR .5 to 33.0% (Figure 3c). The query coordinate therefore moves qualifying candidates into the top ten; the first relevant rank is unchanged in this study. Independent state decoding rarely produces overlapping windows: one of the 11 independently selected cross-state pairs overlaps. Exact non-overlap decoding leaves state-averaged R@1 at 33.3% and changes Top-1 tIoU from 37.1% to 36.3%. This diagnostic averages the two descriptions within each state; the main identity-conditioned retrieval re-mains description-specific. 
+
+E.4 Multiple State Occurrences 
+
+One-window decoding cannot represent every valid recur-rence. A Deformable 3D Gaussians model (Yang et al. 2024b), trained for 30,000 iterations on the D-NeRF jumping-jacks scene (Pumarola et al. 2021), provides 201 fixed-camera renders with two extended episodes and one contracted episode. With the development-selected three-frame smoothing kernel, the trajectory-centered extension recovers one extended episode for one paraphrase, yielding 8.3% mAP and 12.5% recall. This single-scene result exposes the one-window limitation: recovering every valid episode requires an explicit multi-window readout (Ding et al. 2026). Figure 3: Missing-observation robustness and ranking on seven histories. (a,b) The trajectory-centered extension under random missingness (three draws). (c) Candidate ranks under matched coordinates; Oracle is the best overlap in the fixed set. 
+
+## F Seven-History Protocol and Diagnostic Analyses 
+
+Holding development-selected temporal settings, state vo-cabularies, reference intervals, object-local features, and run-wise candidates fixed isolates coordinate origin; the follow-ing perturbations test dependence on sibling semantics and temporal alignment. 
+
+F.1 Development Selection and Reconstructed Analyses 
+
+The candidate oracle separates temporal coverage from evi-dence ranking. Eight nonzero within-run circular shifts pre-serve features, observed runs, and candidates but reduce reconstructed macro R@1 .5 from 43.8% to 14.1%; state permutations preserve the descriptions and temporal inputs while exchanging their sibling-state assignments. Across the five development folds, R@1 .5 spans 16.7– 100.0%, with a 53.3% macro-average and 97.3% candidate-oracle Top-1 tIoU. Sibling-state permutation reduces macro R@1 .5 to 3.3%. Three- and five-frame support tie under the primary R@1 .5 criterion; Top-1 tIoU tie-break selects k=3. On reconstructed histories, Déjà Cue improves R@1 .5 by 50 points on torchocolate and espresso, ties the absolute baseline on americano, and drops 50 points on tamping, yielding an aggregate history-bootstrap interval that includes zero. For the trajectory-centered extension, oracle Top-1 tIoU reaches 90.7 %, versus 44.7 % for selected predictions. Hard-negative margins test separation from sibling-state and non-target alternatives. Table 12 reports target identity and changes in S+ −Ssib and S+ −Sjoint ; Section F.3 defines the candidate sets and co-visibility constraints. 
+
+F.2 Object-Local Features and Observed Runs 
+
+Object-Local Features At each visible target frame, the union of available target-lineage masks defines an object-local crop with 20% padding. Pixels outside the union mask 
+
+Figure 4: Circular-shift sensitivity of the trajectory-centered extension (R@1 .5, %). Columns show the reconstructed his-tories and their macro-average; rows show the unshifted se-quences, eight nonzero within-run shifts, and their mean. Macro R@1 .5 falls from 43.8% to 14.1%. are set to 127 in each RGB channel. SigLIP 2 base-patch16-224 produces unit-normalized 768-dimensional embeddings. For description r, we encode r, “a photo of r,” and “the r,” average the three unit vectors, and normalize the result. The same ensemble is used in development and evaluation. Frames without an object-local observation retain their original indices with vo,t = 0 and do not enter temporal statistics, smoothing, or candidate generation. Figure 5: Evidence trajectories from the trajectory-centered extension on the reconstructed histories. Blue bands mark references and orange segments mark selected windows: a high-overlap empty-cup retrieval, a short selection inside a long blackened state, and a response to compression that precedes the completed tamped state. The latter two cases show how evidence ranking favors only part of a state or an earlier transition response.                          
+
+> History S/D/E LOSO Oracle Perm. hand 2/4/23 100.0 100.0 0.0 banana 4/8/4 25.0 93.5 8.3 lemon 3/6/3 16.7 97.2 8.3 cookie 2/4/4 25.0 100.0 0.0 toy container 2/4/12 100.0 96.0 0.0 Total / macro 13/26/46 53.3 97.3 3.3
+
+Table 10: Development leave-one-history-out diagnostics for the trajectory-centered extension (%, ↑). LOSO and Perm. report R@1 .5 before and after sibling-state permutation; Or-acle is candidate-oracle Top-1 tIoU. S/D/E denotes states, descriptions, and distinct state episodes. 
+
+Run Construction Visibility partitions each object history into maximal contiguous runs. Smoothing neighborhoods and candidate windows are constructed independently in-side each run, so temporal operations never cross a missing target frame. For a sequence of length T , Equation 43 gen-erates durations from ℓ1 = 1 until reaching T . We retain every length that fits at least one development run, produc-ing the 33-duration evaluation set. At evaluation, all fitting durations and inclusive starts are enumerated independently within each run, and cumulative sums evaluate their normal-ized scores.                      
+
+> Coordinates kDev R@1 .5Eval R@1 .5/Top-1 Absolute 337.5 31.2 / 31.1 Traj.-centered 342.5 37.5 / 32.3
+> Déjà Cue 345.8 43.8 / 45.3 + trajectory 150.0 43.8 / 44.9 + trajectory 353.3 43.8 / 44.7 + trajectory 553.3 43.8 / 44.7
+
+Table 11: Coordinate and temporal-support selection (%, 
+
+↑). Dev reports leave-one-history-out R@1 .5; Eval reports R@1 .5/Top-1 tIoU on the reconstructed histories. All rows use union-mask crops. 
+
+F.3 Vocabularies, References, Auxiliary Tracks 
+
+Reference Construction State vocabularies name stable visual conditions within each tracked history; transition and unknown-visibility frames remain unlabeled. Two annotators independently mark the first and last paired RGB and mask-overlay views that visibly satisfy each state. Resolving their 743 disagreements produces the adjudicated reference set. Across 1883 annotated frames, the two boundary sets agree exactly on 60.5% ( κ = 0 .478 ); the macro-average over histories is 76.4%. Among frames assigned a stable state by either annotator, agreement is 56.3%. Cross-hands is the main source of ambiguity at 49.7% exact agreement, while coffee-martini reaches 98.0%. Performance gaps relative to the absolute scan retain their sign under both boundary sets and the adjudicated reference                                            
+
+> (a) Retrieval by object history
+> History Abs. Déjà Cue + traj. Top-1 Oracle torchocolate 0.0 50.0 50.0 53.2 85.3 espresso 0.0 50.0 50.0 48.9 94.3 tamping 50.0 0.0 0.0 4.7 96.5 americano 75.0 75.0 75.0 71.9 86.8 History macro 31.2 43.8 43.8 44.7 90.7
+> (b) Hard-negative separation
+> Measure Abs. →Déjà Cue Positive ∆Paired change Identity acc. (%) 93.8 →100.0 –+6 .2pp Sibling margin –10/16 +2 .3 [ −2.3,7.8]
+> Joint margin –9/16 −1.3 [ −13 .8,7.7]
+
+Table 12: Retrieval and hard-negative separation on four re-constructed histories. Panel (a) reports retrieval metrics (%, 
+
+↑); its first three columns give R@1 .5, while Top-1 and Oracle refer to the trajectory-centered extension. Panel (b) reports target-identity accuracy (%) and changes in hard-negative score margins. Positive ∆ counts queries whose margin in-creases from absolute coordinates to Déjà Cue. Panel (b) intervals are 95% history-bootstrap intervals. History and state Inclusive intervals Descriptions coffee-martini: nearly empty 
+
+[0 , 28] nearly empty martini glass; martini glass containing only a little cocktail coffee-martini: partly filled 
+
+[31 , 68] partly filled martini glass; martini glass filled to an intermediate level coffee-martini: nearly full 
+
+[71 , 99] nearly full martini glass; martini glass containing cocktail near the top of its bowl cross-hands: open [0 , 15] , [86 , 138] , [139 , 181] , [253 , 279] , [285 , 296] , [312 , 325] ,
+
+[353 , 393] , [505 , 575] , [596 , 629] , [679 , 693] , [695 , 709] ,
+
+[722 , 732] , [736 , 754] , [775 , 791] , [805 , 822] , [834 , 843] ,
+
+[853 , 866] , [897 , 907] , [909 , 979] , [1113 , 1171] , [1173 , 1187] ,
+
+[1230 , 1256] , [1341 , 1375] , [1430 , 1445] 
+
+both hands open without interwoven fingers; two open hands with fingers not interlaced cross-hands: clasped 
+
+[16 , 32] , [33 , 85] , [182 , 225] , [227 , 252] , [298 , 311] , [394 , 434] ,
+
+[435 , 504] , [630 , 663] , [664 , 678] , [711 , 721] , [758 , 774] ,
+
+[824 , 833] , [867 , 880] , [887 , 896] , [980 , 1051] , [1054 , 1112] ,
+
+[1188 , 1203] , [1204 , 1229] , [1376 , 1411] , [1414 , 1429] 
+
+opposing hands with fingers visibly interwoven; two hands clasped with interlaced fingers slice-banana: mostly intact 
+
+[0 , 139] peeled banana with most of its body still intact; mostly unsliced peeled banana slice-banana: partly sliced 
+
+[141 , 189] partly sliced banana; peeled banana with roughly half of its body remaining intact slice-banana: mostly sliced 
+
+[254 , 299] , [301 , 329] mostly sliced banana; peeled banana with only a short intact section remaining 
+
+Table 13: Vocabularies and inclusive reference intervals for the held-out histories. Every state has two descriptions; transition and unknown-visibility frames are unlabeled. set. Boundary uncertainty changes their magnitude, espe-cially around recurrent cross-hands episodes. 
+
+Tamping Occlusion The tamping target contains the portafilter assembly and its coffee bed. Complete contact occlusion (frames 183–198) and motion blur at frame 287 make the coffee bed unobservable, leaving only the visible portafilter in the union mask. 
+
+Auxiliary Hard Negatives Each reconstructed history in-cludes two non-target tracks, one co-visible with each tar-get state, for eight auxiliary tracks. Primary retrieval uses the target lineage; auxiliary-track scores serve the identity diagnostics. For query q, S+ is the highest-scoring target window with tIoU at least 0.5 to any reference for q. The sibling negative is the highest-scoring target window that reaches tIoU 0.5 with another state and has zero overlap with references for q. The joint negative is the highest-scoring non-target window outside that track’s co-visibility interval for the queried state. The 4 reconstructed histories supply this 
+
+Reference Déjà Cue − abs. Dual − abs. Top-1 R@1 .5 Top-1 R@1 .5
+
+Boundary set A -12.9 -19.4 -11.1 -27.8 Boundary set B -6.6 -8.3 -7.1 -8.3 Adjudicated reference -12.9 -19.4 -11.1 -27.8 
+
+Table 14: Sensitivity of unchanged predictions to the two annotators’ boundary sets and the adjudicated reference on the three held-out histories. Entries are percentage-point dif-ferences from the absolute scan. Top-1 denotes Top-1 tIoU; Dual denotes Déjà Cue with trajectory centering. margin analysis, which remains separate from seven-history retrieval metrics. Figure 6 visualizes the held-out state topologies, while Table 15 records the reconstructed vocabularies used by the preceding occlusion and hard-negative analyses. 
+
+History State: Interval & Vocabularies torchocolate 
+
+Initial intact surface , [0 , 32] : uncharred chocolate bar ;
+
+chocolate bar with an intact brown surface 
+
+Resulting blackened surface , [39 , 694] : charred chocolate bar ; chocolate bar with a blackened surface 
+
+espresso 
+
+Initial empty cup , [0 , 340] : empty glass cup ; glass cup with no espresso 
+
+Resulting espresso-filled , [721 , 776] : glass cup filled with espresso ; brewed espresso in the glass cup 
+
+tamping 
+
+Initial loose grounds , [0 , 158] : portafilter with loose cof-fee grounds ; untamped grounds in the portafilter 
+
+Resulting tamped puck , [281 , 336] : portafilter with a tamped coffee puck ; compressed coffee grounds in the portafilter 
+
+americano 
+
+Initial clear water , [0 , 133] : glass cup containing clear water ; clear water in the glass cup 
+
+Resulting mixed americano , [195 , 525] : glass cup containing an americano ; dark coffee mixed into the glass cup 
+
+Table 15: Vocabularies and inclusive reference intervals for the four reconstructed histories. Each has two states, with two descriptions per state; transition frames are unlabeled. Figure 6: Three held-out state topologies. (a) Interior fill levels in coffee-martini. (b) Open, clasped, and recurrent-open hands. (c) Progressive banana slicing. These states correspond to the per-history retrieval results in Table 3. 
+
+## G On the Naming of Déjà Cue 
+
+The term Déjà vu (French for “already seen”) describes the psychological illusion of feeling broadly familiar with a sit-uation that is actually being experienced for the first time. In the context of persistent object histories, however, this fa-miliarity is not an illusion: the tracked object is constantly present across the video. As discussed in our formulation, this persistent identity can make many observed moments look broadly familiar to any query mentioning the object, caus-ing absolute image–text similarity to conflate state-specific evidence with general object compatibility. We therefore call our method Déjà Cue . While the tracked history provides the Déjà —the already seen, per-sistent identity that establishes the foundational context—it is not enough to simply recognize the object. The state-balanced sibling vocabulary provides the critical Cue : the relative direction of support needed to distinguish exactly which semantic state the visual evidence depicts. Rather than being overwhelmed by the baseline familiarity of the object, our method isolates the definitive cue among its alternatives. 
+
+## References 
+
+Ding, Y.; Cao, S.; Jiao, L.; Li, Y.; Wang, Z.; Liu, Z.; and Zhang, L. 2026. Retrieving Any Relevant Moments: Benchmark and Models for Generalized Moment Retrieval. arXiv:2605.02623. Jang, J.; Park, J.; Kim, J.; Kwon, H.; and Sohn, K. 2023. Knowing Where to Focus: Event-aware Transformer for Video Grounding. In Proceedings of the IEEE/CVF Inter-national Conference on Computer Vision , 13846–13856. Jeon, M.; Yang, J.; Han, S.; Hwang, J.; Yoon, S.; Kim, J.; and Kim, J. 2025. Point to Span: Zero-Shot Moment Retrieval for Navigating Unseen Hour-Long Videos. arXiv:2512.10363. Lei, J.; Berg, T. L.; and Bansal, M. 2021. Detecting Moments and Highlights in Videos via Natural Language Queries. In 
+
+Advances in Neural Information Processing Systems , vol-ume 34, 11846–11858. Curran Associates, Inc. Moon, W.; Hyun, S.; Lee, S.; and Heo, J.-P. 2026. Correlation-guided calibration of query dependency for video temporal grounding. Pattern Recognition , 174: 112984. Moon, W.; Hyun, S.; Park, S.; Park, D.; and Heo, J.-P. 2023. Query-Dependent Video Representation for Moment Retrieval and Highlight Detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 23023–23033. Pumarola, A.; Corona, E.; Pons-Moll, G.; and Moreno-Noguer, F. 2021. D-NeRF: Neural Radiance Fields for Dy-namic Scenes. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 10318–10327. Sun, H.; Zhou, M.; Chen, W.; and Xie, W. 2024. TR-DETR: Task-Reciprocal Transformer for Joint Moment Retrieval and Highlight Detection. Proceedings of the AAAI Conference on Artificial Intelligence , 38(5): 4998–5007. Tang, J.; Wei, Z.; Zhu, Y.; Shi, C.; Li, G.; Lin, L.; and Yang, S. 2025. Sim-DETR: Unlock DETR for Temporal Sentence Grounding. In Proceedings of the IEEE/CVF International Conference on Computer Vision , 22760–22771. Tokmakov, P.; Li, J.; and Gaidon, A. 2023. Breaking the “Object” in Video Object Segmentation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 22836–22845. Tschannen, M.; Gritsenko, A.; Wang, X.; Naeem, M. F.; Alabdulmohsin, I.; Parthasarathy, N.; Evans, T.; Beyer, L.; Xia, Y.; Mustafa, B.; Hénaff, O.; Harmsen, J.; Steiner, A.; and Zhai, X. 2025. SigLIP 2: Multilingual Vision-Language Encoders with Improved Semantic Understanding, Localiza-tion, and Dense Features. arXiv:2502.14786. Xiao, Y.; Luo, Z.; Liu, Y.; Ma, Y.; Bian, H.; Ji, Y.; Yang, Y.; and Li, X. 2024. Bridging the Gap: A Unified Video Com-prehension Framework for Moment Retrieval and Highlight Detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 18709–18719. Yang, J.; Wei, P.; Li, H.; and Ren, Z. 2024a. Task-Driven Exploration: Decoupling and Inter-Task Feedback for Joint Moment Retrieval and Highlight Detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pat-tern Recognition , 18308–18318. Yang, Z.; Gao, X.; Zhou, W.; Jiao, S.; Zhang, Y.; and Jin, X. 2024b. Deformable 3D Gaussians for High-Fidelity Monoc-ular Dynamic Scene Reconstruction. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 20331–20341.

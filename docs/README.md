@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-07</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-08</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 35 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 21 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>14</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>21</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>8</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-07 21:43:25 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-08 21:16:18 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读2篇、速读3篇，共筛选35篇论文，聚焦空间感知与视觉特征匹配。</p>
-<p>最值得关注：多房间曼哈顿布局估计（9.0）与结构引导的局部特征匹配（9.0），两者分别突破复杂布局建模和特征鲁棒性瓶颈。</p>
-<p>建议优先精读这两篇高分工作，并顺带浏览符号不确定性量化与拓扑图导航以拓展空间推理视角。</p>
+<p>今日精读21篇论文，聚焦3D视觉语言与边缘推理，其中《Qwen-3D》和《TriCLE》获9分最高评价。最值得关注的是3D空间理解通用模型与三模态边缘聚类，均达到精读级深度。建议读者优先查阅Qwen-3D的跨模态对齐设计，再结合TriCLE的轻量化部署方案拓展应用场景。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -73,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">14 篇</strong>
+    <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="PolyLayout: Multi-room Manhattan Layout Estimation">PolyLayout: Multi-room Manhattan Layout Estimation</span></li><li><span class="dpr-home-dashboard-paper-title" title="SGFormer: Structure-Guided Transformer for Robust Local Feature Matching">SGFormer: Structure-Guided Transformer for Robust Local Feature Matching</span></li><li><span class="dpr-home-dashboard-paper-title" title="Geospatial-Prior Guidance for 3D Semantic Scene Completion">Geospatial-Prior Guidance for 3D Semantic Scene Completion</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Qwen-3D: A Generalist 3D Vision-Language Model for Spatial Understanding">Qwen-3D: A Generalist 3D Vision-Language Model for Spatial Understanding</span></li><li><span class="dpr-home-dashboard-paper-title" title="TriCLE: Tri-Modal Vision-Language Reasoning for Edge-Deployed Fine-Grained Clustering">TriCLE: Tri-Modal Vision-Language Reasoning for Edge-Deployed Fine-Grained Clustering</span></li><li><span class="dpr-home-dashboard-paper-title" title="Trace, Verify, and Correct: A Training-Free Framework for Spatial Reasoning in Multimodal LLMs">Trace, Verify, and Correct: A Training-Free Framework for Spatial Reasoning in Multimodal LLMs</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>9</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>6</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>6</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>2</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -86,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">21 篇</strong>
+    <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="SymboUQ: Symbolic Uncertainty Quantification for Spatial Reasoning in LLMs">SymboUQ: Symbolic Uncertainty Quantification for Spatial Reasoning in LLMs</span></li><li><span class="dpr-home-dashboard-paper-title" title="SSTG-Nav: Metric-Grounded Spatial-Semantic Topological Graphs for Reusable Object Navigation">SSTG-Nav: Metric-Grounded Spatial-Semantic Topological Graphs for Reusable Object Navigation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Through the LENS: Local Geometric Decomposition of Vision-Language Model Representations">Through the LENS: Local Geometric Decomposition of Vision-Language Model Representations</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="SG-Layout: Structured Scene Graph-Guided Layout Generation with LLMs">SG-Layout: Structured Scene Graph-Guided Layout Generation with LLMs</span></li><li><span class="dpr-home-dashboard-paper-title" title="3DZip: Spatial-Aware Feature Diversity-Guided Token Compression for 3D Question Answering">3DZip: Spatial-Aware Feature Diversity-Guided Token Compression for 3D Question Answering</span></li><li><span class="dpr-home-dashboard-paper-title" title="Learning to Tessellate: Point Cloud Generation via Recursive Spectral Partitioning">Learning to Tessellate: Point Cloud Generation via Recursive Spectral Partitioning</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">multimodal <strong>11</strong></span><span class="dpr-home-dashboard-tag">d-vision <strong>10</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>9</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>4</strong></span></div>
 </section>
 </div>
 

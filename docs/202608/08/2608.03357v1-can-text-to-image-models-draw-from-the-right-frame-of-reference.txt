@@ -1,0 +1,243 @@
+Title: Can Text-to-Image Models Draw from the Right Frame of Reference?
+
+URL Source: https://arxiv.org/pdf/2608.03357v1
+
+Published Time: Wed, 05 Aug 2026 00:47:08 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Can Text-to-Image Models Draw from the Right Frame of Reference? 
+
+## Zheyuan Gu 1,2 , Ruihang Li 1, Yong Huang 1, Yiqian Zhang 1, Xiangzhao Hao 1,Jiaxin Niu 1, Jiahao Hu 1, Zhenyu Zhang 1∗
+
+> 1
+
+ERNIE Team, Baidu Inc. 
+
+> 2
+
+Peking University 
+
+Abstract 
+
+Spatial instruction following has become a crucial requirement for text-to-image (T2I) generation. A common challenge arises when directional expressions are interpreted under different frames of reference. For example, “the left of” may refer to the viewer’s image coordinates or to the intrinsic orientation of an object, leading to different expected layouts. Existing T2I benchmarks reveal important layout failures, yet they rarely isolate whether models can follow a specified frame of refer-ence when it differs from camera view. To mitigate this gap, we introduce FoR-T2I , a benchmark for evaluating this dis-tinction with 1,200 prompt pairs built from controlled spatial layouts. In each pair, the camera-view (Cam) prompt states the target relation in camera view, while the frame-of-reference (FoR) prompt describes the same target placement through an oriented anchor object. Across 22 closed-source and open-source T2I models, mean final accuracy is 41.8% lower on FoR prompts than on matched Cam prompts; even the best-performing model achieves only 44.3% FoR accuracy. This suggests that current models struggle more when the same layout is described through an object’s orientation rather than directly in image coordinates. We further analyze this gap by relation type and camera view, compare several training-free prompting and feedback-based mitigation strategies, and pro-pose a VLM-gated rewriting approach that selects rewritten prompts using visual feedback, improving average FoR accu-racy from 25.0% to 29.2% under the same generation budget. 
+
+## 1 Introduction 
+
+Recent text-to-image (T2I) models have achieved substan-tial improvements in visual quality and instruction following (Kandwal and Nehra 2024; Goodfellow et al. 2014; Rombach et al. 2022; Lipman et al. 2023). For real-world applications such as design assistance, embodied simulation, and visual planning (Zhang et al. 2023; Yang et al. 2023; Cao et al. 2024; Liu et al. 2026; Ding et al. 2025), a generated image is useful only when it preserves the spatial structure specified by the prompt. This requirement is especially challenging for directional language. As shown in Figure 1, a prompt asking for a person facing the viewer with chopsticks in his left hand and a spoon in his right hand yields a plausible image that nonetheless places the chopsticks on the image’s left. This error is not merely a failure to render the requested objects. Because the person faces the viewer, his anatomi-
+
+> ∗
+
+Corresponding author. <Image> 
+
+> Generate a person facing the screen, with his left hand holding a pair of chopsticks and his right hand holding a spoon.
+> Generate a person facing the screen, with his hand in the right side of the image holding a pair of choopstics and his hand in the left side of the image holding a spoon.
+
+Generated Image 
+
+> Right hand: chopsticks Left hand: spoon
+
+Frame-of-Reference Prompt Camera-View Prompt 
+
+Figure 1: An example of reference-frame confusion in text-to-image generation. The generated image follows the image frame and swaps the requested hand-object assignments. cal left hand appears on the right side of the image, and his anatomical right hand appears on the left side. The model instead follows the viewer’s image frame when the prompt specifies the person’s own left and right hands. We refer to this failure as reference-frame confusion: the model uses the wrong frame of reference for a directional expression. Frames of reference are a basic property of spatial language (Levinson 2003); terms such as “left”, “right”, “front”, and “behind” must be interpreted with respect to some reference frame, such as the viewer’s image frame or an object’s own orientation. This makes reference-frame confusion a genera-tion problem that must be evaluated separately from whether the image is plausible or contains the requested objects. Recent T2I evaluations have increasingly studied whether models can follow compositional prompts involving multi-ple objects and their relations. Benchmarks such as VISOR, GenEval, and T2I-CompBench++ evaluate object presence, counting, attribute binding, and object-object relations, while GenSpace and SpatialGenEval further extend evaluation to richer spatial scenes and 3D-aware configurations (Gokhale et al. 2022; Ghosh, Hajishirzi, and Schmidt 2023; Huang et al. 2025; Wang et al. 2025, 2026b). These studies pro-vide important evidence that current models still struggle with object layouts and relational prompts. However, they do not systematically analyze the role of frames of reference in such prompts. In particular, they usually do not compare two prompts that describe the same target layout under different arXiv:2608.03357v1 [cs.CV] 4 Aug 2026 frames of reference. This makes it difficult to tell whether a model is truly following the specified frame of reference or simply defaulting to the camera view. We therefore ask: can T2I models draw the correct layout when the specified frame of reference diverges from the camera view? 
+
+To answer this question, we introduce FoR-T2I , a bench-mark for frame-of-reference-aware generation in T2I models. Each test case specifies a target spatial layout and instanti-ates it as a pair of camera-view (Cam) and FoR prompts. The Cam prompt describes the layout using direction words from the camera view. The FoR prompt describes the same layout in the anchor’s intrinsic frame, so that satisfying it gen-erally requires placing the target at a different camera-view position. Because each pair shares the same objects, scene context, and target layout, their performance difference pro-vides an estimate of the additional difficulty associated with FoR descriptions. FoR-T2I proposes three task levels: Level 1 tests a single FoR transformation, Level 2 combines mul-tiple relations under a shared anchor, and Level 3 requires chained orientation before spatial transformation. We evaluate 22 recent closed-source and open-source T2I models on 1,200 prompt pairs. To identify where FoR gener-ation fails, we separately assess whether models place target objects correctly and render anchors with the required ori-entations, and analyze how performance varies across cam-era viewpoints and reasoning levels. Every evaluated model achieves lower accuracy on FoR prompts than on its paired Cam prompts. Averaged across the eight closed-source mod-els, final accuracy drops from 50.6% on Cam prompts to 29.1% on FoR prompts, a decrease of 21.5 percentage points. We further evaluate several training-free prompting miti-gations, and propose a VLM-gated rewriting strategy that selects among rewritten prompts using visual feedback, im-proving average FoR accuracy from 25.0% to 29.2% under a matched generation budget. Our contributions are threefold. 
+
+• We formulate frame-of-reference grounding in T2I gen-eration as an evaluation problem and introduce FoR-T2I, containing 1200 matched Cam–FoR prompt pairs across three task levels. 
+
+• We benchmark 22 recent T2I models and find that mean final accuracy is 41.8% lower on FoR prompts than on matched Cam prompts, while even the best model achieves only 44.3% FoR accuracy. 
+
+• We introduce a training-free, VLM-gated prompt rewrit-ing strategy that uses visual feedback to improve average FoR accuracy from 25.0% to 29.2% with the same budget. 
+
+## 2 Related Work 
+
+Frames of Reference in Spatial Tasks. Spatial descriptions can be grounded in intrinsic, relative, or absolute frames of reference (Levinson 2003; Taylor and Tversky 1996; Ten-brink 2011; Carlson-Radvansky and Logan 1997). 1 For ex-
+
+> 1Following this taxonomy, camera view corresponds to the rela-tive frame. For brevity, we write Cam for camera-view prompts and reserve FoR for prompts requiring the anchor’s intrinsic frame; we do not consider the absolute frame, which is under-determined in a single image.
+
+ample, “left” may refer to the viewer’s left or to an oriented object’s own left. FoREST evaluates frame-dependent spatial descriptions in language models (Premsri and Kordjamshidi 2025), while ViewSpatial-Bench and allocentric perception benchmarks study perspective-dependent interpretation in vision-language models (Li et al. 2025; Wang et al. 2026a). These works establish the reference frame as an important factor in spatial interpretation. Their focus, however, is on interpreting language or pre-existing visual observations, where the anchor’s orientation is given. In generation it’s produced by the model, so frame resolution and orientation rendering must be separated by the evaluation protocol. 
+
+Benchmarking Text-to-Image Models. Existing T2I bench-marks evaluate complementary aspects of instruction follow-ing. Composition-oriented benchmarks, such as GenEval and T2I-CompBench++, assess object presence, attribute bind-ing, counting, and relational composition (Ghosh, Hajishirzi, and Schmidt 2023; Huang et al. 2025). Broader benchmarks, including TIIF-Bench and OneIG-Bench, cover style, layout, text rendering, and complex prompts (Wei et al. 2026; Chang et al. 2025). Spatially focused benchmarks evaluate generated object relations and scene layouts. VISOR studies object– object relations (Gokhale et al. 2022), while GenSpace and SpatialGenEval cover richer spatial configurations and 3D-aware relations (Wang et al. 2025, 2026b). These benchmarks determine whether a generated image satisfies a requested layout, but do not isolate the effect of expressing that layout in viewer- or object-centered terms. The impact of reference-frame choice on T2I generation remains unmeasured. 
+
+## 3 FoR-T2I Benchmark 
+
+3.1 Task Levels 
+
+Each item in FoR-T2I starts from a concrete target layout with fixed objects, camera view, anchor orientation, and ground-truth spatial placement. Here, an anchor is the oriented ob-ject that provides the reference frame, and a target is the object that the prompt places relative to the anchor. We ver-balize each layout as a paired Cam and FoR prompt. The Cam prompt describes the target placement directly in the camera view, while the FoR prompt describes the same placement relative to the anchor’s own left, right, front, or back. Thus, the two prompts share the same expected layout but differ in whether the model can place the target directly from the camera view or must use the anchor’s facing direction. 
+
+• Level 1: Single FoR. Each scene contains one anchor and one target. The FoR prompt places the target relative to the anchor’s own left, right, front, or back; the paired Cam prompt places it in the viewer’s image frame. This level requires one frame conversion: mapping the anchor-relative relation to the correct camera-view position. 
+
+• Level 2: Mixed FoR. Each scene contains one anchor and two targets. The FoR prompt places one target relative to the anchor’s own left, right, front, or back, and the other in the viewer’s image frame; the paired Cam prompt places both in the image frame. This level requires resolving two directional expressions under different frames. 
+
+• Level 3: Chained FoR. Each scene contains two anchors and one target. The FoR prompt specifies where the sec-Object Extraction    
+
+> T2I Data Objects T2I Model
+> Object-Orientation Pool
+> Top-down View
+> Eye-level View
+> Extract Prompts
+
+…
+
+> one object, eight orientations
+> Q1: Is the requested object present?
+> Q3: Does it match the requested orientation?
+> Q2: Is exactly one instance generated?
+
+Paired Prompt Generation   
+
+> Layout Pool Object-Orientation Pool
+> Camera-View Prompt FoR Prompt
+> Paired
+
+Layout Construction     
+
+> Layout Pool
+> Source Anchor Oriented Anchor Target
+> Position: (x1, y1) Orientation: z1 degrees Position: (x2, y2) Position: (x3, y3) Orientation: z2 degrees
+> Level 1 1 anchor, 1 target
+> Level 3
+> 1 anchor, 2 targets 2 anchor, 1 target
+> Level 2
+> Task Levels
+> Top-down View Eye-level View
+
+…
+
+> Multi-Views of Single Layout
+
+Human Verification   
+
+> Generated Prompt Pairs
+> Randomly Sample 10%
+> T2I Model
+> Images Human Experts
+> Prompt Templates
+> …The horse is to the right of the truck in the image. …(Truck facing the viewer)
+> The horse is to the left of the truck from truck’s own perspective.
+
+Figure 2: FoR-T2I construction pipeline. (1) We extract objects with a well-defined intrinsic front and keep renderings that pass presence, single-instance, and orientation checks. (2) Each layout deterministically specifies the anchor position, target position and anchor orientation. (3) Each layout yields a Camera-View and a FoR prompt that differ only in whether the spatial term is anchored to the camera or to the explicitly named anchor’s intrinsic frame. (4) 10% of pairs are audited by human experts, full details are reported in the appendix. 
+
+Benchmark Scale Object-Relative FoR Contrast Multi-step FoR VISOR (Gokhale et al. 2022) 25,280 prompts ✗ ✗ ✗
+
+GenEval (Ghosh, Hajishirzi, and Schmidt 2023) 553 prompts ✗ ✗ ✗
+
+T2I-CompBench++ (Huang et al. 2025) 6,000 prompts ✗ ✗ ✗
+
+GenSpace (Wang et al. 2025) 1,800 prompts ✓ ✗ ✗
+
+SpatialGenEval (Wang et al. 2026b) 1,230 prompts ✓ ✗ ✗
+
+FoR-T2I 1,200 prompt pairs ✓ ✓ ✓
+
+Table 1: Comparison with spatial text-to-image benchmarks. Object-Relative indicates directions defined from a reference object’s perspective. FoR Contrast indicates a controlled comparison between object-relative and viewer-centered descriptions. Multi-step FoR indicates tasks in which one FoR relation must be resolved before another. ond anchor is placed relative to the first anchor, and then specifies the second anchor’s facing direction, with both relations defined in the first anchor’s frame of reference. This level chains two frame conversions: the second an-chor’s orientation must be resolved before placing the target. 
+
+3.2 Benchmark Construction 
+
+Figure 2 summarizes the benchmark construction pipeline. We first construct an object vocabulary from prompts in existing T2I benchmarks (Ghosh, Hajishirzi, and Schmidt 2023; Huang et al. 2025; Wang et al. 2026b). An off-the-shelf linguistic parser extracts noun phrases, which are then normalized and deduplicated. We manually retain concrete, visually recognizable objects whose front–back axis is clear enough for their left and right sides to be consistently defined. We next build an object-orientation pool to avoid using object-view-orientation configurations whose facing direc-tion cannot be reliably judged. Using single-object prompts that specify only the camera view and the object’s orienta-tion, we generate images for each retained object under two camera views (eye-level and top-down) and four canonical orientations per view, yielding eight candidate configura-tions. A VLM-based judge checks object presence, instance count, and orientation consistency with the prompt. Only the object-view-orientation configurations that pass all checks are kept for later prompt instantiation. Independently of object identity, we procedurally con-struct abstract layouts in a discrete spatial coordinate system. Each layout specifies the entity slots required by its task level, their coordinates, the camera view, and the orientation of each anchor. We discard layouts in which entities overlap, fall out-side the valid spatial region. For each accepted layout, the engine derives two relation labels from the same coordinates: a camera-view relation from the projected image positions, and a FoR relation from the target displacement relative to the oriented anchor. We then select layouts to obtain approx-imately balanced coverage across task levels, camera views, anchor orientations, and camera-view relations. Finally, we instantiate each selected layout with concrete object categories from the Object-Orientation Pool. For ev-ery orientation-constrained anchor slot, we sample an object whose corresponding camera-view and orientation configu-ration is available. Anchor and target categories are kept dis-tinct, and frequency-aware sampling prevents a small number of common objects from dominating the benchmark. Each instantiated layout is verbalized using matched prompt templates: the Cam prompt states the camera-view relation, while the FoR prompt states the corresponding re-lation relative to the oriented anchor. We use templated ver-balization rather than free-form generation because the two prompts in a pair must differ only in the frame in which the direction word is resolved; free-form paraphrasing would introduce uncontrolled lexical and syntactic variation, con-founding the comparison the benchmark is designed to iso-late. This process produces 1,200 Cam–FoR prompt pairs across the three task levels. Appendix reports our bench-mark’s statistics. 
+
+## 4 Training-Free FoR Mitigation 
+
+Prompt rewriting is the most widely deployed way to im-prove instruction following in T2I systems, and is a natural first attempt for FoR prompts: if a rewrite makes the im-plied camera-view placement explicit, the model no longer performs the frame conversion itself. But a rewrite may re-solve the frame incorrectly, or alter the anchor orientation, and none of these failures is visible from the prompt. We therefore treat rewrites as proposals rather than substitutions, accepting one only when the generated image shows a con-crete improvement. This yields a training-free strategy that requires no modification to the generation model. 
+
+Candidate generation. Given a FoR prompt p, we generate a reference image I0 from the original prompt, and a language model produces K rewrites {p1, . . . , p K } that preserve the objects, camera view, anchor orientation, and intended re-lation while stating the required frame conversion more ex-plicitly. Each rewrite yields one candidate image Ik under the same T2I model and inference settings as I0.
+
+Visual verification. From the original prompt we derive a checklist covering the required objects, the anchor orienta-tion, and the target placement, and a vision-language model (Qwen3.6 27B) compares each candidate Ik against I0 on this checklist. A candidate is accepted only if it improves the target relation without dropping objects or violating the ori-entation constraint; if none is accepted, we keep I0. Checklist construction and all prompts used are given in the supple-mentary material. 
+
+Reference-anchored selection. We compare each candidate against I0 rather than ranking candidates directly, because unconstrained ranking tends to reward visual quality over spatial correctness. The gate asks only whether a rewrite yields a concrete improvement in the required relation, which makes the method conservative: it replaces I0 only when the evidence favors doing so. 
+
+## 5 Experiments 
+
+5.1 Experimental Setup 
+
+We cover both closed-source models and open-source mod-els. All models are evaluated on the same set of Cam prompts and FoR prompts using the metrics defined above. Generated images are scored with an automatic evaluator combining OWL-ViT, Segment Anything Model 3.1 (SAM3.1) (Car-ion et al. 2025), Depth Anything 3 (DA3) (Lin et al. 2025), and a VLM judge. The evaluator checks object presence and count, localizes the requested objects, determines their image-frame relations, and assesses anchor orientation. Its reliability is evaluated against human annotations. 
+
+Metrics. We report geometry accuracy, orientation ac-curacy, and final accuracy. Geometry accuracy measures whether all required target relations are satisfied in the image frame, independently of whether the requested an-chor orientations are rendered correctly. Orientation accu-racy measures whether all required anchor orientations are satisfied. Final accuracy requires both geometry and orien-tation to be correct. For prompts with multiple constraints, all constraints must be satisfied. Avg. denotes the macro average over L1–L3. Because the Cam and FoR prompts in each pair specify the same ground-truth layout, we de-fine Gap = Acc Cam − Acc FoR . This difference estimates the additional difficulty introduced when the same layout is expressed through an anchor-centered relation. Missing required objects and additional instances of a category re-quested exactly once are scored as incorrect. 
+
+5.2 Main Results 
+
+Table 2 reports spatial accuracy by benchmark task level. The closed-source group includes Seedream 5.0 Pro (ByteDance 2026), GPT-Image-2 (OpenAI 2026), Gemini 3 Pro Im-age (Google DeepMind 2025), Gemini 3.1 Flash Im-age (Google DeepMind 2026), Qwen-Image 2.0 (Qwen Team 2026), Seedream 4.0 (Chen et al. 2025c), Gemini 2.5 Flash Image (Google 2025), and GPT-Image-1 (Ope-nAI 2025). The open-source group includes Qwen-Image-2512 (Wu et al. 2025a), HunyuanImage 3.0 (HunyuanIm-age Team 2025), Z-Image Turbo (Z-Image Team 2025), Qwen-Image (Wu et al. 2025b), ERNIE-Image (ERNIE-Image Team, Baidu 2026), UniPic v2 (Wei et al. 2025), Infinity (Han et al. 2024), OmniGen2 (Wu et al. 2025c), Janus-Pro-7B (Chen et al. 2025b), FLUX.1-dev (Black For-est Labs 2024), BAGEL-7B-MoT (Deng et al. 2025), Show-o (Xie et al. 2024), SD3.5 Medium (Esser et al. 2024), and FLUX.1-Fill-dev (Black Forest Labs 2024). Table 2 reports final accuracy for each model and task level. Every model obtains lower average accuracy on FoR prompts than on its paired Cam prompts. Averaged equally across the 22 models, final accuracy decreases from 26.5% on Cam to 15.4% on FoR, an 11.1-point difference. The best FoR result is only 44.3%, showing that substantial room for improvement remains even among the strongest models. The gap persists in models with strong image-frame spa-tial control. Among closed-source models, average accuracy decreases from 50.6% to 29.1%; among open-source mod-els, it decreases from 12.7% to 7.6%. The smaller absolute Avg. L1 L2 L3 Model Cam FoR Cam FoR Cam FoR Cam FoR                                                                                                                                                                                 
+
+> Closed-source models
+> GPT-Image-2 68.2 38.2 75.1 50.9 73.4 51.0 56.1 12.8 Seedream 5.0 64.1 44.3 73.1 55.1 68.0 54.1 51.2 23.6 Gemini 3 Pro Image 53.5 35.9 65.2 45.8 58.5 47.5 36.9 14.4 Gemini 3.1 Flash Image 52.0 29.5 62.8 38.6 58.1 38.8 35.1 11.2 Qwen-Image 2.0 48.8 25.4 59.0 35.4 58.0 32.8 29.3 8.1 Seedream 4.0 44.3 23.1 60.3 33.2 55.8 32.2 16.8 3.8 Gemini 2.5 Flash Image 40.9 19.6 50.6 27.4 47.7 27.3 24.4 4.1 GPT-Image-1 33.3 17.0 43.1 23.3 37.3 21.3 19.6 6.3
+> Open-source models
+> Qwen-Image-2512 33.9 17.9 52.8 30.3 37.5 21.4 11.3 2.1 HunyuanImage 3.0 24.7 13.2 39.9 22.5 27.0 14.6 7.3 2.6 Z-Image Turbo 26.1 13.1 38.6 21.2 31.6 15.5 8.0 2.4 ERNIE-Image 17.5 9.0 33.7 15.9 13.1 9.6 5.8 1.5 Qwen-Image 17.4 9.3 31.5 17.6 15.8 9.6 4.9 0.6 UniPic v2 10.8 7.8 19.1 14.8 10.9 7.5 2.4 1.1 Infinity 9.6 7.8 19.3 15.0 7.9 7.7 1.7 0.6 OmniGen2 8.2 5.2 14.6 9.2 8.6 5.6 1.5 0.9 Janus-Pro-7B 7.1 5.5 14.2 11.4 6.4 4.3 0.9 0.9 FLUX.1-dev 6.9 5.4 15.2 11.4 4.7 3.9 0.9 1.1 BAGEL-7B-MoT 6.1 4.8 11.8 8.4 5.8 4.7 0.6 1.3 Show-o 5.4 4.5 12.2 9.7 3.0 3.2 0.9 0.6 SD3.5 Medium 3.7 2.5 8.4 6.0 2.4 1.3 0.4 0.2 FLUX.1-Fill-dev 0.2 0.1 0.6 0.0 0.0 0.4 0.0 0.0
+
+Table 2: Accuracy by task level and prompt type. Cam de-notes camera view prompts, while FoR denotes prompts that describe the same target layout through an oriented anchor object. Avg. reports the macro average over L1–L3. gap in the latter group should be interpreted in light of its much lower Cam baseline and the resulting floor effect. GPT-Image-2 achieves the highest Cam accuracy at 68.2% but falls to 38.2% on FoR prompts. Seedream 5.0 obtains the highest FoR accuracy at 44.3%, while still showing a 19.8-point gap. These results indicate that strong performance on image-frame descriptions does not reliably transfer to anchor-centered descriptions of the same layout. Both prompt types degrade at higher task levels, but not at the same rate. Mean Cam/FoR accuracy is 35.3%/21.5% at L1 and 28.7%/19.6% at L2, before falling to 14.4%/4.5% at L3. FoR accuracy thus retains roughly two thirds of the corresponding Cam accuracy at L1 and L2, but less than one third at L3. The absolute gap is not monotonic, since many weaker models approach the floor at L3, but the relative col-lapse is consistent across the strongest models. This decline is steeper than repeated single-step resolution would predict. If the two frame resolutions required at L3 failed indepen-dently, L3 accuracy would be approximately the square of L1 accuracy: for the closed-source models this predicts 15.0% but the observed value is 10.5%, whereas the same estimate on Cam prompts is far closer (37.5% predicted, 33.7% ob-served). Chained frame resolution therefore costs more than two independent conversions, and the excess is specific to the FoR condition. 
+
+5.3 Component-Level Results 
+
+Table 3 separates target placement from anchor orientation. Because paired Cam and FoR prompts share the same ori-entation requirements, a degradation specifically associated with the FoR description should appear primarily in geome-try accuracy. This is what we observe: averaged across mod-els, geometry accuracy falls from 55.1% on Cam prompts to 31.8% on FoR, a difference of 23.3 points. Orientation ac-curacy, changes only from 35.7% to 34.3%. The additional FoR difficulty is therefore expressed mainly through incor-rect image-frame placement of the target objects. The small difference in orientation accuracy should not be interpreted as strong orientation generation. Its absolute value remains low under both prompt types and falls at L3 from 19.4% on Cam prompts to 12.8% on FoR prompts. Anchor orientation is therefore a general difficulty shared by both conditions, whereas target placement accounts for most of the Cam–FoR gap. Since final accuracy requires both components to be correct, their combined failure is especially severe at L3. 
+
+5.4 Training-free Mitigation Results 
+
+We compare our method with six training-free baselines. No rewriting directly uses the original FoR prompt. Naive rewrite generates rewritten prompts without visual verifica-tion. We use Qwen3.6-27B for prompt rewrite. DSG (Cho et al. 2024) and TIFA (Hu et al. 2023) use question-based decomposition, while T2I Copilot (Chen et al. 2025a), Visu-alPrompter (Wu et al. 2026), and VisionDirector (Chu et al. 2025) use prompt planning or visual feedback. We adapt all methods to the same generation budget. We evaluate each method on a 10% subset of FoR-T2I, containing 120 FoR prompts. Experiments use three T2I backbones: Z-Image Turbo, Seedream 4.0, and Seedream 5.0. Our method achieves the highest average accuracy, improv-ing the baseline from 25.0% to 29.2%. It also provides the best L3 result, increasing accuracy from 13.3% to 15.0%. Every method improve L1 or L2 but reduce L3 accuracy. This result suggests that visual verification is particularly important when prompt rewriting must preserve chained ori-entation and placement constraints. 
+
+5.5 Evaluator Reliability 
+
+We validate the automatic evaluator against human annota-tions on 120 prompt pairs, covering 10.0% of the bench-mark. Four annotators assess object presence, object count, target placement, anchor orientation, and final correctness. We separately evaluate object detection and the complete evaluation pipeline. This separation distinguishes grounding failures from errors in spatial and orientation judgments. Table 5 validates object grounding and final evaluation separately. In panel (a), OWL-ViT with SAM3.1 grounds 98.9% of required objects and completely grounds 95.0% of prompt pairs. In panel (b), our full evaluator combines OWL-ViT and SAM3.1 for grounding, DA3 for depth esti-mation, and Qwen3.6-27B for orientation judgment, achiev-ing 87.1% accuracy and an F1 score of 88.5 against human Geometry Orientation Avg. L1 L2 L3 Avg. L1 L2 L3 Avg. Model Cam FoR Cam FoR Cam FoR Cam FoR Cam FoR Cam FoR Cam FoR Cam FoR Cam FoR Gap 
+
+Closed-source models 
+
+Seedream 5.0 94.0 68.1 85.7 64.7 84.5 42.4 88.1 58.4 77.5 79.3 79.7 81.2 59.4 44.1 72.2 68.2 64.1 44.3 19.8 GPT-Image-2 87.7 60.4 84.8 59.0 80.4 27.2 84.3 48.9 79.5 80.6 80.1 83.7 66.8 33.8 75.4 66.0 68.2 38.2 30.0 Gemini 3 Pro Image 90.7 65.9 83.7 65.4 77.7 38.9 84.0 56.8 71.1 67.6 67.3 68.9 43.3 32.0 60.6 56.2 53.5 35.9 17.6 Gemini 3.1 Flash Image 89.2 51.8 78.6 54.5 75.5 27.2 81.1 44.5 69.6 71.8 72.2 69.5 44.4 27.6 62.1 56.3 52.0 29.5 22.5 Qwen-Image 2.0 90.6 53.4 87.8 49.3 83.3 26.6 87.2 43.1 64.2 65.2 64.2 64.9 34.7 23.1 54.4 51.1 48.8 25.4 23.4 Seedream 4.0 94.0 47.3 88.5 47.7 77.7 21.6 86.7 38.8 64.8 69.8 62.2 67.1 19.4 10.2 48.8 49.0 44.3 23.1 21.2 Gemini 2.5 Flash Image 85.0 44.7 79.8 43.9 75.2 24.6 80.0 37.7 55.1 51.3 58.9 52.5 32.2 18.4 48.7 40.7 40.9 19.6 21.3 GPT-Image-1 88.4 47.5 75.7 42.5 71.6 28.4 78.6 39.4 49.0 53.0 48.0 48.0 27.6 16.4 41.5 39.1 33.3 17.0 16.4 
+
+Open-source models 
+
+Qwen-Image-2512 81.8 44.4 63.4 34.5 57.8 17.8 67.7 32.2 62.4 66.7 56.1 62.7 18.8 10.9 45.8 46.8 33.9 17.9 15.9 HunyuanImage 3.0 79.4 46.4 56.3 33.4 47.8 21.0 61.2 33.6 50.9 52.6 48.0 49.0 14.3 11.3 37.7 37.7 24.7 13.2 11.5 Z-Image Turbo 85.7 45.4 76.1 41.7 54.3 21.8 72.0 36.3 44.3 46.0 41.5 39.5 13.2 9.0 33.0 31.5 26.1 13.1 13.1 Qwen-Image 73.0 37.8 40.9 24.6 36.4 13.9 50.1 25.4 42.3 47.6 37.0 39.2 9.0 6.0 29.4 30.9 17.4 9.3 8.1 ERNIE-Image 63.7 38.4 27.8 19.7 29.6 12.0 40.4 23.4 48.7 45.1 39.0 39.8 12.4 7.9 33.4 30.9 17.5 9.0 8.5 UniPic v2 71.5 41.6 37.7 24.8 26.8 17.3 45.3 27.9 26.8 29.6 26.6 27.2 3.0 3.2 18.8 20.0 10.8 7.8 3.0 Infinity 62.7 40.8 28.7 24.0 27.2 15.4 39.5 26.7 29.6 31.1 28.1 33.2 3.9 3.0 20.5 22.4 9.6 7.8 1.9 OmniGen2 49.4 29.6 26.6 15.6 19.3 9.6 31.7 18.3 26.0 27.7 19.7 22.7 4.7 4.1 16.8 18.1 8.2 5.2 3.0 Janus-Pro-7B 42.7 38.0 15.2 14.6 13.9 12.2 23.9 21.6 28.5 29.6 26.8 29.1 5.4 5.8 20.2 21.5 7.1 5.5 1.6 FLUX.1-dev 50.0 32.8 18.2 13.5 18.0 9.9 28.7 18.7 29.2 30.0 24.4 29.8 3.2 4.3 18.9 21.4 6.9 5.4 1.5 BAGEL-7B-MoT 42.9 33.3 18.8 13.5 12.8 11.1 24.9 19.3 23.6 25.5 24.6 25.7 3.4 5.1 17.2 18.8 6.1 4.8 1.3 Show-o 41.6 35.2 13.9 14.1 14.6 9.2 23.4 19.5 27.7 25.3 19.1 22.3 4.5 4.1 17.1 17.2 5.4 4.5 0.9 SD3.5 Medium 41.0 34.1 10.9 7.3 10.5 9.2 20.8 16.9 17.2 17.0 18.2 14.8 2.8 1.3 12.7 11.0 3.7 2.5 1.2 FLUX.1-Fill-dev 24.7 25.8 4.7 5.8 6.0 6.0 11.8 12.5 1.9 0.9 0.6 0.6 0.0 0.0 0.9 0.5 0.2 0.1 0.1 
+
+Table 3: Component-wise model breakdown by task level. Cam denotes camera-frame prompts. Geometry measures whether the target spatial relation is satisfied, while Orientation measures whether the anchor object’s facing direction is correct. The final Avg. columns report strict accuracy requiring both components to be correct. Gap is Cam minus FoR in percentage points and is computed before rounding. All Avg. columns are macro-averaged over L1–L3. 
+
+Method L1 L2 L3 Avg. No rewriting 30.0 31.7 13.3 25.0 Naive rewriting 37.5 35.8 10.8 28.0 DSG (Cho et al. 2024) 29.2 35.0 6.7 23.6 TIFA (Hu et al. 2023) 33.3 35.8 5.8 25.0 T2I Copilot (Chen et al. 2025a) 33.3 39.2 10.8 27.8 VisualPrompter (Wu et al. 2026) 33.3 38.3 8.3 26.7 VisionDirector (Chu et al. 2025) 34.2 36.7 10.8 27.2 Ours 34.2 38.3 15.0 29.2 
+
+Table 4: Comparison of training-free enhancement strategies on FoR prompts. All methods are evaluated with three back-bones. L1, L2, and L3 denote the three FoR difficulty levels, and Avg. reports the macro average across levels. annotations. This exceeds the 65.0% accuracy of the stan-dalone VLM judge. Unresolved samples are conservatively scored as incorrect. 
+
+## 6 Analysis 
+
+To identify the sources of the Cam–FoR gap, we analyze per-formance by relation type, camera view, and frame mapping. Create a top-down map. A girl is present, facing image-top. A baristas is present. The baristas is behind girl, opposite girl's own facing direction.  
+
+> Create an eye-level scene. A sports car is present, facing away from the viewer. A rabbit is present. The rabbit sits on the forward side of sports car, using sports car's own orientation.
+> Create an eye-level scene. A cheetah is present, facing the viewer. A dog is present. The dog is on cheetah's own right side, from cheetah's perspective. A couch is present. A couch is placed near the top of the image, using the viewer's image frame.
+> Create an eye-level scene. A plane is present, facing the viewer. A girl is present. The girl sits on the left-hand side of plane, using plane's own orientation. A man is present. A man is placed near the top of the image, using the viewer's image frame.
+> (a) Wrong Frame (b) Partial Compliance
+
+Figure 3: Representative failure patterns under FoR prompts. (a) Wrong Frame Interpretation : the model resolves an object-relative direction in viewer-centered coordinates, placing the barista and rabbit on the wrong side of their ori-ented anchors. (b) Partial Compliance : the model satisfies the viewer-centered constraints for the man and couch, but violates the object-relative constraints for the girl and dog. Unless noted otherwise, results are macro-averaged across models. Relation-level accuracy evaluates only the anchor– target relation rather than all spatial constraints in a prompt. (a) Object grounding coverage                          
+
+> Grounding module Obj. rec. Count acc. Pair comp. OWL-ViT 95.8 89.6 84.2 OWL-ViT + SAM3.1 98.9 97.1 95.0 (b) Agreement with human judgments
+> Evaluator Acc. Prec. Rec. F1 VLM judge 65.0 66.1 79.6 72.2 OWL-ViT pipeline 79.6 90.0 72.3 80.2 OWL-ViT + SAM3.1 pipeline 87.1 90.2 86.9 88.5
+
+Table 5: Evaluator validation on 120 prompt pairs. (a) Object grounding coverage; pair completeness requires all objects to be grounded in both Cam and FoR images. (b) Agreement with human final-correctness annotations. All values are per-centages; Qwen3.6-27B judges orientation.                               
+
+> Condition Cam FoR Gap
+> Relation type (relation-level accuracy)
+> Front 63.2 41.0 22.2 Back 64.5 46.5 18.0 Left 63.2 37.2 26.0 Right 63.0 36.4 26.6
+> Camera view (geometry accuracy)
+> Eye-level 53.8 32.3 21.5 Top-down 56.5 31.4 25.0
+> Lateral frame mapping (relation-level accuracy)
+> Preserved 66.0 60.6 5.3 Axis/depth remapping 59.6 40.1 19.5 Reversed 68.5 18.8 49.7
+
+Table 6: Accuracy by relation, camera view, and frame map-ping. Preserved, remapped, and reversed indicate whether anchor-relative left/right maps to the same side, another axis or depth, or the opposite side. Results are macro-averaged over models; Gap is Cam minus FoR in percentage points. 
+
+6.1 Performance by Relation Type 
+
+Table 6 first separates the primary spatial relation into front, back, left, and right. Cam relation-level accuracy is nearly constant across the four categories, ranging only from 63.0% to 64.5%. The corresponding FoR accuracy is lower for ev-ery relation and varies more substantially, from 36.4% to 46.5%. Left and right produce the largest Cam–FoR gaps, at 26.0 and 26.6 percentage points, respectively, compared with 22.2 points for front and 18.0 points for back. The stable Cam results indicate that this contrast is not primarily caused by the image-frame target positions associated with different relation types. Instead, the larger lateral gaps suggest that models have particular difficulty applying an anchor’s ori-ented left–right axis during generation. This pattern is even clearer among closed-source models, for which the gaps for left and right are 45.4 and 41.5 points, compared with 30.3 and 24.3 points for front and back. The smaller gaps among open-source models should be inter-preted in light of their lower Cam baselines, which leave less room for an additional absolute decrease. 
+
+6.2 Viewpoint and Frame Alignment 
+
+The FoR deficit appears in both camera views. Geometry accuracy under FoR prompts is similar for eye-level and top-down scenes (32.3% and 31.4%), while the corresponding Cam accuracies are 53.8% and 56.5%. Thus, neither view alone accounts for the degradation. Anchor orientation is more informative when expressed through the frame mapping it induces. We therefore group anchor-relative left/right relations by whether the required side is preserved in the image frame, mapped to a differ-ent image or depth axis, or reversed. When the two frames agree, FoR relation-level accuracy approaches the Cam base-line (60.6% versus 66.0%). The gap increases to 19.5 points under axis or depth remapping and reaches 49.7 points un-der reversal, where FoR accuracy falls to 18.8% despite a Cam accuracy of 68.5%. Because the Cam condition re-mains strong on these layouts, the reversal failure cannot be explained by output-layout difficulty alone; it instead iden-tifies the reference-frame conversion as the main source of error. All 22 models show a positive Cam–FoR gap under re-versal. Raw differences between anchor orientations largely reflect these mappings and are less diagnostic in isolation. 
+
+6.3 Failure Patterns 
+
+Wrong frame interpretation. Models often apply an object-relative direction directly in viewer-centered image coordi-nates, as shown in Figure 3(a). Among reversed left/right cases in which all required objects are localizable, 74.1% of FoR generations place the target on the literal image side named by the object-relative relation, compared with 16.7% under the paired Cam prompts. This behavior indicates that models frequently ignore the anchor’s rendered orientation. 
+
+Partial compliance. In prompts containing multiple spatial constraints, models often satisfy at least one relation but not the complete layout. Across L2 and L3, partial com-pliance occurs in approximately 32% of FoR generations, compared with 18% under Cam prompts. The examples in Figure 3(b) satisfy the viewer-centered constraint while vio-lating the object-relative relation. 
+
+## 7 Conclusion 
+
+We introduce FoR-T2I, a controlled benchmark that tests whether T2I models can generate layouts from frame-dependent spatial descriptions, using matched Cam and FoR prompts that specify the same target layout. Across 22 mod-els, the loss is concentrated in a specific condition: when the anchor’s left–right axis is reversed relative to the image, FoR accuracy drops to 18.8% while the paired Cam prompts reach 68.5% on the same layouts. Our VLM-gated rewriting pro-vides a modest improvement, showing that visual feedback can partially mitigate these errors without model updates. The remaining gap motivates future work on orientation-aware representations and training objectives that explicitly connect linguistic reference frames to image coordinates. References 
+
+Black Forest Labs. 2024. FLUX. https://github.com/black-forest-labs/flux. ByteDance. 2026. Seedream 5.0 Pro. https://dreamina. capcut.com/seedream/seedream-5-0-pro. Official Dream-ina/CapCut model page. Cao, P.; Zhou, F.; Song, Q.; and Yang, L. 2024. Controllable Generation with Text-to-Image Diffusion Models: A Survey. arXiv:2403.04279. Carion, N.; Gustafson, L.; Hu, Y.-T.; Debnath, S.; Hu, R.; Suris, D.; Ryali, C.; Alwala, K. V.; Khedr, H.; Huang, A.; Lei, J.; Ma, T.; Guo, B.; Kalla, A.; Marks, M.; Greer, J.; Wang, M.; Sun, P.; Rädle, R.; Afouras, T.; Mavroudi, E.; Xu, K.; Wu, T.-H.; Zhou, Y.; Momeni, L.; Hazra, R.; Ding, S.; Vaze, S.; Porcher, F.; Li, F.; Li, S.; Kamath, A.; Cheng, H. K.; Dollár, P.; Ravi, N.; Saenko, K.; Zhang, P.; and Feicht-enhofer, C. 2025. SAM 3: Segment Anything with Concepts. arXiv:2511.16719. Carlson-Radvansky, L. A.; and Logan, G. D. 1997. The Influence of Reference Frame Selection on Spatial Template Construction. Journal of Memory and Language , 37(3): 411–437. Chang, J.; Fang, Y.; Xing, P.; Wu, S.; Cheng, W.; Wang, R.; Zeng, X.; Yu, G.; and Chen, H.-B. 2025. OneIG-Bench: Omni-dimensional Nuanced Evaluation for Image Genera-tion. arXiv preprint arxiv:2506.07977 .Chen, C.-Y.; Shi, M.; Zhang, G.; and Shi, H. 2025a. T2I-Copilot: A Training-Free Multi-Agent Text-to-Image System for Enhanced Prompt Interpretation and Interactive Genera-tion. In Proceedings of the IEEE/CVF International Confer-ence on Computer Vision (ICCV) .Chen, X.; Wu, Z.; Liu, X.; Pan, Z.; Liu, W.; Xie, Z.; Yu, X.; and Ruan, C. 2025b. Janus-Pro: Unified Multimodal Understanding and Generation with Data and Model Scaling. 
+
+arXiv preprint arXiv:2501.17811 .Chen, Y.; et al. 2025c. Seedream 4.0: Toward Next-generation Multimodal Image Generation. arXiv preprint arXiv:2509.20427 .Cho, J.; Hu, Y.; Garg, R.; Anderson, P.; Krishna, R.; Baldridge, J.; Bansal, M.; Pont-Tuset, J.; and Wang, S. 2024. Davidsonian Scene Graph: Improving Reliability in Fine-Grained Evaluation for Text-to-Image Generation. In ICLR .Chu, M.; Yang, S.; Che, H.; Zhang, S.; Zhang, X.; Yu, S.; Gui, H.; Rao, Z.; Tu, D.; Liu, R.; and Jia, J. 2025. VisionDi-rector: Vision-Language Guided Closed-Loop Refinement for Generative Image Synthesis. arXiv:2512.19243. Deng, C.; Zhu, D.; Li, K.; Gou, C.; Li, F.; Wang, Z.; Zhong, S.; Yu, W.; Nie, X.; Song, Z.; Shi, G.; and Fan, H. 2025. Emerging Properties in Unified Multimodal Pre-training. arXiv:2505.14683. Ding, J.; Zhang, Y.; Shang, Y.; Zhang, Y.; Zong, Z.; Feng, J.; Yuan, Y.; Su, H.; Li, N.; Sukiennik, N.; et al. 2025. Un-derstanding World or Predicting Future? A Comprehensive Survey of World Models. ACM Computing Surveys , 58(3): 1–38. ERNIE-Image Team, Baidu. 2026. ERNIE-Image. https: //huggingface.co/baidu/ERNIE-Image. Hugging Face model card. Esser, P.; Kulal, S.; Blattmann, A.; Entezari, R.; Müller, J.; Saini, H.; Levi, Y.; Lorenz, D.; Sauer, A.; Boesel, F.; Podell, D.; English, Z.; Lacey, K.; Goodwin, A.; Marek, Y.; and Rombach, R. 2024. Scaling Rectified Flow Transformers for High-Resolution Image Synthesis. arXiv:2403.03206. Ghosh, D.; Hajishirzi, H.; and Schmidt, L. 2023. GenEval: An Object-Focused Framework for Evaluating Text-to-Image Alignment. arXiv:2310.11513. Gokhale, T.; Palangi, H.; Nushi, B.; Vineet, V.; Horvitz, E.; Kamar, E.; Baral, C.; and Yang, Y. 2022. Bench-marking Spatial Relationships in Text-to-Image Generation. arXiv:2212.10015. Goodfellow, I. J.; Pouget-Abadie, J.; Mirza, M.; Xu, B.; Warde-Farley, D.; Ozair, S.; Courville, A.; and Bengio, Y. 2014. Generative Adversarial Networks. arXiv:1406.2661. Google. 2025. Gemini 2.5 Flash Image. https://developers. googleblog.com/en/introducing-gemini-2-5-flash-image/. Google Developers Blog. Google DeepMind. 2025. Gemini 3 Pro Im-age. https://ai.google.dev/gemini-api/docs/models/gemini-3-pro-image. Gemini API model documentation. Google DeepMind. 2026. Gemini 3.1 Flash Im-age. https://deepmind.google/models/model-cards/gemini-3-1-flash-image/. Model card. Han, J.; Liu, J.; Jiang, Y.; Yan, B.; Zhang, Y.; Yuan, Z.; Peng, B.; and Liu, X. 2024. Infinity: Scaling Bitwise Au-toRegressive Modeling for High-Resolution Image Synthe-sis. arXiv:2412.04431. Hu, Y.; Liu, B.; Kasai, J.; Wang, Y.; Ostendorf, M.; Krishna, R.; and Smith, N. A. 2023. TIFA: Accurate and Interpretable Text-to-Image Faithfulness Evaluation with Question An-swering. arXiv preprint arXiv:2303.11897 .Huang, K.; Duan, C.; Sun, K.; Xie, E.; Li, Z.; and Liu, X. 2025. T2I-CompBench++: An Enhanced and Comprehen-sive Benchmark for Compositional Text-to-image Genera-tion. arXiv:2307.06350. HunyuanImage Team. 2025. HunyuanImage 3.0 Technical Report. arXiv:2509.23951. Kandwal, S.; and Nehra, V. 2024. A Survey of Text-to-Image Diffusion Models in Generative AI. In 2024 14th International Conference on Cloud Computing, Data Science & Engineering (Confluence) , 73–78. Levinson, S. C. 2003. Space in Language and Cognition: Explorations in Cognitive Diversity . Cambridge, UK: Cam-bridge University Press. Li, D.; Li, H.; Wang, Z.; Yan, Y.; Zhang, H.; Chen, S.; Hou, G.; Jiang, S.; Zhang, W.; Shen, Y.; Lu, W.; and Zhuang, Y. 2025. ViewSpatial-Bench: Evaluating Multi-perspective Spatial Localization in Vision-Language Mod-els. arXiv:2505.21500. Lin, H.; Chen, S.; Liew, J. H.; Chen, D. Y.; Li, Z.; Shi, G.; Feng, J.; and Kang, B. 2025. Depth Anything 3: Re-covering the Visual Space from Any Views. arXiv preprint arXiv:2511.10647 .Lipman, Y.; Chen, R. T. Q.; Ben-Hamu, H.; Nickel, M.; and Le, M. 2023. Flow Matching for Generative Modeling. arXiv:2210.02747. Liu, X.; Ma, K. Y.; Gao, C.; and Shou, M. Z. 2026. Diffusion Models in Robotics: A Survey. International Journal of Computer Vision .OpenAI. 2025. GPT Image 1. https://developers.openai. com/api/docs/models/gpt-image-1. OpenAI API model doc-umentation; deprecated model. OpenAI. 2026. GPT Image 2. https://developers.openai. com/api/docs/models/gpt-image-2. OpenAI API model doc-umentation. Premsri, T.; and Kordjamshidi, P. 2025. FoREST: Frame of Reference Evaluation in Spatial Reasoning Tasks. arXiv:2502.17775. Qwen Team. 2026. Qwen-Image-2.0 Technical Report. arXiv:2605.10730. Rombach, R.; Blattmann, A.; Lorenz, D.; Esser, P.; and Om-mer, B. 2022. High-Resolution Image Synthesis with Latent Diffusion Models. arXiv:2112.10752. Taylor, H. A.; and Tversky, B. 1996. Perspective in Spatial Descriptions. Journal of Memory and Language , 35(3): 371– 391. Tenbrink, T. 2011. Reference Frames of Space and Time in Language. Journal of Pragmatics , 43(3): 704–722. Wang, H.; Zhang, R.; Liu, C.; Wang, G.; Ma, Z.; Fang, H.; and Zhang, W. 2026a. Allocentric Perceiver: Disentangling Allo-centric Reasoning from Egocentric Visual Priors via Frame Instantiation. arXiv:2602.05789. Wang, Z.; Hu, X.; Wang, Y.; Xiong, F.; Zhang, M.; and Chu, X. 2026b. Everything in Its Place: Benchmarking Spatial Intelligence of Text-to-Image Models. arXiv:2601.20354. Wang, Z.; Xu, J.; Zhang, Z.; Pang, T.; Du, C.; Zhao, H.; and Zhao, Z. 2025. GenSpace: Benchmarking Spatially-Aware Image Generation. arXiv:2505.24870. Wei, H.; Xu, B.; Liu, H.; Wu, C.; Liu, J.; Peng, Y.; Wang, P.; Liu, Z.; He, J.; Xietian, Y.; Tang, C.; Wang, Z.; Wei, Y.; Hu, L.; Jiang, B.; Li, W.; He, Y.; Liu, Y.; Song, X.; Li, E.; and Zhou, Y. 2025. Skywork UniPic 2.0: Building Kon-text Model with Online RL for Unified Multimodal Model. arXiv:2509.04548. Wei, X.; Zhang, J.; Wang, Z.; Wei, H.; Guo, Z.; Li, B.; and Zhang, L. 2026. TIIF-Bench: How Does Your T2I Model Follow Your Instructions? arXiv:2506.02161. Wu, C.; Li, J.; Zhou, J.; Lin, J.; Gao, K.; Yan, K.; ming Yin, S.; Bai, S.; Xu, X.; Chen, Y.; Chen, Y.; Tang, Z.; Zhang, Z.; Wang, Z.; Yang, A.; Yu, B.; Cheng, C.; Liu, D.; Li, D.; Zhang, H.; Meng, H.; Wei, H.; Ni, J.; Chen, K.; Cao, K.; Peng, L.; Qu, L.; Wu, M.; Wang, P.; Yu, S.; Wen, T.; Feng, W.; Xu, X.; Wang, Y.; Zhang, Y.; Zhu, Y.; Wu, Y.; Cai, Y.; and Liu, Z. 2025a. Qwen-Image Technical Report. arXiv:2508.02324. Wu, C.; Li, J.; Zhou, J.; Lin, J.; Gao, K.; Yan, K.; Yin, S.-m.; Bai, S.; Xu, X.; Chen, Y.; et al. 2025b. Qwen-Image Technical Report. arXiv:2508.02324. Wu, C.; Zheng, P.; Yan, R.; Xiao, S.; Luo, X.; Wang, Y.; Li, W.; Jiang, X.; Liu, Y.; Zhou, J.; Liu, Z.; Xia, Z.; Li, C.; Deng, H.; Wang, J.; Luo, K.; Zhang, B.; Lian, D.; Wang, X.; Wang, Z.; Huang, T.; and Liu, Z. 2025c. OmniGen2: Exploration to Advanced Multimodal Generation. arXiv:2506.18871. Wu, S.; Sun, M.; Wang, W.; Wang, Y.; and Liu, J. 2026. Visu-alPrompter: Semantic-Aware Prompt Optimization with Vi-sual Feedback for Text-to-Image Synthesis. In International Conference on Learning Representations (ICLR) .Xie, J.; Mao, W.; Bai, Z.; Zhang, D. J.; Wang, W.; Lin, K. Q.; Gu, Y.; Chen, Z.; Yang, Z.; and Shou, M. Z. 2024. Show-o: One Single Transformer to Unify Multimodal Understanding and Generation. arXiv preprint arXiv:2408.12528 .Yang, L.; Zhang, Z.; Song, Y.; Hong, S.; Xu, R.; Zhao, Y.; Zhang, W.; Cui, B.; and Yang, M.-H. 2023. Diffusion Mod-els: A Comprehensive Survey of Methods and Applications. 
+
+ACM Computing Surveys , 56(4): 1–39. Z-Image Team. 2025. Z-Image: An Efficient Image Genera-tion Foundation Model with Single-Stream Diffusion Trans-former. arXiv:2511.22699. Zhang, C.; Zhang, C.; Zhang, M.; and Kweon, I. S. 2023. Text-to-image Diffusion Models in Generative AI: A Survey. arXiv:2303.07909.

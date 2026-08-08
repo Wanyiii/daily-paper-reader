@@ -1,0 +1,640 @@
+Title: Trace, Verify, and Correct: A Training-Free Framework for Spatial Reasoning in Multimodal LLMs
+
+URL Source: https://arxiv.org/pdf/2608.04759v1
+
+Published Time: Thu, 06 Aug 2026 00:53:07 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+## Trace, Verify, and Correct: A Training-Free Framework for Spatial Reasoning in Multimodal LLMs 
+
+Yang Yang 1* , Jiawei Chen 1,2 * , Tairan Chen 3, Zhaoxia Yin 1†1Shanghai Key Laboratory of Multidimensional Information Processing, East China Normal University 
+
+2Zhongguancun Academy 
+
+3Stevens Institute of Technology 
+
+Abstract 
+
+Although Multimodal Large Language Mod-els (MLLMs) have made substantial progress, their spatial reasoning may still produce inter-mediate judgments inconsistent with the input image, allowing errors to propagate through the reasoning chain and affect the final an-swer. Existing methods mainly improve spatial reasoning through training or additional spa-tial information, without considering whether the reasoning process itself is faithful to the model input. Our study shows that unfaith-ful reasoning chains significantly reduce final-answer accuracy. To address this issue, we propose a modular and training-free framework for spatial reasoning verification and correction. The framework constructs a Spatial Evidence Graph (SEG), which associates atomic spatial evidence extracted from Chain-of-Thought rea-soning with visual entities, spatial relations, source steps, and visual evidence. Spatial Ev-idence Reliability Assessment (SERA) evalu-ates the reliability of visual evidence based on object existence, localization, and geometric measurements. The framework then identifies the earliest spatial evidence unit contradicted by reliable visual evidence and guides the orig-inal MLLM to revise the subsequent reasoning and final answer. Across 15 model–dataset set-tings, our method achieves an average accuracy of 68.94%, outperforming the compared base-lines by 8.55 percentage points on average. Our code will be open-sourced. 
+
+1 Introduction 
+
+MLLMs have recently achieved substantial progress in visual question answering (Kuang et al., 2025; Zhong et al., 2026), image under-standing (Jiang et al., 2026; Meng et al., 2025), and cross-modal reasoning (Ma et al., 2026; Jiang et al., 2025). Nevertheless, spatial reasoning re-mains a major challenge. To solve complex spatial 
+
+*Equal contribution. 
+
+†Corresponding author. Auxiliary Spatial Context                
+
+> Corrects inconsistent spatial evidence before regeneration. Leaves intermediate spatial evidence unverified.
+> CONTRADICTED
+> (A) Vanilla
+> Q: Is the apple to the right of bowl? (Ground-truth: No) Step 1: The apple and the bowl are visible in the image.
+> Step 2: The apple is to the right of the bowl.
+> Step 3: Therefore, the answer is Yes. Contradicted spatial evidence → Wrong answer
+> Unsupported spatial evidence can lead to an incorrect answer.
+> (B) Training-stage Enhancement (C) Inference-stage Intervention
+> Ours: Process-oriented Correction
+> Spatial QA / Reasoning Data
+> Requires parameter access and task-specific adaptation.
+> 𝐀 𝐀𝐀𝐀𝐀𝐀 𝐀𝐀𝐀𝐀𝐀 = 𝐀. 𝐀􅰀 ⇒ apple exists
+> 𝐀 𝐀𝐀𝐀𝐀 𝐀𝐀𝐀𝐀𝐀 = 𝐀. 𝐀𝐀 ⇒ bowl exists
+> to the right of
+> 𝐀𭀀𭀀𝐀(𝐀) 𝐀𭀀𭀀𝐀(𝐀’)
+> Parameter Updating Step 1: …… Step 2: The appl e is to the right of the bowl. (unverified)
+> ……
+> Final answer: Yes
+> Improves outputs without verifying intermediate spatial evidence.
+> 𝐀𭀀𭀀𝐀(𝐀)
+> Step 1: …… Step 2: The appl e is to the right of the bowl. (unverified)
+> ……
+> Final answer: No
+> Depth cues Scene structure 3D priors
+> Spatial cue fusion
+> Existence: Location: 𝐀𤀀𝐀𤠀𤀀𦰀 𝐀𝐀𝐀𝐀𝐀 < 𝐀𤀀𝐀𤠀𤀀𦰀 𝐀𝐀𝐀𝐀 ⇒
+> apple to the right of bowl
+> Step 1: …… Step 2: The appl e is to the left of the bowl. (verified)
+> ……
+> Final answer: No
+> Outcome-oriented Enhancement
+
+Figure 1: Motivation for perceptually faithful spatial rea-soning. (A) Vanilla reasoning propagates unsupported evidence to an incorrect answer. (B) Training-stage methods require parameter access and task-specific adaptation. (C) Inference-stage methods improve out-puts but leave intermediate spatial evidence unverified. Our process-oriented method verifies and corrects in-consistent spatial evidence before regeneration. 
+
+problems, MLLMs commonly employ Chain-of-Thought (CoT) reasoning to decompose the prob-lem into a sequence of intermediate steps before deriving the final answer. However, an intermediate spatial judgment that is inconsistent with the visual input may be reused as a premise in subsequent steps, allowing local errors to propagate through the reasoning chain and affect the final answer. Re-liable spatial reasoning is therefore essential for extending multimodal models from static image understanding to interaction with real-world envi-ronments (Chen et al., 2026a; Ding et al., 2025; Liu et al., 2024b). For example, in high-stakes domains such as autonomous driving and robotics, incorrect spatial judgments may lead to erroneous decisions, resulting in substantial economic losses or even threats to human safety. As shown in Fig. 1, prior work (Gholami et al., 2025; Wang et al., 2025b; Daxberger et al., 2025; Zhang et al., 2026; Li et al., 2026b) enhances MLLM spatial reasoning using spatial QA or rea-soning data during training, but requires parameter access and adaptation to new models or tasks. To 1arXiv:2608.04759v1 [cs.CV] 5 Aug 2026 avoid retraining, subsequent work (Ma et al., 2024; Roy et al., 2025; Zhu et al., 2026; Li et al., 2025b; Hua et al., 2026) introduces depth cues, structured scene representations, or 3D priors at inference time. However, these methods remain primarily outcome-oriented: they enhance the input or over-all generation process without explicitly locating, verifying, or correcting intermediate spatial evi-dence. Consequently, intermediate reasoning er-rors may remain undetected and propagate to the final answer. We term consistency between inter-mediate spatial evidence and visual input percep-tual faithfulness (Lv et al., 2026; Li et al., 2026a). Section 2.1 shows that perceptually unfaithful rea-soning chains have significantly lower answer ac-curacy. We therefore adopt a process-oriented strat-egy that verifies and corrects spatial evidence after initial CoT generation and regenerates the affected reasoning and final answer. Reliably correcting such unfaithful reasoning presents two key challenges. First, spatial evidence units are difficult to extract and trace. In free-form CoT, spatial judgments may be expressed implic-itly and distributed across interdependent reason-ing steps, making it difficult to accurately identify each evidence unit and trace it to its source step. Second, verification evidence is not always reli-able. Object existence, localization, and geometric measurements may be affected by occlusion and perception errors, and correcting the CoT based on uncertain evidence may alter otherwise valid spatial judgments and degrade answer accuracy. To meet these challenges, we propose averification-and-correction framework for perceptu-ally faithful spatial reasoning in MLLMs. SEG ad-dresses evidence extraction and provenance tracing by representing each atomic CoT spatial judgment as an evidence unit while preserving its visual en-tities, spatial relations, and source step. SERA ad-dresses unreliable verification evidence by assess-ing object existence, localization confidence, and geometric measurement quality. Based on these reliability-aware results, the framework identifies the earliest evidence unit contradicted by reliable visual evidence and guides the original MLLM to regenerate the affected reasoning and final answer. Correcting from the earliest reliably detected error improves perceptual faithfulness and final-answer accuracy while preserving valid reasoning. Our key contributions are: • We propose a systematic verification and           
+
+> Dataset CoT Faithfulness Acc. (%) OR p-value
+> RealWorldQA Fully Faithful 51.10 1.99 <0.001
+> Unfaithful 34.41
+> Table 1: Final-answer accuracy conditioned on CoT faithfulness for InternVL3.5-8B.
+
+correction framework for spatial reasoning in MLLMs, enabling evidence-level spatial-relation verification, error localization, and reasoning revision. • We develop the SEG and SERA to support structured provenance tracing of spatial evi-dence units and hierarchical reliability assess-ment of verification evidence. • Our training-free and model-agnostic frame-work consistently improves multiple MLLMs across spatial reasoning benchmarks, achiev-ing an average accuracy of 68.94% and out-performing the compared baselines by 8.55 percentage points on average. 
+
+2 Why Reasoning-Level Spatial Correction Is Necessary 
+
+We investigate the necessity of reasoning-level spa-tial correction through three empirical analyses. 
+
+2.1 Perceptually Unfaithful Reasoning Is Associated with Lower Answer Accuracy 
+
+To examine the relationship between reasoning faithfulness and answer performance, we inspect CoTs generated by InternVL3.5-8B on Real-WorldQA and annotate spatial evidence units as supported, contradicted, or inconclusive. We com-pare faithful CoTs, in which all evidence units are supported by the image, with unfaithful CoTs containing at least one contradicted evidence unit. As shown in Tab. 1, the two groups achieve final-answer accuracies of 51 .10% and 34 .41% , respec-tively, a difference of 16 .69% . This difference is statistically significant (Fisher’s exact test, OR 
+
+= 1 .99 , p < 0.001 ), indicating that perceptually unfaithful spatial reasoning is significantly associ-ated with lower final-answer accuracy. Therefore, we investigate whether improving spatial reasoning faithfulness can enhance final-answer accuracy. 
+
+2.2 Spatial Unfaithfulness Accumulates Along the Reasoning Chain 
+
+We further normalize the position of each spatial ev-idence unit according to its source step and define 225% 50% 75% 100% 
+
+> Normalized reasoning progress
+> 80 85 90 95
+> SEF (%)
+> 94.12 92.54 87.96 84.13 94.73 90.91 87.70 80.95
+> RealWorldQA GQA
+
+Figure 2: Cumulative spatial evidence faithfulness of Vanilla on fixed 500-sample subsets of RealWorldQA and GQA using InternVL3.5-8B. 
+
+Spatial Evidence Faithfulness at p% (SEF@ p) as the cumulative faithfulness of evidence units orig-inating within the first p% of the reasoning chain. As shown in Fig. 2, the SEF@ p of Vanilla consis-tently decreases as reasoning progresses on both RealWorldQA and GQA, indicating that unfaithful spatial evidence can arise at different stages and gradually accumulate. Therefore, improving final-answer accuracy requires locating spatial evidence units within the reasoning chain. 
+
+2.3 Untargeted Self-Revision Is Unreliable 
+
+To examine whether untargeted revision of the en-tire reasoning chain can address these errors, we evaluate generic Self-Revision on RealWorldQA, where the same MLLM is provided with the orig-inal image, question, initial reasoning chain, and answer and is asked to reconsider and revise the complete reasoning process without explicit error localization or external visual evidence. The com-plete prompt is provided in Appendix E. As shown in Fig. 3, Self-Revision improves InternVL but de-grades Qwen and Llama, indicating that such per-ceptual unfaithfulness is not merely attributable to stochastic sampling, but instead reflects systematic limitations in the visual perception of MLLMs (Li et al., 2025a; Chen et al., 2026b). It is therefore necessary to introduce independent and reliable visual evidence and explicitly localize the spatial evidence units that require correction. These analyses suggest that improving final-answer accuracy through perceptually faithful rea-soning requires locating specific spatial evidence units in the CoT that conflict with the visual in-put and providing their locations and verification evidence for targeted regeneration. 40 45 50 55 60 65 70 75 
+
+> Accuracy (%)
+> Qwen InternVL Llama
+> 63.66 48.63 54.90 55.69 57.25 48.37
+> Vanilla Self-Revision
+
+Figure 3: Effect of generic Self-Revision on the final-answer accuracy of three MLLMs on RealWorldQA. 
+
+3 Method 
+
+Motivated by the above analyses, we propose a training-free framework for spatial reasoning veri-fication and correction that locates and corrects per-ceptually unfaithful spatial evidence units, thereby improving perceptual faithfulness and final-answer accuracy. As illustrated in Fig. 4, given an image 
+
+I and a question q, an MLLM first generates an initial reasoning chain and answer. The framework then extracts spatial evidence units to construct a SEG, verifies each using visual evidence assessed for reliability, locates the earliest unit contradicted by reliable evidence, and guides the model to revise the affected subsequent reasoning and final answer. 
+
+3.1 Spatial Evidence Graph Construction 
+
+Spatial judgments in natural-language CoT are often distributed across different reasoning steps, making them difficult to verify independently and trace back to their origins when errors are detected. To address this issue, we explicitly convert these judgments into a Spatial Evidence Graph (SEG). The construction process consists of three steps: ex-tracting spatial evidence units from the reasoning chain, mapping them into a unified graph struc-ture, and associating them with the visual evidence required for subsequent verification. Given an initial reasoning chain C =
+
+{c1, c 2, . . . , c n}, we prompt an MLLM to extract spatial evidence units from each reasoning step across four types: object existence, absolute im-age position, 2D relative spatial relations, and rel-ative depth. Each unit retains its source step, en-abling unsupported evidence to be localized in the original CoT. We organize these units into a SEG 
+
+G = ( V, E, A), where V contains visual entity nodes and an image-reference node, E denotes di-rected spatial-relation edges, and A stores evidence types, source steps, and visual evidence. Object 31 Initial CoT Reasoning Question ：Where is the lamp relative to the vase? 
+
+> <think> Step 1 ：The lamp is to the right of the vase.
+> Step 2 ：The lamp is in front of the vase.
+> Step 3 ：Therefore, the lamp is to the right front of the vase.
+> </think> <answer>
+> The lamp is to the right front of the vase.
+> </answer>
+> Error propagation leads to a wrong answer
+
+2 Spatial Evidence Graph Construction                
+
+> Subject Relation Object Source Step s1 lamp right of vase step 1 s2 lamp front of vase step 2 s3 lamp right front of vase step 3
+> s1: right of
+> reason CoT
+> s3: right front of s2: in front of (verified by object depth z)
+
+3 Reliability-Aware Spatial Verification  
+
+> verify each evidence unit 𝐀 𝐀
+
+4 Targeted Revision & Answer Regeneration               
+
+> regenerate answer: <think> Step 1 ：The lamp is to the right of the vase.
+> Step 2 ：The lamp is behind the vase.
+> Step 3 ：Therefore, the lamp is behind and to the right of the vase. </think>
+> 𝐀 𝐀 Existence (using existence scores 𝐀 𝐀𝐀𝐀𝐀𝐀𝐀 𝐀𝐀𝐀𝐀𝐀 )
+> 𝐀 𝐀 Localization (using bbox/center)
+> 𝐀 𝐀 Measurement (using depth z)
+> Reliability aggregation g(o)
+> HIGH
+> Verification Report earliest contradicted unit: s2 s1: supported; s2: contradi cted; s3: contradicted visual evidence: ……
+> MEDIUM LOW
+> image question
+> verification report
+> vase Final Answer: Behind and to the right of the vase. lamp
+> MLLM (regenerator)
+> 𝐀 𝐀𝐀𝐀𝐀 𝐀𝐀𝐀𝐀𝐀 = 0.93
+> bbox: [(𝐀 1, 𝐀 1), ……]
+> center: ( 𝐀 𝐀1 ,𝐀 𝐀1 )source:
+> step 1, 2, 3
+> depth: 𝐀 1
+> (verified by horizontal center x) (decomposed into right of + in front of)
+> HIGH strong evidence
+> MEDIUM weak evidence
+> LOW insufficient evidence
+> lamp
+> SEG Instantiation & Evidence Binding: Existence | Abs. Position | 2D Relation | Relative Depth
+> 𝐀 𝐀𝐀𝐀𝐀 𝐀𝐀𝐀𝐀𝐀 = 0.95
+> bbox: [(𝐀 2, 𝐀 2), ……]
+> center: ( 𝐀 𝐀2 ,𝐀 𝐀2 )source:
+> step 1, 2, 3
+> vase depth: 𝐀 2
+
+Figure 4: Overview of our process-oriented spatial reasoning correction framework. SEG structures intermediate spatial evidence, SERA assesses visual evidence reliability, and the earliest contradicted evidence unit guides targeted reasoning and answer regeneration. 
+
+existence is represented as an entity-node attribute, while absolute positions and inter-object relations are represented as directed edges. Each unit is formally represented as 
+
+sm = ⟨oi, r m, o j , t m, k m⟩ ,
+
+where oi and oj denote the entities or reference node involved in the evidence unit, rm denotes the encoded spatial relation, tm denotes the evidence type, and km records the source reasoning step. Finally, we associate visual evidence by evi-dence type. For each entity, Grounding DINO (Liu et al., 2024a) provides candidate boxes and confi-dence scores, from which we compute the existence score pyes (o) following FaithAct. Bounding-box coordinates support absolute-position and 2D rela-tion units. For depth relations, SAM2 (Ravi et al., 2025) provides object masks, and a monocular depth estimator (Yang et al., 2024) computes depth statistics within them. The resulting SEG links its nodes and edges to the evidence required for reliability assessment and verification. Extraction prompts and details are provided in Appendix B. 
+
+3.2 Reliability-Aware Spatial Verification 
+
+The SEG specifies the spatial evidence units to be verified and associates them with the correspond-ing visual entities and evidence. However, in chal-lenging cases involving small objects, occlusion, cluttered backgrounds, or ambiguous boundaries, the associated visual observations may exhibit sub-stantial uncertainty. For example, object detection may produce low-confidence or incomplete bound-ing boxes, while depth estimation may be affected by segmentation boundary errors and depth varia-tions within the object region. Treating all visual evidence as equally reliable in such cases may lead to overconfident verification decisions and intro-duce new errors into subsequent reasoning revision. We therefore introduce Spatial Evidence Reliabil-ity Assessment (SERA), which evaluates whether the relevant visual evidence is sufficiently reliable to support a decisive judgment before verifying each spatial evidence unit. This process consists of entity-level evidence reliability assessment and evidence-unit-level spatial verification. For each visual entity o, SERA evaluates three complementary aspects of its evidence: exis-tence certainty, localization clarity, and geometric-measurement stability, denoted by RE (o), RL(o),and RM (o), respectively. Let pyes (o) ∈ [0 , 1] de-note the image-level probability that entity o is present, obtained during SEG construction. We define existence reliability as 
+
+RE (o) = 2 |pyes (o) − 0.5| .
+
+Localization reliability measures whether the en-tity is localized unambiguously. Let s1 and s2 de-note the top two raw grounding scores produced by Grounding DINO for entity o. We define 
+
+RL(o) = min ( σ(s1), σ (s1 − s2)) ,
+
+where the first term measures the confidence of the top-ranked candidate, while the second mea-4sures its score margin over the second-ranked can-didate. A small margin indicates that multiple can-didate locations have similar scores and that the localization may therefore be ambiguous. Here, 
+
+σ(·) denotes the sigmoid function. Geometric-measurement reliability evaluates the stability of the visual measurements used for ev-idence unit verification. For evidence units that do not involve relative depth, no additional geo-metric measurement is required, and we therefore set RM (o) = 1 . For relative-depth evidence units, measurement reliability depends on both mask-area sufficiency and depth consistency: 
+
+RM (o) = 
+
+(1, for non-depth evidence units ,amask (o) dstable (o).amask (o) = σ (log 10 (max( |Mo|, 1)) − θm) ,dstable (o) = σ (θd − Std( Do)) .
+
+Here, Mo denotes the segmentation mask of en-tity o, and Do denotes the depth values within the corresponding masked region. A larger valid mask region and lower within-region depth variance in-dicate a more stable depth measurement. The three reliability components are aggregated into an entity-level evidence reliability score using a weighted geometric mean: 
+
+g(o) = RE (o)αRL(o)β RM (o)γ , α+β +γ = 1 .
+
+This aggregation substantially reduces the over-all reliability when any critical evidence component has a low value, while α, β, and γ control the rela-tive contributions of the three components. Based on g(o), the evidence associated with each entity is divided into three reliability tiers: 
+
+tier( o) = 
+
+
+
+HIGH , g(o) ≥ τh,
+
+MEDIUM , τl ≤ g(o) < τ h,
+
+LOW , g(o) < τ l.
+
+We set τh = 0 .75 and τl = 0 .45 . A positive object-existence unit is marked as S UPPORTED if 
+
+RE (o) ≥ τh and pyes (o) > 0.5, and C ONTRA - 
+
+> DICTED
+
+if RE (o) ≥ τh and pyes (o) < 0.5; labels are reversed for negative units. Any existence unit with RE (o) < τ h is marked as I NCONCLUSIVE .After verification, we sort the results by source step and locate the earliest spatial evidence unit contradicted by reliable visual evidence. Its source step, result, and visual evidence form a verification report, which is provided with the original image and question to the same MLLM to revise the judg-ment and regenerate the affected reasoning and final answer. If no reliable contradiction is found, the original reasoning and answer are retained. De-tailed verification rules and the regeneration prompt are provided in Appendix C. 
+
+4 Experiments 
+
+4.1 Experimental Setup Datasets and models. We evaluate our method on five benchmarks: 60 samples from LLaVA-Bench-in-the-Wild (Liu et al., 2023), 765 sam-ples from RealWorldQA (AI, 2024), 3,000 sam-ples from the POPE split (Li et al., 2023), 12,578 samples from the GQA balanced test-dev (Hud-son and Manning, 2019), and 96 samples from MMHal-Bench (Sun et al., 2024). These bench-marks cover open-ended visual question answering, real-world scene understanding, object-existence hallucination, and spatial-relation reasoning. Evalu-ation protocols for different datasets are provided in Appendix D. We use Qwen3-VL-8B-Instruct (Bai et al., 2025), InternVL3.5-8B (Wang et al., 2025a), and Llama-3.2-11B-Vision-Instruct (Grattafiori et al., 2024) as backbone models. 
+
+Baselines and metrics. We compare our method with Vanilla, SpatialPIN (Ma et al., 2024), ByDe-Way (Roy et al., 2025), SoM (Yang et al., 2023), GoM (Frisoni et al., 2026), and FaithAct (Li et al., 2026a). All methods use identical samples and eval-uation procedures, with final-answer accuracy as the primary metric. We also use Spatial Evidence Faithfulness (SEF) to assess intermediate reason-ing. For sample i, let Si and Ci denote the numbers of S UPPORTED and C ONTRADICTED units, respec-tively, and define SEF i = Si/(Si + Ci).
+
+4.2 Main Results 
+
+To evaluate the overall effectiveness of our frame-work and its applicability across models and datasets, we compare it with Vanilla reasoning and several inference-time spatial augmentation and verification methods on three MLLMs and five benchmarks. As shown in Tab. 2, our method achieves the best performance in 11 of the 15 model–dataset settings. Specifically, the average accuracy increases from 64 .33% to 70 .59% for Qwen, from 56 .11% to 68 .55% for InternVL, and from 63 .55% to 67 .68% for Llama. In contrast, the 5Model + Method LLaVA-Bench (%) RealWorldQA (%) POPE (%) GQA (%) MMHal (%) Average (%) Qwen + Vanilla 63.33 63.66 74.90 56.21 63.54 64.33 + SpatialPIN 58.33 64.44 85.67 48.33 63.54 64.06 + ByDeWay 65.00 65.36 82.90 56.49 66.67 67.28 + SoM 60.00 64.18 85.43 60.10 63.54 66.65 + GoM 56.67 53.20 85.43 33.88 54.17 56.67 + FaithAct 53.33 46.54 79.67 55.13 64.58 59.85 + Ours 71.67 66.93 86.33 57.20 70.83 70.59 InternVL + Vanilla 53.33 48.63 75.60 43.62 59.38 56.11 + SpatialPIN 45.00 60.52 80.83 51.18 55.21 58.55 + ByDeWay 56.67 44.18 85.27 55.22 60.42 60.35 + SoM 48.33 56.73 79.30 59.92 47.92 58.44 + GoM 46.67 56.73 86.23 47.94 42.71 56.06 + FaithAct 41.67 60.65 65.63 49.80 47.92 53.13 + Ours 60.00 66.14 88.57 60.35 67.71 68.55 Llama + Vanilla 58.33 54.90 81.30 69.06 54.17 63.55 + SpatialPIN 48.33 45.88 84.73 66.62 58.33 60.78 + ByDeWay 51.67 56.60 86.27 60.26 55.21 62.00 + SoM 41.67 52.81 82.80 60.02 63.54 60.17 + GoM 41.67 43.01 86.67 63.00 47.92 56.45 + FaithAct 40.00 58.43 86.40 75.08 53.13 62.61 + Ours 65.00 61.18 85.30 71.72 55.21 67.68 
+
+Table 2: Performance comparison across five multimodal reasoning benchmarks using Qwen3-VL-8B-Instruct, InternVL3.5-8B, and Llama-3.2-11B-Vision-Instruct. Bold and underlined values denote the best and second-best results, respectively, within each model–dataset setting. 
+
+Dataset Spatial Evidence Faithfulness (% ↑) Final-answer Accuracy (% ↑)Human Eval. Model Eval. 
+
+RealWorldQA 82.12 → 92.47 
+
+> (+10 .35)
+
+81.79 → 91.40 
+
+> (+9 .61)
+
+45.00 → 57.00 
+
+> (+12 .00)
+
+GQA 90.94 → 96.70 
+
+> (+5 .76)
+
+90.03 → 95.60 
+
+> (+5 .57)
+
+62.00 → 69.00 
+
+> (+7 .00)
+
+Table 3: Relationship between spatial evidence faithful-ness and final-answer accuracy on 200-example subsets of RealWorldQA and GQA. Values before and after →
+
+correspond to Vanilla and our method, respectively. 
+
+other methods exhibit more variable gains across models and benchmarks. These results demonstrate that our method provides consistent improvements across different backbones and datasets, indicating that explicitly verifying and correcting intermedi-ate spatial evidence is more effective than merely augmenting the initial spatial information. 
+
+4.3 Reasoning Faithfulness 
+
+To examine whether our method improves percep-tual faithfulness, we evaluate SEF on fixed subsets of RealWorldQA and GQA and analyze its change over the reasoning process. As shown in Tab.3, both human and automatic evaluations show an upward trend in SEF, accompanied by improve-ments in final-answer accuracy. Figure 5 shows that Vanilla’s SEF steadily declines as reasoning progresses, whereas our method remains consis-tently higher and improves SEF@100 by 8.97% 
+
+on GQA. These results demonstrate that the frame-25% 50% 75% 100%     
+
+> Normalized reasoning progress
+> 80 85 90 95 100
+> SEF (%)
+> 94.12 92.54 87.96 84.13 100.00 96.34 91.47 88.10
+> Δ+5.88 Δ+3.80 Δ+3.51 Δ+3.97
+> RealWorldQA
+> 25% 50% 75% 100%
+> Normalized reasoning progress
+> 94.73 90.91 87.70 80.95 100.00 92.74 91.33 89.92
+> Δ+5.27 Δ+1.83 Δ+3.63 Δ+8.97
+> GQA
+> Vanilla Ours
+
+Figure 5: Cumulative spatial evidence faithfulness on fixed 500-sample subsets of RealWorldQA and GQA using InternVL3.5-8B. 
+
+Backbone Full w/o SEG (∆) w/o SERA (∆)
+
+Qwen3-VL-8B 66.93 63.92 (−3.01 ) 62.88 (−4.05 )
+
+InternVL3.5-8B 66.14 63.01 (−3.13 ) 61.96 (−4.18 )
+
+Llama-3.2-11B 61.18 58.56 (−2.62 ) 57.65 (−3.53 )
+
+Table 4: Ablation study of SEG and SERA on Real-WorldQA across multiple MLLMs. 
+
+work improves both the perceptual faithfulness of intermediate reasoning and final-answer accuracy. 
+
+4.4 Ablation Studies Component ablation. To assess the contribu-tions of the two core modules, we remove SEG and SERA separately. In w/o SEG, spatial evidence units are processed as a flat list without construct-ing a graph connecting entities, relations, visual evidence, and source steps. In w/o SERA, SEG and visual evidence collection are retained, but reliabil-ity assessment and gating are removed, allowing direct evidence use for verification and correction. As shown in Tab. 4, removing SEG and SERA re-6w/o RE w/o RL w/o RM w/o Gating Full 60 65 70 75 80 85            
+
+> Score (%)
+> 66.00 68.50 67.00 67.50 70.50 83.57 78.19 82.87 80.95 84.54
+> InternVL3.5-8B
+> Acc. SEF
+> w/o REw/o RLw/o RMw/o Gating Full 60 65 70 75 80 85
+> 62.00 60.50 63.50 63.50 65.00 81.57 79.26 80.65 82.21 83.91
+> Llama-3.2-11B
+> Acc. SEF
+
+Figure 6: Fine-grained ablation of SERA on a fixed 200-sample subset of RealWorldQA. 
+
+Setting τl τh SEF (%) Acc. (%) 
+
+Loose 0.35 0.65 84.04 51 Default 0.45 0.75 89.36 55 
+
+Strict 0.55 0.85 86.17 52 
+
+Table 5: Sensitivity of SERA to its reliability thresholds on a fixed 100-sample subset of RealWorldQA using Qwen3-VL-8B-Instruct. 
+
+duces average accuracy across the three backbones by 2.92 and 3.92 percentage points, respectively, confirming the contributions of structured evidence organization and reliability-aware verification. 
+
+Fine-grained SERA ablation. To analyze SERA’s components, we separately remove RE ,
+
+RL, RM , and reliability-aware gating. In w/o RE ,only RL and RM are aggregated with renormalized weights. In w/o RL or w/o RM , the correspond-ing visual evidence is retained but excluded from reliability estimation. In w/o Gating, all compo-nents remain, but reliability tiers no longer deter-mine whether verification is decisive. As shown in Fig. 6, each removal reduces accuracy and SEF, with RL having the largest impact, confirming their complementary roles. 
+
+Threshold sensitivity. To assess SERA’s thresh-old sensitivity, we compare loose, default, and strict settings. As shown in Tab. 5, the default setting achieves the highest SEF and accuracy. Loose thresholds allow noisy evidence to trigger correc-tion, whereas strict thresholds yield more inconclu-sive units. The default thresholds better balance correction coverage and evidence reliability. 
+
+4.5 Human Validation of Intermediate Components 
+
+To validate the automatic components, we ran-domly sampled 50 CoT responses each from Re-alWorldQA and GQA. Human annotators identify spatial evidence units and their source steps for strict exact-match evaluation of the extractor, and label the resulting 291 units as Supported , Contra-
+
+(a) Spatial Evidence Extraction Dataset Precision (%) Recall (%) F1 (%) 
+
+RealWorldQA 89.19 94.96 91.99 GQA 88.89 94.74 91.72 
+
+(b) Automatic Spatial Verification Dataset 3-way Acc. F1-S F1-C F1-I Macro-F1 Dec. Acc. Coverage               
+
+> RealWorldQA 94.96 98.20 58.82 92.31 83.11 95.00 85.61 GQA 94.74 97.81 58.82 76.92 77.85 95.86 96.05
+
+Table 6: Human validation of the spatial evidence ex-tractor and verifier. Panel (a) reports extraction quality under strict exact matching of all evidence fields and source steps. Panel (b) reports verification quality. S, C, and I denote Supported , Contradicted , and Inconclusive .Dec. Acc. is accuracy on human-decidable units, and Coverage is the proportion assigned a decisive label. 
+
+Performance Inference Efficiency Method Accuracy (%, ↑)E2E Time (s) Time/Tok. (ms) 
+
+Vanilla 53.00 0.8943 1.4425 SpatialPIN 52.00 (↓1.00) 1.3151 (×1.47) 1.0950 (×0.76) 
+
+ByDeWay 58.00 (↑5.00) 1.3155 (×1.47) 1.0262 (×0.71) 
+
+SoM 59.00 (↑6.00) 0.9626 (×1.08) 1.4232 (×0.99) 
+
+GoM 50.00 (↓3.00) 0.9384 (×1.05) 1.5132 (×1.05) 
+
+FaithAct 58.00 (↑5.00) 1.2566 (×1.41) 1.0425 (×0.72) 
+
+Ours 61.00 (↑8.00) 2.5095 (×2.81) 3.3592 (×2.33) 
+
+Table 7: Performance and efficiency on a 100-sample GQA subset using InternVL3.5-8B. E2E Time denotes average end-to-end inference latency, while Time/Tok. denotes the latency normalized by output length. 
+
+dicted , or Inconclusive for verifier evaluation. As shown in Tab.6, the extractor achieves F1 scores of 91 .99% and 91 .72% on the two datasets, while the verifier achieves 94 .85% three-way accuracy and 81 .76% Macro-F1, with 95 .47% decisive ac-curacy at 91 .07% coverage, indicating high agree-ment with human judgments, providing a reliable basis for subsequent correction. 
+
+4.6 Efficiency and Scope Analysis 
+
+To assess inference cost and cross-task general-ity, we evaluate efficiency on a fixed 100-sample GQA subset using InternVL3.5-8B and transfer to ScienceQA and MathVista across three backbones. All latency measurements use identical hardware and software settings on eight NVIDIA GeForce RTX 4090 GPUs. 
+
+Inference efficiency. As shown in Tab. 7, al-though our method incurs higher overall latency, its absolute runtime remains on the order of seconds while delivering the largest accuracy gain of 8.00 
+
+7Figure 7: Transfer analysis on ScienceQA and Math-Vista. Results are reported as final-answer accuracy. 
+
+percentage points. Moreover, it does not modify the underlying generation function or decoding pro-cedure of the MLLM. Thus, our method achieves a substantial performance improvement with man-ageable test-time overhead while preserving the original generation mechanism. 
+
+Transfer beyond spatial reasoning. As shown in Fig. 7, the maximum performance decrease on ScienceQA is only 1.11 percentage points. On MathVista, Qwen decreases by 2.44 points, whereas InternVL and Llama improve by 0.50 and 
+
+8.22 points, respectively. Overall, our method largely preserves the models’ performance on broader multimodal tasks and provides additional gains in some settings. 
+
+4.7 Complementarity with Inference-Time Spatial Augmentation 
+
+To evaluate whether our process-oriented spatial reasoning correction complements inference-time spatial augmentation for final-answer performance, we combine it with SpatialPIN. As shown in Tab.8, the combination achieves an average accuracy of 
+
+65 .45% , outperforming SpatialPIN alone ( 56 .95% )and our method alone ( 64 .75% ). It also outper-forms both methods across all three backbones. These results demonstrate the complementarity between inference-time spatial augmentation and process-oriented spatial reasoning correction. 
+
+5 Related Work 
+
+5.1 Spatial Reasoning in Multimodal LLMs 
+
+Existing methods for MLLM spatial reason-ing mainly use training-based enhancement or inference-time augmentation. Training-based meth-ods construct spatial instruction data or introduce region- and depth-aware representations (Chen et al., 2024; Cheng et al., 2024; Sun et al., 2025b; Ogezi and Shi, 2025). Inference-time methods pro-                     
+
+> Method Qwen InternVL Llama Average
+> Vanilla 63.66 48.63 54.90 55.73 SpatialPIN 64.44 60.52 45.88 56.95 Ours 66.93 66.14 61.18 64.75 SpatialPIN + Ours 67.71 66.41 62.22 65.45
+> Table 8: Performance of SpatialPIN, our process-oriented correction, and their combination on Real-WorldQA.
+
+vide depth cues, 3D priors, visual marks, or struc-tured scene representations (Ma et al., 2024; Roy et al., 2025; Yang et al., 2023; Frisoni et al., 2026). However, they enhance spatial knowledge without verifying whether intermediate judgments are vi-sually supported. Our method instead extracts and verifies spatial evidence units from CoT and traces unsupported units to their source steps. 
+
+5.2 Faithful Reasoning and Verification 
+
+Recent methods improve multimodal faithfulness through decoding correction, reasoning verifica-tion, or post-hoc grounding. Decoding methods suppress unsupported language priors by adjust-ing output distributions or strengthening visual grounding (Wang et al., 2024; Ghosh et al., 2025), while verifier-based and post-hoc methods check reasoning trajectories against localized visual ev-idence (Sun et al., 2025a; Yi and Shang, 2025). FaithAct uses the visual faithfulness of intermedi-ate reasoning to guide correction (Li et al., 2026a). However, these methods neither represent inter-object spatial relations as verifiable evidence units nor assess the reliability of corrective visual evi-dence. We address both limitations through SEG-based evidence tracing and SERA-based reliability-aware verification. 
+
+6 Conclusion 
+
+We propose a modular and training-free frame-work for perceptually faithful spatial reasoning in MLLMs. The SEG structures intermediate spa-tial evidence units and preserves their source steps, while SERA determines whether existence, local-ization, and geometric evidence is sufficiently reli-able for verification. The framework then corrects the earliest contradicted evidence unit and regen-erates the affected reasoning steps to prevent error propagation. Experiments across three representa-tive MLLMs and five benchmarks show that our method achieves an average accuracy of 68.94%, outperforming the compared baselines by 8.55 per-centage points on average. These results demon-8strate that evidence-level verification provides an effective approach to improving spatial reasoning. 
+
+Limitations 
+
+Although in this work we present a systematic and training-free framework for verifying and correct-ing spatial reasoning in MLLMs, it still has several limitations. First, the framework relies on explicit CoT and can verify only the spatial evidence successfully ex-tracted from the generated reasoning. Spatial errors that remain implicit or are omitted from the CoT cannot be directly localized or corrected, while non-spatial reasoning errors fall beyond the scope of the current framework. Second, our experiments mainly focus on static-image question-answering benchmarks and three open-source MLLM back-bones. Its effectiveness in video understand-ing, multi-view reasoning, proprietary MLLMs, and closed-loop embodied interaction therefore re-mains to be investigated. Future work will explore the identification of implicit spatial evidence and extend the framework to a broader range of models, tasks, and dynamic embodied environments. 
+
+References 
+
+X AI. 2024. Grok-1.5 vision preview. Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, Lianghao Deng, Wei Ding, Chang Gao, Chunjiang Ge, and 1 others. 2025. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 .Boyuan Chen, Zhuo Xu, Sean Kirmani, Brain Ichter, Dorsa Sadigh, Leonidas Guibas, and Fei Xia. 2024. Spatialvlm: Endowing vision-language models with spatial reasoning capabilities. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pat-tern Recognition , pages 14455–14465. Jiawei Chen, Simin Huang, Jiawei Du, Shuaihang Chen, Yu Tian, Mingjie Wei, Chao Yu, and Zhaoxia Yin. 2026a. Tex3d: Objects as attack surfaces via adver-sarial 3d textures for vision-language-action models. 
+
+arXiv preprint arXiv:2604.01618 .Jiawei Chen, Yang Yang, Chao Yu, Yu Tian, Zhi Cao, Xue Yang, Linghao Li, Hang Su, and Zhaoxia Yin. 2026b. Red teaming large reasoning models. In 
+
+Proceedings of the 64th Annual Meeting of the As-sociation for Computational Linguistics (Volume 1: Long Papers) , pages 22559–22591. An-Chieh Cheng, Hongxu Yin, Yang Fu, Qiushan Guo, Ruihan Yang, Jan Kautz, Xiaolong Wang, and Sifei Liu. 2024. Spatialrgpt: Grounded spatial reasoning in vision-language models. Advances in Neural In-formation Processing Systems , 37:135062–135093. Erik Daxberger, Nina Wenzel, David Griffiths, Haim-ing Gang, Justin Lazarow, Gefen Kohavi, Kai Kang, Marcin Eichner, Yinfei Yang, Afshin Dehghan, and 1 others. 2025. Mm-spatial: Exploring 3d spatial understanding in multimodal llms. In Proceedings of the IEEE/CVF International Conference on Com-puter Vision , pages 7395–7408. Renhua Ding, Xiao Yang, Zhengwei Fang, Jun Luo, Kun He, and Jun Zhu. 2025. Invisible to hu-mans, triggered by agents: Stealthy jailbreak attacks on mobile vision-language agents. arXiv preprint arXiv:2510.07809 .Giacomo Frisoni, Lorenzo Molfetta, Mattia Buzzoni, and Gianluca Moro. 2026. Graph-of-mark: Promote spatial reasoning in multimodal language models with graph-based visual prompting. arXiv preprint arXiv:2603.06663 .Mohsen Gholami, Ahmad Rezaei, Zhou Weimin, Sitong Mao, Shunbo Zhou, Yong Zhang, and Mohammad Akbari. 2025. Spatial reasoning with vision-language models in ego-centric multi-view scenes. arXiv preprint arXiv:2509.06266 .Sreyan Ghosh, Chandra Kiran Evuru, Sonal Kumar, Utkarsh Tyagi, Oriol Nieto, Zeyu Jin, and Dinesh Manocha. 2025. Visual description grounding re-duces hallucinations and boosts reasoning in lvlms. In International Conference on Learning Representa-tions , volume 2025, pages 66510–66547. Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, and 1 others. 2024. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 .Jiacheng Hua, Yishu Yin, Yuhang Wu, Tai Wang, Yifei Huang, and Miao Liu. 2026. Unleashing spatial rea-soning in multimodal large language models via tex-tual representation guided reasoning. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 13616–13637. Drew A Hudson and Christopher D Manning. 2019. Gqa: A new dataset for real-world visual reasoning and compositional question answering. In Proceed-ings of the IEEE/CVF conference on computer vision and pattern recognition , pages 6700–6709. Jingjing Jiang, Chao Ma, Xurui Song, Hanwang Zhang, and Jun Luo. 2025. Corvid: Improving multimodal large language models towards chain-of-thought rea-soning. In Proceedings of the IEEE/CVF Interna-tional Conference on Computer Vision , pages 3034– 3046. Juntao Jiang, Jiangning Zhang, Yali Bi, Jinsheng Bai, Weixuan Liu, Weiwei Jin, Zhucun Xue, Yong Liu, Xiaobin Hu, and Shuicheng Yan. 2026. 
+
+9M3cotbench: Benchmark chain-of-thought of mllms in medical image understanding. arXiv preprint arXiv:2601.08758 .Jiayi Kuang, Ying Shen, Jingyou Xie, Haohao Luo, Zhe Xu, Ronghao Li, Yinghui Li, Xianfeng Cheng, Xika Lin, and Yu Han. 2025. Natural language un-derstanding and inference with mllm in visual ques-tion answering: A survey. ACM Computing Surveys ,57(8):1–36. Jiaze Li, Hao Yin, Wenhui Tan, Jingyang Chen, Boshen Xu, Yuxun Qu, Yijing Chen, Jianzhong Ju, Zhenbo Luo, and Jian Luan. 2025a. Revisor: Beyond textual reflection, towards multimodal introspective reason-ing in long-form video understanding. arXiv preprint arXiv:2511.13026 .Junxian Li, Xinyue Xu, Sai Ma, Di Zhang, and Sichao Li. 2026a. Faithful-first reasoning, planning, and acting for multimodal llms. In Findings of the As-sociation for Computational Linguistics: ACL 2026 ,pages 6777–6793. Pengteng Li, Pinhao Song, Wuyang Li, Weiyu Guo, Huizai Yao, Yijie Xu, Dugang Liu, and Hui Xiong. 2025b. See&trek: Training-free spatial prompting for multimodal large language model. arXiv preprint arXiv:2509.16087 .Yifan Li, Yifan Du, Kun Zhou, Jinpeng Wang, Xin Zhao, and Ji-Rong Wen. 2023. Evaluating object hallucination in large vision-language models. In 
+
+Proceedings of the 2023 conference on empirical methods in natural language processing , pages 292– 305. Zongzhao Li, Zongyang Ma, Mingze Li, Songyou Li, Yu Rong, Tingyang Xu, Ziqi Zhang, Deli Zhao, and Wenbing Huang. 2026b. Star-r1: Multi-view spatial transformation reasoning by reinforcing multimodal llms. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 12041–12051. Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. 2023. Visual instruction tuning. Advances in neural information processing systems , 36:34892– 34916. Shilong Liu, Zhaoyang Zeng, Tianhe Ren, Feng Li, Hao Zhang, Jie Yang, Qing Jiang, Chunyuan Li, Jianwei Yang, Hang Su, and 1 others. 2024a. Grounding dino: Marrying dino with grounded pre-training for open-set object detection. In European conference on computer vision , pages 38–55. Springer. Shuyuan Liu, Jiawei Chen, Shouwei Ruan, Hang Su, and Zhaoxia Yin. 2024b. Exploring the robustness of decision-level through adversarial attacks on llm-based embodied models. In Proceedings of the 32nd ACM international conference on multimedia , pages 8120–8128. Weijiang Lv, Yaoxuan Feng, Xiaobo Xia, Jiayu Wang, Yan Jing, Wenchao Chen, and Bo Chen. 2026. Spd-faith bench: Diagnosing and improving faithfulness in chain-of-thought for multimodal large language models. arXiv preprint arXiv:2602.07833 .Chenyang Ma, Kai Lu, Ta-Ying Cheng, Niki Trigoni, and Andrew Markham. 2024. Spatialpin: Enhanc-ing spatial reasoning capabilities of vision-language models through prompting and interacting 3d priors. 
+
+Advances in neural information processing systems ,37:68803–68832. Jinlong Ma, Yu Zhang, Xuefeng Bai, Kehai Chen, Yuwei Wang, Zeming Liu, Jun Yu, and Min Zhang. 2026. Beyond unimodal shortcuts: Mllms as cross-modal reasoners for grounded named entity recogni-tion. arXiv preprint arXiv:2602.04486 .Fanqing Meng, Jin Wang, Chuanhao Li, Quanfeng Lu, Hao Tian, Tianshuo Yang, Jiaqi Liao, Xizhou Zhu, Jifeng Dai, Yu Qiao, and 1 others. 2025. Mmiu: Mul-timodal multi-image understanding for evaluating large vision-language models. In International Con-ference on Learning Representations , volume 2025, pages 38405–38453. Michael Ogezi and Freda Shi. 2025. Spare: Enhanc-ing spatial reasoning in vision-language models with synthetic data. In Proceedings of the 63rd Annual Meeting of the Association for Computational Lin-guistics (Volume 1: Long Papers) , pages 7855–7875. Nikhila Ravi, Valentin Gabeur, Yuan-Ting Hu, Rong-hang Hu, Chaitanya Ryali, Tengyu Ma, Haitham Khedr, Roman Rädle, Chloe Rolland, Laura Gustafson, and 1 others. 2025. Sam 2: Segment anything in images and videos. In International Con-ference on Learning Representations , volume 2025, pages 28085–28128. Rajarshi Roy, Devleena Das, Ankesh Banerjee, Arjya Bhattacharjee, Kousik Dasgupta, and Subarna Tri-pathi. 2025. Bydeway: Boost your multimodal llm with depth prompting in a training-free way. In Pro-ceedings of the IEEE/CVF International Conference on Computer Vision , pages 6058–6064. Linzhuang Sun, Hao Liang, Jingxuan Wei, Bihui Yu, Tianpeng Li, Fan Yang, Zenan Zhou, and Wentao Zhang. 2025a. Mm-verify: Enhancing multimodal reasoning with chain-of-thought verification. In Pro-ceedings of the 63rd Annual Meeting of the Associa-tion for Computational Linguistics (Volume 1: Long Papers) , pages 14100–14115. Xuefei Sun, Doncey Albin, Cecilia Mauceri, Destin Woods, and Chris Heckman. 2025b. Spatial-llava: Enhancing large language models with spatial refer-ring expressions for visual understanding. In ICRA 2025 Workshop: Human-Centered Robot Learning in the Era of Big Data and Large Models .Zhiqing Sun, Sheng Shen, Shengcao Cao, Haotian Liu, Chunyuan Li, Yikang Shen, Chuang Gan, Liangyan Gui, Yu-Xiong Wang, Yiming Yang, and 1 others. 
+
+10 2024. Aligning large multimodal models with factu-ally augmented rlhf. In Findings of the Association for Computational Linguistics: ACL 2024 , pages 13088–13110. Chenxi Wang, Xiang Chen, Ningyu Zhang, Bozhong Tian, Haoming Xu, Shumin Deng, and Huajun Chen. 2024. Mllm can see? dynamic correction decod-ing for hallucination mitigation. arXiv preprint arXiv:2410.11779 .Weiyun Wang, Zhangwei Gao, Lixin Gu, Hengjun Pu, Long Cui, Xingguang Wei, Zhaoyang Liu, Linglin Jing, Shenglong Ye, Jie Shao, and 1 others. 2025a. In-ternvl3. 5: Advancing open-source multimodal mod-els in versatility, reasoning, and efficiency. arXiv preprint arXiv:2508.18265 .Yuxin Wang, Lei Ke, Boqiang Zhang, Tianyuan Qu, Hanxun Yu, Zhenpeng Huang, Meng Yu, Dan Xu, and Dong Yu. 2025b. N3d-vlm: Native 3d grounding enables accurate spatial reasoning in vision-language models. arXiv preprint arXiv:2512.16561 .Jianwei Yang, Hao Zhang, Feng Li, Xueyan Zou, Chun-yuan Li, and Jianfeng Gao. 2023. Set-of-mark prompting unleashes extraordinary visual grounding in gpt-4v. arXiv preprint arXiv:2310.11441 .Lihe Yang, Bingyi Kang, Zilong Huang, Zhen Zhao, Xi-aogang Xu, Jiashi Feng, and Hengshuang Zhao. 2024. Depth anything v2. Advances in Neural Information Processing Systems , 37:21875–21911. Shixin Yi and Lin Shang. 2025. Corgi: Verified chain-of-thought reasoning with post-hoc visual grounding. 
+
+arXiv preprint arXiv:2508.00378 .Jiahui Zhang, Yurui Chen, Yueming Xu, Ze Huang, Jilin Mei, Chunhui Chen, Yanpeng Zhou, Yu-Jie Yuan, Xinyue Cai, Guowei Huang, and 1 others. 2026. From flatland to space: Teaching vision-language models to perceive and reason in 3d. Advances in Neural Information Processing Systems , 38. Liangyu Zhong, Fabio Philipp Rosenthal, Joachim Sicking, Fabian Hüger, Thorsten Bagdonat, Hanno Gottschalk, and Leo Schwinn. 2026. Focus: Internal mllm representations for efficient fine-grained visual question answering. Advances in Neural Information Processing Systems , 38:96498–96535. Fangrui Zhu, Hanhui Wang, Yiming Xie, Jing Gu, Tianye Ding, Jianwei Yang, and Huaizu Jiang. 2026. Struct2d: A perception-guided framework for spatial reasoning in mllms. Advances in Neural Information Processing Systems , 38:135805–135837. 
+
+11 A Discussion: Improving Accuracy through Perceptual Faithfulness 
+
+Our analysis reveals a strong association between perceptual faithfulness and final-answer accuracy: reasoning chains containing contradicted spatial evidence are substantially less accurate than fully faithful ones. This observation motivates our cen-tral hypothesis that improving the perceptual faith-fulness of intermediate spatial reasoning can lead to more accurate final answers. To operationalize this idea, SEG makes spatial evidence units explicit and traceable to their source steps, while SERA determines whether the corresponding visual ev-idence is sufficiently reliable for verification and correction. By locating the earliest contradicted ev-idence unit and regenerating the affected reasoning, our framework reduces the propagation of visually unsupported spatial judgments. The consistent im-provements in both Spatial Evidence Faithfulness and final-answer accuracy across datasets and back-bones provide empirical support for this hypothesis. Moreover, the gains obtained by combining our framework with SpatialPIN suggest that enriching spatial information and improving the faithfulness of generated reasoning are complementary: the for-mer provides additional spatial cues, whereas the latter verifies whether the intermediate evidence actually used by the model is consistent with the image. These findings indicate that perceptual faith-fulness is not only a property for evaluating spatial reasoning, but also a practical direction for improv-ing its final-answer accuracy. 
+
+B Spatial Evidence Extraction and SEG Construction Details 
+
+B.1 Step-wise Spatial Evidence Extraction 
+
+Given an initial reasoning chain C =
+
+{c1, c 2, . . . , c n}, we process each reasoning step ck to extract atomic spatial evidence units. Each extracted unit retains its source-step index k,allowing contradicted evidence to be traced back to its original position in the CoT. Following the definition in Sec. 3.1, the extractor covers four evidence types: object existence, absolute image position, 2D relative spatial relations, and relative depth. Each spatial evidence unit is represented in the unified form 
+
+sm = ⟨oi, r m, o j , t m, k m⟩ ,
+
+where oi and oj denote the involved visual enti-ties or the image-reference node, rm denotes the encoded spatial relation, tm denotes the evidence type, and km records the source reasoning step. For object-existence evidence, rm records whether the entity is stated to be present or absent and oj is not required. For absolute-position evidence, oj
+
+is the image-reference node. For 2D relative and relative-depth evidence, oi and oj denote the two involved visual entities. The extractor records only spatial evidence ex-plicitly expressed in the corresponding reasoning step. A mere mention of an entity is not treated as an object-existence judgment, and hypotheti-cal, conditional, interrogative, or uncertain expres-sions are not converted into decisive existence ev-idence. Composite spatial statements are decom-posed into atomic units whenever they contain mul-tiple relations. For example, “the lamp is to the right front of the vase” is decomposed into a 2D relation ( right_of ) and a relative-depth relation (closer_than ). Before graph construction, relation labels are canonicalized to the predefined vocabulary, while entity expressions required to distinguish different visual instances are preserved. Spatial statements appearing in different reasoning steps remain sep-arate evidence units because their source-step in-dices differ. Only exact duplicate outputs within the same reasoning step are removed. 
+
+B.2 SEG Instantiation 
+
+The extracted evidence units are organized into a Spatial Evidence Graph G = ( V, E, A ). The node set V contains visual entity nodes and an additional image-reference node. The edge set E contains directed spatial-relation edges. The attribute set 
+
+A stores the evidence type, source-step index, and visual evidence associated with each node or edge. Object-existence evidence is stored as an at-tribute of the corresponding entity node. Absolute-position evidence is represented as a directed edge from an entity node to the image-reference node. Both 2D relative relations and relative-depth rela-tions are represented as directed edges between vi-sual entity nodes. Each evidence record preserves its relation type and source-step index, enabling chronological ordering and subsequent error local-ization. 12 B.3 Visual Evidence Binding 
+
+For each visual entity involved in the extracted evi-dence units, Grounding DINO provides candidate bounding boxes and their confidence scores. The highest-scoring candidate is used as the primary lo-calization result, while the top two raw grounding scores are retained for the localization-reliability computation defined in Sec. 3.2. Given a selected bounding box bo = ( x1, y 1, x 2, y 2), its center is 
+
+xc(o) = x1 + x2
+
+2 , yc(o) = y1 + y2
+
+2 .
+
+The image-level existence probability pyes (o) is computed following FaithAct and is bound to the corresponding entity node for object-existence ver-ification. Bounding-box coordinates and center locations provide the geometric evidence used for absolute-position and 2D relative-relation evidence units. For relative-depth evidence units, the selected bounding box is used to prompt SAM2 to obtain an object mask. A monocular depth estimator then provides the depth values within the masked re-gion, from which the object-level depth statistic and within-region stability information are computed. These measurements are bound to the correspond-ing depth-relation edge for subsequent reliability assessment and verification. The resulting SEG therefore explicitly links each atomic spatial evidence unit to the visual obser-vations required for verification. The reliability computation, verification decisions, and targeted correction report used by SERA are described sepa-rately in the reliability-aware verification appendix. 
+
+B.4 Spatial Evidence Extraction Prompt 
+
+Tab. 9 presents the prompt used to extract step-level spatial evidence units. The extractor is applied to each reasoning step, and the resulting units are subsequently combined to instantiate the SEG. 
+
+C Verification Report and Reasoning Regeneration Details 
+
+C.1 Spatial Evidence Verification Rules 
+
+For every visual entity involved in the reasoning chain, we first compute the predefined image-level existence judgment JE (o). This node-level judg-ment is used both to verify explicit object-existence evidence units and to check the entity-existence presuppositions of absolute-position, 2D relative-relation, and relative-depth evidence units. The node-level judgment itself does not introduce an additional existence evidence unit unless the initial CoT explicitly expresses the corresponding exis-tence judgment. Explicit object-existence evidence units are ver-ified according to their extracted polarity. A
+
+present unit is marked as S UPPORTED when 
+
+JE (o) = PRESENT and as C ONTRADICTED when 
+
+JE (o) = ABSENT . The decisions are reversed for an absent unit. If JE (o) = UNCERTAIN , the evidence unit is marked as I NCONCLUSIVE . Verifi-cation of an existence unit depends only on the exis-tence judgment determined by RE (o) and pyes (o),rather than on the aggregated entity-reliability tier. For absolute image position, the bounding-box center is first normalized by the image width W
+
+and height H:
+
+˜xc(o) = xc(o)
+
+W , ˜yc(o) = yc(o)
+
+H .
+
+The normalized center is then mapped to fixed horizontal and vertical partitions corresponding to left , center , and right , together with top ,
+
+center , and bottom . Their combinations produce the nine supported image regions. The same frame-partition rules are used across all datasets and mod-els. Pairwise left–right and above–below relations are determined using bounding-box centers. Since the image-coordinate origin is located at the upper-left corner, a smaller x coordinate indicates a more leftward position, while a smaller y coordinate in-dicates a higher position: 
+
+oi left_of oj ⇐⇒ xc(oi) < x c(oj ),oi above oj ⇐⇒ yc(oi) < y c(oj ).
+
+The inverse comparisons are used for right_of 
+
+and below . A fixed spatial margin is applied in implementation to avoid decisive judgments when two centers are nearly aligned. The near relation is evaluated using the normal-ized 2D distance between the two object centers: 
+
+d2D (oi, o j ) = 
+
+" xc(oi) − xc(oj )
+
+W
+
+2
+
++
+
+ yc(oi) − yc(oj )
+
+H
+
+2#1/2
+
+.
+
+A pair is considered near only when this distance is below the fixed threshold used in our implemen-tation. 13 Prompt used for step-level spatial evidence extraction 
+
+Read the reasoning step below from a vision QA chain and extract all atomic spatial evidence units stated in this step. Do not use information from other reasoning steps and do not invent unstated relations. Each evidence unit must contain: {subject, relation, object, type, source_step}. Supported evidence types and relations: 1. existence : present , absent . Set object to null. 2. absolute_position : left , right , top , bottom , center , top_left , top_right , bottom_left , bottom_right . Set 
+
+object to image .3. relative_2d : left_of , right_of , above , below , near .4. relative_depth : closer_than , farther_than . Map “in front of” to closer_than and “behind” to farther_than .Rules: - Copy the integer from the [Step N] label into source_step .- Preserve the entity expression needed to identify the intended visual instance, such as “the person on the left” or “the second car”. - Extract an existence unit only when the step explicitly judges that an entity is present or absent. - Do not treat a mere entity mention as an existence judgment. - Do not convert hypothetical, conditional, interrogative, or uncertain expressions into decisive evidence units. - Decompose a statement containing multiple spatial relations into separate atomic evidence units. - Include repeated statements when they occur in different reasoning steps; their source steps are different. - If the step contains no spatial evidence, return an empty array. REASONING STEP: ###{CURRENT CoT STEP WITH [Step N] LABEL}### Return ONLY valid JSON with no Markdown formatting: { “evidence_units”: [ { “subject”: “the bus”, “relation”: “left_of”, “object”: “the car”, “type”: “relative_2d”, “source_step”: 1 }, { “subject”: “the person on the left”, “relation”: “closer_than”, “object”: “the person on the right”, “type”: “relative_depth”, “source_step”: 1 } ] } 
+
+Table 9: Prompt used to extract atomic spatial evidence units from each reasoning step. 
+
+For relative-depth relations, z(o) denotes the mask-based object-level depth statistic computed after reversing the ordering of the raw inverse-depth prediction. Consequently, a smaller z(o) indicates that an object is closer to the camera, whereas a larger value indicates that it is farther: 
+
+oi closer_than oj ⇐⇒ z(oi) < z (oj ),oi farther_than oj ⇐⇒ z(oi) > z (oj ).
+
+A fixed depth-difference margin is used to avoid decisive verification when the estimated depths are too similar. Monocular depth is compared only between objects in the same image. For an absolute-position, 2D relative-relation, or relative-depth evidence unit, entity-existence pre-suppositions are checked before geometric verifica-tion. If any involved entity has JE (o) = ABSENT ,the evidence unit is marked as C ONTRADICTED 
+
+because its existence presupposition is violated. If any involved entity has JE (o) = UNCERTAIN , the evidence unit is marked as I NCONCLUSIVE . Ge-ometric verification is performed only when all involved entities have JE (o) = PRESENT . In this case, the corresponding geometric rule produces a SUPPORTED or C ONTRADICTED result only when every involved entity is assigned to the HIGH tier. If any involved entity is assigned to the MEDIUM or LOW tier, the evidence unit is marked as I N-
+
+> CONCLUSIVE
+
+.
+
+C.2 Verification Report Construction 
+
+After evidence-level verification, we construct a verification record for each evidence unit contain-ing its textual content, source reasoning step, verifi-cation result, evidence-specific reliability informa-tion, and precomputed visual judgment. All records are ordered by their source-step indices and, within the same step, by their order of occurrence in the initial CoT. For each entity, the report retains its image-level existence score pyes (o), existence reliability RE (o),and precomputed existence judgment. For an ex-plicit object-existence evidence unit, the report ad-ditionally retains its extracted polarity and source reasoning step. The existence judgment is defined 14 as 
+
+JE (o) = 
+
+
+
+PRESENT , RE (o)≥τh
+
+> pyes (o)>0.5
+
+,
+
+ABSENT , RE (o)≥τh
+
+> pyes (o)<0.5
+
+,
+
+UNCERTAIN , RE (o) < τ h.
+
+Here, PRESENT and ABSENT denote reli-able presence and reliable absence, respectively, whereas U NCERTAIN indicates that the available existence evidence is insufficient for a decisive judgment. This judgment is node-level visual evi-dence computed for each relevant entity and does not convert a mere entity mention into an explicit existence evidence unit. The regeneration model di-rectly uses this precomputed judgment rather than inferring entity existence again from pyes (o).For 2D relative relations, the report provides a precomputed Layout judgment ; for absolute image positions, it provides a Frame judgment ; and for relative-depth relations, it provides a precomputed 
+
+Depth judgment . A geometric judgment is treated as decisive only when all involved entities are reli-ably determined to be present and are assigned to the HIGH tier. If an absolute-position or relation evidence unit is contradicted because an involved entity is reliably determined to be absent, the re-port explicitly identifies the violation of its entity-existence presupposition. If entity existence is un-certain or geometric reliability is insufficient, the evidence unit is reported as I NCONCLUSIVE . The reasoning model directly uses these precomputed judgments rather than reinterpreting raw bounding boxes, grounding scores, or depth values. Let the set of evidence units contradicted by reli-able visual evidence be 
+
+S− = {sm | ver( sm) = CONTRADICTED } .
+
+If this set is nonempty, we select the earliest con-tradicted evidence unit according to the provenance index km stored in the SEG: 
+
+s⋆ = arg min 
+
+> sm∈S −
+
+km.
+
+If multiple contradicted evidence units share the earliest source-step index, the first unit according to their original order within that reasoning step is selected. The earliest contradicted evidence unit s⋆ is high-lighted in the verification report, while relevant SUPPORTED and I NCONCLUSIVE judgments are also retained. S UPPORTED results help the model preserve already correct judgments, whereas I N- 
+
+> CONCLUSIVE
+
+results indicate that the available ev-idence is insufficient and should not be treated as mandatory correction signals. 
+
+C.3 Targeted Reasoning Regeneration 
+
+When a reliable contradiction is found, the original image, original question, initial reasoning chain, initial answer, verification report, and dataset-specific answer-format requirements are jointly pro-vided to the same MLLM that generated the initial reasoning. The model is not required to reinterpret the low-level visual evidence; instead, it revises the localized error according to the verified spatial judgments in the report. During regeneration, the model is instructed to preserve judgments consistent with reliable evi-dence, revise the earliest contradicted evidence unit 
+
+s⋆, and regenerate the affected reasoning from its source step together with the final answer. If a spatial-relation evidence unit is contradicted be-cause an involved entity is reliably determined to be absent, the model should remove or revise the unsupported relation rather than infer the opposite spatial relation. The model is not required to repeat existence probabilities, reliability scores, bounding boxes, grounding scores, depth values, or other low-level evidence in its output. Evidence units marked as INCONCLUSIVE must not be treated as decisive correction signals. When no reliable contradiction is identified, i.e., 
+
+S− = ∅, regeneration is not performed, and the ini-tial reasoning chain and answer are retained. This fallback strategy prevents unnecessary modifica-tions caused by MEDIUM- or LOW-reliability evi-dence or uncertain existence evidence. The entire correction process is performed using the original MLLM and requires no task-specific model fine-tuning or parameter updates. 
+
+C.4 Reasoning Regeneration Prompt 
+
+The complete prompt used for targeted reasoning regeneration is shown in Tab. 10. Its placeholders are replaced with the original question, initial rea-soning, initial answer, generated verification report, and answer-format requirements of the correspond-ing dataset. 
+
+D Answer Evaluation Prompts 
+
+Evaluation protocol. For RealWorldQA, GQA, and POPE, we first apply deterministic answer-15 extraction and normalization rules. GPT-4o is in-voked as a text-only semantic evaluator only when the rule-based procedure is inconclusive. For all GPT-4o evaluations, we set the temperature to 0 and the maximum number of output tokens to 8, and use the same system prompt. For Real-WorldQA, GQA, and POPE, only the last 4,500 characters of the model response are retained for evaluation. 
+
+GPT-4o-based binary semantic accuracy. For LLaVA-Bench-in-the-Wild and MMHal-Bench, we do not use exact string matching. Instead, all valid samples are evaluated using GPT-4o-based binary semantic judgments. The evaluator returns Y ES 
+
+when the response correctly answers the question and is semantically consistent with the reference an-swer, and N O otherwise. Synonyms, paraphrases, and harmless formatting or detail differences are ac-cepted, whereas materially incorrect answers, con-tradictions, failures to answer, or unsupported state-ments that change the answer’s meaning are judged incorrect. A Y ES judgment is recorded as correct=true ,whereas a NO judgment is recorded as 
+
+correct=false . The reported accuracy is the proportion of successfully scored samples judged as Y ES :
+
+Acc GPT -4o = Ncorrect 
+
+Nscored 
+
+,
+
+where Ncorrect is the number of samples judged as Y ES , and Nscored is the number of samples for which a valid binary judgment is successfully ob-tained. Samples that cannot be scored successfully are excluded from the denominator. 
+
+E Self-Revision Prompt 
+
+Tab. 15 presents the complete prompt used for the generic Self-Revision baseline. 16 Prompt used for targeted reasoning regeneration 
+
+You are given an image, a question, your previous reasoning and final answer, and a verification report containing spatial judgments derived from reliable visual evidence. Question: {Original question} Previous reasoning: {Previous reasoning} Previous final answer: {Previous final answer} Verification Report: {Verification Report, i.e., additional_information} Report interpretation rules: - Follow the precomputed Existence judgment for each entity: PRESENT indicates reliable presence, ABSENT indicates reliable absence, and UNCERTAIN indicates insufficient existence evidence. - Do not infer that every entity mentioned in the report is present in the image. - Use the precomputed Layout judgment to determine left/right/above/below relations. - Use the precomputed Frame judgment to determine an object’s absolute position in the image. - Use the precomputed Depth judgment to determine closer/farther or front/behind relations. - Do not reinterpret or recompute a judgment from the reported probability, reliability score, bounding box, grounding score, or depth value. - A SUPPORTED result should be preserved unless it is affected by the correction of an earlier contradicted evidence unit. - A CONTRADICTED result should be revised according to the corresponding precomputed visual judgment. - If a relation is CONTRADICTED because an involved entity is ABSENT, remove or revise the unsupported relation; do not infer the opposite spatial relation. - An INCONCLUSIVE result is not a mandatory correction signal. Do not force a spatial judgment from inconclusive evidence. - Do not replace a 2D left/right relation with a depth or front/behind relation, or vice versa. Correction instructions: - Revise the highlighted earliest contradicted evidence unit and regenerate the affected reasoning from its source step together with the final answer. - Preserve earlier reasoning steps and other judgments that remain consistent with the verified evidence. - Ensure that the regenerated reasoning and final answer are mutually consistent. - Do not introduce unsupported objects, attributes, or spatial relations. - Do not repeat the verification evidence, probabilities, reliability scores, bounding boxes, grounding scores, or depth values in your reasoning. - Think step by step. Preserve the original step-based reasoning format whenever possible, and return the revised reasoning followed by the final answer. {Dataset-specific answer-format requirements} 
+
+Table 10: Prompt used to guide targeted reasoning regeneration using the verification report. 
+
+Common system prompt used for answer evaluation 
+
+Reply with exactly YES or NO. No punctuation or explanation. 
+
+Table 11: Common system prompt used for GPT-4o-based answer evaluation. 
+
+17 Prompt used for evaluating LLaVA-Bench-in-the-Wild and MMHal-Bench 
+
+You are a strict correctness grader for {benchmark_name}. Evaluate the model response as a binary correct/incorrect visual-question-answering response. Return YES when it correctly answers the question and is semantically consistent with the reference answer. Synonyms, paraphrases, and harmless formatting or detail differences are acceptable. The reference answer is not necessarily the only valid wording. Return NO for a materially wrong answer, contradiction, failure to answer, or unsupported statements that change the answer’s meaning. A clear factual contradiction anywhere in the response makes it incorrect. Question: {question} Reference answer: {gt} Model response: {model_answer} Reply with exactly one token: YES if correct, otherwise NO. 
+
+Table 12: Binary semantic-correctness prompt used for LLaVA-Bench-in-the-Wild and MMHal-Bench. The placeholder {benchmark_name} is replaced with the corresponding benchmark name. 
+
+Prompt used for evaluating RealWorldQA and GQA 
+
+You are a strict grader for vision-language QA. Decide whether the model’s answer expresses the SAME final choice as the ground truth. - For multiple-choice, same option letter (or same wording as the labeled choice) counts as match. - For two-option word questions (e.g. two nouns), treat synonyms or clear paraphrases as match only if they pick the same entity. - Ignore harmless formatting differences. Question (may be empty): {question} Ground truth (GT): {gt} Model response (may include long chain-of-thought; judge the intended final answer): {model_answer} Reply with exactly one token: YES if equivalent, otherwise NO. 
+
+Table 13: Semantic-equivalence prompt used for RealWorldQA and GQA when deterministic answer extraction and normalization are inconclusive. 
+
+Prompt used for evaluating POPE 
+
+You are a strict grader for vision-language QA. Decide whether the model’s answer expresses the SAME final choice as the ground truth. - For multiple-choice, same option letter (or same wording as the labeled choice) counts as match. - For two-option word questions (e.g. two nouns), treat synonyms or clear paraphrases as match only if they pick the same entity. - Ignore harmless formatting differences. This is a POPE-style binary task: ground truth is exactly YES or NO (object existence in the image). Decide whether the model’s intended final judgment matches that YES/NO, even if the model did not print the word “yes” or “no” clearly. Question (may be empty): {question} Ground truth (GT): {gt} Model response (may include long chain-of-thought; judge the intended final answer): {model_answer} Reply with exactly one token: YES if equivalent, otherwise NO. 
+
+Table 14: Binary object-existence evaluation prompt used for POPE when deterministic answer extraction is inconclusive. 
+
+18 Prompt used for Self-Revision 
+
+You are given an image, a question, and your previous reasoning and final answer. Please carefully reconsider the previous reasoning based on the image and the question. Check whether each step is consistent with the visual content and whether the final answer follows from the reasoning. Do not assume that the previous reasoning or answer is incorrect. Preserve correct judgments and revise only the parts that you independently determine should be changed. Question: {question} Previous reasoning: {previous_cot} Previous final answer: {previous_answer} Please provide your revised reasoning and final answer in the following format: Reasoning: <your revised reasoning> Final Answer: <your final answer> 
+
+Table 15: Complete prompt used for the generic Self-Revision baseline. 
+
+19

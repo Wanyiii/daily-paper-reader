@@ -1,0 +1,335 @@
+Title: LoDA: A Level of Detection Aware Method and a Multimodal Sensing Benchmark for Object Level Change Detection
+
+URL Source: https://arxiv.org/pdf/2608.05356v1
+
+Published Time: Fri, 07 Aug 2026 00:15:50 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# LoDA: A Level of Detection Aware Method and a Multimodal Sensing Benchmark for Object Level Change Detection 
+
+# Haitian Wang 
+
+Western Australia Machine Intelligence Group Pty Ltd Nedlands, WA, Australia Department of Computer Science and Software Engineering The University of Western Australia Crawley, WA, Australia School of Electrical Engineering, Computing and Mathematical Sciences Curtin University Bentley, WA, Australia haitian.wang@uwa.edu.au 
+
+# Xinyu Wang 
+
+Western Australia Machine Intelligence Group Pty Ltd Nedlands, WA, Australia Department of Computer Science and Software Engineering The University of Western Australia Crawley, WA, Australia xinyu.wang@uwa.edu.au 
+
+# Sheldon Fung 
+
+Department of Computer Science and Software Engineering The University of Western Australia Crawley, WA, Australia sheldon.feng@uwa.edu.au 
+
+# Xian Zhang 
+
+Department of Computer Science and Software Engineering The University of Western Australia Crawley, WA, Australia xian.zhang@research.uwa.edu.au 
+
+# Zichen Geng ∗
+
+Department of Computer Science and Software Engineering The University of Western Australia Crawley, WA, Australia zen.geng@research.uwa.edu.au 
+
+## Abstract 
+
+High-definition 3D LiDAR maps are important for autonomous driving and smart-city services, which require reliable detection of object-level changes in multi-temporal urban LiDAR to keep digital maps aligned with the physical world. Existing approaches from raster height differencing to depth image and point-cloud networks often remain tile-based and threshold-driven, yielding per-point scores without explicit detection limits or consistent object-level labels. We propose an object-level 3D change-detection pipeline that integrates detection-limit-aware registration, geometry-driven object proxies with rule-based semantic and instance segmentation, and displacement cues in height, volume, and surface-normal di-rection to assign five change labels with confidence. By decoupling registration, geometry, and semantics, the pipeline propagates pose uncertainty into spatially varying detection limits, stabilizes cross-epoch correspondences, and suppresses false changes caused by residual misalignment and density variation. We also present LoDA, a level-of-detection (LoD) aware benchmark for Subiaco district with fused multi-temporal vehicle-LiDAR maps constructed with LiDAR, GNSS, and IMU support, semantic instances, and object-level annotations. On this benchmark, our method achieves 95.0% 
+
+> ∗Corresponding author.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> MM ’26, Rio de Janeiro, Brazil
+> © 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2213-4/2026/11 https://doi.org/10.1145/3767308.3834930
+
+accuracy, 90.8% macro F1, and 83.0% macro IoU, exceeding the best baseline by 8.7 IoU points and 4.4 F1 points. On the public Urb3DCD-V2 benchmark evaluated under the official point-wise protocol, it reaches 96.81% mean accuracy and 89.52% mean change IoU, improving over the strongest reported baselines by 1.36 points in mAcc and 3.18 points in mIoUch. 
+
+## CCS Concepts 
+
+• Computing methodologies → Scene understanding .
+
+## Keywords 
+
+Change Detection, Object-level Analysis, Urban 3D Mapping, Level of Detection, Benchmark Dataset 
+
+ACM Reference Format: 
+
+Haitian Wang, Xinyu Wang, Sheldon Fung, Xian Zhang, and Zichen Geng. 2026. LoDA: A Level of Detection Aware Method and a Multimodal Sensing Benchmark for Object Level Change Detection. In Proceedings of the 34th ACM International Conference on Multimedia (MM ’26), November 10–14, 2026, Rio de Janeiro, Brazil. ACM, New York, NY, USA, 10 pages. https: //doi.org/10.1145/3767308.3834930 
+
+## 1 Introduction 
+
+High-definition 3D LiDAR maps are a core representation for au-tonomous driving and smart-city systems because they encode road geometry, traffic context, and static scene structure beyond the current sensor view [1, 45]. They support map-based localiza-tion, long-term perception, and large-scale urban data management [3, 9, 10, 49]. In practice, however, urban environments are not static. Buildings are modified, vegetation grows or is pruned, and arXiv:2608.05356v1 [cs.CV] 5 Aug 2026 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Wang et al. 
+
+Figure 1: Overview of the full study. The left part summarises data acquisition and benchmark construction from raw LiDAR packets, metadata, and navigation measurements to fused bi-temporal city maps. The right part shows the proposed change detection method, which takes the fused maps as input, performs LoD-aware correspondence and class-consistent instance formation, and outputs object-level 3D change labels. 
+
+roadside infrastructure changes over time. These changes must be identified reliably if HD maps are to remain consistent with the physical world. Existing change detection methods do not fully address this re-quirement. Classical LiDAR differencing methods compare digital surface models or local point distances, but they are sensitive to registration error and usually report point-wise or surface-wise dis-crepancies that must be grouped manually [2, 27, 28, 38, 51]. Raster-based and image-based methods simplify the problem through pro-jection, but they discard vertical structure and rarely model whether a change is actually observable under varying density and range [16, 41]. Recent 3D deep models improve geometric representation learning, yet they typically operate on tiles, rely on fixed thresh-olds or implicit priors, and output point-wise change predictions rather than structured object-level records [14, 18, 19, 23, 39, 40, 50]. For map maintenance, the practical requirement is different. The system should decide whether an object has been added, removed, increased, decreased, or left unchanged, and it should do so under an explicit notion of local detectability. We present an LoD-aware object-level pipeline for bi-temporal vehicle LiDAR maps. It refines cross-epoch alignment and estimates a spatially varying detection limit from local roughness, sampling density, and residual pose uncertainty. Geometry-based object prox-ies establish stable coarse correspondences before semantic refine-ment and class-consistent instance formation. LoD-gated height, volume, and normal-direction displacement cues then assign Added, Removed, Increased, Decreased, or Unchanged labels. This design suppresses false changes caused by residual misalignment, den-sity variation, and weak observability while producing structured map-update records. To evaluate this setting, we introduce LoDA, an object-level Li-DAR change-detection benchmark constructed from multimodal vehicle surveys collected in Subiaco in 2023 and 2025 using LiDAR, GNSS, and IMU. LoDA provides fused bi-temporal city maps, se-mantic and instance annotations, and five-class object-level change labels. Candidate pairs are generated automatically, whereas final labels are independently verified using synchronized annotation views and QA, reducing protocol bias. The benchmark supports controlled object-level evaluation and external transfer testing on Urb3DCD-V2 without per-dataset retuning. Our method achieves 95 .0% ACC, 90 .8% mF1, and 83 .0% mIoU on LoDA, and 96 .81% mAcc and 89 .52% mIoUch on Urb3DCD-V2. These results demonstrate the value of explicit observability modeling and instance-level rea-soning for urban map updating. Our contributions are: 
+
+• We introduce LoDA, an LoD-aware benchmark for object-level LiDAR change detection, constructed from a multi-modal vehicle sensing setup with LiDAR, GNSS, and IMU support, and released with fused bi-temporal city maps, se-mantic and instance annotations, and five-class object-level change labels. 
+
+• We propose an LoD-aware object-level pipeline that refines cross-epoch alignment, estimates spatially varying detection limits, and builds stable geometry-based correspondences for class-consistent instance reasoning. 
+
+• We introduce LoD-gated object-level change cues that com-bine height, volume, and normal-direction displacement to infer Added, Removed, Increased, Decreased, and Unchanged for structured map update. 
+
+## 2 Related Work 
+
+Early urban LiDAR mapping largely treated city models as static assets for localization, with updates performed offline or manually [31, 45]. Classical 3D change detection in laser scanning typically relies on differencing digital surface models or point clouds [2]. Raster and height-statistics methods capture large elevation shifts but lose fine 3D structure and are sensitive to occlusion and resid-ual misregistration, while M3C2 measures signed distances along local normals with uncertainty driven by roughness and sampling density but remains a local surface comparator and does not di-rectly yield object-level change records[27, 28]. Recent geometric object-level approaches have also started to address long-term Li-DAR change reasoning through multi-mission SLAM, probabilistic object differencing, and object correspondence in cluttered environ-ments [43]. Recent variants further reduce uncertainty and improve resolution via patch-based normal-distance estimation [57]. In remote sensing imagery, change detection is commonly framed as dense 2D mask prediction using spectral differences, object-based classifiers, or Siamese encoder–decoder networks[16, 46]. Similar ideas are often transferred to LiDAR via rasterisation into height images or multi-channel grids [2], which simplifies learning but collapses vertical structure and mixes occluded and well-observed regions, typically without modelling spatially varying observability. Recent 3D deep models learn geometric representations from points or sparse voxels [14, 50]. They have been adopted for multi-temporal change detection, including DC3DCD [20] and Urb3DCD with Siamese KPConv-style baselines [17, 19]. However, these ap-proaches typically operate on tiles and output per-point change maps, and their robustness can depend on implicit priors learned from labels rather than explicit observability constraints [18]. LoDA: A Level of Detection Aware Method and a Multimodal Sensing Benchmark for Object Level Change Detection MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Figure 2: Acquisition layout in Subiaco. The survey is organised into 21 closed loops (Seq 1 to Seq 21) covering main corridors, side streets, and intersections. Base map © Google. Imagery © Airbus, CNES / Airbus, and Maxar Technologies. Route overlays, loop boundaries, and labels © 2026 the authors. Used under the Google Geo Guidelines. 
+
+## 3 Data Collection 
+
+We collected vehicle LiDAR surveys in Subiaco in 2023 and 2025 to build the bi-temporal city maps used in all experiments. Data were acquired in 21 closed loops with deliberate overlap at inter-sections, as shown in Fig. 2. The driven distance is 18 .6 km and each loop is logged as an independent sequence at 10 to 30 km /h. For reproducible evaluation, both epochs are partitioned into fixed 120 m × 120 m blocks aligned to the GDA2020 zone 50 grid. A block is kept if both epochs satisfy at least 40% occupancy on a 0 .5 m hor-izontal grid after ground removal and the post-registration block centroid offset is below 0 .5 m. Block IDs are split into 60% /10% /30% train, validation, and test by hashing the block index. LoDA is in-tended as a controlled urban benchmark for object-level change analysis in vehicle LiDAR rather than an exhaustive cross-city suite, and cross-scene transfer is further examined by applying the same frozen pipeline to Urb3DCD-V2 without per-dataset retuning. Data were acquired with an Ouster OS1-128 LiDAR, dual-antenna RTK GNSS, and a MEMS IMU under GNSS-PPS synchronization and fixed extrinsic calibration. Packets are decoded into organised scans and deskewed using interpolated IMU poses. Trajectories are estimated on a voxel pyramid {1.0, 0.5, 0.25 } m using multi-resolution NDT and robust point-to-plane ICP, with loop closures and GNSS/IMU constraints fused in a pose graph optimised in the GDA2020 zone 50 frame[47, 52, 56]. The city map is fused into a global 0 .25 m voxel grid and a 2 m ground model is estimated for height normalisation. Each epoch provides per-point seman-tic labels in {ground , building , vegetation , mobile } and per-class in-stance IDs defined on the fused map. Building instances are obtained by merging adjacent planar parts with compatible facade normals and overlapping footprints. Vegetation and mobile instances follow connectedness under a density-adaptive Euclidean radius. Let Y denote the five change labels: Added , Removed , Increased ,
+
+Decreased , and Unchanged . The released object labels are produced by an annotation protocol that is independent of the proposed inference rules. Candidate cross-epoch pairs are first proposed au-tomatically under centroid distance below 2 m and 3D OBB IoU above 0 .05. Each candidate is then verified during annotation using synchronized plan-view renderings, height maps, and occupancy overlays, and the final label is assigned after QA. Added and Re-moved are used when an instance is verified to exist in only one epoch. For matched instances, Increased and Decreased are assigned only when visible object-level growth or shrinkage is supported by the annotation views, otherwise Unchanged is used. The local LoD 95 map is available during annotation only as an observabil-ity aid and does not directly determine the released label. Cases that remain ambiguous after QA are excluded from the benchmark statistics rather than forced to follow the output of the proposed method. 
+
+## 4 Method 
+
+Our method takes a pair of fused bi-temporal city maps as input and performs object-level change inference in three stages. We first MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Wang et al. 
+
+Figure 3: LoD-aware object-level change-detection pipeline. Registration and correspondence produce LoD-aware matches, followed by class-consistent instance formation and LoD-gated five-class change inference. 
+
+refine cross-epoch geometric alignment and estimate a spatially varying level of detection to define local observability. We then con-struct geometry-based object correspondences and class-consistent instances. Finally, we assign change labels from LoD-gated geomet-ric cues, including height, volume, and normal-direction displace-ment. 
+
+## 4.1 Geometric Registration and Object-Level Correspondence 
+
+Let P23 and P25 denote the fused Subiaco point clouds from 2023 and 2025. We estimate a rigid alignment 𝑇 23 →25 ∈ SE (3) and a spa-tially varying normal-direction level of detection (LoD), then build geometry-only object proxies and a cross-epoch correspondence table that is reused by later semantic and instance processing. Both epochs are filtered by Statistical Outlier Removal ( 𝑘 = 20, standard-deviation multiplier 1 .0) and downsampled into a voxel pyramid with leaf sizes {1.0, 0.5, 0.25 } m. All thresholds are selected once on the LoDA validation split and then frozen for the LoDA test split and Urb3DCD-V2. Normals are estimated within a ra-dius of 0 .75 m using at most 30 neighbours, and near-isotropic neighbourhoods are rejected. Varying 𝑘 within [16 , 24 ] changes validation mIoU by less than 0 .3 points. Pose initialization uses multi-resolution NDT [6, 36], followed by robust point-to-plane ICP [5, 13] over the three pyramid levels. ICP uses correspondence radii {1.5, 0.75 , 0.35 } m and at most {60 , 40 , 30 } iterations, with early stopping at pose updates below 10 −4. KD-tree correspondences [4] are retained only when the paired normals differ by less than 30 ◦.Using correspondences C = {( 𝑝 𝑖 , 𝑞 𝑖 , 𝑛 𝑖 )} with 𝑝 𝑖 ∈ P 23 , 𝑞 𝑖 ∈ P 25 
+
+and 𝑛 𝑖 the unit normal at 𝑞 𝑖 , we minimize min   
+
+> 𝑅 ∈SO (3), 𝑡 ∈R3
+
+1
+
+|C| ∑︁ (𝑝 𝑖 ,𝑞 𝑖 ,𝑛 𝑖 ) ∈ C 
+
+𝜌 𝜏 
+
+ 𝑛 ⊤ 
+
+> 𝑖
+
+(𝑅𝑝 𝑖 + 𝑡 − 𝑞 𝑖 )2
+
+𝜎 2
+
+> 𝑖
+
+!
+
+, (1) where 𝜌 𝜏 is the Tukey biweight [25] with 𝜏 = 0.30 m and 𝜎 2 
+
+> 𝑖
+
+=
+
+𝜎 20 + 𝜎 2 
+
+> 𝑟
+
+(𝑞 𝑖 ) combines a fixed sensor term 𝜎 0 = 0.02 m with lo-cal roughness 𝜎 𝑟 (𝑞 𝑖 ). To compute 𝜎 𝑟 (𝑞 𝑖 ), we fit a local plane by PCA in the same 𝑟 𝑛 neighborhood and collect signed point-to-plane residuals {𝑟 ℓ }. We estimate the robust standard deviation as ˆ 𝜎 𝑟 = 1.4826 · median ℓ |𝑟 ℓ − median (𝑟 ℓ )| [42] and set 𝜎 2 
+
+> 𝑟
+
+= ˆ𝜎 2 
+
+> 𝑟
+
+.Optimization uses Gauss–Newton with rejection of pairs whose unsigned residual exceeds 𝜏 . The pose covariance Σ𝑇 ∈ R6×6 is approximated by the inverse normal-equation matrix at the so-lution [11], and Σ𝑡 ∈ R3×3 is taken as the translational block of 
+
+Σ𝑇 . We use this translational block in Eq. (2) and neglect the rota-tional term because evaluation is performed on fixed 120 m blocks after rigid refinement and vertical normalization, where the resid-ual rotational contribution was empirically smaller than the local roughness term. To enforce a common vertical axis, we fit ground planes on a 2 m grid in each epoch by RANSAC [22] with an inlier threshold of 0.10 m and a minimum of 200 inliers per cell. We take the median ground normal as the global up direction, rotate both maps to align it with e𝑧 , then height-normalize by subtracting the local median ground elevation. LoD is computed on a uniform 1 m grid and linearly interpolated to the voxel centers used by later stages. For each grid cell 𝑔 , we pool points within a radius 𝑟 LoD = 1.0 m around the cell center, estimate the cell normal 𝑛 𝑔 by PCA, and compute normal-direction residuals to the best-fit plane as in the registration step. We require 
+
+𝑁 23 (𝑔 ) ≥ 30 and 𝑁 25 (𝑔 ) ≥ 30 to form a valid estimate. Otherwise we mark the cell as low-observability and set LoD 95 (𝑔 ) = 0.50 m, which prevents downstream stages from asserting changes in undersam-pled regions. With 𝜎 223 (𝑔 ) and 𝜎 225 (𝑔 ) computed via the MAD-to-std conversion and squared, the 95% LoD along 𝑛 𝑔 is LoD 95 (𝑔 ) = 1.96 √︄ 𝜎 223 (𝑔 )
+
+𝑁 23 (𝑔 ) + 𝜎 225 (𝑔 )
+
+𝑁 25 (𝑔 ) + 𝑛 ⊤ 
+
+> 𝑔
+
+Σ𝑡 𝑛 𝑔 , (2) which defines the minimum detectable displacement under local sampling and alignment uncertainty[28, 54]. Geometry-only object proxies are built after removing ground points using the 2 m ground model. Non-ground points are vox-elized at 0 .5 m and converted into a binary occupancy grid. To close small gaps on thin structures, we apply a 3D morphologi-cal closing [48] consisting of one dilation and one erosion using a 3 × 3 × 3 structuring element in voxel space. Connected components are then extracted with 26-connectivity and treated as proxies. For each proxy 𝑜 , we store centroid 𝑐 (𝑜 ), an oriented bounding box 
+
+𝐵 (𝑜 ) from PCA, ℎ95 (𝑜 ) as the 95th percentile of height above the local ground surface, and a normalized 10-bin height histogram 
+
+𝐻 (𝑜 ) on [0, ℎ 95 (𝑜 )] with uniform bin edges. Proxies with fewer than 200 occupied voxels are discarded. Cross-epoch proxy association is solved by gated bipartite as-signment. Candidate pairs must satisfy ∥𝑐 𝑖 − 𝑐 𝑗 ∥2 < 2.0 m and IoU (𝐵 𝑖 , 𝐵 𝑗 ) > 0.10. Each candidate is scored by cost (𝑜 𝑖 , 𝑜 𝑗 ) =
+
+𝑤 𝑝 ∥𝑐 𝑖 −𝑐 𝑗 ∥22+𝑤 𝑏 
+
+ 1−IoU (𝐵 𝑖 , 𝐵 𝑗 )+𝑤 ℎ𝐷 𝜒 2 (𝐻 𝑖 , 𝐻 𝑗 ) with (𝑤 𝑝 , 𝑤 𝑏 , 𝑤 ℎ ) =LoDA: A Level of Detection Aware Method and a Multimodal Sensing Benchmark for Object Level Change Detection MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+(1.0, 2.0, 0.5). The final assignment uses the Hungarian algorithm [37] with a fixed unmatched cost of 3 .0. Matched pairs yield a correspon-dence table storing (𝑐, 𝐵, ℎ 95 , 𝐻 ) for both epochs and the median LoD 95 over voxel centers in 𝐵 𝑖 ∪ 𝐵 𝑗 , while unmatched proxies are retained as Added or Removed candidates. 
+
+## 4.2 Semantic and Instance Segmentation 
+
+We segment each epoch into semantic classes and object instances using geometry cues computed on the 0 .25 m voxel grid[30]. For every point, we estimate the local covariance in a 0 .6 m radius neighborhood and obtain eigenvalues (𝜆 1 ≥ 𝜆 2 ≥ 𝜆 3) to derive linearity 𝐿 = (𝜆 1 −𝜆 2)/ 𝜆 1, planarity 𝑃 = (𝜆 2 −𝜆 3)/ 𝜆 1, and sphericity 
+
+𝑆 = 𝜆 3/𝜆 1. Together with the absolute vertical normal component and height above the ground surface, each point is represented by 
+
+f𝑖 = 𝐿 𝑖 , 𝑃 𝑖 , 𝑆 𝑖 , |n𝑖 ·e𝑧 |, 𝑧 𝑔,𝑖 
+
+⊤. (3) We then form superpoints by cut-pursuit on a 𝑘 -NN graph with 
+
+𝑘 = 20 by solving[29]. We build the 𝑘 -NN graph on voxel centers at 0 .25 m with 𝑘 = 20 and an edge-length cap of 1 .2 m to avoid long-range links across streets. Features are standardized per epoch to zero mean and unit variance before graph construction, and we set 𝛽 = 0.8 and 𝜎 𝑓 to the median ∥f𝑖 − f𝑗 ∥2 over graph edges. min 
+
+> U
+
+∑︁ 𝑢 ∈ U ∑︁ 𝑖 ∈𝑢 
+
+f𝑖 − 𝝁 𝑢 1 + 𝛽 ∑︁  
+
+> (𝑖,𝑗 ) ∈ E
+
+𝑤 𝑖 𝑗 ⊮U ( 𝑖 ) ≠ U ( 𝑗 ), (4) Cut-pursuit iterations stop when the relative decrease in the objec-tive falls below 10 −4 or after 20 refinement rounds, which produced superpoints of median size 350 points on LoDA, where 𝝁 𝑢 is the segment median feature and 𝑤 𝑖 𝑗 = exp 
+
+
+
+−∥ f𝑖 − f𝑗 ∥22/𝜎 2
+
+> 𝑓
+
+
+
+. Semantic labels are assigned per superpoint and propagated to points with four classes. A superpoint is ground if its median distance to the ground model is below 0 .10 m and at least 80% of its normals satisfy 
+
+|n · e𝑧 | > 0.996 (within 5 ◦ of horizontal). A non-ground superpoint is labeled as building if 𝑃 > 0.60, |n · e𝑧 | < 0.25, the plane-fit RMSE is below 0 .08 m, and the estimated planar support area exceeds 5 m 2
+
+after merging adjacent coplanar superpoints with normal deviation below 12 ◦. It is labeled as vegetation if 𝑆 > 0.35, median height above ground satisfies 𝑧 𝑔 > 0.5 m, and the within-segment normal azimuth spread between the 95th and 5th percentiles exceeds 30 ◦.Remaining non-ground superpoints are labeled as mobile if their oriented bounding box satisfies length < 5 m, width < 3 m, height 
+
+< 3 m, and voxelized volume below 60 m 3. If multiple rules are satisfied, the priority order is ground, building, vegetation, mobile. These class rules were fixed on the LoDA validation split after ground normalization and then used unchanged on the LoDA test split and Urb3DCD-V2, with no per-block retuning. Representative geometry patterns used by the semantic stage are shown in Fig. 4. Instances are extracted within each class. Buildings are obtained by first extracting planar patches by region growing on superpoints with 𝑃 > 0.60 and merging adjacent patches when their normals differ by at most 12 ◦ and their projected footprints have IoU above 0.30. Patches with fewer than 800 points are absorbed into the near-est compatible building instance if the centroid-to-plane distance is below 0 .20 m, otherwise they are discarded as fragments. Vegetation instances are produced by Euclidean clustering on non-ground, non-building points with an adaptive radius 𝑟 𝑐 = max (0.8 m , 1.8/ 3
+
+√𝜌 ),where 𝜌 is the local point density estimated in a 1 m ball, and with 
+
+Figure 4: Representative geometry patterns used in the se-mantic stage: (a) vegetation, (b) compact object, (c) facade-like planar structure, and (d) slender vertical structure. 
+
+a minimum of 200 points per cluster. Mobile instances are pro-duced by DBSCAN [21] in the horizontal plane with 𝜀 = 0.7 m and minPts = 30, followed by eroding the ground mask by 0 .15 m in 2D to remove clusters connected to curbs and facades. Learning-based moving-object segmentation from sequential LiDAR scans provides an alternative for scan-level dynamic filtering [12], whereas our benchmark operates on fused bi-temporal maps and therefore uses deterministic geometry-based rules for mobile instance extraction. 
+
+## 4.3 Change Analysis 
+
+Let C = {ground , building , vegetation , mobile }. For each semantic class 𝑐 ∈ C and each associated pair (𝑜 23  
+
+> 𝑖
+
+, 𝑜 25  
+
+> 𝑗
+
+), we evaluate geometry on a voxel grid with edge length 0 .5 m inside the union of their oriented bounding boxes. For every occupied grid point 𝑥 we query the nearest surface points 𝑝 23 (𝑥 ) and 𝑝 25 (𝑥 ) and their normals 
+
+𝑛 23 (𝑥 ) and 𝑛 25 (𝑥 ). These samples define the occupied volumes 
+
+𝑉 23 and 𝑉 25 , the 3D occupancy intersection over union IoU 3D , the centroid shift Δc = c𝑗 − c𝑖 , the height difference Δℎ = ℎ25 95 − ℎ23 95 
+
+based on the 95th percentile height, and the volume change Δ𝑉 =
+
+𝑉 25 − 𝑉 23 . Normal direction displacement is estimated as 
+
+𝐷 ⊥ (𝑜 𝑖 , 𝑜 𝑗 ) = median 𝑥 ∈Ω (𝑜 𝑖 ,𝑜 𝑗 ) ¯𝑛 (𝑥 )⊤  𝑝 25 (𝑥 ) − 𝑝 23 (𝑥 ) (5) with Ω(𝑜 𝑖 , 𝑜 𝑗 ) the set of voxel centers in the box intersection and ¯𝑛 (𝑥 ) =  𝑛 23 (𝑥 )+ 𝑛 25 (𝑥 )/ 𝑛 23 (𝑥 )+ 𝑛 25 (𝑥 ) 2. The pairwise detection limit in normal direction is LoD 95 (𝑜 𝑖 , 𝑜 𝑗 ) = median 𝑥 ∈Ω (𝑜 𝑖 ,𝑜 𝑗 ) LoD 95 (𝑥 ) (6) using the grid based LoD 95 from Eq. (2). Statistics Δℎ and 𝐷 ⊥ are used only if |Δℎ| > 𝛼 LoD LoD 95 and |𝐷 ⊥ | > 𝛼 LoD LoD 95 with 𝛼 LoD =
+
+1.10, selected by a small sensitivity sweep over {1.0, 1.1, 1.2} on the validation split, where performance was stable and 𝛼 LoD =
+
+1.10 avoided spurious Increased /Decreased flips. Nearest-neighbor queries for 𝑝 23 (𝑥 ) and 𝑝 25 (𝑥 ) use a radius cap of 0 .6 m. If fewer than 50 valid samples exist in Ω(𝑜 𝑖 , 𝑜 𝑗 ) after radius capping, we set 𝐷 ⊥ (𝑜 𝑖 , 𝑜 𝑗 ) = 0 and mark the cue as non-informative so that the decision falls back to IoU, centroid shift, and voxel volume. Each pair receives a label 𝑦 ∈ Y . For buildings and vegetation, unmatched instances are Added or Removed . For matched instances we require class specific overlap and displacement bounds, namely IoU 3D > 0.12 and ∥Δc∥2 < 1.5 m for buildings and IoU 3D > 0.08 and 
+
+∥Δc∥2 < 2.0 m for vegetation. A building pair is Increased if Δℎ > 0and |Δℎ| > 0.60 m or if Δ𝑉 /𝑉 23 > 0.12, and Decreased if Δℎ < 0and |Δℎ| > 0.60 m or if Δ𝑉 /𝑉 23 < −0.12. It is Unchanged if IoU 3D >
+
+0.20, ∥Δc∥2 < 1.5 m, |Δℎ| ≤ 0.60 m and |Δ𝑉 |/ 𝑉 23 ≤ 0.12, or if MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Wang et al. 
+
+Table 1: Comparison on LoDA. ACC is micro accuracy; mF1 and mIoU are five-class macro scores, followed by per-class IoU (%). 
+
+Representation Method ACC mF1 mIoU Added Removed Increased Decreased Unchanged Raster DSM DSM RF [7] 90.6 71.0 53.2 69.8 53.4 24.8 29.7 88.2 DSM Siamese [16] 91.2 72.4 55.5 72.3 56.2 27.9 31.5 89.7 DSM FC EF [16] 91.5 72.0 55.2 73.1 55.0 26.8 30.6 90.4 DSM FC Siam Conc [16] 91.9 72.9 56.6 74.5 56.3 28.7 32.4 90.9 DSM U Net [15] 92.4 74.1 58.1 76.2 58.1 30.6 34.5 91.3 Point based M3C2 [28] 92.7 75.2 59.8 78.4 60.2 33.5 36.1 90.8 PointNet++ Siam [40] 93.4 80.1 66.2 82.7 68.4 41.8 46.0 92.1 SiamKPConv [50] 94.0 84.5 71.1 85.9 73.2 49.3 53.7 93.5 TripletKPConv [19] 94.3 85.7 73.0 87.4 75.1 52.6 56.9 93.0 EFS KPConv [20] 94.6 86.4 74.3 88.3 76.8 54.1 58.4 93.8 Siam PTv3 [55] 94.8 88.0 76.9 88.2 77.8 62.0 62.7 94.0 Siam PointMamba [32] 94.9 88.5 77.6 89.0 78.4 63.0 63.5 94.1 Siam Mamba3D [24] 94.8 88.2 77.1 88.6 78.1 62.6 62.2 94.0 Siam LitePT [58] 94.7 87.5 76.2 88.0 77.2 60.5 61.3 94.0 Voxel based Urb3DCD OneConvFusion [19] 93.7 82.3 68.9 84.1 70.5 46.7 50.2 93.2 Siam MinkUNet [14] 93.9 84.1 70.6 85.2 72.9 48.9 52.8 93.4 EFSKPConv [20] 94.1 85.2 72.3 86.7 74.4 51.3 55.6 93.6 MinkUNeXt [8] 93.9 84.1 70.6 85.2 72.9 48.9 52.8 93.4 Siam VoxelMamba [60] 94.8 88.4 77.4 88.9 78.6 62.9 61.8 94.8 Siam UniMamba [26] 94.9 88.8 77.9 89.1 79.0 63.8 63.0 94.6 Object based Ours 95.0 90.8 83.0 87.8 81.2 77.2 73.7 95.1 
+
+Table 2: Performance on 15 representative LoDA blocks. The final row aggregates all evaluated instances.                                                                                                                                         
+
+> Block ACC mF1 mIoU Per class IoU (%) Added Removed Increased Decreased Unchanged C01 95.4 91.2 83.6 88.9 80.4 76.4 74.3 98.0 C02 95.7 90.5 82.9 87.4 82.2 77.3 71.6 96.0 C03 94.6 90.1 82.2 88.5 80.1 76.3 72.5 93.7 C04 95.9 91.6 84.0 89.6 82.9 77.0 74.8 95.5 C05 95.1 90.3 82.8 88.7 81.6 75.8 73.2 94.6 C06 94.8 89.7 82.0 86.5 81.9 77.5 71.1 92.8 C07 95.3 90.4 83.2 88.0 81.3 76.9 73.8 95.8 C08 94.7 89.8 82.1 86.9 80.5 77.2 71.7 93.9 C09 95.6 91.0 83.4 88.4 81.0 78.0 73.9 95.7 C10 94.9 89.6 82.3 87.3 80.2 76.1 71.4 96.3 C11 95.8 91.4 83.8 88.8 82.7 78.3 74.6 95.0 C12 95.2 90.9 83.1 87.9 81.8 77.4 73.5 94.9 C13 94.5 89.4 81.8 87.1 80.7 75.9 70.8 94.4 C14 95.5 91.1 83.5 89.2 81.5 77.8 73.6 95.3 C15 94.4 89.2 81.7 86.8 80.9 76.2 70.9 94.0
+> all 95.0 90.8 83.0 87.8 81.2 77.2 73.7 95.1
+
+all informative statistics stay below the LoD gate. Vegetation uses thresholds |Δℎ| > 0.35 m and |Δ𝑉 |/ 𝑉 23 > 0.18 with the same logic. When height and volume indicators disagree we inspect the vertical occupancy histogram inside the overlap and select Increased if mass shifts upward and Decreased otherwise. Remaining vegetation pairs that satisfy the overlap bound are marked Unchanged .Ground changes are evaluated on a 2 m raster. For each tile we compute the median elevation difference Δ𝑧 and the median LoD 95 .A tile is Increased if Δ𝑧 > 0.15 m and |Δ𝑧 | > 1.1 LoD 95 over a con-nected region larger than 25 m 2, Decreased if Δ𝑧 < −0.15 m under the same conditions, and Unchanged otherwise. Ground Added and 
+
+Removed are not defined. Mobile objects are treated at the instance level. Unmatched mobiles are labeled Added or Removed . Matched mobiles are labeled Unchanged if IoU 3D > 0.20 and ∥Δc∥2 < 2.0 m. Otherwise, the pair is assigned to the epoch with the larger un-matched occupancy inside the union box, yielding Added when the 2025 support dominates and Removed otherwise. No annotated mobile instance is discarded during evaluation. 
+
+Figure 5: Qualitative results on three Subiaco blocks. For each block, the top and bottom rows show the 2023 and 2025 epochs; columns show the plan view, height map, semantic labels, instances, and object-level change map. 
+
+For each matched pair, we compute a deterministic confidence score in [0, 1] from LoD-normalized height, volume, overlap, centroid-shift, and normal-displacement cues. Class-specific weights are se-lected once on the LoDA validation split and then frozen for all experiments. The score is used only for ranking and manual inspec-tion and is not interpreted as a calibrated posterior probability. 
+
+## 4.4 Evaluation protocol 
+
+Metrics are computed after aggregating predictions over the full test split. The evaluation set contains every annotated non-ground instance, including all mobile instances. Ground tiles are excluded LoDA: A Level of Detection Aware Method and a Multimodal Sensing Benchmark for Object Level Change Detection MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Table 3: Point-wise change segmentation on Urb3DCD-V2: summary metrics and published class-wise IoU. 
+
+Panel A: Summary metrics 
+
+Method Src (Venue, Year) Rep. Sup. mAcc mIoUch DSM-Siamese (FC-Siamese, DSM raster) [16] IGARSS, 2018 raster supervised 80.91 57.41 DSM-FC-EF (FCN early-fusion on DSM) [16] ICIP, 2018 raster supervised 81.47 58.07 SiamKPConv (KPConv Siamese, 3 input feats) [50] ICCV, 2019 point supervised 91.21 80.12 SiamKPConv (KPConv Siamese, 10 feats incl. change cues) [18] CoRR, 2023 point supervised 93.65 84.82 SiamKPConv (10 feats, no stabilization) [18] CoRR, 2023 point supervised 91.44 80.49 SiamKPConv (stabilization only, no extra feats) [18] CoRR, 2023 point supervised 92.92 83.80 OneConvFusion (sparse voxel net, one-layer fusion) [18] CoRR, 2023 voxel supervised 93.71 85.19 TripletKPConv (triplet loss, point-wise change) [18] CoRR, 2023 point supervised 93.67 86.34 EncoderFusion SiamKPConv (late fusion of Siam encoders) [18] CoRR, 2023 point supervised 94.23 85.19 EncoderFusion SiamKPConv (10 feats) [17] ISPRS Ann., 2022 point supervised 94.13 85.87 EFSKPConv (KPConv with encoder fusion and selection) [20] ISPRS JPRS, 2023 point supervised 94.23 85.19 DC3DCD (unsupervised deep clustering on 3D features) [20] ISPRS JPRS, 2023 point weakly sup. 68.45 57.06 SIREN + S + TVN + TD (object-proxy change cues) [20] ISPRS JPRS, 2023 object proxy supervised 95.45 82.14 RFF + S + TVN + TD (object-proxy change cues) [20] ISPRS JPRS, 2023 object proxy supervised 95.41 82.52 PGN3DCD (prior-guided 3DCD network) [59] TGRS, 2024 point supervised 95.92 87.05 PointMamba (SSM backbone with Siam head) [32] NeurIPS, 2024 point supervised 96.02 87.62 Mamba3D (SSM 3D encoder with Siam head) [24] arXiv, 2024 point supervised 95.85 87.20 Serialized Point Mamba (serialized SSM with Siam head) [53] arXiv, 2024 point supervised 95.98 87.47 Ms-DANet (multi-scale difference-aware 3DCD) [35] TGRS, 2025 point supervised 96.10 87.88 ME-CPT (multi-task enhanced cross-temporal point transformer) [61] TGRS, 2026 point supervised 95.88 87.62 
+
+Ours (object-level LoD gating + matching + cue fusion) This work object based object based 96.81 89.52 Panel B: Per-class IoU (%) on published class-wise reports 
+
+Method Unch. New bld. Demo. New veg. Veg grow. Miss veg. Mobile SiamKPConv (+10 feat.) [18] 97.60 92.75 86.84 95.92 68.70 73.38 94.05 TripletKPConv [18] 96.20 85.40 89.60 89.05 54.80 60.20 88.70 EncoderFusion SiamKPConv [18] 96.46 91.00 88.42 96.31 78.82 72.68 95.16 DC3DCD (EFSKPConv + i.f.) [20] 93.96 79.26 67.88 75.34 69.48 20.29 80.10 
+
+Ours 98.26 95.61 94.30 95.07 75.87 79.32 95.82 
+
+Table 4: Ablation on LoDA: impact of LoD-aware registration, correspondence, instance formation, and change cues. Metrics: ACC, mF1, mIoU, and per-class IoU (%). 
+
+Category Variant ACC mF1 mIoU Added Removed Increased Decreased Unchanged Baseline (learning) EFS KPConv 94.6 86.4 74.3 88.3 76.8 54.1 58.4 93.8 Reference (ours) Full pipeline (LoD-aware registration + proxies + cut-pursuit instances + 
+
+Δℎ,Δ𝑉 ,𝐷 ⊥)95.0 90.8 83.0 87.8 81.2 77.2 73.7 95.1 Registration and LoD No LoD gating in decisions 93.6 86.0 75.2 86.0 78.5 60.4 57.8 93.2 Global LoD (single scalar, no spatial variation) 94.3 89.0 80.6 87.0 80.0 72.4 68.9 94.5 LoD without pose covariance term ( 𝑛 ⊤ Σ𝑡 𝑛 removed) 94.5 89.6 81.7 87.3 80.6 74.9 71.0 94.8 ICP without robust loss (L2 point-to-plane) 94.2 89.2 81.0 86.8 79.6 74.1 70.2 94.3 No vertical alignment and height normalisation 93.8 87.2 77.5 86.1 79.0 65.5 62.8 93.9 Correspondence No geometry-only proxies (match final instances directly) 94.0 88.5 79.9 84.5 76.0 75.0 70.4 93.8 Greedy matching (no Hungarian assignment) 94.8 90.1 82.3 87.4 80.4 76.2 72.5 95.0 Instance formation No cut-pursuit superpoints (voxel connected components only) 94.1 88.8 80.0 85.0 77.5 73.8 69.9 94.0 No planar merging for buildings (patch instances kept separate) 94.4 89.1 80.9 86.2 78.8 74.5 70.7 94.4 Fixed-radius vegetation clustering (no density adaptation) 94.7 89.9 82.1 87.1 80.7 75.9 72.1 94.7 Change cues Without height cue Δℎ 94.1 88.1 79.2 87.2 80.9 68.3 64.9 94.9 Without volume cue Δ𝑉 94.2 88.6 79.9 87.0 80.1 70.5 67.1 94.7 Without normal-direction cue 𝐷 ⊥ 94.6 89.4 81.2 87.6 81.0 73.1 69.2 94.9 Height-only cue ( Δℎ only, no Δ𝑉 and no 𝐷 ⊥) 93.7 86.8 77.0 86.8 79.7 63.9 60.5 94.2 
+
+from Tables 1 and 2. Let 𝑇 𝑃 𝑦 , 𝐹 𝑃 𝑦 , and 𝐹 𝑁 𝑦 denote the counts for label 𝑦 ∈ Y . We report micro accuracy as ACC = Í𝑦 ∈ Y 𝑇 𝑃 𝑦 /𝑁 ,where 𝑁 is the number of evaluated instances. Per-class scores are IoU 𝑦 = 𝑇 𝑃 𝑦 /( 𝑇 𝑃 𝑦 + 𝐹 𝑃 𝑦 + 𝐹 𝑁 𝑦 ) and F1 𝑦 = 2𝑇 𝑃 𝑦 /( 2𝑇 𝑃 𝑦 + 𝐹 𝑃 𝑦 +
+
+𝐹 𝑁 𝑦 ). Macro IoU and macro F1 are the unweighted mean over the five labels in Y and are not frequency-weighted. If a method emits no valid prediction for an annotated instance, that instance is counted as a false negative for its ground-truth label. 
+
+## 5 Experiments 
+
+We assess the pipeline on the LoDA benchmark by running end-to-end object-level change inference on the fused multi-temporal maps and reporting label-level accuracy, macro F1, and macro IoU against representative raster, point, voxel, and deep-learning baselines. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Wang et al. 
+
+Table 5: Efficiency profile on the 15 LoDA evaluation blocks. Time is wall-clock seconds. Breakdown reports registration, segmentation, matching, and change analysis as R/S/M/C. PeakMem is peak host RAM (GB). Pts is the fused point count per block (million). Inst is the number of non-ground instances used for matching and change analysis.                                                                                      
+
+> Block Pts (M) Inst Breakdown (R/S/M/C) Total (s) PeakMem (GB) C01 1.12 240 10.2/27.5/1.9/8.0 47.6 9.8 C02 1.28 275 10.8/30.6/2.1/8.6 52.1 10.7 C03 1.45 310 11.7/33.2/2.3/9.2 56.4 11.6 C04 1.62 345 12.5/35.7/2.5/10.1 60.8 12.5 C05 1.38 290 11.4/32.1/2.2/9.0 54.7 11.2 C06 1.95 420 14.0/41.5/3.0/11.8 70.3 15.4 C07 1.74 380 13.1/38.8/2.8/11.0 65.7 14.2 C08 1.56 330 12.2/35.0/2.5/9.8 59.5 12.7 C09 2.18 460 14.9/45.1/3.2/12.6 75.8 16.8 C10 1.33 285 11.0/31.2/2.1/8.7 53.0 10.9 C11 2.05 440 14.4/42.9/3.1/12.0 72.4 16.1 C12 1.87 405 13.6/40.2/2.9/11.4 68.1 15.0 C13 1.22 255 10.6/29.0/2.0/8.3 49.9 10.3 C14 1.69 365 12.9/37.6/2.7/10.7 63.9 13.8 C15 1.51 320 12.0/34.1/2.4/9.5 58.0 12.3
+> Avg. 1.60 341 12.4/35.6/2.5/10.0 60.5 12.9
+
+## 5.1 Experimental Setup 
+
+All experiments were conducted on a single Linux workstation run-ning Ubuntu 22.04, equipped with an Intel Xeon Gold 6330 CPU (28 cores), 64 GB RAM, and an NVIDIA GeForce RTX 5090 GPU with 24 GB VRAM. We used a Conda environment with Python 3.10, PyTorch 2.1.2, CUDA 12.1, and cuDNN 9.0. Point cloud preprocess-ing, registration, and I/O were implemented with Open3D [62] 0.18, PCL [44] 1.13, and PDAL 2.6. Learning-based baselines were trained from their official public codebases (MinkowskiEngine 0.5.4 for sparse voxels and the released KPConv implementation for point-based networks). All methods are evaluated on the same 120 m × 120 m blocks and the same train/val/test split, using identical shared preprocess-ing: Statistical Outlier Removal, rigid alignment with 𝑇 23 →25 , and ground removal + height normalization via the 2 m ground model. Our spatially varying LoD 95 gating is not applied to any baseline. All rule thresholds in the proposed pipeline, including semantic cri-teria, clustering limits, and change thresholds, were selected once on the LoDA validation split and then frozen for LoDA test and Urb3DCD-V2, with no per-scene or per-dataset retuning. Raster DSM baselines use 0 .5 m nDSM grids (240 × 240 per block), sparse-voxel baselines voxelize at 0 .25 m, and point-based baselines use 0.25 m downsampled points with uniform 𝑁 =8192 sampling per epoch-block when needed. Unless specified by the original code-base, learning baselines use AdamW [34] (lr 10 −3, weight decay 10 −4) with cosine decay [33] for 100 epochs (batch size 2), standard geometric augmentation (yaw rotation, scaling [0.95 , 1.05 ], jitter 
+
+𝜎 =0.01 m, dropout), and early stopping on validation mIoU (pa-tience 20); results are averaged over three seeds, while our pipeline is deterministic. For Urb3DCD-V2, we follow the official split and point-wise evaluation protocol. 
+
+## 5.2 Evaluation on LoDA 
+
+Tables 1 and 2 summarise the LoDA results. Our method achieves 95 .0% ACC, 90 .8% mF1, and 83 .0% mIoU. Compared with the strongest baseline, EFS KPConv, mIoU and mF1 improve by 8 .7 and 4 .4 points. The largest gains occur for Increased and Decreased , with improve-ments of 23 .1 and 15 .3 IoU points. Fig. 5 shows qualitative results. Typical failures involve sparse tree crowns, fragmented facade patches, and short-lived parked vehicles. Because compatible five-label object-level baselines are unavailable, Table 3 also reports the closest published object-proxy comparisons on Urb3DCD-V2. 
+
+## 5.3 Efficiency and Scalability 
+
+Table 5 reports the runtime and memory usage. Across 15 LoDA blocks, pipeline processes an average of 1 .60 million points and 341 non-ground instances per block in 60 .5 s, with 12 .9 GB peak host memory. Segmentation is the dominant cost, requiring 35 .6 s and accounting for 58 .8% of the average runtime, whereas object matching requires only 2 .5 s (4 .1%). From C01 to C09, the input in-creases from 1 .12 to 2 .18 million points, while runtime and memory increase from 47 .6 to 75 .8 s and from 9 .8 to 16 .8 GB, respectively, indicating consistent scaling over the evaluated block range. 
+
+## 5.4 Evaluation on Urb3DCD-V2 
+
+We further evaluate on Urb3DCD-V2 under the official point-wise protocol by projecting each instance-level decision to point labels. Table 3 reports 96 .81% mAcc and 89 .52% mIoUch, exceeding the best listed baselines by 1 .36 and 3 .18 points, respectively. 
+
+## 5.5 Ablation Study 
+
+Table 4 isolates the effects of LoD-aware registration, correspon-dence, instance formation, and change cues. The full pipeline achieves 83 .0 mIoU and 90 .8 mF1. Removing LoD gating causes the largest mIoU drop, mainly increasing confusion between Increased and 
+
+Decreased .
+
+## 6 Conclusion 
+
+We presented LoDA and an LoD-aware object-level change detec-tion pipeline for bi-temporal vehicle LiDAR maps. The method achieves 95 .0% ACC, 90 .8% mF1, and 83 .0% mIoU on LoDA, and 96 .81% mAcc and 89 .52% mIoUch on Urb3DCD-V2, showing that LoD-gated instance-level reasoning improves reliable map update under density variation and residual misregistration. 
+
+## Acknowledgments 
+
+This work was supported by Western Australia Machine Intelli-gence Group Pty Ltd under the project “Building, Correcting, Plan-ning and Updating High-Fidelity 3D City Maps for Western Aus-tralia” (WG-20267524-CM). The project focuses on the planning, construction, correction, and long-term updating of high-fidelity 3D urban and road maps. In particular, it investigates the generation of planned or future road environments from infrastructure devel-opment plans and existing geospatial information, including LiDAR point clouds, GNSS data, and previously constructed 3D maps. This support facilitated the development and evaluation of the LoDA benchmark and the proposed object-level change-detection frame-work. The authors gratefully acknowledge this support. LoDA: A Level of Detection Aware Method and a Multimodal Sensing Benchmark for Object Level Change Detection MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+## References 
+
+[1] Kaleab Taye Asrat and Hyung-Ju Cho. 2024. A comprehensive survey on high-definition map generation and maintenance. ISPRS International Journal of Geo-Information 13, 7 (2024), 232. [2] Mohammad Awrangjeb, Clive S Fraser, and Guojun Lu. 2015. Building change detection from LiDAR point cloud data based on connected component analy-sis. ISPRS annals of the photogrammetry, remote sensing and spatial information sciences 2 (2015), 393–400. [3] Jens Behley, Martin Garbade, Andres Milioto, Jan Quenzel, Sven Behnke, Cyrill Stachniss, and Jurgen Gall. 2019. Semantickitti: A dataset for semantic scene understanding of lidar sequences. In Proceedings of the IEEE/CVF international conference on computer vision . 9297–9307. [4] Jon Louis Bentley. 1975. Multidimensional Binary Search Trees Used for Associa-tive Searching. Commun. ACM 18, 9 (1975), 509–517. doi:10.1145/361002.361007 [5] Paul J. Besl and Neil D. McKay. 1992. A Method for Registration of 3-D Shapes. 
+
+IEEE Transactions on Pattern Analysis and Machine Intelligence 14, 2 (1992), 239– 256. doi:10.1109/34.121791 [6] Peter Biber and Wolfgang Straßer. 2003. The normal distributions transform: A new approach to laser scan matching. In Proceedings 2003 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS 2003)(Cat. No. 03CH37453) ,Vol. 3. IEEE, 2743–2748. [7] Leo Breiman. 2001. Random Forests. Machine Learning 45, 1 (2001), 5–32. doi:10. 1023/A:1010933404324 [8] Juan José Cabrera, Antonio Santo, Arturo Gil, Carlos Viegas, and Luis Payá. 2025. MinkUNeXt: Point cloud-based large-scale place recognition using 3D sparse convolutions. Array (2025), 100569. [9] Cesar Cadena, Luca Carlone, Henry Carrillo, Yasir Latif, Davide Scaramuzza, José Neira, Ian Reid, and John J Leonard. 2017. Past, present, and future of simultaneous localization and mapping: Toward the robust-perception age. IEEE Transactions on robotics 32, 6 (2017), 1309–1332. [10] Holger Caesar, Varun Bankiti, Alex H Lang, Sourabh Vora, Venice Erin Liong, Qiang Xu, Anush Krishnan, Yu Pan, Giancarlo Baldan, and Oscar Beijbom. 2020. nuscenes: A multimodal dataset for autonomous driving. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 11621–11631. [11] Andrea Censi. 2007. An accurate closed-form estimate of ICP’s covariance. In 
+
+Proceedings 2007 IEEE international conference on robotics and automation . IEEE, 3167–3172. [12] Xieyuanli Chen, Shijie Li, Benedikt Mersch, Louis Wiesmann, Jürgen Gall, Jens Behley, and Cyrill Stachniss. 2021. Moving object segmentation in 3D LiDAR data: A learning-based approach exploiting sequential data. IEEE Robotics and Automation Letters 6, 4 (2021), 6529–6536. [13] Yang Chen and Gérard Medioni. 1992. Object Modelling by Registration of Multiple Range Images. Image and Vision Computing 10, 3 (1992), 145–155. doi:10.1016/0262-8856(92)90066-C [14] Christopher Choy, JunYoung Gwak, and Silvio Savarese. 2019. 4d spatio-temporal convnets: Minkowski convolutional neural networks. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 3075–3084. [15] Özgün Çiçek, Ahmed Abdulkadir, Soeren S Lienkamp, Thomas Brox, and Olaf Ronneberger. 2016. 3D U-Net: learning dense volumetric segmentation from sparse annotation. In International conference on medical image computing and computer-assisted intervention . Springer, 424–432. [16] Rodrigo Caye Daudt, Bertr Le Saux, and Alexandre Boulch. 2018. Fully convo-lutional siamese networks for change detection. In 2018 25th IEEE international conference on image processing (ICIP) . IEEE, 4063–4067. [17] Iris de Gélis, Zoé Bessin, Pierrick Letortu, Marie Jaud, Christophe Delacourt, Stéphane Costa, Olivier Maquaire, Rachel Davidson, Thomas Corpetti, and Sébastien Lefèvre. 2022. Cliff Change Detection Using Siamese KPConv Deep Network on 3D Point Clouds. In ISPRS Annals of the Photogrammetry, Remote Sensing and Spatial Information Sciences , Vol. V-3-2022. 649–656. doi:10.5194/isprs-annals-V-3-2022-649-2022 [18] Iris De Gélis, Thomas Corpetti, and Sébastien Lefèvre. 2024. Change detection needs change information: Improving deep 3-D point cloud change detection. 
+
+IEEE Transactions on Geoscience and Remote Sensing 62 (2024), 1–10. [19] Iris de Gélis, Sébastien Lefèvre, and Thomas Corpetti. 2021. Change detection in urban point clouds: An experimental comparison with simulated 3d datasets. 
+
+Remote Sensing 13, 13 (2021), 2629. [20] Iris de Gélis, Sébastien Lefèvre, and Thomas Corpetti. 2023. DC3DCD: Unsuper-vised learning for multiclass 3D point cloud change detection. ISPRS Journal of Photogrammetry and Remote Sensing 206 (2023), 168–183. [21] Martin Ester, Hans-Peter Kriegel, Jörg Sander, and Xiaowei Xu. 1996. A Density-Based Algorithm for Discovering Clusters in Large Spatial Databases with Noise. In Proceedings of the Second International Conference on Knowledge Discovery and Data Mining . AAAI Press, 226–231. [22] Martin A Fischler and Robert C Bolles. 1981. Random sample consensus: a paradigm for model fitting with applications to image analysis and automated cartography. Commun. ACM 24, 6 (1981), 381–395. [23] Benjamin Graham and Laurens Van der Maaten. 2017. Submanifold sparse convolutional networks. arXiv preprint arXiv:1706.01307 (2017). [24] Xu Han, Yuan Tang, Zhaoxuan Wang, and Xianzhi Li. 2024. Mamba3d: Enhancing local features for 3d point cloud analysis via state space model. In Proceedings of the 32nd ACM International Conference on Multimedia . 4995–5004. [25] Paul W Holland and Roy E Welsch. 1977. Robust regression using iteratively reweighted least-squares. Communications in Statistics-theory and Methods 6, 9 (1977), 813–827. [26] Xin Jin, Haisheng Su, Kai Liu, Cong Ma, Wei Wu, Fei Hui, and Junchi Yan. 2025. UniMamba: Unified spatial-channel representation learning with group-efficient mamba for LiDAR-based 3D object detection. In Proceedings of the Computer Vision and Pattern Recognition Conference . 1407–1417. [27] Abderrazzaq Kharroubi, Florent Poux, Zouhair Ballouch, Rafika Hajji, and Roland Billen. 2022. Three dimensional change detection using point clouds: A review. 
+
+Geomatics 2, 4 (2022), 457–485. [28] Dimitri Lague, Nicolas Brodu, and Jérôme Leroux. 2013. Accurate 3D compar-ison of complex topography with terrestrial laser scanner: Application to the Rangitikei canyon (NZ). ISPRS journal of photogrammetry and remote sensing 82 (2013), 10–26. [29] Loic Landrieu and Guillaume Obozinski. 2017. Cut pursuit: Fast algorithms to learn piecewise constant functions on general weighted graphs. SIAM Journal on Imaging Sciences 10, 4 (2017), 1724–1766. [30] Loic Landrieu and Martin Simonovsky. 2018. Large-scale point cloud semantic segmentation with superpoint graphs. In Proceedings of the IEEE conference on computer vision and pattern recognition . 4558–4567. [31] Jesse Levinson, Michael Montemerlo, and Sebastian Thrun. 2007. Map-based precision vehicle localization in urban environments.. In Robotics: science and systems , Vol. 4. Atlanta, GA, USA, 1. [32] Dingkang Liang, Xin Zhou, Wei Xu, Xingkui Zhu, Zhikang Zou, Xiaoqing Ye, Xiao Tan, and Xiang Bai. 2024. Pointmamba: A simple state space model for point cloud analysis. Advances in neural information processing systems 37 (2024), 32653–32677. [33] Ilya Loshchilov and Frank Hutter. 2017. SGDR: Stochastic Gradient Descent with Warm Restarts. In International Conference on Learning Representations .https://openreview.net/forum?id=Skq89Scxx [34] Ilya Loshchilov and Frank Hutter. 2019. Decoupled Weight Decay Regularization. In International Conference on Learning Representations . https://openreview.net/ forum?id=Bkg6RiCqY7 [35] Jinhao Lu, Chenguang Dai, Zhenchao Zhang, Xuanguang Liu, Ruqin Zhou, Song Ji, Yongsheng Zhang, Haiyan Guan, and Hanyun Wang. 2025. Ms-DANet: Multi-scale Difference-aware Network for 3D Point Cloud Change Detection. IEEE Transactions on Geoscience and Remote Sensing (2025). [36] Martin Magnusson, Achim Lilienthal, and Tom Duckett. 2007. Scan registration for autonomous mining vehicles using 3D-NDT. Journal of Field Robotics 24, 10 (2007), 803–827. [37] James Munkres. 1957. Algorithms for the Assignment and Transportation Prob-lems. J. Soc. Indust. Appl. Math. 5, 1 (1957), 32–38. doi:10.1137/0105003 [38] Hiroshi Murakami, Katsuto Nakagawa, Hiroyuki Hasegawa, Taku Shibata, and Eiji Iwanami. 1999. Change detection of buildings using an airborne laser scanner. 
+
+ISPRS Journal of Photogrammetry and Remote Sensing 54, 2-3 (1999), 148–152. [39] Charles R Qi, Hao Su, Kaichun Mo, and Leonidas J Guibas. 2017. Pointnet: Deep learning on point sets for 3d classification and segmentation. In Proceedings of the IEEE conference on computer vision and pattern recognition . 652–660. [40] Charles Ruizhongtai Qi, Li Yi, Hao Su, and Leonidas J Guibas. 2017. Pointnet++: Deep hierarchical feature learning on point sets in a metric space. Advances in neural information processing systems 30 (2017). [41] Ayushman Ramola and Anurag Vidyarthi. 2024. Versatile applications of pixel-and object-based change detection techniques in remote sensing. In 2024 15th international conference on computing communication and networking technologies (ICCCNT) . IEEE, 1–6. [42] Peter J Rousseeuw and Christophe Croux. 1993. Alternatives to the median absolute deviation. Journal of the American Statistical association 88, 424 (1993), 1273–1283. [43] Joseph Rowell, Lintong Zhang, and Maurice Fallon. 2024. LiSTA: Geometric object-based change detection in cluttered environments. In 2024 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 3632–3638. [44] Radu Bogdan Rusu and Steve Cousins. 2011. 3D Is Here: Point Cloud Library (PCL). In 2011 IEEE International Conference on Robotics and Automation . IEEE, 1–4. doi:10.1109/ICRA.2011.5980567 [45] Heiko G Seif and Xiaolong Hu. 2016. Autonomous driving in the iCity—HD maps as a key challenge of the automotive industry. Engineering 2, 2 (2016), 159–162. [46] Ayesha Shafique, Guo Cao, Zia Khan, Muhammad Asad, and Muhammad Aslam. 2022. Deep learning-based change detection in remote sensing images: A review. 
+
+Remote Sensing 14, 4 (2022), 871. [47] Tixiao Shan, Brendan Englot, Drew Meyers, Wei Wang, Carlo Ratti, and Daniela Rus. 2020. Lio-sam: Tightly-coupled lidar inertial odometry via smoothing and mapping. In 2020 IEEE/RSJ international conference on intelligent robots and systems (IROS) . IEEE, 5135–5142. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Wang et al. 
+
+[48] Pierre Soille. 2003. Morphological Image Analysis: Principles and Applications (2 ed.). Springer, Berlin, Heidelberg. doi:10.1007/978-3-662-05088-0 [49] Pei Sun, Henrik Kretzschmar, Xerxes Dotiwalla, Aurelien Chouard, Vijaysai Patnaik, Paul Tsui, James Guo, Yin Zhou, Yuning Chai, Benjamin Caine, et al. 2020. Scalability in perception for autonomous driving: Waymo open dataset. In 
+
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition .2446–2454. [50] Hugues Thomas, Charles R Qi, Jean-Emmanuel Deschaud, Beatriz Marcotegui, François Goulette, and Leonidas J Guibas. 2019. Kpconv: Flexible and deformable convolution for point clouds. In Proceedings of the IEEE/CVF international confer-ence on computer vision . 6411–6420. [51] Thi Huong Giang Tran, Camillo Ressl, and Norbert Pfeifer. 2018. Integrated change detection and classification in urban areas based on airborne laser scan-ning point clouds. Sensors 18, 2 (2018), 448. [52] Ignacio Vizzo, Tiziano Guadagnino, Benedikt Mersch, Louis Wiesmann, Jens Behley, and Cyrill Stachniss. 2023. Kiss-icp: In defense of point-to-point icp– simple, accurate, and robust registration if done the right way. IEEE Robotics and Automation Letters 8, 2 (2023), 1029–1036. [53] Tao Wang, Wei Wen, Jingzhi Zhai, Kang Xu, and Haoming Luo. 2024. Serialized point mamba: A serialized point cloud mamba segmentation model. arXiv preprint arXiv:2407.12319 (2024). [54] Lukas Winiwarter, Katharina Anders, and Bernhard Höfle. 2021. M3C2-EP: Pushing the limits of 3D topographic point cloud change detection by error propagation. ISPRS Journal of Photogrammetry and Remote Sensing 178 (2021), 240–258. [55] Xiaoyang Wu, Li Jiang, Peng-Shuai Wang, Zhijian Liu, Xihui Liu, Yu Qiao, Wanli Ouyang, Tong He, and Hengshuang Zhao. 2024. Point transformer v3: Simpler faster stronger. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 4840–4851. [56] Wei Xu, Yixi Cai, Dongjiao He, Jiarong Lin, and Fu Zhang. 2022. Fast-lio2: Fast direct lidar-inertial odometry. IEEE Transactions on Robotics 38, 4 (2022), 2053–2073. [57] Yihui Yang and Volker Schwieger. 2023. Patch-based M3C2: Towards lower-uncertainty and higher-resolution deformation analysis of 3D point clouds. In-ternational Journal of Applied Earth Observation and Geoinformation 125 (2023), 103535. [58] Yuanwen Yue, Damien Robert, Jianyuan Wang, Sunghwan Hong, Jan Dirk Wegner, Christian Rupprecht, and Konrad Schindler. 2025. Litept: Lighter yet stronger point transformer. arXiv preprint arXiv:2512.13689 (2025). [59] Wenxiao Zhan, Ruozhen Cheng, and Jing Chen. 2024. PGN3DCD: Prior-Knowledge-Guided Network for Urban 3-D Point Cloud Change Detection. IEEE Transactions on Geoscience and Remote Sensing 62 (2024), 1–15. [60] Guowen Zhang, Lue Fan, Chenhang He, Zhen Lei, Zhaoxiang Zhang, and Lei Zhang. 2024. Voxel mamba: Group-free state space models for point cloud based 3d object detection. Advances in Neural Information Processing Systems 37 (2024), 81489–81509. [61] Luqi Zhang, Haiping Wang, Chong Liu, Zhen Dong, and Bisheng Yang. 2026. ME-CPT: Multi-Task Enhanced Cross-Temporal Point Transformer for Urban 3D Change Detection. IEEE Transactions on Geoscience and Remote Sensing (2026). [62] Qian-Yi Zhou, Jaesik Park, and Vladlen Koltun. 2018. Open3D: A modern library for 3D data processing. arXiv preprint arXiv:1801.09847 (2018).

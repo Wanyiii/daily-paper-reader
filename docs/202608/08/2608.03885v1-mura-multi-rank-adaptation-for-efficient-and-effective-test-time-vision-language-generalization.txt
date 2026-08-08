@@ -1,0 +1,540 @@
+Title: MuRA: Multi-Rank Adaptation for Efficient and Effective Test-Time Vision-Language Generalization
+
+URL Source: https://arxiv.org/pdf/2608.03885v1
+
+Published Time: Wed, 05 Aug 2026 01:27:26 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# MuRA: Multi-Rank Adaptation for Efficient and Effective Test-Time Vision-Language Generalization 
+
+## Gengyuan Liu ∗
+
+Tsinghua University Shenzhen, China gy-liu24@mails.tsinghua.edu.cn 
+
+## Nanzhou Wang ∗
+
+Tsinghua University Shenzhen, China wnz24@mails.tsinghua.edu.cn 
+
+## Chang Liu †
+
+Tsinghua University Beijing, China liuchang2022@tsinghua.edu.cn 
+
+## Qinwen Wu 
+
+Tsinghua University Shenzhen, China wuqw24@mails.tsinghua.edu.cn 
+
+## Zhenhao Wang 
+
+Huazhong University of Science and Technology Wuhan, China m202470074@hust.edu.cn 
+
+## Jiacong Wang 
+
+University of Chinese Academy of Sciences Beijing, China wangjiacong20@mails.ucas.ac.cn 
+
+## Bokui Chen †
+
+Tsinghua University Shenzhen, China chenbk@tsinghua.edu.cn 
+
+## Xiangyang Ji †
+
+Tsinghua University Beijing, China xyji@tsinghua.edu.cn 
+
+Abstract 
+
+Vision-language models exhibit remarkable zero-shot capabilities but suffer significant performance degradation under distribution shifts. While test-time adaptation (TTA) via Low-Rank Adaptation offers a parameter-efficient solution, we identify a fundamental bottleneck in current methods: the reliance on static rank configura-tions. Because visual inputs inherently possess varying information densities, a fixed rank forces an inevitable optimization compro-mise, leading to underfitting on complex scenes and overfitting on simple ones. To bridge this gap, we propose Multi-Rank Adaptation (MuRA), a novel framework that dynamically selects and fuses adap-tation modules of varying capacities based on token-level visual complexity. MuRA synergizes Multi-Rank Orthogonal Decompo-sition to provide a superior, knowledge-preserving initialization, and Unified Component Fusion with Continuous Router Updating to sustainably learn semantic-to-rank mappings. Furthermore, we provide rigorous theoretical justifications mathematically proving the necessity and gradient stability of this adaptive mechanism. Crucially, MuRA’s dynamic design uniquely thrives at the deepest visual layer, capitalizing on the shortest gradient backpropaga-tion path. Extensive experiments demonstrate that MuRA achieves state-of-the-art accuracy across extensive domain generalization and cross-dataset benchmarks while significantly reducing both computational and memory overhead. 
+
+> ∗These authors contributed equally to this research.
+> †Corresponding authors.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> MM ’26, Rio de Janeiro, Brazil
+> © 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2213-4/2026/11 https://doi.org/10.1145/3767308.3835061
+
+CCS Concepts 
+
+• Computing methodologies → Image representations .
+
+Keywords 
+
+Test-Time Adaptation, Vision-Language Models, Low-Rank Adap-tation, Domain Generalization 
+
+ACM Reference Format: 
+
+Gengyuan Liu, Nanzhou Wang, Chang Liu, Qinwen Wu, Zhenhao Wang, Ji-acong Wang, Bokui Chen, and Xiangyang Ji. 2026. MuRA: Multi-Rank Adap-tation for Efficient and Effective Test-Time Vision-Language Generalization. In Proceedings of the 34th ACM International Conference on Multimedia (MM ’26), November 10–14, 2026, Rio de Janeiro, Brazil. ACM, New York, NY, USA, 9 pages. https://doi.org/10.1145/3767308.3835061 
+
+1 Introduction 
+
+Large-scale vision-language models (VLMs) such as CLIP [26] achieve strong zero-shot visual recognition by training on massive image-text pairs and learning aligned representations in a shared embed-ding space. However, their performance degrades severely under distribution shifts, a vulnerability that Test-Time Adaptation (TTA) mitigates during inference using exclusively unlabeled test samples, bypassing the need for costly target annotations. As illustrated in Figure 1, existing TTA methods for VLMs gener-ally fall into three categories: input-adaptive, output-adaptive, and knowledge-adaptive approaches. Input-adaptive methods optimize learnable prompts or transformations at test time, while output-adaptive approaches recalibrate the final predictions using cached feature statistics. More recently, knowledge-adaptive methods have sought deeper model adaptation by injecting lightweight learnable modules, such as Low-Rank Adaptation (LoRA), optimizing them directly during inference. While LoRA-based TTA offers a promis-ing pathway by explicitly updating visual representations, current implementations yield limited performance gains and can even trigger catastrophic degradation under severe distribution shifts. arXiv:2608.03885v1 [cs.CV] 4 Aug 2026 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Gengyuan Liu et al. (d) MuRA (Ours).    
+
+> Muti-Rank Adapters
+> in Image Encoder
+> Text Features Image Feature
+> A photo of a [class] Image with Various Entropy ··· Bird Cat Dog
+> Text / Image Encoder
+
+(c) Knowledge-adaptive method.   
+
+> Low-Rank Adapters
+> in Image Encoder
+> Text Features Image Feature
+> A photo of a [class]
+> ··· Bird Cat Dog
+> Text / Image Encoder
+
+(a) Input-adaptive method.    
+
+> Text Prompts [class]
+> ··· Bird Cat Dog
+> Visual Prompts
+> Text Features Image Feature
+> Text / Image Encoder
+
+(b) Output-adaptive method.    
+
+> Text Features Image Feature
+> Cached Features Cached Logists
+> A photo of a [class]
+> ··· Bird Cat Dog
+> Text / Image Encoder
+
+Figure 1: Overview of test-time adaptation approaches in vision-language models. 30.5 72 92.3 91.1 89.9 88.7 54 52 50 48 68.7 68.2 67.7 67.2 95.2 94.7 94.2 93.7 28.5 26.5 48.5 49.5 50.5 51.5 77.8 24.5 65.6 66.4 79.3 64.8 82.3 80.8 65.2 64.0 59.6 62.4 56.8 69 70 71 ImageNet-R ImageNet-V2 ImageNet-S ImageNet-A ImageNet MuRA (Ours) BCA TDA TTL TPT Aircraft Caltech101 Cars DTD Pets 04812 16 20 48 52 56 60 64 68 Accuracy (%) Processing Speed (sample/s) DPE (6.04GB) TPT (4.34GB) MuRA(Ours) (2.05GB) TDA (1.22GB) CLIP (0.67GB) TTL (2.45GB) Knowledege-Adaptive Output-Adaptive Input-Adaptive Vanilla CLIP 
+
+Figure 2: Effectiveness and efficiency of MuRA. (Left) MuRA consistently surpasses existing methods across diverse datasets. (Right) MuRA delivers higher throughput and a re-duced memory footprint compared to competing baselines. 
+
+Through systematic evaluation, we identify the fundamental bottleneck of current knowledge-adaptive TTA: the static rank con-figuration. Following the standard parameter-efficient fine-tuning paradigm, existing methods universally assign a fixed rank to all test samples. However, our analysis reveals that the optimal represen-tational capacity required for adaptation varies drastically across different data distributions. As illustrated in Figure 3 (Left), distinct domains exhibit entirely different rank preferences. Furthermore, we discover a strong linear correlation ( 𝑅 2 = 0.913) between the visual complexity of an input—quantified by image entropy [35] across RGB channels—and its optimal LoRA rank (Figure 3, Right). Low-entropy inputs, such as simple textures or stylized art, require only low-rank updates; high-entropy inputs, such as visually clut-tered or corrupted scenes, demand higher ranks to capture complex structural semantics. A static rank forces an inevitable optimiza-tion compromise, leading to underfitting on complex scenes and overfitting on simple ones. While dynamic rank selection has been explored in offline fine-tuning, these methods rely on prolonged training with labeled data, rendering them entirely inapplicable to the label-free, single-pass constraints of TTA. To bridge this critical gap, we propose Multi-Rank Adaptation (MuRA), an efficient and effective TTA framework that dynami-cally selects and fuses LoRA modules of varying ranks based on 1 2 3 4 5 6 7 861.0 63.1 65.2 ImageNet-A 71.6 72.0 72.4 ImageNet 65.3 65.9 66.5 ImageNet-V 53.6 54.2 54.8 DTD 80.4 81.1 81.8 ImageNet-R 48.5 51.5 54.5 EuroSAT log 2(Rank) Accuracy (%) 5.0 5.5 6.0 6.5 7.0 7.5 0123456EuroSAT ImageNet-R DTD ImageNet-V ImageNet ImageNet-A log 2(Rank) Image Entropy R2= 0.913 P = 0.003 
+
+Figure 3: Motivation for dynamic rank adaptation. (Left) The optimal static rank varies significantly across six distinct datasets. (Right) A strong positive correlation ( 𝑅 2 = 0.913 )exists between this optimal rank ( log 2) and data complexity. 
+
+token-level visual complexity. MuRA introduces two core innova-tions. First, Multi-Rank Orthogonal Decomposition (MROD) initial-izes rank-specific adaptation modules by decomposing pretrained weights into principal components. This directly solves the opti-mization instability and vanishing gradients inherent in standard zero-initialized LoRA during short-horizon test-time updates. Sec-ond, Unified Component Fusion (UCF) employs a lightweight, learn-able router to dynamically compute token-level mixing weights. Unlike conventional TTA methods that aggressively reset parame-ters after every sample, we introduce a Continuous Router Updating (CRU) strategy. By explicitly resetting only the capacity anchors while continuously updating the router, CRU allows the model to globally learn the generalized "complexity-to-capacity" mapping. Crucially, MuRA resolves the effectiveness-efficiency dilemma in-herent in conventional methods. While standard single-rank adapta-tion suffers severe performance drops when restricted to the deepest visual layer, MuRA’s dynamic routing naturally excels at encod-ing these complex, high-level semantics. By uniquely achieving its peak accuracy solely at the deepest layer, MuRA capitalizes on the shortest gradient backpropagation path. As shown in Figure 2, this structural synergy enables MuRA to deliver superior accuracy with higher throughput and a significantly smaller memory footprint than competing baselines. Our main contributions are summarized as follows: MuRA: Multi-Rank Adaptation for Efficient and Effective Test-Time Vision-Language Generalization MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+• We identify the fundamental limitation of static rank configu-rations in knowledge-adaptive TTA, empirically establishing a strong correlation between input visual complexity (en-tropy) and the optimal adaptation rank. 
+
+• We propose MuRA, a novel TTA framework that synergizes Multi-Rank Orthogonal Decomposition, Unified Component Fusion, and Continuous Router Updating for dynamic rank routing. We further provide rigorous theoretical justifica-tions proving the necessity and gradient stability of MuRA. 
+
+• Extensive experiments demonstrate that MuRA’s dynamic design uniquely thrives at the deepest visual layer, achiev-ing state-of-the-art accuracy across multiple generalization benchmarks while fundamentally minimizing computational overhead and memory footprint. 
+
+2 Related Work 2.1 Vision-Language Model Adaptation 
+
+With the rapid surge of VLMs [18–20, 26, 31–33], adapting these large-scale pre-trained models to downstream tasks without full fine-tuning has become crucial for efficient deployment. Adaptation methods of VLMs mainly fall into prompt tuning-based and feature adapter-based ones. Prompt tuning has emerged as a prominent strategy, particularly effective in few-shot and test-time scenarios. For example, CoOp [42] optimizes learnable continuous prompts appended to class names, while CoCoOp [41] introduces a meta-network that generates image-conditioned prompts based on visual features. UPT [38] jointly learns both visual and textual prompts through a lightweight network. For feature adapter, it modifies the internal representation of VLMs by inserting lightweight train-able modules. CLIP-Adapter [9] adds a residual bottleneck layer to fuse task-specific features, and Tip-Adapter [40] uses a non-parametric cache for similarity-based classification. These methods are parameter-efficient and well-suited to low-data scenarios. 
+
+2.2 Test-time adaptation with vision-language models 
+
+Traditional TTA approaches in computer vision have explored various unsupervised techniques, including entropy minimization, batch normalization calibration, pseudo-labeling, and consistency regularization. In the context of VLMs, several adaptation strategies have emerged. Prompt-based methods like TPT [28] optimize text prompts by minimizing marginal entropy across augmented views. DiffTPT [8] enhances prompt robustness using diffusion-based aug-mentations, while PromptAlign [1] explicitly aligns token distribu-tions between test and source domains. Beyond textual prompts, LoRA-based adaptation has gained traction for its efficiency, with TTL [14] adapting CLIP’s attention weights during inference. In contrast, training-free methods avoid backpropagation entirely: TDA [16] refines pseudo-labels via a key-value cache, MTA [37] filters reliable augmentations through inlierness optimization, and DPE [39] maintains dual semantic and visual prototypes. Recent efficient methods include MCP [3] using multi-cache for intra-class compactness, TT-RAA [6] leveraging streaming Gaussian databases for retrieval, and GS-Bias [13] learning global-spatial biases for logit calibration. BCA [43] introduces an adaptive prior mechanism that updates class embeddings using sample posteriors. w/o TTA wTTA            
+
+> Input Rank = 2 Rank = 8 Rank = 32
+> (a) Attention visualization. 0500 1000 1500 2000 2500 3000 3500 05000 10000 15000 20000 Step TPT MROD-Init Standard-Init Grad-Norm (b) Gradient norm analysis.
+
+Figure 4: The stabilizing effect of MROD-Initialization and Multi-Rank attention refinement. (a) Visualizing LoRA atten-tion across ranks. (b) Gradient Norm analysis during TTA. 
+
+3 Method 3.1 Overview 
+
+As shown in Figure 5, MuRA is an adaptive framework integrated at the deepest visual layer that learns dynamic rank preferences across diverse distributions. Multi-Rank Orthogonal Decomposition (MROD) orthogonally decomposes pretrained weights to initial-ize different-rank LoRA modules, avoiding optimization difficulty from zero-initialization. Unified Component Fusion (UCF) aver-ages residuals {𝑅 𝑖 }𝑘 𝑖 =1 into ¯ 𝑅 , then uses a Mixture-of-Experts (MoE) mechanism to construct and combine different low-rank matri-ces. Continuous Router Updating (CRU) continuously updates the router across samples, capturing visual-semantic correlations for token-specific rank selection. For test-time adaptation on a given input image 𝑥 , we apply a data augmentation function A to generate a set of augmented views. For each view ˜ 𝑥 ∈ A ( 𝑥 ), we compute the prediction entropy and apply an adaptive weighting scheme to balance their contribu-tions, following the approach in [14]. The trainable parameters are updated by minimizing the final loss computed as Eq. 3: 
+
+HΦ ( ˜𝑥 ) = −
+
+> 𝐶
+
+∑︁ 
+
+> 𝑗 =1
+
+˜𝑝 Φ (𝑦 𝑗 | ˜𝑥 ) log ˜ 𝑝 Φ (𝑦 𝑗 | ˜𝑥 ), (1) 
+
+𝛽 Φ ( ˜𝑥 ) = 1exp (H Φ ( ˜𝑥 ) − 𝜖 ) , (2) 
+
+L = − 1
+
+𝜌𝑁 ∑︁ ˜𝑥 ∈ A ( 𝑋 )
+
+1[H Φ ( ˜𝑥 ) ≤ 𝜏 ] · 𝛽 Φ ( ˜𝑥 ) · H Φ ( ˜𝑥 ), (3) where 𝐶 denotes the total number of classes, ˜ 𝑝 Φ denotes the pre-dicted class probabilities, 𝛽 Φ ( ˜𝑥 ) represents the adaptive weighting term as defined in Eq. 2, and 𝜏 is a dynamic threshold set as the 
+
+𝜌 -percentile of the entropy values across all augmented views. Upon completion of test-time adaptation, the VLM performs in-ference on the original image without augmentation. Subsequently, the trainable low-rank matrices are reset to their MROD-initialized values prepared for the next adaptation while preserving the router’s accumulated knowledge. 
+
+3.2 Main Components 
+
+Multi-Rank Orthogonal Decomposition. Following [23], we ini-tialize LoRA modules with low-rank principal components from orthogonally decomposed pretrained weights. Figure 4a shows that different ranks capture distinct, meaningful attention patterns be-fore adaptation, providing effective knowledge representations; MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Gengyuan Liu et al. ’
+
+> Deepest Layer
+
+Image Encoder 
+
+𝐀 1’    
+
+> A photo of a [class] Average
+> Text Prompts P
+> Test Sample Xx1
+> x2
+> xN
+> Class Name C
+
+Unified Component Fusion 
+
+··· ··· 
+
+𝐀 2’𝐀 M
+
+Loss L
+
+> Filtering & Weighting Process
+
+𝐀 1
+
+> low
+
+𝐀 2
+
+> low
+
+𝐀 N
+
+> high
+
+Multi-Rank Orthogonal Decomposition  
+
+> hl
+> ···
+> Or2
+> rk
+> Continuous Router Updating
+> Rr1
+> Router
+> R1
+> · · ·
+> R2
+> Rk
+> Wr1rk
+> r2
+
+𝐀 𝐀 /exp 𝐀 𝐀   
+
+> Frozen Parameters Trainable Parameters Resetting Parameters Retaining Parameters
+> ··· ··· Bird Cat Dog
+
+—
+
+Text Encoder 
+
+Figure 5: Overall Architecture of Multi-Rank Adaptation (MuRA). MuRA is an adaptive framework integrated into the deepest visual layer, designed to overcome the limitations of fixed-rank adaptation. It is built upon two core innovation components: (1) Multi-Rank Orthogonal Decomposition (MROD), which initializes rank-specific adaptation components {𝐴 𝑖 , 𝐵 𝑖 } and residual matrices {𝑅 𝑖 } from the pre-trained weight 𝑊 . (2) Unified Component Fusion (UCF), which employs a continuously updated Router (CRU) to dynamically combine these different rank components for token-level adaptation. The overall process is optimized via an entropy-based test-time adaptation objective applied to augmented views. 
+
+after TTA, these maps focus more strongly on salient image re-gions. Gradient analysis in Figure 4b further shows smaller, more stable norms than standard LoRA and input-adaptive TPT, reducing adaptation instability. Motivated by these observations, we propose MROD to initialize LoRA parameters through structured decompo-sition of pretrained weights. Given rank configurations { 𝑟 1, ..., 𝑟 𝑘 } in ascending order, for a weight matrix 𝑊 ∈ R𝑚 ×𝑛 , MROD performs its economic singular value decomposition: 𝑊 = 𝑈 𝑆𝑉 ⊤, where 
+
+𝑈 ∈ R𝑚 ×min (𝑚,𝑛 ) , 𝑉 ∈ R𝑛 ×min (𝑚,𝑛 ) are orthogonal matrices, and 
+
+𝑆 = diag (s) contains singular values in descending order. For each rank 𝑟 𝑖 , we initialize the LoRA projection matrices as follows: 
+
+𝐴 𝑖 = 𝑈 [:,:𝑟 𝑖 ]𝑆 1/2   
+
+> [:𝑟 𝑖 ,:𝑟 𝑖 ]
+
+∈ R𝑚 ×𝑟 𝑖 , (4) 
+
+𝐵 𝑖 = 𝑆 1/2  
+
+> [:𝑟 𝑖 ,:𝑟 𝑖 ]
+
+𝑉 ⊤[:,:𝑟 𝑖 ] ∈ R𝑟 𝑖 ×𝑛 , (5) 
+
+𝑅 𝑖 = 𝑈 [:,𝑟 𝑖 :]𝑆 [𝑟 𝑖 :,𝑟 𝑖 :]𝑉 ⊤[:,𝑟 𝑖 :] ∈ R𝑚 ×𝑛 , (6) where 𝑅 𝑖 represents the residual matrix after decomposition. With these initialization strategies, we can decompose 𝑊 into: 
+
+𝑊 = 𝐴 𝑖 𝐵 ⊤ 
+
+> 𝑖
+
++ 𝑅 𝑖 . (7) This orthogonal decomposition ensures 𝐴 𝑖 𝐵 𝑖 ⊥ 𝑅 𝑖 for each 𝑖 , fa-cilitating more efficient optimization compared to zero-initialization. Note that MROD is performed only once, with these initialized pro-jection matrices cached for subsequent resets, incurring negligible computational overhead. 
+
+Unified Component Fusion. To effectively combine different-rank LoRA modules and residual matrices, we propose UCF, drawing inspiration from Mixture-of-Experts [15]. The residual matrices from MROD are aggregated through aver-aging: ¯ R = 1
+
+> 𝑘
+
+Í𝑘 𝑖 =1 R𝑖 . The aggregated matrix ¯ 𝑅 replaces the original pretrained weight and remains frozen to maintain pretrained con-sistency. Let h𝑙 denote the token representation from the deepest layer. A zero-initialized router W𝑟 ∈ R𝑘 ×𝑑 computes rank pref-erences through: 𝝅 (h𝑙 ) = softmax (W𝑟 h𝑙 ), where 𝑑 denotes the feature dimension. The router initialization ensures stable initial-ization by producing uniform softmax outputs. The final feature output is o = Í𝑘 𝑖 =1 𝜋 𝑖 (h𝑙 )A𝑖 B⊤ 
+
+> 𝑖
+
+h𝑙 + ¯Rh 𝑙 . Distinct from LoRA param-eters, which store specific semantic knowledge and are susceptible to error accumulation from continuous updating, the router learns a robust "Complexity-Capacity Mapping." Accordingly, we propose the CRU strategy to maintain the router’s state throughout adap-tation, empowering it to effectively capture fine-grained visual complexities for optimal rank selection. 
+
+4 Theoretical Justification 
+
+In this section, we provide a formal theoretical analysis to justify the optimization dynamics of MuRA framework. Specifically, we demonstrate why dynamic rank routing is mathematically neces-sary for diverse test streams and prove the stability of the CRU strategy introduced in Section 3. MuRA: Multi-Rank Adaptation for Efficient and Effective Test-Time Vision-Language Generalization MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+To simplify our notation, let 𝑓 𝑖 (h𝑙 ) = A𝑖 B⊤ 
+
+> 𝑖
+
+h𝑙 denote the isolated feature transformation of the 𝑖 -th rank expert, and let 𝜋 𝑖 = 𝝅 (h𝑙 )𝑖 
+
+denote its corresponding routing probability. Lemma 4.1 (Gradient Structure of the Router). Applying the chain rule through the softmax routing mechanism, the gradient of the adaptation loss L with respect to the router weights W 𝑖 𝑟 for expert 𝑖 is formulated as: 
+
+∇W𝑖 𝑟 L = E
+
+"
+
+𝜋 𝑖 (1 − 𝜋 𝑖 ) 𝜕 L
+
+𝜕 o 𝑓 𝑖 (h𝑙 )h⊤ 
+
+> 𝑙
+
+−∑︁ 
+
+> 𝑗 ≠𝑖
+
+𝜋 𝑗 𝜋 𝑖 
+
+𝜕 L
+
+𝜕 o 𝑓 𝑗 (h𝑙 )h⊤
+
+> 𝑙
+
+#
+
+Remark. Lemma 4.1 shows that the first term gives positive feed-back when expert 𝑖 minimizes the loss, the second penalizes it by other experts’ relative effectiveness, and jointly the router maxi-mizes selecting the most effective expert for h𝑙 .To understand why a static rank is insufficient, we define 𝐻 (𝑥 )
+
+as the information entropy of the input 𝑥 , which characterizes its complexity. We partition the data distribution into semantic re-gions Ω𝑖 with concentrated entropy 𝐻 (Ω𝑖 ) and associate each rank with a capacity center 𝜇 𝑖 and local risk 𝑅 𝑖 (𝐻 ) = 𝛼 𝑖 + 𝜆 𝑖 𝑑 (𝐻, 𝜇 𝑖 )2,where 𝑑 (𝐻, 𝜇 𝑖 ) measures complexity-capacity mismatch. Let 𝑧 𝑖 =
+
+(W 𝑖 𝑟 )⊤h𝑙 , 𝜋 𝑖 = exp (𝑧 𝑖 )/ Í𝑗 exp (𝑧 𝑗 ), and ¯𝑓 (h𝑙 ) = Í𝑗 𝜋 𝑗 𝑓 𝑗 (h𝑙 ). With 
+
+𝑔 = 𝜕 L/ 𝜕 o, the chain rule gives 𝜕 L/ 𝜕𝑧 𝑖 = 𝜋 𝑖 ⟨𝑔, 𝑓 𝑖 (h𝑙 ) − ¯𝑓 (h𝑙 )⟩ ; us-ing the first-order approximation ⟨𝑔, 𝑓 𝑖 (h𝑙 ) − ¯𝑓 (h𝑙 )⟩ ≈ ℓ𝑖 (𝑥 ) − ℓ𝜋 (𝑥 )
+
+connects the routing update to the hypothetical loss ℓ𝑖 (𝑥 ) of expert 
+
+𝑖 and the current mixture loss ℓ𝜋 (𝑥 ).Lemma 4.2 (The Necessity of Dynamic Routing). One router gradient step yields 
+
+Δ𝑧 𝑖 = −𝜂 𝑟 
+
+𝜕 L
+
+𝜕𝑧 𝑖 
+
+≈ 𝜂 𝑟 𝜋 𝑖 
+
+ℓ𝜋 (𝑥 ) − ℓ𝑖 (𝑥 ) .
+
+Consequently, for a semantic region Ω𝑖 with concentrated entropy 
+
+𝐻 (Ω𝑖 ), the expected logit update satisfies 
+
+E𝑥 ∈Ω𝑖 [Δ𝑧 𝑖 ] ∝ 𝜋 𝑖 
+
+h∑︁ 
+
+> 𝑗
+
+𝜋 𝑗 𝑑 (𝐻 (Ω𝑖 ), 𝜇 𝑗 )2 − 𝑑 (𝐻 (Ω𝑖 ), 𝜇 𝑖 )2 i
+
+.
+
+Remark. The update promotes an expert if and only if its complexity-capacity mismatch is below the routing-weighted average mismatch across all experts, thereby inducing explicit rank competition. Con-sequently, low-complexity inputs drift toward low-rank experts, whereas high-complexity inputs drift toward high-rank experts. This relative criterion replaces an isolated absolute-mismatch in-terpretation of entropy and capacity. A single static rank cannot participate in such competition and therefore forces suboptimal compromises across diverse inputs, leading to underfitting or over-fitting. By decoupling representational capacity from individual image complexity, UCF enables token-specific capacity allocation. Finally, we analyze the stability of maintaining the router’s state across sequential test samples. Let W (𝑡 ) 
+
+> 𝑟
+
+denote the router weights at adaptation step 𝑡 , 𝜂 𝑟 denote the router’s learning rate, and 𝐿 𝜋 
+
+denote the Lipschitz constant of the softmax function. Lemma 4.3 (Stability of Continuous Router Updating). Given bounded gradients during test-time adaptation, the change in token-level routing probability across sequential updates is bounded by the Lipschitz continuity of the softmax distribution: 
+
+|𝜋 (𝑡 +1) 
+
+> 𝑖
+
+(h𝑙 ) − 𝜋 (𝑡 ) 
+
+> 𝑖
+
+(h𝑙 )| ≤ 𝐿 𝜋 · 𝜂 𝑟 · ∥∇ W𝑟 L∥ 
+
+Remark. In standard joint-training MoE architectures, continuous sequential updates often cause routing collapse because the experts’ representations constantly drift. However, as detailed in Section 3, the MuRA experts ( A𝑖 , B𝑖 ) are explicitly reset to their MROD-initialized principal components after adapting to each sample. Because these capacity anchors remain fixed, the router’s optimiza-tion landscape—the generalized "complexity-to-capacity" mapping described in Lemma 4.2—is globally stationary. Lemma 4.3 the-oretically guarantees that accumulating gradients for the router over diverse test streams is mathematically stable. This proves that our Continuous Router Updating (CRU) strategy successfully aggregates structural routing knowledge without suffering from catastrophic forgetting or semantic drift. 
+
+5 Experiments 5.1 Experimental Settings 
+
+Benchmarks. We evaluate MuRA on two distinct benchmarks: the out-of-distribution (OOD) benchmark and the cross-domain benchmark. The OOD benchmark assesses model robustness on four ImageNet [5] variants: ImageNet-A [12], ImageNet-V2 [27], ImageNet-R [11], and ImageNet-S [30]. The cross-domain bench-mark evaluates adaptation capability across ten diverse domains: Aircraft [22], Caltech101 [7], Cars [17], DTD [4], EuroSAT [10], Flower102 [24], Food101 [2], Pets [25], SUN397 [36], and UCF101 [29]. 
+
+Implementation Details. We build our framework upon the pre-trained CLIP model. The rank configuration is set to {2,4,8,16,32}. For each test image, we generate 63 augmented views. We optimize the parameters for a single step using the AdamW [21] optimizer, with learning rates of 6e-3 and 1e-4 for the low-rank adaptation matrices and the router, respectively. 
+
+Compared Methods. We evaluate MuRA against the zero-shot CLIP baseline and three categories of state-of-the-art TTA ap-proaches: (1) Input-adaptive methods, including TPT, DiffTPT, Promp-tAlign, and ADTE [34]; (2) Output-adaptive methods, including TDA, MTA, GS-Bias [13], and TT-RAA [6]; and (3) Knowledge-adaptive methods, specifically TTL alongside our MuRA. 
+
+5.2 Main Results 
+
+Results on OOD Benchmark. As shown in Table 1, MuRA achieves state-of-the-art performance across ImageNet and its out-of-distribution variants. This not only demonstrates vastly superior robustness compared to the static-rank approach TTL but also out-performs the recent strong baseline ADTE. While ADTE shows a slight edge on ImageNet-S, MuRA secures the highest overall aver-age and OOD average, validating our core motivation that dynamic rank selection is essential for handling varying data complexities under distribution shifts. 
+
+Results on Cross-Domain Benchmark. Table 2 demonstrates MuRA’s superior generalization capability across diverse visual do-mains. Compared to recent SOTA methods like ADTE and TT-RAA, which may excel in specific target datasets, MuRA exhibits a much more balanced and robust adaptation profile across different visual characteristics. Crucially, on datasets requiring fine-grained se-mantic extraction—such as the visually ambiguous Aircraft dataset MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Gengyuan Liu et al. 
+
+Table 1: Performance comparison on ImageNet and its OOD variants. 
+
+Category Method ImageNet ImageNet-A ImageNet-V2 ImageNet-R ImageNet-S Average OOD Average w/o TTA CLIP-ViT-B/16 [ICML 22] 68.34 49.89 61.88 77.65 48.24 61.20 59.42 Input Adaptive TPT [NeurIPS 22] 68.98 54.77 63.45 77.06 47.94 62.44 60.81 DiffTPT [ICCV 23] 70.30 55.68 65.10 75.00 46.80 62.28 60.52 PromptAlign [NeurIPS 23] - 59.37 65.29 79.33 50.23 - 63.55 ADTE [ICLR 26] 71.80 65.50 65.60 81.40 53.50 67.50 66.50 Output Adaptive TDA [CVPR 24] 69.51 60.11 64.67 80.24 50.54 65.01 63.89 MTA [CVPR 24] 70.08 58.06 64.24 78.33 49.61 64.06 62.56 GS-Bias [ICML 25] 69.02 54.55 63.37 76.64 48.21 62.36 60.69 TT-RAA [ICCV 25] 70.23 60.59 64.69 80.58 49.98 65.01 63.96 Knowledge Adaptive TTL [WACV 25] 70.23 60.51 64.55 77.54 48.61 64.29 62.80 
+
+MuRA (Ours) 72.46 66.15 66.48 82.47 51.76 67.86 66.72 Table 2: Performance comparison on the Cross-Domain benchmark. 
+
+Category Method Aircraft Caltech Cars DTD EuroSAT Flower Food Pets SUN UCF Average w/o TTA CLIP-ViT-B/16 [ICML 22] 23.67 93.35 65.48 44.27 42.01 67.44 83.65 88.25 62.59 65.13 63.58 Input Adaptive TPT [NeurIPS 22] 24.78 94.16 66.87 47.75 42.44 68.98 84.67 87.79 65.50 68.04 65.10 DiffTPT [ICCV 23] 25.60 92.49 67.67 47.65 43.13 70.15 87.23 88.22 65.74 62.67 65.17 PromptAlign [NeurIPS 23] 24.80 94.01 68.50 47.24 47.86 72.39 86.65 90.76 67.54 69.47 66.92 ADTE [ICLR 26] 28.90 94.80 70.90 49.50 53.80 72.60 86.30 89.70 70.40 73.10 69.00 Output Adaptive TDA [CVPR 24] 23.91 94.24 67.28 47.40 58.00 71.42 86.14 88.63 67.62 70.68 67.53 MTA [CVPR 24] 25.20 94.21 68.47 45.90 45.36 68.06 85.00 88.24 66.67 68.69 65.58 GS-Bias [ICML 25] 25.30 94.16 66.77 45.10 43.63 68.86 85.67 88.58 64.78 65.74 64.86 TT-RAA [ICCV 25] 25.38 94.08 66.42 47.99 66.12 72.68 86.09 89.83 67.69 71.29 68.76 Knowledge Adaptive TTL [WACV 25] 23.82 93.63 67.97 46.69 42.02 70.48 85.05 88.72 66.32 69.20 65.39 
+
+MuRA (Ours) 30.96 95.33 68.88 54.79 57.05 74.54 85.57 92.61 69.18 70.31 69.92 
+
+and the texture-heavy DTD—MuRA’s multi-rank mechanism yields striking improvements, substantially outperforming all competing methods. Ultimately, MuRA secures the highest average accuracy across all ten domains, further cementing the effectiveness of dy-namic capacity allocation. 
+
+5.3 Ablation Study 
+
+In this section, we systematically ablate the core components of MuRA to understand their individual contributions. 
+
+Design Analysis. We first conduct comprehensive ablation stud-ies across three challenging OOD datasets to validate the overall architecture. Table 3 presents a systematic investigation of our main designs. The MROD-initialization brings significant improvements even in a single-rank setting, achieving a 7.38% average accuracy gain over the vanilla CLIP. Furthermore, extending to multi-rank scenarios via UCF and incorporating the CRU strategy effectively leverages accumulated knowledge for better rank routing, leading to an additional 1.13% improvement in average accuracy over the model with MROD and UCF only. 
+
+Rank Configurations and Attention Adaptation. Having established the effectiveness of the overall framework, we inves-tigate the specific configurations of the low-rank modules. In Fig-ure 6a, performance curves show significant improvements as ranks progressively increase up to {2,4,8,16,32}, beyond which the gains plateau while computational costs continue to rise. The substantial gap between our progressive strategy and homogeneous configura-tions validates that adapting to varying data complexities requires a spectrum of rank components. Furthermore, as shown in Figure 6b, progressively incorporating more attention matrices—from solely the query matrix (Q) to the full set (Q, K, V, O)—yields consistent performance improvements, confirming our strategy of updating the complete attention block to maximize adaptation efficacy. 
+
+Routing Mechanism Strategies. We further examine the de-sign of the Unified Component Fusion (UCF) router by evaluating its MuRA: Multi-Rank Adaptation for Efficient and Effective Test-Time Vision-Language Generalization MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil {2} {2, 4} {2, 4, 8} {2, ..., 16} {2, ..., 32} {2, ..., 64} {2, ..., 128} 60.9 63.8 66.7 68.4 69.6 70.8 81.2 81.9 82.6 Accuracy (%) Rank Configuration ImageNet-R UCF101 ImageNet-A Progressive Ranks Ranks of {2, 2, 2, 2, 2} Ranks of {32, 32, 32, 32, 32} {32, 32, 32, 32, 32} {2, 2, 2, 2, 2} {2, 2, 2, 2, 2} {2, 2, 2, 2, 2} {32, 32, 32, 32, 32} {32, 32, 32, 32, 32} 
+
+(a) Rank configuration analysis. 57.11 68.36 79.89 62.73 70.08 82.21 65.65 70.12 82.38 66.15 70.31 82.47 ImageNet-A UCF101 ImageNet-R 55 60 65 70 75 80 Accuracy (%) Datasets QQ+K Q+K+V Q+K+V+O (b) Attention weights to adapt. 
+
+Figure 6: Analysis of (a) different rank configurations, where solid lines represent rank configuration while dashed lines indicate homogeneous low-rank {2,2,2,2,2} and high-rank {32,32,32,32,32} settings, (b) The impact of adapting different attention matrices. Table 3: Design ablation study of our MuRA. 
+
+Main Designs Img-A Img-R UCF Avg. MROD UCF CRU 
+
+× × × 49.89 77.65 65.13 64.22 
+
+× ✓ × 60.61 81.26 69.15 70.34 
+
+✓ × × 63.93 81.63 69.23 71.60 
+
+✓ ✓ × 64.24 81.85 69.47 71.85 
+
+✓ ✓ ✓ 66.15 82.47 70.31 72.98 
+
+Table 4: Performance comparison of Single-Rank variants vs. MuRA across different depths (Average accuracy on ImageNet-A, ImageNet-R, and UCF101). Layer groups: Bot-tom (1-4), Mid (5-8), Neck (9-10), Penultimate (11), and Deep-est (12). 
+
+Method Bottom Mid Neck Penultimate Deepest Single-Rank 67.87 67.46 67.71 67.78 67.51 Single-Rank (SVD-Init) 60.33 55.23 70.74 70.46 70.30 
+
+MuRA (Ours) 60.08 56.76 70.56 70.77 72.98 Table 5: Ablation of different routing strategies. 
+
+Routing Strategy ImageNet-A ImageNet-R UCF101 Avg. Hard Routing 63.17 81.66 69.89 71.57 
+
+Soft Routing 66.15 82.47 70.31 72.98 
+
+operational granularity and routing strategy. First, regarding gran-ularity, Table 6 compares Instance-Level and Token-Level routers. When CRU is enabled, the Token-Level router shows significant gains (+1.13% mAcc), demonstrating that effective rank adaptation requires token-level granularity to capture local variations in visual complexity. Second, regarding the routing strategy, Table 5 shows that Soft Routing consistently outperforms Hard Routing across all datasets, validating that combining multiple rank components flexibly is more effective than strictly selecting a single rank. 
+
+Table 6: Ablation study of different router designs. mAcc represents the mean accuracy across ImageNet-A, ImageNet-R, and UCF101 datasets. 
+
+Router Design mAcc w/o CRU w CRU Δ (%) Instance-Level 71.86 71.89 +0.03 
+
+Token-Level 71.85 72.98 +1.13 
+
+Table 7: Efficiency and performance comparison. Throughput is measured in samples/second. CLIP † denotes the zero-shot baseline (theoretical upper bound for efficiency). mAcc is the mean accuracy across ImageNet-A, -R, and UCF101. Best adaptation results are in bold. 
+
+Method FLOPs (T) Memory (GB) Throughput mAcc CLIP † 2.25 0.67 19.57 64.22 TPT 3.32 4.34 3.20 66.62 Single-Rank (Matched) 2.25 3.08 4.59 68.21 
+
+MuRA (Ours) 2.40 2.05 11.26 72.98 Table 8: Performance comparison using the larger ViT-L/14 backbone. The best results are highlighted in bold.                             
+
+> Method ImageNet Img-A Img-V2 Img-R Img-S Avg OOD Avg. CLIP-ViT-L/14 74.04 53.88 67.69 87.42 63.18 69.31 68.13 Single-Rank 75.62 65.21 69.43 87.46 63.51 72.25 71.40
+> MuRA (Ours) 78.66 81.96 73.19 91.79 64.69 78.06 77.91
+
+5.4 Efficiency and Scalability Analysis 
+
+A practical test-time adaptation method must not only be accurate but also structurally efficient and scalable to larger foundation models. In this section, we analyze the source of MuRA’s efficiency, its computational footprint, and its scalability. 
+
+Adaptation Depth and Inherent Efficiency. Table 4 shows that standard Single-Rank drops from 67.87% at Bottom to 67.51% at Deepest, whereas MuRA’s dynamic rank routing reverses this trend and peaks at Deepest; parameter-matched SVD-initialized Single-Rank improves deeper adaptation over standard-LoRA Single-Rank but peaks at Neck. Static-rank recovery thus requires shallower adaptation, forfeiting the fastest updates and lowest memory from the shortest backpropagation path, supporting dynamic ranks as the source of MuRA’s effective, efficient deepest-layer adaptation. 
+
+Efficiency-Effectiveness Trade-off. Building upon its deep-layer design, MuRA unlocks an optimal trade-off. As detailed in Table 7, while conventional methods like TPT suffer from severe throughput bottlenecks and memory bloat, MuRA maintains a highly practical throughput and requires only 2.05 GB of mem-ory—closely mirroring the efficiency profile of zero-shot CLIP. At this minimal computational cost, MuRA yields a massive accu-racy improvement over the baseline. Crucially, we evaluate MuRA against a Single-Rank (Matched) baseline configured with an identi-cal number of trainable parameters. Against a Single-Rank (Matched) MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Gengyuan Liu et al. 
+
+Table 9: Performance comparison on the CLIP-ResNet-50 backbone. Avg. is the mean accuracy over ImageNet-A, ImageNet-R, and UCF101. Best results are in bold. 
+
+Method ImageNet-A ImageNet-R UCF101 Avg. CLIP 21.83 56.15 58.84 45.61 TPT 26.67 59.11 60.82 48.87 TDA 30.29 62.58 64.18 52.35 Single-Rank 27.41 60.37 59.95 49.24 Single-Rank (SVD-Init) 29.18 61.26 62.25 50.90 MuRA (Instance-Level) 30.55 62.79 64.30 52.55 
+
+MuRA (Token-Level) 32.86 63.14 65.76 53.92 GT : Bee 
+
+> Input Image
+> (0.6606) ant (0.1281) bee (0.0908) fly
+> CLIP
+> (0.2637) ant (0.2595) bee (0.1455) fly
+> Rank = 2
+> (0.5731) fly (0.4039) bee (0.0173) ant
+> Rank = 8
+> (0.9995) bee (0.0003) fly (0.0001) ladybug
+> Rank = 32
+> (0.9946) bee (0.0034) fly (0.0007) ant
+> MuRA
+> GT : Elephant
+> Input Image
+> (0.1276) bison (0.1025) cottontail rabbit (0.0933) skunk
+> CLIP
+> (0.1854) bison (0.1274) elephant (0.1107) cottontail rabbit
+> Rank = 2
+> (0.5804) elephant (0.1643) cottontail rabbit (0.1183) porcupine
+> Rank = 8
+> (0.6187) porcupine (0.1181) elephant (0.1075) bison
+> Rank = 32
+> (0.6646) elephant (0.1234) cottontail rabbit (0.1007) porcupine
+> MuRA
+> GT : Cracked
+> Input Image
+> (0.2488) scaly (0.1968) blotchy (0.0989) wrinkled
+> CLIP
+> (0.8088) cracked (0.0745) scaly (0.0431) blotchy
+> Rank = 2
+> (0.5037) cracked (0.1814) scaly (0.0348) wrinkled
+> Rank = 8
+> (0.5018) scaly (0.2644) cracked (0.0110) blotchy
+> Rank = 32
+> (0.9829) cracked (0.0066) scaly (0.0063) blotchy
+> MuRA
+
+Figure 7: Visualization of attention maps and top-3 predic-tions for CLIP, different rank components, and MuRA. 
+
+baseline with an identical number of trainable parameters, MuRA delivers a 4.77% accuracy gain, runs more than twice as fast, and uses significantly less memory, confirming that gains stem from dynamic routing rather than naive capacity increase. 
+
+Scalability to Larger Models. Evaluating on the larger ViT-L/14 backbone (Table 8), MuRA achieves a superior 78.06% average accuracy. The performance leap is most striking on ImageNet-A, where MuRA reaches 81.96%—yielding a massive +28.08% absolute gain over vanilla CLIP and outperforming the static Single-Rank baseline by 16.75%. These results demonstrate that while fixed-rank constraints bottleneck larger architectures, MuRA effectively unleashes their full representational potential. 
+
+Generalization to CNN Backbones. We evaluate CLIP-ResNet-50 under the same protocol (Table 9). MuRA adapts final-bottleneck 1×1 convolutions. Single-Rank uses rank 64 on these layers, match-ing 0.33M. Token-level routing treats each spatial location’s channel-wise vector as a token. MuRA (Token-Level) achieves the best mean accuracy, surpassing TPT, TDA, both single-rank baselines, and instance-level routing, demonstrating that MuRA generalizes across backbones rather than being specific to ViTs. 0 1000 2000 3000 4000 5000 6000 7000   
+
+> Global Step
+> 010 20 30 40 50 60 70
+> Accuracy (%)
+> MuRA w CRU MuRA w/o CRU DPE
+
+(a) Accuracy. 0 1000 2000 3000 4000 5000 6000 7000  
+
+> Global Step
+> 1.56 1.57 1.58 1.59 1.60 1.61
+> Rank-Utilization Entropy
+> ImageNet-A ImageNet-V ImageNet ImageNet-R ImageNet-S DTD EuroSat
+
+(b) Rank entropy. ImageNet-A ImageNet-V ImageNet ImageNet-R ImageNet-S DTD EuroSat  
+
+> Domain (Ordered by Time)
+> 020 40 60 80 100
+> Proportion (%)
+> Rank 2 Rank 4 Rank 8 Rank 16 Rank 32
+
+(c) Routing profile. 
+
+Figure 8: MuRA dynamically stabilizes and adapts its rank allocation under continuous distribution shifts. Accuracy and Q-matrix routing dynamics are shown throughout the seven-domain stream. 
+
+5.5 Qualitative Results 
+
+Attention Analysis. To qualitatively assess MuRA, we visual-ize the self-attention heatmaps of CLIP, MuRA, and the individual rank components within MuRA, along with their top-3 prediction probabilities. As shown in Figure 7, different rank-specific LoRA components focus on distinct types of image information: low-rank matrices tend to produce diffuse attention over background or coarse features, while high-rank ones concentrate on semanti-cally rich foreground areas. Importantly, MuRA dynamically selects appropriate rank components. For object-centric samples like the bee (Row 1), it leverages higher-rank components (Rank-32) for semantic-rich foreground attention. In contrast, for texture-centric samples like the cracked earth (Row 3), it utilizes lower-rank com-ponents (Rank-2) to capture broader attention distributions. CLIP’s attention appears confined, limiting the effectiveness of purely output-adaptive methods. 
+
+5.6 Router Dynamics under Continuous Distribution Shifts 
+
+We evaluate MuRA on a continual TTA stream of seven sequential domains in decreasing intrinsic complexity—ImageNet-A, ImageNet-V, ImageNet, ImageNet-R, ImageNet-S, DTD, and EuroSAT—with 1,000 steps per domain, yielding a highly non-i.i.d., class-imbalanced stream with abrupt shifts. Figure 8a shows MuRA with CRU achiev-ing the highest accuracy throughout, surpassing MuRA without CRU and DPE. With CRU, rank-utilization entropy decreases (Fig-ure 8b), indicating router stabilization and greater rank-selection certainty without cold start. Figure 8c shows complex domains se-lecting ranks 8, 16, 32 and simpler domains ranks 2, 4; full Q/K/V/O results appear in the supplementary material. 
+
+6 Conclusion and Future Work 
+
+MuRA enables efficient and effective TTA by tailoring representa-tional capacity to token-level input complexity; together, MROD, UCF, and CRU achieve state-of-the-art generalization at minimal cost. However, MuRA still uses manually specified rank bound-aries, relies on a minimum-entropy objective that can induce over-confident predictions, and has not yet been validated on autore-gressive LVLMs. Future work will derive boundaries from MROD singular-value decay while preserving pretrained energy; extend complexity-aligned capacity to autoregressive LVLM decoding for robust, hallucination-free reasoning; and develop optimization-driven gradient and capacity modulation to address over-confidence and generalize MuRA to broader architectures. MuRA: Multi-Rank Adaptation for Efficient and Effective Test-Time Vision-Language Generalization MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Acknowledgments 
+
+This work was supported in part by the National Natural Science Foundation of China under Grant U24B6012, 62406167. 
+
+References 
+
+[1] Jameel Abdul Samadh, Mohammad Hanan Gani, Noor Hussein, Muhammad Uzair Khattak, Muhammad Muzammal Naseer, Fahad Shahbaz Khan, and Salman H Khan. 2023. Align your prompts: Test-time prompting with distribution alignment for zero-shot generalization. Advances in Neural Information Processing Systems 
+
+36 (2023), 80396–80413. [2] Lukas Bossard, Matthieu Guillaumin, and Luc Van Gool. 2014. Food-101–mining discriminative components with random forests. In European conference on com-puter vision . Springer, 446–461. [3] Xinyu Chen, Haotian Zhai, Can Zhang, Xiupeng Shi, and Ruirui Li. 2025. Multi-Cache Enhanced Prototype Learning for Test-Time Generalization of Vision-Language Models. In Proceedings of the IEEE/CVF International Conference on Computer Vision . 2281–2291. [4] Mircea Cimpoi, Subhransu Maji, Iasonas Kokkinos, Sammy Mohamed, and An-drea Vedaldi. 2014. Describing textures in the wild. In Proceedings of the IEEE conference on computer vision and pattern recognition . 3606–3613. [5] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. 2009. Imagenet: A large-scale hierarchical image database. In 2009 IEEE conference on computer vision and pattern recognition . Ieee, 248–255. [6] Xinqi Fan, Xueli Chen, Luoxiao Yang, Chuin Hong Yap, Rizwan Qureshi, Qi Dou, Moi Hoon Yap, and Mubarak Shah. 2025. Test-Time Retrieval-Augmented Adap-tation for Vision-Language Models. In Proceedings of the IEEE/CVF International Conference on Computer Vision . 8810–8819. [7] Li Fei-Fei, Rob Fergus, and Pietro Perona. 2004. Learning generative visual models from few training examples: An incremental bayesian approach tested on 101 object categories. In 2004 conference on computer vision and pattern recognition workshop . IEEE, 178–178. [8] Chun-Mei Feng, Kai Yu, Yong Liu, Salman Khan, and Wangmeng Zuo. 2023. Diverse data augmentation with diffusions for effective test-time prompt tuning. In Proceedings of the IEEE/CVF International Conference on Computer Vision . 2704– 2714. [9] Peng Gao, Shijie Geng, Renrui Zhang, Teli Ma, Rongyao Fang, Yongfeng Zhang, Hongsheng Li, and Yu Qiao. 2024. Clip-adapter: Better vision-language models with feature adapters. International Journal of Computer Vision 132, 2 (2024), 581–595. [10] Patrick Helber, Benjamin Bischke, Andreas Dengel, and Damian Borth. 2019. Eurosat: A novel dataset and deep learning benchmark for land use and land cover classification. IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing 12, 7 (2019), 2217–2226. [11] Dan Hendrycks, Steven Basart, Norman Mu, Saurav Kadavath, Frank Wang, Evan Dorundo, Rahul Desai, Tyler Zhu, Samyak Parajuli, Mike Guo, et al. 2021. The many faces of robustness: A critical analysis of out-of-distribution generalization. In Proceedings of the IEEE/CVF international conference on computer vision . 8340– 8349. [12] Dan Hendrycks, Kevin Zhao, Steven Basart, Jacob Steinhardt, and Dawn Song. 2021. Natural adversarial examples. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 15262–15271. [13] Zhaohong Huang, Yuxin Zhang, Jingjing Xie, Fei Chao, and Rongrong Ji. 2025. GS-Bias: Global-Spatial Bias Learner for Single-Image Test-Time Adaptation of Vision-Language Models. arXiv preprint arXiv:2507.11969 (2025). [14] Raza Imam, Hanan Gani, Muhammad Huzaifa, and Karthik Nandakumar. 2025. Test-time low rank adaptation via confidence maximization for zero-shot gen-eralization of vision-language models. In 2025 IEEE/CVF Winter Conference on Applications of Computer Vision (WACV) . IEEE, 5449–5459. [15] Robert A Jacobs, Michael I Jordan, Steven J Nowlan, and Geoffrey E Hinton. 1991. Adaptive mixtures of local experts. Neural computation 3, 1 (1991), 79–87. [16] Adilbek Karmanov, Dayan Guan, Shijian Lu, Abdulmotaleb El Saddik, and Eric Xing. 2024. Efficient test-time adaptation of vision-language models. In Pro-ceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition .14162–14171. [17] Jonathan Krause, Michael Stark, Jia Deng, and Li Fei-Fei. 2013. 3d object repre-sentations for fine-grained categorization. In Proceedings of the IEEE international conference on computer vision workshops . 554–561. [18] Weixian Lei, Jiacong Wang, Haochen Wang, Xiangtai Li, Jun Hao Liew, Jiashi Feng, and Zilong Huang. 2025. The scalability of simplicity: Empirical analysis of vision-language learning with a single transformer. arXiv preprint arXiv:2504.10462 
+
+(2025). [19] Junnan Li, Dongxu Li, Caiming Xiong, and Steven Hoi. 2022. Blip: Bootstrapping language-image pre-training for unified vision-language understanding and generation. In International conference on machine learning . PMLR, 12888–12900. [20] Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. 2023. Visual in-struction tuning. Advances in neural information processing systems 36 (2023), 34892–34916. [21] Ilya Loshchilov and Frank Hutter. 2017. Decoupled weight decay regularization. 
+
+arXiv preprint arXiv:1711.05101 (2017). [22] Subhransu Maji, Esa Rahtu, Juho Kannala, Matthew Blaschko, and Andrea Vedaldi. 2013. Fine-grained visual classification of aircraft. arXiv preprint arXiv:1306.5151 
+
+(2013). [23] Fanxu Meng, Zhaohui Wang, and Muhan Zhang. 2024. Pissa: Principal singular values and singular vectors adaptation of large language models. Advances in Neural Information Processing Systems 37 (2024), 121038–121072. [24] Maria-Elena Nilsback and Andrew Zisserman. 2008. Automated flower classifica-tion over a large number of classes. In 2008 Sixth Indian conference on computer vision, graphics & image processing . IEEE, 722–729. [25] Omkar M Parkhi, Andrea Vedaldi, Andrew Zisserman, and CV Jawahar. 2012. Cats and dogs. In 2012 IEEE conference on computer vision and pattern recognition .IEEE, 3498–3505. [26] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. 2021. Learning transferable visual models from natural language supervision. In International conference on machine learning . PmLR, 8748–8763. [27] Benjamin Recht, Rebecca Roelofs, Ludwig Schmidt, and Vaishaal Shankar. 2019. Do imagenet classifiers generalize to imagenet?. In International conference on machine learning . PMLR, 5389–5400. [28] Manli Shu, Weili Nie, De-An Huang, Zhiding Yu, Tom Goldstein, Anima Anand-kumar, and Chaowei Xiao. 2022. Test-time prompt tuning for zero-shot gener-alization in vision-language models. Advances in Neural Information Processing Systems 35 (2022), 14274–14289. [29] Khurram Soomro, Amir Roshan Zamir, and Mubarak Shah. 2012. Ucf101: A dataset of 101 human actions classes from videos in the wild. arXiv preprint arXiv:1212.0402 (2012). [30] Haohan Wang, Songwei Ge, Zachary Lipton, and Eric P Xing. 2019. Learning robust global representations by penalizing local predictive power. Advances in neural information processing systems 32 (2019). [31] Jiacong Wang, Zijian Kang, Haochen Wang, Haiyong Jiang, Jiawen Li, Bohong Wu, Ya Wang, Jiao Ran, Xiao Liang, Chao Feng, et al. 2025. Vgr: Visual grounded reasoning. arXiv preprint arXiv:2506.11991 (2025). [32] Jiacong Wang, Bohong Wu, Haiyong Jiang, Xun Zhou, Xin Xiao, Haoyuan Guo, and Jun Xiao. 2024. World to code: Multi-modal data generation via self-instructed compositional captioning and filtering. arXiv preprint arXiv:2409.20424 (2024). [33] Peng Wang, Shuai Bai, Sinan Tan, Shijie Wang, Zhihao Fan, Jinze Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, et al. 2024. Qwen2-vl: Enhancing vision-language model’s perception of the world at any resolution. arXiv preprint arXiv:2409.12191 (2024). [34] Xiangyu Wu, Dongming Jiang, Feng Yu, Yueying Tian, Jiaqi Tang, Qing-Guo Chen, Yang Yang, and Jianfeng Lu. 2026. Adaptive Debiasing Tsallis Entropy for Test-Time Adaptation. arXiv preprint arXiv:2602.11743 (2026). [35] Yue Wu, Yicong Zhou, George Saveriades, Sos Agaian, Joseph P Noonan, and Premkumar Natarajan. 2013. Local Shannon entropy measure with statistical tests for image randomness. Information Sciences 222 (2013), 323–342. [36] Jianxiong Xiao, James Hays, Krista A Ehinger, Aude Oliva, and Antonio Torralba. 2010. Sun database: Large-scale scene recognition from abbey to zoo. In 2010 IEEE computer society conference on computer vision and pattern recognition . IEEE, 3485–3492. [37] Maxime Zanella and Ismail Ben Ayed. 2024. On the test-time zero-shot gen-eralization of vision-language models: Do we really need prompt learning?. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recogni-tion . 23783–23793. [38] Yuhang Zang, Wei Li, Kaiyang Zhou, Chen Huang, and Chen Change Loy. 2022. Unified vision and language prompt learning. arXiv preprint arXiv:2210.07225 
+
+(2022). [39] Ce Zhang, Simon Stepputtis, Katia Sycara, and Yaqi Xie. 2024. Dual prototype evolving for test-time generalization of vision-language models. Advances in Neural Information Processing Systems 37 (2024), 32111–32136. [40] Renrui Zhang, Rongyao Fang, Wei Zhang, Peng Gao, Kunchang Li, Jifeng Dai, Yu Qiao, and Hongsheng Li. 2021. Tip-adapter: Training-free clip-adapter for better vision-language modeling. arXiv preprint arXiv:2111.03930 (2021). [41] Kaiyang Zhou, Jingkang Yang, Chen Change Loy, and Ziwei Liu. 2022. Conditional prompt learning for vision-language models. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 16816–16825. [42] Kaiyang Zhou, Jingkang Yang, Chen Change Loy, and Ziwei Liu. 2022. Learning to prompt for vision-language models. International Journal of Computer Vision 
+
+130, 9 (2022), 2337–2348. [43] Lihua Zhou, Mao Ye, Shuaifeng Li, Nianxin Li, Xiatian Zhu, Lei Deng, Hongbin Liu, and Zhen Lei. 2025. Bayesian test-time adaptation for vision-language models. In Proceedings of the Computer Vision and Pattern Recognition Conference .29999–30009.
