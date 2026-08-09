@@ -41,7 +41,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-08</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-09</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 21 篇</strong>
@@ -51,7 +51,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>8</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-08 21:16:18 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-09 21:18:25 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读21篇论文，聚焦3D视觉语言与边缘推理，其中《Qwen-3D》和《TriCLE》获9分最高评价。最值得关注的是3D空间理解通用模型与三模态边缘聚类，均达到精读级深度。建议读者优先查阅Qwen-3D的跨模态对齐设计，再结合TriCLE的轻量化部署方案拓展应用场景。</p>
+<p>今日共处理21篇论文，精读8篇、速读13篇，焦点集中在3D高斯泼溅与动态场景重建。</p>
+<p>最值得看的是《DynActiveGS》与《UniqueSplat》，均获9分高分，分别突破动态重建和可泛化三维重建。</p>
+<p>建议先精读这两篇高分工作，再以速读中的多模态学习与文字超分作延伸参考。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -74,9 +76,9 @@
     <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Qwen-3D: A Generalist 3D Vision-Language Model for Spatial Understanding">Qwen-3D: A Generalist 3D Vision-Language Model for Spatial Understanding</span></li><li><span class="dpr-home-dashboard-paper-title" title="TriCLE: Tri-Modal Vision-Language Reasoning for Edge-Deployed Fine-Grained Clustering">TriCLE: Tri-Modal Vision-Language Reasoning for Edge-Deployed Fine-Grained Clustering</span></li><li><span class="dpr-home-dashboard-paper-title" title="Trace, Verify, and Correct: A Training-Free Framework for Spatial Reasoning in Multimodal LLMs">Trace, Verify, and Correct: A Training-Free Framework for Spatial Reasoning in Multimodal LLMs</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="DynActiveGS: Active Gaussian Splatting for Dynamic Scene Reconstruction">DynActiveGS: Active Gaussian Splatting for Dynamic Scene Reconstruction</span></li><li><span class="dpr-home-dashboard-paper-title" title="UniqueSplat: View-conditioned 3D Gaussian Splatting for Generalizable 3D Reconstruction">UniqueSplat: View-conditioned 3D Gaussian Splatting for Generalizable 3D Reconstruction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Geospatial-Prior Guidance for 3D Semantic Scene Completion">Geospatial-Prior Guidance for 3D Semantic Scene Completion</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>6</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>5</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>2</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,9 +89,9 @@
     <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="SG-Layout: Structured Scene Graph-Guided Layout Generation with LLMs">SG-Layout: Structured Scene Graph-Guided Layout Generation with LLMs</span></li><li><span class="dpr-home-dashboard-paper-title" title="3DZip: Spatial-Aware Feature Diversity-Guided Token Compression for 3D Question Answering">3DZip: Spatial-Aware Feature Diversity-Guided Token Compression for 3D Question Answering</span></li><li><span class="dpr-home-dashboard-paper-title" title="Learning to Tessellate: Point Cloud Generation via Recursive Spectral Partitioning">Learning to Tessellate: Point Cloud Generation via Recursive Spectral Partitioning</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Latency-Tolerant Cloud-Edge Collaborative Vision-Language-Action Models via Emergent Representational Specialization">Latency-Tolerant Cloud-Edge Collaborative Vision-Language-Action Models via Emergent Representational Specialization</span></li><li><span class="dpr-home-dashboard-paper-title" title="iStructTab: Structured Feature Sequencing for Multimodal Learning of Image and Tabular Data">iStructTab: Structured Feature Sequencing for Multimodal Learning of Image and Tabular Data</span></li><li><span class="dpr-home-dashboard-paper-title" title="Coupled Continuous-Discrete Generation for Scene Text Image Super-Resolution">Coupled Continuous-Discrete Generation for Scene Text Image Super-Resolution</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>9</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>4</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>7</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>6</strong></span></div>
 </section>
 </div>
 
