@@ -1,0 +1,793 @@
+Title: LifelongCrossNav: Persistent 3D Semantic Memory for Cross-Floor Multi-Object Navigation
+
+URL Source: https://arxiv.org/pdf/2608.07079v1
+
+Published Time: Mon, 10 Aug 2026 00:58:09 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# LifelongCrossNav: Persistent 3D Semantic Memory for Cross-Floor Multi-Object Navigation 
+
+## Zehui Li 1,* , Zihao Sun 1,* , Jiawei Xu 1, Zheqi He 2, †, Xiaoqiang Zhang 1, †, Jing-Shu Zheng 2, Lu Liu 2,Dahui Gao 2, Xiuwan Chen 1
+
+> 1
+
+Peking University 
+
+> 2
+
+Beijing Academy of Artificial Intelligence 
+
+> *
+
+Equal contribution. †Corresponding authors. 
+
+zehui.li@stu.pku.edu.cn, zqhe@baai.ac.cn 
+
+Abstract 
+
+Object-goal navigation has made substantial progress in se-mantic perception and exploration, yet persistent memory for multi-object navigation and cross-floor navigation are still commonly addressed separately. We present LifelongCross-Nav , a framework for sequential multi-object ObjectNav in unknown multi-floor indoor environments. Within each episode, the agent receives an ordered sequence of object-goal queries while continuously maintaining a shared sparse 3D semantic voxel memory. This memory incrementally accu-mulates geometric structure, traversability states, and vision-language features, allowing subsequent object-goal queries to retrieve previously acquired scene information without re-building the map. To support persistent search across floors, LifelongCrossNav combines support-aware 3D traversabil-ity mapping, stair-specific perception, and direction-aware stair traversal. A unified navigation policy coordinates same-floor frontier exploration, live and historical point-of-interest retrieval, stair navigation, and target-object search and ap-proach. We further introduce HM3D-MFMON , a benchmark for sequential Multi-Floor Multi-Object Navigation built on HM3D scenes, including a dedicated subset in which com-pleting the full sequence of object-goal subtasks requires at least one floor transition. Experimental results show that Life-longCrossNav consistently outperforms a representative pla-nar persistent semantic-map baseline on HM3D-MFMON, demonstrating that persistent 3D semantic memory and cross-floor traversability modeling effectively support sequential multi-object navigation in multi-floor environments. Project page: https://flageval-baai.github.io/LifelongCrossNavPage. 
+
+## 1 Introduction 
+
+Object-Goal Navigation (ObjectNav) requires an embod-ied agent to explore an unseen environment and navigate to an instance of a specified object category. Recent ad-vances in open-vocabulary perception, semantic mapping, and frontier-based exploration have substantially improved target search in unseen scenes (Duan et al. 2022; Sun et al. 2025; Liu et al. 2025). However, most existing studies remain centered on single-object navigation in planar or single-floor environments, whereas real indoor agents may need to search for multiple objects in sequence and move between floors, as illustrated in Fig. 1. Existing research largely addresses these requirements separately. Cross-floor methods model stairs, floor transi-tions, or floor-level reasoning, but generally consider only 
+
+Figure 1: Conceptual illustration of sequential multi-object ObjectNav in a multi-floor environment. The agent navi-gates from Start to Goal 1 ( TV ), Goal 2 ( bed ), and Goal 3 (toilet ) in order. The colored trajectories denote consecutive object-goal subtasks, including cross-floor traversal through the staircase. one object goal (Gong et al. 2026; Zheng et al. 2026). Multi-object navigation instead retains environmental information across a sequence of object goals (Wani et al. 2020; Busch et al. 2025). In this setting, the agent receives only the cur-rent object goal, and the next one is revealed after the current object-goal subtask is completed. We use lifelong to denote this within-episode setting, in which the environment and ac-cumulated memory persist across sequential object-goal sub-tasks. Nevertheless, existing multi-object methods primarily rely on planar representations or avoid goal sequences that require stair traversal. Planar maps may collapse vertically overlapping spaces, while single-object cross-floor methods need not preserve queryable semantic observations for future object goals. A unified solution must therefore support both vertical traversability and persistent semantic memory. To address this gap, we present LifelongCrossNav , a framework for sequential multi-object ObjectNav in un-known multi-floor indoor environments. It maintains a shared sparse 3D voxel representation that combines support-aware geometry with goal-independent vision-language features. The stored features can be re-queried when a new object arXiv:2608.07079v1 [cs.RO] 7 Aug 2026 goal is issued, while a unified navigation policy coordinates same-floor exploration, stair traversal, semantic retrieval, and final target-object approach through mode-aware 3D plan-ning. We further introduce HM3D-MFMON , a benchmark for sequential multi-object navigation in multi-floor HM3D scenes. To handle multiple valid target object instances and agent-dependent subtask starting positions, we adopt a post-hoc stage-wise shortest-path protocol and conditional met-rics that evaluate agents reaching each successive object-goal subtask. Our contributions are threefold: 
+
+• We introduce HM3D-MFMON, comprising 927 three-goal episodes from 36 multi-floor HM3D scenes, includ-ing 288 Cross-Floor-Required episodes, together with a post-hoc evaluation protocol for multi-instance sequential navigation. 
+
+• We propose LifelongCrossNav, which unifies support-aware 3D voxel mapping, persistent vision-language memory, stair-aware navigation, and historical semantic retrieval in a closed-loop system. 
+
+• Experiments demonstrate improved multi-object and cross-floor navigation over a persistent planar semantic-memory baseline, while History POIs improve path effi-ciency for later object goals. 
+
+## 2 Related Work 
+
+Open-Vocabulary Semantic Navigation 
+
+Early ObjectNav methods combined semantic perception with explicit spatial memory. Goal-Oriented Semantic Ex-ploration, for example, projects object detections into a se-mantic map and uses frontier-based exploration for long-horizon navigation (Batra et al. 2020; Chaplot et al. 2020). More recent methods use pretrained vision-language mod-els to support zero-shot or open-vocabulary target search. ZSON aligns object goals with visual observations through multimodal goal embeddings, while VLFM scores explo-ration frontiers using vision-language relevance (Majumdar et al. 2022; Yokoyama et al. 2024). OpenFMNav and SG-Nav further incorporate foundation models or online 3D scene graphs for semantic reasoning (Kuang, Lin, and Jiang 2024; Yin et al. 2024). These methods improve generalization to unseen object categories, but they primarily evaluate single-object navigation and do not focus on retaining semantic memory across successive object goals. 
+
+Multi-Object Navigation and Persistent Memory 
+
+Multi-object navigation extends ObjectNav from one ob-ject goal to an ordered sequence of object goals within the same environment. MultiON introduced this setting to eval-uate semantic mapping and memory over successive target searches (Wani et al. 2020). GOAT-Bench further studies life-long navigation with object-category, image, and language goals, emphasizing the reuse of experience without resetting the environment (Khanna et al. 2024). OneMap addresses zero-shot multi-object navigation by maintaining a reusable open-vocabulary feature map that can be queried again when a new object goal is issued (Busch et al. 2025). These works demonstrate that persistent scene memory can reduce re-peated exploration and improve later-goal efficiency. How-ever, their navigation representations are primarily planar or bird’s-eye-view maps and do not explicitly model stairs, vertically overlapping spaces, or traversable connections be-tween floors. 
+
+Cross-Floor Navigation and 3D Representation 
+
+Cross-floor ObjectNav considers environments in which the agent and a target object instance may lie on different floors. MFNP uses multimodal reasoning and floor-transition poli-cies for multi-floor target search (Zhang et al. 2025a), while ASCENT combines a multi-floor spatial abstraction with stair-aware, coarse-to-fine exploration (Gong et al. 2026). TravExplorer instead maintains a unified traversability-aware 3D representation of floors, stairs, and landings, allowing cross-floor paths to be planned directly through connected support surfaces (Zheng et al. 2026). Related 3D semantic mapping work, such as BeliefMapNav, shows that voxel maps can also organize object-location priors, online observations, and semantic uncertainty (Zhou et al. 2025). 
+
+## 3 Method 
+
+Task Formulation 
+
+Each episode is defined by an ordered sequence of K ob-ject goals (g1, . . . , g K ). Following sequential multi-object navigation, the agent receives only the current object goal 
+
+gk; the next object goal gk+1 is revealed and activated only after the current object-goal subtask has been suc-cessfully completed (Wani et al. 2020). At each time step 
+
+t, the agent receives an egocentric RGB observation It,a depth observation Dt, the 6-DoF camera pose Tt, and the current object goal gk. The discrete action space con-tains MoveForward , TurnLeft , TurnRight , LookUp ,
+
+LookDown , and Stop . MoveForward advances the agent by 0.25 m, while turning and camera pitch actions change the corresponding orientation by 30 ◦. A subtask is successful when the agent issues Stop within the success threshold of a valid target object instance. Within an episode, LifelongCrossNav retains the 3D geometric map, stair states, and goal-independent vision-language voxel features across object goals. When a new ob-ject goal is issued, its text embedding and query-conditioned similarity field are recomputed, while the POIs, navigation path, and goal-verification states associated with the previous object goal are reinitialized. An overview of LifelongCross-Nav is shown in Fig. 2. 
+
+Support-Aware 3D Voxel Mapping 
+
+LifelongCrossNav represents the environment using a sparse 3D voxel map. In contrast to planar projection, this repre-sentation preserves height and distinguishes vertically over-lapping rooms, corridors, landings, and staircases. Inspired by traversability-aware ray-casting approaches (Zheng et al. 2026), the map combines RGB-D geometry, vertical sup-port relationships, and stair-semantic evidence to represent executable connections across floors. Figure 2: Overview of LifelongCrossNav. Given RGB-D observations, the agent pose, and the current goal text, the system jointly updates a support-aware 3D voxel map and persistent 3D semantic memory. The geometric branch constructs multi-floor traversability from observed surfaces, ray-cast free space, and semantic-geometric stair evidence, while the semantic branch lifts and fuses goal-independent vision-language features into 3D surface voxels. The unified navigation policy selects among Basic Frontiers, Stair Frontiers, History POIs, and Live POIs and performs mode-aware 3D planning for basic exploration, stair exploration, POI navigation, and final object approach. After the current object goal is completed, the accumulated environmental memory is retained and the next object goal is activated. 
+
+RGB-D Projection and Sparse Voxelization. Valid depth pixels are back-projected into the camera coordinate system, transformed into the world frame using the 6-DoF camera pose, and quantized into sparse voxels. Depth-ray endpoints provide observed surface evidence, whereas intermediate ray locations provide free-space evidence. Only observed voxels and locally inferred navigation states are stored, allowing the map to grow incrementally with the explored space. 
+
+Support-Aware Voxel Types. The navigation map abstracts the observed space into four functional voxel types: Occu-pied , Traversable , Stair , and Unsupported . Occupied vox-els represent observed surfaces, including walls, furniture, floors, and stair candidates that have not yet been confirmed. For each ray-observed free-space voxel, the system searches downward within a local vertical range. Free space with reli-able support is classified as Traversable, whereas free space without observed support is classified as Unsupported and provides geometric evidence for potential downward transi-tions. Stair voxels represent stair surfaces confirmed jointly by semantic and geometric observations. SegFormer-B2 (Xie et al. 2021) extracts a pixel-level stair mask, which is lifted into 3D using depth and camera pose and verified through local height variation, step trends, spatial continuity, and support relationships. Stair voxels are updated only after the system enters Stair Explore , where they form an explicit traversable connection between floors. 
+
+Persistent 3D Semantic Memory 
+
+LifelongCrossNav stores goal-independent vision-language features in the same sparse 3D coordinate system and re-queries them whenever the active object goal changes. 
+
+Dense Vision-Language Feature Encoding. We adopt SED-based dense vision-language encoding (Xie et al. 2024). Given the current RGB observation, the encoder produces a 
+
+24 × 24 × 768 spatial feature map aligned with the CLIP text-embedding space. The feature map is bilinearly upsam-pled to the depth resolution, and each valid depth pixel is associated with a local-contextual visual feature. 
+
+Feature Lifting and Cumulative Fusion. Pixel features are lifted to the 3D surface voxels reached by their corresponding depth rays. Features are assigned only to observed surfaces and are not propagated through free-space voxels. When mul-tiple pixels in the same frame are quantized into voxel v, their features are aggregated using observation-quality weights: 
+
+¯f (t) 
+
+> v
+
+=
+
+P 
+
+> p∈P v
+
+qpfp
+
+P 
+
+> p∈P v
+
+qp + ϵ , (1) where Pv is the set of pixels assigned to voxel v, fp is the corresponding visual feature, and qp reflects the observation quality. Let F(t−1)  
+
+> v
+
+and C(t−1)  
+
+> v
+
+denote the stored feature and accu-mulated confidence, and let c(t) 
+
+> v
+
+denote the confidence of the current per-frame observation. Multi-view observations are fused using a cumulative weighted average: 
+
+F(t) 
+
+> v
+
+= C(t−1)  
+
+> v
+
+F(t−1)  
+
+> v
+
++ c(t) 
+
+> v
+
+¯f (t)
+
+> v
+
+C(t−1)  
+
+> v
+
++ c(t)
+
+> v
+
+,C(t) 
+
+> v
+
+= C(t−1)  
+
+> v
+
++ c(t) 
+
+> v
+
+.
+
+(2) 
+
+Query-Conditioned 3D Retrieval. When an object goal is activated, its text embedding is compared with the stored Figure 3: Basic Frontier types and their default priority: 1O
+
+Traversable, 2O Descend, and 3O Ascent. The dashed staircase denotes unexplored cross-floor structure. surface-voxel features using cosine similarity. The resulting responses form a query-conditioned 3D similarity field with-out rebuilding the geometric or semantic map. High-response historical regions are grouped using 3D neighborhood clus-tering, after which the Top-K candidates are retained as History POIs and assigned nearby reachable navigation po-sitions. 
+
+Unified Navigation Policy 
+
+The unified policy selects navigation targets from Basic Fron-tiers, Stair Frontiers, History POIs, and Live POIs. These candidates support three navigation modes: Basic Explore ,
+
+Stair Explore , and POI Navigation .
+
+Candidate Navigation Points. Basic Frontiers denote the three planar candidate types used during ordinary explo-ration, as shown in Fig. 3. Traversable Frontiers are formed at boundaries between Traversable voxels and unknown space. Descend Frontiers are extracted near boundaries between Traversable and Unsupported voxels and indicate potential downward transitions. Ascent Frontiers are generated from stair-semantic evidence, RGB-D step geometry, and multi-frame consistency, with their navigation positions remaining on the current exploration plane near a potential ascending entrance. Stair Frontiers are direction-aware advancing boundaries extracted from the currently confirmed stair-voxel cluster. Their heights change with the observed staircase, allowing the agent to continue exploring upward or downward within the stair structure. History POIs are obtained by querying the persistent vision-language voxel memory with the current goal text, thereby supporting semantic retrieval beyond a fixed de-tector label set. Live POIs are generated through a config-urable target-detection interface. Following OneMap (Busch et al. 2025), we employ YOLOv7 (Wang, Bochkovskiy, and Liao 2023) for the six HM3D ObjectNav target categories, which are covered by MS-COCO, and switch to YOLO-World (Cheng et al. 2024) for queries outside this category set. MobileSAM (Zhang et al. 2023) extracts the detected-object mask, while depth and pose recover its 3D location. 
+
+Hierarchical Mode Switching and 3D Planning. Reli-able current target evidence and reachable POIs are prior-itized over unexplored geometric candidates. When no valid semantic candidate is available, Basic Explore first visits Traversable Frontiers on the current floor. Descend and As-cent Frontiers are considered only after no reachable ordinary frontier remains. Once a stair entrance has been verified, the policy activates Stair Explore and follows Stair Frontiers un-til a new landing is reached. An active stair session retains control so that stair traversal is not interrupted by ordinary frontiers or unrelated semantic candidates. All modes use a common 3D A* planner but differ in admissible voxel types and graph connectivity. Basic Explore uses a strict 26-neighbor graph over the current traversable region. POI Navigation uses the regular graph together with previously established stair connectivity when the selected POI lies on another floor. Stair Explore admits confirmed Stair voxels and expands the endpoint neighborhood within a fixed physical radius to connect staircase observations that may be sparse in the voxel map. 
+
+Final Target-Object Approach and Verification. Once sta-ble target-object evidence is obtained, the detected mask is projected into 3D and a nearby safe observation position is selected. During the approach, the system updates the detec-tion and verifies the target object using detection confidence, mask quality, visibility, viewing direction, and 3D distance. Reaching either a History POI or a Live POI does not by itself complete the subtask; a current target-object observa-tion must still pass the verification criteria. After successful verification, the next object goal is activated while the geo-metric map, stair structure, and goal-independent semantic memory are retained. If verification fails, the system returns to candidate selection and continues exploration. 
+
+## 4 Experimental Setup 
+
+HM3D-MFMON Benchmark 
+
+We construct HM3D-MFMON from HM3D v0.2 and its se-mantic annotations (Ramakrishnan et al. 2021; Yadav et al. 2023). HM3D provides semantically annotated indoor scenes with realistic multi-floor layouts and navigable stair connec-tions, while remaining compatible with established Habitat ObjectNav protocols. Following the sequential task formulation of MultiON (Wani et al. 2020), each episode contains three sequentially issued object goals. The agent receives only the current ob-ject goal and is informed of the next one after successfully completing the current object-goal subtask. HM3D-MFMON includes six target object categories: 
+
+chair , bed , toilet , plant , sofa , and tv_monitor .All valid instances of the current target object category are retained, and reaching any instance that satisfies the success criterion completes the corresponding subtask. We select 36 HM3D scenes with valid multi-floor struc-tures and stair connectivity and generate 927 three-goal episodes. By verifying target-instance distributions and nav-igable connectivity, we identify a Cross-Floor-Required Figure 4: Post-hoc stage-wise shortest-path evaluation. A globally optimized route may depend on future object goals that are unavailable to the agent. (CFR) subset of 288 episodes whose complete object-goal sequences cannot be completed without at least one floor transition. 
+
+Post-hoc Multi-Object Evaluation Protocol 
+
+Post-hoc Stage-Wise Shortest-Path Evaluation. In stan-dard single-object ObjectNav, the episode start and target object category are fixed, allowing the shortest geodesic dis-tance to the nearest valid target instance to be computed before navigation (Batra et al. 2020). This assumption does not directly extend to sequential multi-object navigation with multiple valid instances. The start of a later subtask depends on the target object instance selected for the previous ob-ject goal and on the position from which that subtask was completed. A globally optimized route over the complete object-goal sequence could resolve this ambiguity, but such a route uses future object goals that have not yet been issued. It may therefore favor a non-nearest instance of the current target category solely because that instance is closer to a future goal, violating the causal information constraint of the sequential task. Figure 4 illustrates the difference between such an oracle route and the proposed stage-wise evaluation. For episode i, let xstart  
+
+> i,k
+
+denote the actual agent position when the k-th object goal gi,k is activated. For the first sub-task, this is the episode start; for later subtasks, it is obtained from the executed trajectory after the preceding object goal has been completed. Let Xi(gi,k ) denote the valid naviga-ble observation positions associated with all instances of the current target object category. We compute the stage-wise reference distance as 
+
+d∗ 
+
+> i,k
+
+= min   
+
+> x∈X i(gi,k )
+
+dgeo 
+
+ xstart  
+
+> i,k
+
+, x , (3) where dgeo denotes geodesic distance on the navigation mesh. This reference depends only on the actual stage start, the current object goal, and its valid target instances; it does not use future object goals. Different agents can therefore be evaluated using shortest paths consistent with the target object instances selected during their preceding subtasks. 
+
+Per-Goal and Sequence-Level Metrics. Let SR i,k ∈ { 0, 1}
+
+indicate whether episode i successfully completes its k-th object-goal subtask, and let li,k denote the path length exe-cuted during that subtask. Its per-goal path efficiency is 
+
+SPL i,k = SR i,k 
+
+d∗
+
+> i,k
+
+max 
+
+
+
+d∗
+
+> i,k
+
+, l i,k 
+
+ . (4) For stage-wise dataset aggregation, an unexecuted subtask is assigned zero SR and SPL, while it remains distinguishable from an executed failure in the recorded episode results. Following MultiON (Wani et al. 2020), we report sequence-level Success Rate (SR), Success weighted by Path Length (SPL), Progress Rate (PR), and Progress weighted by Path Length (PPL). PR measures the fraction of completed object goals, while PPL weights the successfully completed prefix by its path efficiency. 
+
+Stage-Wise Conditional Evaluation. Sequence-level met-rics do not reveal how performance changes across successive object goals. Inspired by the stage-wise analysis of semantic-memory reuse in OneMap (Busch et al. 2025), we therefore report Conditional SR and Conditional SPL for each object-goal index. Under our sequential termination protocol, the k-th sub-task is executed only when all preceding object goals have been completed. By defining SR i, 0 = 1 , the number of episodes that reach stage k is PNi=1 SR i,k −1. Conditional performance is therefore 
+
+SR cond  
+
+> k
+
+=
+
+PNi=1 SR i,k 
+
+PNi=1 SR i,k −1
+
+, SR i, 0 = 1 , (5) and 
+
+SPL cond  
+
+> k
+
+=
+
+PNi=1 SPL i,k 
+
+PNi=1 SR i,k −1
+
+. (6) Conditional metrics evaluate success and efficiency only among episodes that reach stage k. Conditional SPL is par-ticularly useful for examining whether later object goals are reached more efficiently as geometric and semantic memory accumulates. For completeness, the stage-wise Global metrics average over all N episodes, with unexecuted subtasks contributing zero: 
+
+SR global  
+
+> k
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+SR i,k , SPL global  
+
+> k
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+SPL i,k .
+
+(7) Under the sequential termination protocol, these metrics are directly related to their Conditional counterparts: 
+
+SR global  
+
+> k
+
+= SR global  
+
+> k−1
+
+SR cond  
+
+> k
+
+,
+
+SPL global  
+
+> k
+
+= SR global  
+
+> k−1
+
+SPL cond  
+
+> k
+
+, SR global 0 = 1 . (8) Global metrics additionally incorporate the probability of reaching stage k and are used only to distinguish stage-conditioned performance from preceding failures. We fo-cus on Conditional SR and Conditional SPL in the main text and report Global results in the supplementary material. Sequence-level SR, SPL, PR, and PPL summarize complete and partial episode progress. Baselines and Evaluation Settings 
+
+Multi-Object Navigation. For sequential multi-object nav-igation, OneMap serves as the primary baseline because it maintains a persistent open-vocabulary 2D semantic map that can be reused across successive object goals (Busch et al. 2025). OneMap and LifelongCrossNav are evaluated under the same task and evaluation settings described above. To isolate the effect of historical semantic retrieval, we additionally evaluate a variant denoted as w/o H-POI . This variant disables only History POI generation, while retain-ing the support-aware 3D voxel map, accumulated vision-language features, and all cross-floor navigation components. 
+
+Single-Object Navigation. As an auxiliary evaluation, we follow the OneMap setting and evaluate LifelongCrossNav on the HM3D ObjectNav validation split, which contains 2,000 episodes over six target object categories (Yadav et al. 2023). We compare against representative task-specific, zero-shot, open-vocabulary, and floor-aware ObjectNav methods, including SGMT (Zhang et al. 2024), XGX (Wasserman et al. 2024), ZSON (Majumdar et al. 2022), VLFM (Yokoyama et al. 2024), SG-Nav (Yin et al. 2024), OpenFMNav (Kuang, Lin, and Jiang 2024), OneMap (Busch et al. 2025), Instruct-Nav (Long et al. 2025), ApexNav (Zhang et al. 2025b), Be-liefMapNav (Zhou et al. 2025), MFNP (Zhang et al. 2025a), and ASCENT (Gong et al. 2026). Each episode contains one object goal, and performance is measured using stan-dard SR and SPL. The experiments follow the six-category HM3D ObjectNav setting and therefore use YOLOv7 for target-object detection. All evaluations are conducted on a single NVIDIA RTX 5090 GPU. 
+
+## 5 Experimental Results 
+
+Multi-Object Navigation 
+
+Overall Performance. As shown in Table 1, LifelongCross-Nav substantially improves sequence completion and partial progress over the planar semantic-memory baseline. Dis-abling History POI generation mainly reduces SPL and PPL, indicating that historical semantic retrieval mitigates repeated exploration during later object-goal subtasks. The slightly higher SR and PR of w/o H-POI are examined in the Failure Analysis. 
+
+Stage-Wise Results on All Episodes. Figure 5 reports Con-ditional SR and Conditional SPL for the three sequential ob-ject goals. LifelongCrossNav maintains higher Conditional SR than OneMap throughout the sequence, showing that its 3D representation supports more object-goal subtasks in-volving vertical-space exploration. Both persistent-memory methods become more path-efficient on later goals, whereas the w/o H-POI variant remains nearly unchanged. This con-trast shows that the later-stage efficiency gain arises primar-ily from reusing historical semantic observations rather than from geometric exploration alone. 
+
+Cross-Floor-Required Evaluation. As shown in Table 2, OneMap can complete some preceding subtasks but can-not complete any full Cross-Floor-Required sequence. Life-longCrossNav achieves nonzero sequence success and stronger partial progress, demonstrating that persistent planar                     
+
+> Method SR ↑SPL ↑PR ↑PPL ↑
+> OneMap 16.83 6.95 33.69 14.03 w/o H-POI 29.77 8.46 48.54 14.91 LifelongCrossNav 29.13 9.64 48.40 16.70
+
+Table 1: Overall multi-object navigation results on all 927 HM3D-MFMON episodes. 
+
+Figure 5: Stage-wise conditional performance on all 927 HM3D-MFMON episodes. memory alone is insufficient when task completion requires explicit stair traversal and cross-floor connectivity. The stage-wise results in Fig. 6 show that OneMap cannot complete the remaining object-goal subtasks once cross-floor traversal becomes necessary. In the CFR subset, episodes that successfully reach later stages have already completed pre-vious same-floor subtasks; therefore, the remaining target is more likely to require the unresolved floor transition. Without explicit stair representation and cross-floor connectivity, the planar semantic map cannot provide an executable solution for these cases. Unlike the trend over all episodes, Conditional SPL does not increase monotonically on the CFR subset because later goals may still require unseen-floor exploration and addi-tional stair traversal. Nevertheless, the complete framework remains more efficient than both OneMap and w/o H-POI on later stages, indicating that historical semantic retrieval remains useful after floor transitions. 
+
+Single-Object Navigation 
+
+Table 3 shows that LifelongCrossNav retains competitive single-object success without online LLM reasoning. Com-pared with OneMap, its higher SR but lower SPL reflects a multi-floor policy that prioritizes current-floor exploration before activating cross-floor candidates. Method SR ↑ SPL ↑ PR ↑ PPL ↑
+
+OneMap 0.00 0.00 18.52 7.97 w/o H-POI 7.29 1.91 28.94 9.16 LifelongCrossNav 7.99 2.35 29.17 9.75 
+
+Table 2: Overall multi-object navigation results on the 288 Cross-Floor-Required episodes. 
+
+Figure 6: Stage-wise conditional performance on the 288 Cross-Floor-Required episodes. 
+
+Failure Analysis 
+
+The slightly higher SR and PR of w/o H-POI in Table 1 do not constitute a reliable success advantage. Paired episode anal-ysis attributes this difference to a limited number of outcome reversals after History POI retrieval changes the selected target-object instance or approach viewpoint. The category-wise distributions in Tables 4 and 5 further show that His-tory POIs change the composition of navigation failures: they reduce failures caused by local planning, incomplete exploration, and unreachable candidates, but increase false target-object detections. Out-of-time failures remain broadly comparable between the two settings. The additional misdetections are concentrated primarily on bed . History POIs can direct the agent toward alterna-tive object instances and approach viewpoints, from which YOLOv7 occasionally confuses beds with visually similar sofas. These false detections trigger unnecessary approaches and failed target verification, offsetting part of the navigation benefit gained from historical semantic retrieval. Outside 
+
+bed , category-level success is generally preserved or im-proved, with a marginal reduction for sofa . In particular, the reductions in stuck and incomplete-exploration failures indicate that History POIs provide more informative nav-igation targets and reduce repeated geometric exploration. Their consistent gains in SPL, PPL, and later-stage Condi-tional SPL therefore provide clearer evidence of improved path efficiency, while also highlighting target verification as the main remaining source of error.                                                                         
+
+> Method Zero-shot Multi-Floor LLM Reasoning SR ↑SPL ↑
+> SGM ×××60.2 30.8 XGX ×××72.9 35.7
+> ZSON ✓××25.5 12.6 VLFM ✓××52.5 30.4 SG-Nav ✓×✓54.0 24.9 OpenFMNav ✓×✓54.9 24.4 OneMap ✓××55.8 37.4
+> InstructNav ✓×✓58.0 20.9 ApexNav ✓×✓59.6 33.0 BeliefMapNav ✓×✓61.4 30.6 MFNP ✓✓✓58.3 26.7 ASCENT ✓✓✓65.4 33.5 LifelongCrossNav ✓✓×59.7 28.0
+
+Table 3: Single-object navigation results on HM3D.                                             
+
+> Object Total Success Failure Misdetection Failure Stuck Failure OOT Failure Not Reached Failure All Explored
+> chair 363 323 13 17 901
+> toilet 345 267 24 20 27 07
+> sofa 372 239 84 27 14 35
+> tv_monitor 291 180 30 16 50 14 1
+> plant 276 155 843 59 110
+> bed 356 182 163 3341
+
+Table 4: Object-wise outcome counts for LifelongCrossNav.                                             
+
+> Object Total Success Failure Misdetection Failure Stuck Failure OOT Failure Not Reached Failure All Explored
+> chair 362 323 10 17 10 02
+> toilet 338 261 23 24 20 010
+> sofa 376 243 73 33 18 36
+> tv_monitor 290 174 28 23 48 13 4
+> plant 277 148 853 58 28
+> bed 358 201 133 8961
+
+Table 5: Object-wise outcome counts for w/o H-POI. 
+
+## 6 Conclusion 
+
+In this work, we introduced LifelongCrossNav for sequen-tial multi-object ObjectNav in unknown multi-floor envi-ronments. LifelongCrossNav combines support-aware 3D voxel mapping, persistent vision-language semantic memory across object goals, and a unified policy for planar explo-ration and stair navigation, enabling the agent to jointly ex-ploit vertical structure, cross-floor connectivity, and histori-cal semantic observations. We further introduced the HM3D-MFMON benchmark and a post-hoc stage-wise evaluation protocol based on the actual starting state of each object-goal subtask. Experimental results show that LifelongCross-Nav consistently outperforms the planar persistent semantic mapping baseline on both the full multi-object benchmark and the Cross-Floor-Required subset. Ablation results show that History POIs reduce repeated exploration and improve later-goal efficiency. Future work will study real-world de-ployment and more robust cross-floor navigation. References 
+
+Batra, D.; Gokaslan, A.; Kembhavi, A.; Maksymets, O.; Mot-taghi, R.; Savva, M.; Toshev, A.; and Wijmans, E. 2020. ObjectNav Revisited: On Evaluation of Embodied Agents Navigating to Objects. arXiv preprint arXiv:2006.13171 .Busch, F. L.; Homberger, T.; Ortega-Peimbert, J.; Yang, Q.; and Andersson, O. 2025. One Map to Find Them All: Real-time Open-Vocabulary Mapping for Zero-shot Multi-Object Navigation. In 2025 IEEE International Conference on Robotics and Automation (ICRA) , 14835–14842. Chaplot, D. S.; Gandhi, D. P.; Gupta, A.; and Salakhutdi-nov, R. 2020. Object Goal Navigation using Goal-Oriented Semantic Exploration. In Advances in Neural Information Processing Systems , volume 33, 4247–4258. Cheng, T.; Song, L.; Ge, Y.; Liu, W.; Wang, X.; and Shan, Y. 2024. YOLO-World: Real-Time Open-Vocabulary Object Detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 16901–16911. Duan, J.; Yu, S.; Tan, H. L.; Zhu, H.; and Tan, C. 2022. A Survey of Embodied AI: From Simulators to Research Tasks. 
+
+IEEE Transactions on Emerging Topics in Computational Intelligence , 6(2): 230–244. Gong, Z.; Li, R.; Hu, T.; Qiu, R.; Kong, L.; Zhang, L.; Zhao, G.; Ding, Y.; and Liang, J. 2026. Stairway to Success: An On-line Floor-Aware Zero-Shot Object-Goal Navigation Frame-work via LLM-Driven Coarse-to-Fine Exploration. IEEE Robotics and Automation Letters , 11(3): 2943–2950. Khanna, M.; Ramrakhya, R.; Chhablani, G.; Yenamandra, S.; Gervet, T.; Chang, M.; Kira, Z.; Chaplot, D. S.; Batra, D.; and Mottaghi, R. 2024. GOAT-Bench: A Benchmark for Multi-Modal Lifelong Navigation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 16373–16383. Kuang, Y.; Lin, H.; and Jiang, M. 2024. OpenFMNav: To-wards Open-Set Zero-Shot Object Navigation via Vision-Language Foundation Models. In Findings of the Association for Computational Linguistics: NAACL 2024 , 338–351. Liu, Y.; Liu, L.; Zheng, Y.; Liu, Y.; Dang, F.; Li, N.; and Ma, K. 2025. Embodied Navigation. Science China Information Sciences , 68(4): 141101. Long, Y.; Cai, W.; Wang, H.; Zhan, G.; and Dong, H. 2025. InstructNav: Zero-shot System for Generic Instruction Navi-gation in Unexplored Environment. In Proceedings of the 8th Conference on Robot Learning , volume 270 of Proceedings of Machine Learning Research , 2049–2060. PMLR. Majumdar, A.; Aggarwal, G.; Devnani, B.; Hoffman, J.; and Batra, D. 2022. ZSON: Zero-Shot Object-Goal Navigation using Multimodal Goal Embeddings. In Advances in Neural Information Processing Systems , volume 35, 32340–32352. Ramakrishnan, S. K.; Gokaslan, A.; Wijmans, E.; Maksymets, O.; Clegg, A.; Turner, J. M.; Undersander, E.; Galuba, W.; Westbury, A.; Chang, A. X.; Savva, M.; Zhao, Y.; and Batra, D. 2021. Habitat-Matterport 3D Dataset (HM3D): 1000 Large-Scale 3D Environments for Embodied AI. In 
+
+Thirty-Fifth Conference on Neural Information Processing Systems Datasets and Benchmarks Track .Sun, J.; Wu, J.; Ji, Z.; and Lai, Y.-K. 2025. A Survey of Object Goal Navigation. IEEE Transactions on Automation Science and Engineering , 22: 2292–2308. Wang, C.-Y.; Bochkovskiy, A.; and Liao, H.-Y. M. 2023. YOLOv7: Trainable Bag-of-Freebies Sets New State-of-the-Art for Real-Time Object Detectors. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 7464–7475. Wani, S.; Patel, S.; Jain, U.; Chang, A. X.; and Savva, M. 2020. MultiON: Benchmarking Semantic Map Memory Us-ing Multi-Object Navigation. In Advances in Neural Infor-mation Processing Systems , volume 33. Wasserman, J.; Chowdhary, G.; Gupta, A.; and Jain, U. 2024. Exploitation-Guided Exploration for Semantic Em-bodied Navigation. In 2024 IEEE International Conference on Robotics and Automation , 2901–2908. Xie, B.; Cao, J.; Xie, J.; Khan, F. S.; and Pang, Y. 2024. SED: A Simple Encoder-Decoder for Open-Vocabulary Semantic Segmentation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition .Xie, E.; Wang, W.; Yu, Z.; Anandkumar, A.; Alvarez, J. M.; and Luo, P. 2021. SegFormer: Simple and Efficient De-sign for Semantic Segmentation with Transformers. In 
+
+Advances in Neural Information Processing Systems , vol-ume 34, 12077–12090. Yadav, K.; Ramrakhya, R.; Ramakrishnan, S. K.; Gervet, T.; Turner, J.; Gokaslan, A.; Maestre, N.; Chang, A. X.; Ba-tra, D.; Savva, M.; Clegg, A. W.; and Chaplot, D. S. 2023. Habitat-Matterport 3D Semantics Dataset. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 4927–4936. Yin, H.; Xu, X.; Wu, Z.; Zhou, J.; and Lu, J. 2024. SG-Nav: Online 3D Scene Graph Prompting for LLM-Based Zero-Shot Object Navigation. In Advances in Neural Information Processing Systems , volume 37, 5285–5307. Yokoyama, N.; Ha, S.; Batra, D.; Wang, J.; and Bucher, B. 2024. VLFM: Vision-Language Frontier Maps for Zero-Shot Semantic Navigation. In 2024 IEEE International Confer-ence on Robotics and Automation (ICRA) , 42–48. Zhang, C.; Han, D.; Qiao, Y.; Kim, J. U.; Bae, S.-H.; Lee, S.; and Hong, C. S. 2023. Faster Segment Anything: Towards Lightweight SAM for Mobile Applications. arXiv preprint arXiv:2306.14289 .Zhang, L.; Wang, H.; Xiao, E.; Zhang, X.; Zhang, Q.; Jiang, Z.; and Xu, R. 2025a. Multi-Floor Zero-Shot Object Nav-igation Policy. In 2025 IEEE International Conference on Robotics and Automation (ICRA) , 6416–6422. Zhang, M.; Du, Y.; Wu, C.; Zhou, J.; Qi, Z.; Ma, J.; and Zhou, B. 2025b. ApexNav: An Adaptive Exploration Strategy for Zero-Shot Object Navigation with Target-Centric Seman-tic Fusion. IEEE Robotics and Automation Letters , 10(11): 11530–11537. Zhang, S.; Yu, X.; Song, X.; Wang, X.; and Jiang, S. 2024. Imagine Before Go: Self-Supervised Generative Map for Object Goal Navigation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,16414–16425. Zheng, H.; Chen, Z.; Huang, Y.; Liu, H.; Wang, J.; Yang, M.; and Qin, T. 2026. TravExplorer: Cross-Floor Embodied Exploration via Traversability-Aware 3-D Planning. arXiv preprint arXiv:2605.19958 .Zhou, Z.; Hu, Y.; Zhang, L.; Li, Z.; and Chen, S. 2025. BeliefMapNav: 3D Voxel-Based Belief Map for Zero-Shot Object Navigation. In Advances in Neural Information Pro-cessing Systems , volume 38. 7 Technical Supplement 
+
+This supplement provides the configuration, voxel-state defi-nitions, navigation-mode details, type-aware planning rules, and additional stage-wise evaluation results omitted from the main paper. 
+
+## A Computational Environment 
+
+All reported experiments were conducted using the soft-ware and hardware environment summarized in Table 6. The CUDA version listed below refers to the runtime bundled with PyTorch, rather than the version reported by the host GPU driver. 
+
+## B Experimental Configuration 
+
+Each HM3D-MFMON episode contains three sequential object-goal queries. The sparse geometric map and goal-independent SED/CLIP features persist across queries within the same episode. Query-conditioned similarity scores, POIs, active paths, frontier selections, and controller states are re-freshed when the active object goal changes. All states are reset between independent episodes. Table 7 summarizes the frozen settings used for the re-ported experiments. The internal target-approach range is a policy parameter, whereas the evaluator success radius is used only for ground-truth success assessment. 
+
+## C Persistent 3D Semantic Memory 
+
+Dense Feature Projection and Fusion 
+
+For each RGB frame, the SED image encoder produces a spatial feature tensor 
+
+Fdense  
+
+> t
+
+∈ R24 ×24 ×768 . (9) The feature tensor is bilinearly interpolated to the depth res-olution. Each valid depth pixel is then back-projected with the camera intrinsics and transformed into the global frame using the 6-DoF camera pose. Consequently, features are written only to observed surface voxels rather than being copied uniformly over free space. For pixel (u, v ), the observation quality is 
+
+qt(u, v ) = [1 − tanh( γ ∥∇ Dt(u, v )∥)] 
+
+× exp 
+
+
+
+− (d0 − Dt(u, v )) 2
+
+3σ2
+
+> d
+
+
+
+. (10) Depth discontinuities and observations far from the preferred range therefore receive smaller weights. If voxel v has accumulated feature f t−1 
+
+> v
+
+and confidence 
+
+wt−1 
+
+> v
+
+, the new observation is fused using 
+
+f tv = wt−1 
+
+> v
+
+f t−1 
+
+> v
+
++ qtv f tv, obs 
+
+wt−1 
+
+> v
+
++ qtv
+
+,wtv = wt−1 
+
+> v
+
++ qtv .
+
+(11) This is a cumulative weighted average rather than an expo-nential moving average. The fused features and confidence values persist across object-goal subtasks within an episode.            
+
+> Component Tested value OS Ubuntu 22.04, Linux 6.8 Python 3.10.20 PyTorch / torchvision 2.11.0+cu128 / 0.26.0+cu128 CUDA runtime used by PyTorch 12.8 GPU used for paper runs NVIDIA GeForce RTX 5090, 32 GB Habitat-Sim / Habitat-Lab 0.2.4 / 0.2.4 Transformers 4.26.1 OpenCV / NumPy 4.8.0 / 1.26.4 Detectron2 / timm 0.6 / 1.0.26 Rerun SDK 0.23.1
+
+Table 6: Software and hardware environment used for the reported experiments. 
+
+Query-Conditioned Retrieval 
+
+For the active object-goal text q, the normalized text embed-ding tq is compared with every feature-bearing voxel: 
+
+sq (v) = f ⊤ 
+
+> v
+
+tq
+
+∥fv ∥2∥tq ∥2
+
+. (12) The resulting 3D similarity field is query-dependent and is not part of the persistent memory itself. Spatially consistent high-similarity responses are clustered, and the four highest-ranked clusters form the initial History-POI candidate set. When the active object goal changes, the stored voxel fea-tures remain unchanged, whereas the similarity field and History POIs are recomputed for the new text query. 
+
+## D Support-Aware Voxel States 
+
+The sparse map maintains seven operational voxel states. Surface states store observed geometry, while air states rep-resent the volume occupied by the agent above a supporting surface. Table 8 summarizes their construction and planning roles. 
+
+Support Classification 
+
+Depth returns are first inserted as OCCUPIED . Ray cast-ing creates observed free-space samples, after which sup-port is searched vertically below each sample. Let s(v)
+
+denote the first valid support type found below voxel 
+
+v. We define the ordinary-support and stair-support sets as Sord = {OCCUPIED , FAKE_STAIR } and Sstair =
+
+{STAIR , STAIR_EXPANDED }, respectively. The derived air state is then determined by 
+
+τair (v) = 
+
+
+
+TRAVERSABLE , s(v) ∈ S ord ,
+
+TRAVERSABLE_STAIR , s(v) ∈ S stair ,
+
+TRAVERSABLE_FAKE , s(v) = ∅.
+
+(13) Accordingly, TRAVERSABLE represents supported free space above an ordinary or reversible surface, whereas TRAVERSABLE_STAIR denotes free space supported by confirmed stair geometry. In contrast, 
+
+TRAVERSABLE_FAKE indicates observed free space for Group Parameter Value Group Parameter Value Sensor RGB/depth resolution 640 ×640 Map Metric XY extent 60 ×60 mSensor Horizontal field of view 90 ◦ Map Voxel resolution (XYZ) 0.10 m Sensor Camera height 0.88 m Map Indexed Z extent approx. ±30 mAction Forward step 0.25 m Map Inflation radius 0.20 m Action Yaw/pitch increment 30 ◦ Map Support search depth 0.40 m SED Encoder input 768 ×768 SED Dense output 24 ×24 ×768                                                                           
+
+> Fusion Depth-gradient factor γ0.20 Fusion Preferred depth d01.0 m Fusion Depth scale σd1.5 m History POI Retrieved clusters Top-4 History POI Blacklist cylinder 0.8 m XY, 0.6 m Z POI Live takeover radius 1.0 m Object YOLOv7 confidence 0.70 Object Secondary confidence 0.60 Object Found confidence 0.70 Object Minimum box area 1/64 image Object Minimum projected voxels 10 Object Target-approach range 1.30 m Stair SegFormer pixel threshold 0.25 Stair Minimum component area 80 px Stair Descent confirmation 0.48 Stair Geometry threshold 0.65 Frontier Normal minimum cluster 5Frontier Init./descent minimum cluster 2StairSem Session admission radius 2.5 m StairSem Arrival threshold 0.40 m Planner Normal graph 26-neighbor Planner StairSem edge radius 1.0 m Evaluation Episode action budget 1200 Evaluation Success radius 1.50 m Navmesh Agent height/radius 1.50/0.10 m Navmesh Maximum climb/slope 0.30 m/ 60 ◦
+> Navmesh Cell size/height 0.03/0.05 m Dataset Goals/categories 3/6
+
+Table 7: Frozen configuration used for the reported LifelongCrossNav experiments. which no valid support is found within the support-search depth. It should therefore not be confused with 
+
+FAKE_STAIR , which is a reversible surface state rather than an unsupported-air state. 
+
+Stair-State Promotion 
+
+During Basic Explore, SegFormer masks and RGB-D ge-ometry may generate ascent or descent evidence, but ordi-nary OCCUPIED voxels are not immediately rewritten as confirmed stairs. After the corresponding stair entrance is reached and verified, the controller enters Stair Explore, im-plemented as the StairSem mode. Within StairSem, accepted surface voxels are pro-moted to STAIR ; adjacent occupied cells may become 
+
+STAIR_EXPANDED ; rejected evidence is retained as 
+
+FAKE_STAIR . Support-dependent air voxels are then re-classified locally. This delayed promotion prevents uncertain stair observations collected during ordinary exploration from directly changing the cross-floor planning graph. 
+
+## E Candidate Hierarchy and Navigation Modes 
+
+Candidate Priority 
+
+The controller considers four main candidate classes: 
+
+Ct = Plive /history  
+
+> t
+
+∪ F trav  
+
+> t
+
+∪ F desc  
+
+> t
+
+∪ F asc  
+
+> t
+
+. (14) Their default selection priority is 
+
+Plive /history  
+
+> t
+
+≻ F trav  
+
+> t
+
+≻ F desc  
+
+> t
+
+≻ F asc  
+
+> t
+
+. (15) Here, Basic Frontiers collectively refer to Traversable, Descend, and Ascent Frontiers used during ordinary explo-ration: 
+
+• Traversable Frontier : the boundary between supported 
+
+TRAVERSABLE voxels and genuine unknown space; 
+
+• Descend Frontier : the boundary between supported traversable space and unsupported or fake-stair geome-try; 
+
+• Ascent Frontier : a semantic-geometric entrance pro-posal for an upward stair. The controller first explores reachable Traversable Fron-tiers on the current floor. Only after no reachable ordinary frontier remains does it consider Descend and Ascent Fron-tiers. Descend is attempted before ascent by default, although the order may be adapted according to the most recent suc-cessful floor-transition direction. A selected candidate is committed for a short grace period so that incremental map updates do not cause frequent target switching. Commitment is therefore a stability mechanism rather than an additional candidate class. A committed can-didate is replaced only when it becomes invalid, unreachable, or is superseded by a higher-priority POI. 
+
+Mode Definitions 
+
+Table 9 summarizes the high-level modes and their planning behavior. During History-POI navigation, a new Live POI may take control only when its projected 3D location is spatially con-sistent with the active History-POI region. This prevents un-related detections elsewhere in the scene from interrupting historical retrieval. Voxel state Construction and geometric interpretation Pathable Targetable Planning role 
+
+OCCUPIED Surface voxel produced by a valid RGB-D depth return. It represents walls, fur-niture, ordinary floors, and other observed geometry and may carry a semantic feature. No No Collision geometry and ordi-nary support. 
+
+TRAVERSABLE Ray-observed free-space voxel whose first valid support within 0.40 m is 
+
+OCCUPIED or reversible FAKE_STAIR .Yes Yes Primary state for same-floor navigation. 
+
+TRAVERSABLE_STAIR Free-space voxel whose first valid support is STAIR or STAIR_EXPANDED . Yes Yes Robot occupancy above aconfirmed stair surface. 
+
+TRAVERSABLE_FAKE Ray-observed free-space voxel for which no valid support is found within the support-search depth. No No Marks unsupported air, drop-offs, or stair voids. 
+
+STAIR Surface voxel accepted as stair geometry after semantic and 3D geometric verifi-cation. Yes Yes Confirmed stair body used during StairSem. 
+
+STAIR_EXPANDED Neighboring OCCUPIED voxel assimilated into a confirmed stair component to improve sparse geometric continuity. Yes Yes Complements incomplete stair observations with ahigher planning cost. 
+
+FAKE_STAIR Rejected or reversible stair evidence retained instead of being immediately dis-carded. Fallback No High-cost temporary connec-tion and reversible support state. 
+
+Table 8: Operational voxel states and their roles in mapping and planning. 
+
+Mode Navigation target Graph construction Main behavior and admissibility Exit condition 
+
+Basic Explore Traversable, Descend, or Ascent Frontier Strict 26-neighbor graph; se-lected target remains on the cur-rent exploration level Prioritizes ordinary TRAVERSABLE space. De-scend and ascent targets are entrance proposals; Basic Explore does not actively traverse an un-confirmed stair body. Valid POI, verified stair entrance, or exhausted candidates. 
+
+POI Navigation Live POI or History POI Standard 26-neighbor 3D graph Navigates toward current or previously observed semantic evidence. Previously confirmed stair connections may be reused to reach a POI on another floor. POI arrival, invalidation, live-target takeover, or failure. 
+
+Stair Explore / StairSem Directional Stair Frontier Pathable endpoints inside a 1.0 m physical 3D sphere Admits confirmed stair states and stair-supported air. The requested ascent or descent direction con-strains vertical progress and suppresses unrelated platforms or neighboring stair flights. Stair-frontier arrival fol-lowed by multi-frame landing confirmation. 
+
+Target Approach Observation viewpoint near a Live POI Local path planning and discrete view correction Refines the camera pose, target mask, and stop-ping decision. It does not initiate new cross-floor exploration. Valid found action, re-jected detection, or return to exploration. 
+
+Table 9: Navigation modes, target types, and mode-dependent planning behavior. 
+
+## F Type-Aware 3D A ∗
+
+Normal Graph 
+
+Basic Explore and POI Navigation use a 26-neighbor graph. The heuristic is the 3D Euclidean distance from the current voxel to the goal: 
+
+h(n) = 
+
+q
+
+(ix − gx)2 + ( iy − gy )2 + ( iz − gz )2. (16) The transition cost is 
+
+c(n, n ′) = ∥n − n′∥2 + p(τn′ ), (17) where p(τn′ ) is determined by the destination voxel state. The penalties favor stable supported air while preserving access to confirmed stair geometry. FAKE_STAIR remains available only as a costly fallback and is never selected as a navigation endpoint. Ordinary planning prioritizes non-inflated voxels. When a mode explicitly permits an inflated pathable endpoint, its transition cost is multiplied by two. If the agent is already in-side an inflated pathable region, the planner may temporarily retain inflated states to allow the agent to leave that region; strict planning resumes afterward. 
+
+StairSem Graph 
+
+Sparse RGB-D observations may leave gaps larger than one voxel between successive stair surfaces. StairSem therefore replaces the fixed 26-neighbor relation with all existing path-able endpoints inside a 1.0 m physical sphere. This neigh-borhood is defined in metric 3D space rather than by a fixed voxel offset. Inflated TRAVERSABLE and TRAVERSABLE_STAIR 
+
+endpoints may be used when necessary, whereas inflated 
+
+STAIR , STAIR_EXPANDED , and FAKE_STAIR endpoints are rejected. If the final Stair Frontier is temporarily un-reachable, intermediate session-local stair targets are tried in descending order of vertical progress. Destination voxel state Type penalty      
+
+> TRAVERSABLE 0
+> TRAVERSABLE_STAIR 0
+> STAIR 4
+> STAIR_EXPANDED 5
+> FAKE_STAIR 10
+
+Table 10: Voxel-type penalties used by the 3D A ∗ planner. The expanded graph is deliberately permissive for incom-plete stair observations. It verifies the stored endpoints of each edge but does not claim continuous swept-volume col-lision certification along every intermediate sample of a long edge. 
+
+## G Evaluation Protocol and Additional Results 
+
+Benchmark Summary 
+
+HM3D-MFMON contains 927 three-goal episodes from 36 multi-floor HM3D scenes. The finalized Cross-Floor-Required (CFR) subset contains 288 episodes whose com-plete object-goal sequences require at least one floor transi-tion. The first mandatory transition occurs at the first, second, or third object-goal subtask in 102, 101, and 85 episodes, re-spectively. 
+
+Post-Hoc Stage-Wise Shortest Paths 
+
+For stage k of episode i, the shortest-path denominator is recomputed from the actual beginning of that trajectory seg-ment: 
+
+d⋆i,k = min   
+
+> v∈V (qi,k )
+
+dgeo 
+
+ xstart  
+
+> i,k
+
+, v  , (18) where V(qi,k ) contains the valid navigable viewpoints of all instances belonging to the requested object category. Let si,k ∈ { 0, 1} denote stage success and let li,k be the executed trajectory length. Stage-wise SPL is 
+
+SPL i,k = si,k 
+
+d⋆i,k 
+
+max( d⋆i,k , l i,k ) . (19) This post-hoc protocol does not require the agent to know future object goals and avoids fixing later-stage shortest paths before the actual completion location of the preceding goal is known. 
+
+Conditional and Global Metrics 
+
+Unexecuted later goals are excluded from conditional de-nominators. Setting si, 0 = 1 , the conditional metrics are 
+
+SR cond  
+
+> k
+
+=
+
+PNi=1 si,k 
+
+PNi=1 si,k −1
+
+,
+
+SPL cond  
+
+> k
+
+=
+
+PNi=1 si,k −1SPL i,k 
+
+PNi=1 si,k −1
+
+.
+
+(20)                                  
+
+> Method Global SR ↑Global SPL ↑
+> k= 1 k= 2 k= 3 k= 1 k= 2 k= 3
+> OneMap 54.58 29.67 16.83 23.46 13.54 9.14 w/o H-POI 70.33 45.52 29.77 25.26 18.06 11.64 LifelongCrossNav 70.33 45.74 29.13 25.26 22.71 15.82
+
+Table 11: Stage-wise global performance on all 927 HM3D-MFMON episodes. All values are percentages.                                  
+
+> Method Global SR ↑Global SPL ↑
+> k= 1 k= 2 k= 3 k= 1 k= 2 k= 3
+> OneMap 42.36 13.19 0.00 17.82 6.89 0.00 w/o H-POI 55.56 23.96 7.29 19.00 10.79 3.02 LifelongCrossNav 55.56 23.96 7.99 19.00 12.99 4.92
+
+Table 12: Stage-wise global performance on the 288 CFR episodes. All values are percentages. The corresponding global metrics use the complete episode set: 
+
+SR global  
+
+> k
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+si,k ,
+
+SPL global  
+
+> k
+
+= 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+si,k −1SPL i,k .
+
+(21) The two views are related by 
+
+SR global  
+
+> k
+
+=
+
+P 
+
+> i
+
+si,k −1
+
+N SR cond  
+
+> k
+
+,
+
+SPL global  
+
+> k
+
+=
+
+P 
+
+> i
+
+si,k −1
+
+N SPL cond  
+
+> k
+
+.
+
+(22) Conditional metrics isolate performance among episodes that reach stage k, whereas global metrics additionally pre-serve the cascade effect of earlier failures. For a three-goal episode, SR global 3 is equal to the episode-level SR because success at the third stage implies that all preceding goals have also been completed. 
+
+History-POI Ablation Boundary 
+
+The w/o H-POI variant disables only History-POI genera-tion and selection. It retains the persistent SED feature map, cumulative feature fusion, Live POIs, support-aware voxel mapping, stair perception, and cross-floor planning. The ab-lation therefore measures the contribution of explicit histor-ical semantic retrieval rather than removing the complete semantic-memory representation. 
+
+Global Results on All Episodes 
+
+The global results preserve the same efficiency trend ob-served with Conditional SPL. The complete framework maintains substantially higher later-stage Global SPL than w/o H-POI, showing that the efficiency improvement from historical retrieval remains visible after accounting for episodes that fail before reaching later goals. 
+
+Global Results on Cross-Floor-Required Episodes 
+
+The CFR results expose the effect of unresolved floor tran-sitions. If OneMap reaches the third object goal, its first two goals have already been completed without requiring a floor transition. Because every CFR sequence contains at least one mandatory transition, the remaining third goal must then contain the unresolved cross-floor requirement. With-out an executable stair representation, OneMap consequently obtains zero third-stage success. LifelongCrossNav retains nonzero third-stage Global SR and SPL by explicitly representing stair structures and cross-floor connectivity. The higher later-stage Global SPL of the complete framework relative to w/o H-POI further shows that historical semantic retrieval remains useful after floor transitions.

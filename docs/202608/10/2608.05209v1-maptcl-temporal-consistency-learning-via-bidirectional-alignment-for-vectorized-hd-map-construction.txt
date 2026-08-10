@@ -1,0 +1,496 @@
+Title: MapTCL: Temporal Consistency Learning via Bidirectional Alignment for Vectorized HD Map Construction
+
+URL Source: https://arxiv.org/pdf/2608.05209v1
+
+Published Time: Fri, 07 Aug 2026 00:01:57 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# MapTCL: Temporal Consistency Learning via Bidirectional Alignment for Vectorized HD Map Construction 
+
+Hyeonseo Kim 1, Juyeb Shin 1, Hyeonjun Jeong 2, Hiwon Shin 1, and Dongsuk Kum 2
+
+Abstract — Constructing reliable online HD maps remains challenging in dynamic urban environments due to moving objects and occlusions. While recent works employ feature-level temporal fusion to address this, they rely solely on per-frame ground truth supervision. Consequently, they lack an explicit objective to directly penalize the geometric noise and temporal jitter between consecutive online HD maps. To address this, we propose MapTCL, an auxiliary training strategy that formulates temporal consistency loss between current and past frames via bidirectional alignment. Specifically, Bidirectional Vector Consistency Learning (BVCL) models the geometric and semantic discrepancies between associated past and current vector instances as an auxiliary loss. We also employ Raster map Consistency Learning (RCL) as an additional loss to stabilize dense BEV features. By jointly training with these dual losses, MapTCL improves the temporal stability of generated HD maps. Extensive experiments on two standard benchmarks demonstrate the effectiveness of our approach. As a versatile plug-and-play module, MapTCL consistently enhances existing baseline models, achieving gains of +3.7 mAP & +2.8 C-mAP on nuScenes and +3.1 mAP & +2.5 C-mAP on Argoverse 2 without additional inference overhead. 
+
+I. INTRODUCTION High-Definition (HD) maps provide centimeter-level accu-racy and vectorized semantic representations of static objects, which are crucial for reliable localization [1], [2] and path planning [3], [4] in autonomous driving. Traditionally, HD maps have been generated through offline SLAM-based methods [5], [6] with a mobile mapping system, which involves complex pipelines and manual annotation. This process also requires human verification and regular updates, leading to high maintenance costs and labor. To mitigate these issues, online HD map construction [7]–[16] using onboard sensors has emerged as a promising alternative. This approach leverages neural networks with onboard sensors to detect map elements and construct vectorized local HD maps without manual annotation. However, early works [7]–[11] predict each local map independently, without explicitly modeling temporal consis-tency. As shown in Fig. 1 (a), this often leads to unstable vec-tor predictions across consecutive frames, such as spatial jit-
+
+This work was supported by Advanced GPU Utilization Support Program and the National Research Foundation of Korea (NRF) grant funded by the Korea government (MSIT) (RS-2026-25479609).  
+
+> 1
+
+H. Kim, J. Shin and H. Shin are with the Robotics Program, Korea Advanced Institute of Science and Technology (KAIST), Dae-jeon 34141, South Korea (email: hyeonseo.kim@kaist.ac.kr ,
+
+juyebshin@kaist.ac.kr , hiwon.shin@kaist.ac.kr )
+
+> 2
+
+H. Jeong and D. Kum are with the Cho Chun Shik Graduate School of Mobility, Korea Advanced Institute of Science and Technology (KAIST), Daejeon 34141, South Korea (email: 
+
+hyeonjun.jeong@kaist.ac.kr , dskum@kaist.ac.kr )(a) Temporally Inconsistent Predictions     
+
+> (b) Our Method
+> Instance B
+> Prediction at 𝒕𝒕
+> X
+> Prediction at 𝒕𝒕 − 𝟏𝟏
+> Temporal
+> Inconsistency Instance A
+> X
+> Instance A
+> Prediction at 𝒕𝒕 − 𝟏𝟏
+> Instance B
+> Instance A
+> (uncertain)
+> Prediction at 𝒕𝒕
+> Forward
+> Temp. Loss
+> Backward
+> Temp. Loss
+> Bidirectional
+> Alignment
+> Ego
+> Motion
+> Ego
+> Motion
+> Instance B
+> (uncertain)
+
+Fig. 1. Motivation and core concept of MapTCL. (a) Examples of temporally inconsistent predictions in online vectorized HD maps. The yellow and purple boxes highlight vector instances that fail to maintain continuity across consecutive frames. (b) The core concept of MapTCL. The bidirectional alignment loss enhances temporal consistency. 
+
+ter, flickering instances, or temporary disappearance of map elements, especially under dynamic occlusions and long-range perception. To mitigate this, various approaches [13], [15], [16] have been proposed to utilize temporal informa-tion, such as aggregating past BEV features and queries, interacting with clip-level memory tokens and tracking his-torical queries. Despite these architectural advancements, they mainly optimize each predicted HD map against the ground truth of the same timestamp, without directly com-paring predictions across time. Therefore, even if the ground-truth annotations are temporally consistent, the model is not explicitly penalized when the same physical map element is predicted with different geometric and semantic continuity in sequential frames. This makes the output vulnerable to spatial jitter, flickering, and unstable vector instances. To address these limitations, we propose MapTCL, an auxiliary training strategy that reinforces temporal consis-tency and reduces frame-to-frame noise in local HD maps. MapTCL applies a dual temporal constraint across two prediction-level representations: Bidirectional Vector Consis-tency Learning (BVCL) for vector elements and Raster Con-sistency Learning (RCL) for raster maps. At its core, BVCL directly penalizes the geometric and semantic discrepancies between the model’s past and current vector predictions, as demonstrated in Fig. 1 (b). To formulate this accurately without propagating historical errors, we introduce Bidirec-tional Temporal Matching (BTM). BTM first filters only high-confidence vector instances from consecutive vectorized maps. These selected vectors are then transformed into each other’s coordinate system and matched bidirectionally. Finally, the geometric and semantic differences between arXiv:2608.05209v1 [cs.CV] 5 Aug 2026 the matched elements are formulated as an auxiliary loss. MapTCL also integrates RCL as a supplementary training to stabilize the BEV feature consistency. In this module, BEV features from the image backbone are processed by a seg-mentation head to generate dense raster maps. The additional auxiliary loss is then defined as the discrepancy between the current and past raster maps. By jointly optimizing these two auxiliary losses, MapTCL enforces self-consistency across long-term frames and effectively suppresses temporal jitter of online HD map predictions. Furthermore, existing tempo-ral fusion methods [13], [15], [16] increase computational and memory costs during inference, thereby degrading the real-time performance required for online HD map con-struction. In contrast, MapTCL is a plug-and-play training framework that introduces no additional inference overhead. We conduct extensive experiments by applying MapTCL to various baseline and SOTA models on the nuScenes [17] and Argoverse2 [18] datasets. Across multiple metrics, our method consistently improves both accuracy and temporal consistency without additional inference costs. In summary, our contributions are as follows:  
+
+> •
+
+Bidirectional Vector Consistency Learning (BVCL) is proposed as a novel mechanism to enforce temporal consistency by formulating bidirectional alignment be-tween vector instances across consecutive HD maps.  
+
+> •
+
+MapTCL is introduced as a plug-and-play auxiliary training framework. By jointly applying BVCL and RCL to baseline models, explicit supervision is provided to ensure robust and temporally coherent HD map construction.  
+
+> •
+
+Our method achieves improved performance on two standard benchmarks (nuScenes and Argoverse2) with various baseline models, without introducing additional computational and memory overhead during inference. II. RELATED WORK 
+
+A. Online HD Map Construction 
+
+With the rapid advancements in deep learning, online HD map construction using onboard sensors has gained signif-icant attention as a cost-effective alternative to traditional HD map construction. HDMapNet [7] generates a rasterized map through BEV segmentation and converts it into a vector representation via post-processing. However, this process is heuristic and incurs additional processing. VectorMap-Net [8] introduces the first end-to-end learning framework for online HD mapping, employing a coarse-to-fine two-stage approach with DETR [19] network. MapTR [9] improves the VectorMapNet pipeline by introducing hierarchical trans-former queries and permutation-equivalent modeling into a DETR-based one-stage architecture. MapTRv2 [11] further improves MapTR by modifying the decoder architecture and incorporating multiple auxiliary training strategies, which significantly enhances HD map detection performance. In-staGraM [10] proposes a graph-based end-to-end network for efficient HD mapping. Mask2Map [12] employs BEV segmentation masks and mask-aware queries to extract ge-ometric features and positional context. MapQR [20] im-proves spatial accuracy by enhancing instance-level queries through a scatter-and-gather query design. However, since these methods do not exploit historical context, they remain vulnerable to temporal inconsistency in complex scenarios, such as dynamic occlusions or long-range perception. 
+
+B. Temporal Learning for HD Map Construction 
+
+Utilizing temporal information is essential for constructing robust and temporally consistent HD maps. StreamMap-Net [13] pioneers the integration of temporal modeling into online HD map construction by streaming historical latent through GRU (Gated Recurrent Unit)-based BEV feature fusion and streaming queries. MapTracker [15], inspired by MOTR [21], formulates HD mapping as a tracking mech-anism by generating tracked ground truth and performing bipartite matching based on these tracked annotations. It also stores long-term past BEV features and vector elements in a memory buffer and strengthens temporal continuity by fusing them. MapUnveiler [16] utilizes long-term clip-level tokens to enhance HD map consistency. Its Inter-clip Unveiler module stores key token features extracted from previous clips and integrates them with the current clip’s features via an attention mechanism. Despite improved performance, these methods fundamentally rely on per-frame ground truth supervision. Furthermore, aggregating a large amount of past features leads to high memory usage and increased com-putational costs during inference. However, as an auxiliary training method, MapTCL strengthens temporal consistency without extra computational and memory cost during in-ference. SQD-MapNet [14], inspired by DN-DETR [22], strengthens the temporal consistency of StreamMapNet by denoising ground-truth queries. DTCLMapper [23] enhances temporal instance consistency via contrastive learning and further enforces geometric consistency across frames using a Map Occupancy loss on ego-aligned rasterized maps. In contrast, our method enforces temporal consistency via bidi-rectional matching of vector elements, directly minimizing geometric and semantic inconsistencies between past and current predictions, and complementing it with raster-level consistency learning. III. METHODOLOGY 
+
+A. Overview 
+
+MapTCL aims to model and enforce temporal consistency between sequential frames through an auxiliary training strategy. In this paper, we adopt StreamMapNet [13] as our baseline for BEV-based online HD map construction. Fig. 2 shows the typical BEV-based online HD map con-struction pipeline, which utilizes synchronized multi-view images [17], [18], BEV (Bird’s Eye View) encoder [24] for view transformation and a map decoder [19] for vector regression. During each training iteration, the memory buffer stores and updates past HD maps ˆMvec (t−1) , ..., ˆMvec (t−
+
+Nt) and raster maps ˆMras (t − 1) , ..., ˆMras (t − Nt) gener-ated from Nt historical frames, where t denotes the current time. These memories are then used for temporal consistency Detection Transformer                      
+
+> Multi-view images BEV Encoder
+> View Transform
+> BEV Features
+> Current HD Map (�𝑴𝑴𝒗𝒗𝒗𝒗𝒗𝒗 𝑡𝑡 )
+> 𝓛𝓛𝒓𝒓 𝒗𝒗 𝒓𝒓 𝓛𝓛 𝒗𝒗 𝒄𝒄𝒄𝒄
+> Bidirectional Vector Consistency Learning
+> Raster map Consistency Learning
+> Image Backbone
+> Segmentation Head
+> 𝓛𝓛 𝒄𝒄𝒗𝒗𝒓𝒓
+> 𝓛𝓛𝒓𝒓𝒓𝒓 𝒄𝒄
+> Ground Truth
+> (𝑮𝑮𝒓𝒓𝒓𝒓 𝒄𝒄 (𝒕𝒕 ))
+> Current Raster Map
+> (�𝑴𝑴𝒓𝒓𝒓𝒓 𝒄𝒄 𝑡𝑡 )
+> Past Raster Maps
+> (�𝑴𝑴𝒓𝒓𝒓𝒓 𝒄𝒄 𝑡𝑡 − 1 , ��� ,�𝑴𝑴𝒓𝒓𝒓𝒓 𝒄𝒄 𝑡𝑡 − 𝑁𝑁𝑡𝑡 )
+> Memory buffer
+> Warp
+> GRU
+> Bidirectional Temporal Matching 𝓛𝓛𝑩𝑩𝑩𝑩𝑩𝑩𝑩𝑩
+> Memory buffer Warp
+> Past HD Maps
+> (�𝑴𝑴𝒗𝒗𝒗𝒗𝒗𝒗 𝒕𝒕 − 𝟏𝟏 ,��� ,�𝑴𝑴𝒗𝒗𝒗𝒗𝒗𝒗 𝒕𝒕 − 𝑵𝑵𝒕𝒕 )
+> Ground Truth
+> (𝑮𝑮𝒗𝒗𝒗𝒗𝒗𝒗 (𝒕𝒕 ))
+> Temporal Fusion Map Decoder
+
+Fig. 2. Overall pipeline of MapTCL. The pipeline takes multi-view images as input, encodes them into BEV features, and employs a map decoder to regress vectorized HD maps. The vector and raster maps are stored in the memory buffer at each iteration and subsequently utilized in both BVCL and RCL. These processes are removed during inference. 
+
+learning, which includes Bidirectional Vector Consistency Learning (BVCL) and Raster map Consistency Learning (RCL). These processes are removed during inference with-out incurring any additional computational cost and memory. We first explain BEV-based online HD map construction in section III-B, followed by the introduction of our method into this framework: (1) Bidirectional Vector Consistency Learning (BVCL) in section III-C, and (2) Raster map Consistency Learning (RCL) in section III-D. 
+
+B. BEV-based Online HD Map Construction 
+
+The BEV encoder, consisting of an image backbone and a view transformation network [24], extracts BEV features from multi-view images. These features are fused with the past one stored in a memory buffer using GRU (Gated Recurrent Unit). These are then fed into a DETR [19]-based map decoder, where learnable queries attend to the features to predict vectorized map elements. Through bipartite match-ing, predicted N instances are matched with the ground truth Gvec (t) at time t. The predicted HD map is repre-sented as N vectorized instances ˆMvec (t) = {(ˆ vi)}N −1
+
+> i=0
+
+and each map instance ˆvi =
+
+ ˆCi, ˆPi
+
+
+
+consists of class distribution (pedestrian crossing, lane divider, road boundary) and position of Np vector points, where ˆC = {ˆcj }3 
+
+> j=1
+
+and 
+
+ˆP = {(ˆ xj , ˆyj )}Np−1 
+
+> j=0
+
+.
+
+C. Bidirectional Vector Consistency Learning 
+
+Vector instances in consecutive local HD maps should re-main temporally consistent. To this end, we draw inspiration from cycle consistency in 3D scene flow estimation [25], which imposes a strict geometric constraint by enforcing that 3D points tracked forward and backward across frames return to their original coordinates. By adapting this cycle alignment principle to vector-based HD mapping, we pro-pose Bidirectional Vector Consistency Learning (BVCL). In contrast to existing methods supervised only by per-frame ground truth, BVCL enforces forward–backward consistency by jointly aligning the geometric and semantic attributes of vector instances across frames. To match misaligned vector instances from different timestamps, we introduce a novel Bidirectional Temporal Matching (BTM) method. As illus-trated in Fig. 3, BTM mechanism matches confident vector elements from past and current frames in both directions to enhance temporal association, thereby mitigating the risk of error propagation across frames. In the predicted past local HD map at time t − Nt, we select map elements with confidence scores above τ and transform them into the current coordinate system using the ego vehicle’s motion. We then conduct bipartite matching between these warped reliable elements and all predicted N instances in the cur-rent HD maps. This matching process is also applied in the opposite direction. We transform the current predicted instances into the coordinate system of each past frame t−Nt
+
+using the inverse ego-motion. Since the set of confident vector elements in past and current HD maps may differ due to temporal inconsistency, the matched elements in each direction may also vary. By performing bidirectional matching and modeling the discrepancies as a loss, we reinforce consistent associations between consecutive vector instances while weakening inconsistent ones. The matching process consists of instance-level and point-level matching, following the hierarchical matching strategy introduced in MapTR [9]. First, we determine the optimal instance-level assignment ˆπ between a set of current N map elements 
+
+{(ˆ vti )}N −1 
+
+> i=0
+
+from ˆMvec (t) and warped previous K map element {(ˆ vt−Nt 
+
+> i
+
+)}K−1 
+
+> i=0
+
+from ˆMvec (t − Nt). ˆπ ∈ ΠK is an optimal permutation of K map elements with the lowest matching cost of instance-level matching as defined in Eq. 1. The pair-wise matching cost Lins match is computed by HD Map (�𝑽𝑽 𝒕𝒕 )            
+
+> HD Map (�𝑽𝑽 𝒕𝒕−𝟏𝟏 )
+> �𝒗𝒗 𝒊𝒊 𝒕𝒕−𝟏𝟏
+> �𝒗𝒗 𝒋𝒋 𝒕𝒕
+> �𝒗𝒗𝒋𝒋 𝒕𝒕
+> Forward Matching
+> �𝒗𝒗𝒊𝒊 𝒕𝒕−𝟏𝟏
+> 𝓛𝓛𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇 _𝒗𝒗𝒗𝒗𝒗𝒗
+> 𝓛𝓛𝒃𝒃 𝒇𝒇𝒗𝒗 𝒃𝒃 𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇 _𝒗𝒗𝒗𝒗𝒗𝒗 𝑪𝑪 𝒇𝒇 𝑪𝑪 𝒇𝒇 >𝝉𝝉
+> Warp
+> (𝒕𝒕 − 𝟏𝟏 𝒕𝒕 )
+> 𝝉𝝉
+> Class Distribution Class Distribution
+> 𝝉𝝉
+> 𝑪𝑪 𝒇𝒇 𝑪𝑪 𝒇𝒇 >𝝉𝝉
+> 𝓛𝓛𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇 _𝒗𝒗 𝒄𝒄𝒄𝒄
+> Backward Matching
+> Class Distribution
+> 𝝉𝝉
+> Class Distribution
+> 𝝉𝝉 𝓛𝓛𝒃𝒃 𝒇𝒇𝒗𝒗 𝒃𝒃 𝒇𝒇𝒇𝒇𝒇𝒇𝒇𝒇 _𝒗𝒗 𝒄𝒄𝒄𝒄
+> Low-confidence
+> Instance Warp
+> (𝒕𝒕 𝒕𝒕 − 𝟏𝟏 )
+> Low-confidence
+> Instance
+
+Fig. 3. Bidirectional Temporal Matching mechanism. High-confidence elements from past vectorized HD maps are warped to the current frame using ego pose and compared with current predictions to compute distance and class distribution losses. This process is performed bidirectionally. 
+
+considering both the class score and the positional distance of the vector instances. 
+
+ˆπ = arg min 
+
+> π∈ΠK
+> K
+
+X
+
+> i=1
+
+Lins match 
+
+
+
+ˆvt−Nt 
+
+> π(i)
+
+, ˆvti
+
+
+
+, (1) 
+
+Lins match 
+
+
+
+ˆvt−Nt 
+
+> π(i)
+
+, ˆvti
+
+
+
+=Lcls 
+
+ ˆCt−Nt 
+
+> π(i)
+
+, ˆCti
+
+
+
++ Lpos 
+
+ ˆP t−Nt 
+
+> π(i)
+
+, ˆP ti
+
+
+
+.
+
+(2) We represent the class prediction of each instance as a multi-class probability and define the class matching cost 
+
+Lcls as the L1 distance. Lpos defined as SmoothL1 Loss that formulates positional distance between them. Hungarian algorithm [26] is applied based on these costs to iden-tify optimal instance assignment ˆπ. After the instance-level matching, point-level matching is performed based on the assigned instance ˆvt−Nt 
+
+> ˆπ(i)
+
+to find the optimal point-to-point correspondence. The optimal assignment of the points ˆγ ∈ Γ
+
+is selected from point-level matching cost: 
+
+ˆγ = arg min 
+
+> γ∈Γ
+> Np
+
+X
+
+> j=1
+
+Lpos 
+
+
+
+ˆpt−Nt 
+
+> j
+
+, ˆptγ(j)
+
+
+
+, (3) where Lpos is the SmoothL1 Loss. This forward matching step is then performed in reverse. The details of the loss functions are provided in section III-E. 
+
+D. Raster map Consistency Learning 
+
+BEV features extracted by the BEV encoder provide a structured and spatially unified representation of the sur-rounding environment, which is crucial for regressing vector-ized instances. To promote temporal coherence in these rep-resentations, we introduce Raster map Consistency Learning (RCL). Inspired by temporal consistency losses that penalize pixel-level discrepancies across frames in video segmenta-tion [27] and matting [28], RCL adapts dense cross-frame alignment to the BEV space. Following the MapTRv2 [11] approach, we first generate a binary raster map ˆMras (t) by segmentation head ϕBEV Seg , as illustrated in Fig. 2. The raster map is supervised with the rasterized ground truth map Gras (t), providing dense supervision that encourages the model to capture the global structure and geometry of the map. Building on this, the RCL further enforces temporal consistency by leveraging the past raster maps ˆMras (t−Nt)
+
+from the memory buffer. We warp them to the current coordinate frame and compute the inconsistency between the current raster map ˆMras (t) and the historical one. This inconsistency is formulated as an additional auxiliary loss. We leave the detailed loss function of RCL to section III-E. 
+
+E. Training Loss 
+
+MapTCL adopts an end-to-end training based on map loss with GT supervision and our auxiliary loss that comprise BVCL and RCL. 
+
+Map Loss. Map loss is weighted sum of several basic losses from baseline method (StreamMapNet [13]), which are regression loss, classification loss and transformation loss: 
+
+Lmap = λ1Lreg + λ2Lcls + λ3Ltrans , (4) where λ1, λ2 and λ3 are the hyper-parameters. The re-gression loss and transformation loss are computed using SmoothL1 Loss, while the classification loss is calculated using Focal Loss. 
+
+BVCL Loss. BVCL follows both the forward and back-ward processes, as described in Sec. III-C. At each stage, the point-to-point loss (Lforward vec and Lbackward vec ) and class distribution loss ( Lforward cls and Lbackward cls ) between matched instances are defined as follows: 
+
+LBVCL = Lforward vec + Lforward cls 
+
++ Lbackward vec + Lbackward cls . (5) We employ BTM with Hungarian algorithm [26] to find an optimal instance-level and point-level assignment ( ˆπ and 
+
+ˆγ) between current and past Nt frames. Lforward vec and 
+
+Lforward cls are formulated as follows: 
+
+Lforward vec =
+
+> Nt
+
+X
+
+> n=1
+
+wnKX
+
+> i=1
+> Np
+
+X
+
+> j=1
+
+Lpos 
+
+
+
+ˆpt−n
+
+> ˆπ(i),ˆγi(j)
+
+, ˆpti,j 
+
+
+
+, (6) 
+
+Lforward cls =
+
+> Nt
+
+X
+
+> n=1
+
+unKX
+
+> i=1
+
+LKL 
+
+ ˆCt−n
+
+> ˆπ(i)
+
+, ˆCti
+
+
+
+, (7) where the point-to-point loss uses SmoothL1 Loss, and the class distribution loss is defined by the KL-divergence. The wn and un denote the temporal weights for positional and semantic consistency at the t − Nt frame, respectively. We assign higher weight to temporally closer frames for more reliable alignment. The Lbackward vec and Lbackward cls 
+
+are computed by warping the current HD map instance to the current frame, using the same mechanism and weights as the forward process. 
+
+RCL Loss. In RCL, we introduce a BEV segmentation head, ϕBEVSeg , based on BEV features to generate a binary raster map. The segmentation loss is defined as a mask Focal loss [29], a common pixel loss in vector HD mapping ap-proaches [11], [15], computed between the predicted binary raster map and the rasterized ground truth: 
+
+Lseg = LFocal 
+
+ ˆM ras (t), Gras (t)
+
+
+
+, (8) 
+
+ˆM ras (t) = ϕBEVSeg (FBEV ) . (9) The predicted raster map is then compared with the raster maps from past frames to compute the inconsistency. The Raster map Consistency loss is defined as a mask Focal loss between current raster map and historical raster maps: 
+
+Lras =
+
+> Nt
+
+X
+
+> n=1
+
+αnLFocal 
+
+ ˆM ras (t − n), ˆM ras (t)
+
+
+
+. (10) The weight αn is assigned to emphasize temporally closer frames by giving them higher value. The total loss of RCL is as follows: 
+
+LRCL = βLseg + Lras . (11) 
+
+Overall Loss. The overall loss is defined as the sum of the above losses: 
+
+L = Lmap + LBVCL + LRCL . (12) IV. E XPERIMENTS 
+
+A. Experimental Settings 
+
+Dataset. We conduct experiments on two benchmarks: nuScenes [17] and Argoverse2 [18]. nuScenes contains 1,000 driving scenes of about 20 seconds with 2 Hz annotations from six surround cameras at 480 ×800 resolution. Argov-erse2 includes 1,000 scenarios of about 15 seconds with 10 Hz annotations from seven surround cameras at 608 ×608 resolution. Both datasets follow the standard 700/150/150 train/val/test split. Following [13], the official splits of nuScenes and Argoverse2 have geographically overlapping areas, which can lead to model overfitting. Therefore, we mainly conduct training and evaluation on the newly des-ignated non-overlapping (i.e., newsplit) datasets rather than oldsplit. 
+
+Metrics. Following prior works [7]–[9], [11], [13], we adopt Chamfer distance-based Average Precision (AP) as the primary evaluation metric. The AP is calculated at three distance thresholds: {0.5m, 1.0m, 1.5m }, and the final mean Average Precision (mAP) is derived by averaging the results across three road element categories: pedestrian crossings, lane dividers, and road boundaries. However, the Chamfer distance-based mAP evaluates only single-frame detection performance and does not consider temporal consistency in detecting and tracking the same map elements across frames. To address this limitation, MapTracker [15] introduced a consistency-aware metric, termed C-mAP, which we adopt in this work. 
+
+Implementation Details. We integrate MapTCL into var-ious baseline models [13]–[15] and compare its performance with other SOTA methods. To ensure a fair comparison, we fix the fusion length to a single frame (Fused Frames = 1) for all temporally-aware baselines (StreamMapNet, SQD-MapNet, MapTracker) to demonstrate that MapTCL enhances temporal consistency without relying on extended temporal fusion. Another temporal model, MapUnveiler, is excluded from this setting due to its unavailable code. StreamMapNet and SQD-MapNet are trained with a two-stage schedule (single-frame followed by temporal train-ing), and MapTCL is applied only in the temporal stage. They are trained for 24 epochs on nuScenes (6/18) and 6 epochs on Argoverse2 (1/5). MapTracker uses a three-stage schedule (6/2/16 on nuScenes and 2/1/3 on Argoverse2), with MapTCL applied only in the final stage. This design is adopted to reduce the risk of error propagation, since early training stages typically contain many false positive predictions that can lead to unstable temporal associations. All models are trained on 4 NVIDIA A6000 GPUs with a batch size of 16 using the AdamW optimizer [30]. We set the number of predicted instances to N = 100 with each instance represented by Np = 20 vector points. We also set Nt = 5 , τ = 0 .3, λ1 = 50 .0, λ2 = 5 .0, λ3 = 0 .1
+
+and β = 1 .0 in StreamMapNet + MapTCL. Other optimizer settings and hyperparameters vary across experiments. For example, on Argoverse2 newsplit with StreamMapNet + MapTCL, we use an initial learning rate of 5e − 4 with a weight decay of 0.03. We also set w1:5 = [9 , 7, 5, 3, 1] and 
+
+u1:5 = a1:5 = [1 .0, 0.7, 0.5, 0.3, 0.1] . Regarding ego-motion-based warping, MapTCL aligns past information to the current frame for temporal consistency. StreamMapNet and SQD-MapNet assume accurate ego poses, while MapTracker introduces pose noise during training to improve robustness to pose estimation errors. 
+
+B. Main Results 
+
+MapTCL consistently improves the performance of diverse baseline models across two benchmark datasets under both newsplit and oldsplit settings. 
+
+Results on Non-overlapping Split. Table I presents the quantitative results on the nuScenes and Argoverse2 newsplit validation sets. On nuScenes, MapTCL improves the mAP of StreamMapNet from 35.2 to 38.9 (+3.7) and SQD-MapNet from 36.6 to 37.9 (+1.3). Similarly, MapTracker achieves an improvement from 39.4 to 41.0 (+1.6). In addition to accuracy gains, temporal consistency is also enhanced, with C-mAP increasing by +2.8, +1.4, and +1.6 for StreamMap-Net, SQD-MapNet, and MapTracker, respectively. Simi-lar improvements are also observed on Argoverse2, where MapTCL consistently enhances both mAP and C-mAP across all baselines. Notably, MapTracker + MapTCL sur-passes MapUnveiler [16], a SOTA model utilizing three fused frames, on nuScenes despite operating under a single-frame fusion setting. These improvements are achieved without any additional inference costs, as indicated by the identical FPS after applying MapTCL. Fig. 4 shows qualitative compar-isons between StreamMapNet + MapTCL, baseline methods (StreamMapNet, SQD-MapNet, and MapTracker), and the ground truth on the nuScenes newsplit dataset. Among the 
+
+N predicted vector instances, only those with confidence scores above 0.4 are visualized. As shown in the figure, our TABLE I COMPARISONS ON NU SCENES AND ARGOVERSE 2 VALIDATION SETS USING NON -OVERLAPPING DATA SPLIT WITHIN 60 m × 30 m RANGE . FPS IS MEASURED USING A SINGLE NVIDIA RTX 3090 GPU. † RESULTS REPRODUCED IN OUR ENVIRONMENT USING AVAILABLE CODE , AND ∗ RESULTS FROM THE CORRESPONDING PAPERS . - INDICATES UNAVAILABLE RESULTS (C-MAP NOT REPORTED AND FPS OMITTED DUE TO DIFFERENT EVALUATION ENVIRONMENTS ). Dataset Method Epochs Fused Frames AP ped AP div. AP bound. mAP C-mAP FPS nuScenes MapTRv2 [11] † 24 0 26.8 14.7 44.4 28.6 - -MapUnveiler [16] ∗ 24 3 43.2 26.5 48.7 39.4 - -StreamMapNet [13] † 24 1 34.3 29.4 42.0 35.2 25.7 14.5 StreamMapNet + MapTCL 24 1 39.2 32.5 45.0 38.9(+3.7) 28.5(+2.8) 14.5 SQD-MapNet [14] † 24 1 37.1 28.6 44.1 36.6 25.4 14.5 SQD-MapNet + MapTCL 24 1 37.1 32.0 44.5 37.9(+1.3) 26.8(+1.4) 14.5 MapTracker [15] † 24 1 42.0 29.2 46.8 39.4 30.8 11.2 MapTracker + MapTCL 24 1 44.2 29.9 48.9 41.0(+1.6) 32.4(+1.6) 11.2 Argoverse2 MapTRv2 [11] † 6 0 56.0 60.7 60.0 58.9 - -StreamMapNet [13] † 6 1 49.1 51.9 59.7 53.6 35.4 14.9 StreamMapNet + MapTCL 6 1 52.9 55.1 62.1 56.7(+3.1) 37.9(+2.5) 14.9 SQD-MapNet [14] † 6 1 52.4 53.0 60.8 55.4 35.1 14.9 SQD-MapNet + MapTCL 6 1 54.4 55.7 62.2 57.4(+2.0) 39.0(+3.9) 14.9 MapTracker [15] † 6 1 61.9 72.2 63.4 66.1 53.5 12.3 MapTracker + MapTCL 6 1 62.5 73.4 64.7 66.9(+0.8) 54.6(+1.1) 12.3 TABLE II COMPARISONS ON NU SCENES AND ARGOVERSE 2 VALIDATION SETS USING GEO -OVERLAPPING DATA SPLIT WITHIN 60 m × 30 m RANGE . FPS IS MEASURED USING A SINGLE NVIDIA RTX 3090 GPU. † RESULTS REPRODUCED IN OUR ENVIRONMENT USING AVAILABLE CODE , AND ∗ RESULTS FROM THE CORRESPONDING PAPERS . - INDICATES UNAVAILABLE RESULTS (C-MAP NOT REPORTED AND FPS OMITTED DUE TO DIFFERENT EVALUATION ENVIRONMENTS ). Dataset Method Epochs Fused Frames AP ped AP div. AP bound. mAP C-mAP FPS nuScenes MapTRv2 [11] ∗ 24 0 59.8 62.4 62.4 61.5 - -DTCLMapper [23] ∗ 24 0 62.6 59.7 63.4 61.9 - -MapQR [20] ∗ 24 0 68.0 63.4 67.7 66.4 - -SQD-MapNet [14] † 24 1 59.7 62.7 61.9 61.4 44.5 14.5 MapUnveiler [16] ∗ 24 3 67.6 67.6 68.8 68.0 - -StreamMapNet [13] † 24 1 58.9 60.2 58.7 59.3 44.9 14.5 StreamMapNet + MapTCL 24 1 62.1 62.9 61.4 62.1(+2.8) 45.4(+0.5) 14.5 MapTracker [15] † 24 1 70.3 67.3 66.2 67.9 53.6 11.2 MapTracker + MapTCL 24 1 72.3 69.6 68.8 70.2(+2.3) 59.8(+6.2) 11.2 Argoverse2 MapTRv2 [11] ∗ 6 0 60.7 68.9 64.5 64.7 - -DTCLMapper [23] ∗ 6 0 69.4 61.9 64.1 65.1 - -MapQR [20] ∗ 6 0 72.3 64.3 68.1 68.2 - -SQD-MapNet [14] † 6 1 54.0 52.3 59.3 55.2 35.0 14.9 MapUnveiler [16] ∗ 6 3 68.9 73.7 68.9 70.5 - -StreamMapNet [13] † 6 1 50.8 52.8 57.4 53.7 35.2 14.9 StreamMapNet + MapTCL 6 1 54.0 53.4 59.1 55.6(+2.9) 37.7(+2.5) 14.9 MapTracker [15] † 6 1 66.3 72.9 64.5 68.1 53.5 12.3 MapTracker + MapTCL 6 1 66.3 73.6 66.4 68.7(+0.6) 56.3(+2.8) 12.3 
+
+method generates more accurate and temporally consistent HD maps under challenging conditions such as dynamic occlusions and rainy weather. In contrast, other methods exhibit temporally inconsistent predictions, where certain map elements disappear, deform, or become misaligned across frames. Fig. 5 further presents qualitative comparisons between MapTracker and MapTracker + MapTCL on the Ar-goverse2 dataset. Similarly, MapTCL demonstrates improved temporal consistency even in the presence of occlusions caused by surrounding dynamic objects. 
+
+Results on Original Split. As shown in Table II, MapTCL consistently improves both mAP and C-mAP across all baselines on the original splits of nuScenes and Argoverse2. 
+
+TABLE III PERFORMANCE ON NEWSPLIT OF NU SCENES AND ARGOVERSE 2 WITHIN 
+
+100 m × 50 m PERCEPTION RANGE .Dataset Method AP ped AP div. AP bound. mAP nuScenes StreamMapNet 27.1 18.5 21.5 22.4 
+
++ MapTCL 29.4 21.8 28.3 26.5 
+
+Argoverse2 StreamMapNet 53.5 42.2 46.7 47.5 
+
++ MapTCL 56.9 44.2 50.0 50.2 
+
+In particular, MapTracker + MapTCL achieves the largest C-mAP gain on nuScenes. It may benefit more from the ge-ographically overlapping split, where train-validation overlap can make temporal correspondences easier to exploit. This large gain may also be affected by hyperparameter settings, Multi-view Images  StreamMapNet  SQD-MapNet  MapTracker  StreamMapNet  
+
+> + MapTCL
+> GT
+> Time
+> ped. crossing divider boundary
+
+Fig. 4. Qualitative comparisons on newsplit of nuScenes validation within 60 m × 30 m perception range. StreamMapNet + MapTCL is compared with other baselines (StreamMapNet [13], SQD-MapNet [14], MapTracker [15]) and ground truth. The red dashed boxes indicate occlusions caused by surrounding objects, which lead to temporal inconsistency. Time   
+
+> ped. crossing divider boundary
+> MapTracker MapTracker
+> + MapTCL
+> GT Multi-view Images
+
+Fig. 5. Qualitative comparisons on newsplit of Argoverse2 validation within 
+
+60 m × 30 m perception range. MapTracker + MapTCL is compared with the baseline and ground truth. The red dashed boxes indicate occlusions caused by surrounding objects, which lead to temporal inconsistency. TABLE IV PERFORMANCE UNDER HEAVY OCCLUSIONS ON NEWSPLIT OF NU SCENES WITHIN 60 m × 30 m PERCEPTION RANGE .Method AP ped AP div. AP bound. mAP C-mAP StreamMapNet 29.7 23.4 35.1 29.5 29.9 SQD-MapNet 28.5 24.5 36.1 29.7 29.0 StreamMapNet + MapTCL 33.3 27.2 36.7 32.4 32.8 
+
+such as confidence threshold and loss weights. 
+
+Performance on Long Perception Range. Table III shows that our method consistently outperforms the baseline under a 100 m × 50 m perception range, demonstrating its effectiveness in long-range perception scenarios. 
+
+Performance on Occlusion Scenario Table IV reports the performance on the nuScenes validation set under occlusion-prone scenarios, where we select scenes containing dynamic 
+
+TABLE V COMPONENT ABLATION OF OUR METHOD ON NEWSPLIT OF NU SCENES WITHIN 60 m × 30 m PERCEPTION RANGE .VCL BVCL SL RCL AP ped AP div. AP bound. mAP 32.7 29.7 41.9 35.2                        
+
+> ✓37.2 30.2 40.2 35.9
+> ✓38.6 30.2 43.0 37.2
+> ✓38.7 31.5 43.4 37.8
+> ✓✓37.2 31.9 45.8 38.2
+> ✓✓✓39.2 32.5 45.0 38.9
+
+TABLE VI MEMORY SIZE ABLATION OF OUR METHOD ON NEWSPLIT OF 
+
+ARGOVERSE 2 WITHIN 60 m × 30 m PERCEPTION RANGE .
+
+Nt AP ped AP div. AP bound. mAP C-mAP 1 52.3 53.8 61.7 55.9 36.8 3 51.5 53.9 62.5 56.0 36.5 5 52.9 55.1 62.1 56.7 37.9 
+
+7 45.8 50.5 58.6 51.6 32.5 
+
+objects within 5m of the ego vehicle. Our method consis-tently outperforms both StreamMapNet and SQD-MapNet, demonstrating its robustness in occluded environments. 
+
+C. Ablation Studies 
+
+Component Ablation. We analyze the contribution of each component, including Vector Consistency Learning (VCL), Bidirectional Vector Consistency Learning (BVCL), Segmentation Learning (SL), and Raster Consistency Learn-ing (RCL), as summarized in Table V. VCL is a simplified BVCL variant that only performs forward matching, omitting backward matching. SL refers to performing only segmen-tation learning within RCL without temporal learning. All components improve performance, with the BVCL and RCL combination yielding the highest gain of 3.7 mAP. 
+
+Memory Ablation. Table VI shows the effect of memory size used in MapTCL for computing the temporal consis-tency loss. Increasing the memory size improves perfor-mance by incorporating longer temporal context, with the best results achieved at a memory size of 5. However, using too many past frames may introduce outdated or noisy TABLE VII ABLATION STUDY ON CONFIDENCE THRESHOLD OF BVCL ON NEWSPLIT OF ARGOVERSE 2. 
+
+τ AP ped AP div. AP bound. mAP C-mAP 0.1 49.7 52.3 59.9 54.0 23.8 0.3 52.9 55.1 62.1 56.7 37.9 
+
+0.5 51.5 53.9 62.5 56.0 36.5 
+
+information, which can degrade performance. 
+
+Confidence Threshold Ablation in BVCL. We further evaluate the effect of different confidence thresholds in BVCL. Only instances with confidence scores above the threshold are used to compute the consistency loss. As shown in Table VII, both overly low and overly high thresholds degrade performance, with the best results achieved at a threshold of 0.3. V. CONCLUSION We propose MapTCL, an auxiliary training strategy that enhances temporal consistency in online HD maps by mod-eling consistency losses across past frames. By incorporating BVCL and RCL, MapTCL improves geometric and semantic coherence between consecutive predictions and consistently reduces temporal jitter, without introducing additional infer-ence cost. Experiments on nuScenes and Argoverse2 show consistent improvements in both accuracy and temporal stability. However, MapTCL is sensitive to hyperparameter settings, especially the temporal context length, where overly long histories may introduce noisy supervision and degrade performance. REFERENCES [1] H. Jeong, J. Shin, F. Rameau, and D. Kum, “Multi-modal place recognition via vectorized hd maps and images fusion for autonomous driving,” IEEE Robotics and Automation Letters , 2024. [2] A. Chalvatzaras, I. Pratikakis, and A. A. Amanatiadis, “A survey on map-based localization techniques for autonomous vehicles,” IEEE Transactions on intelligent vehicles , vol. 8, no. 2, pp. 1574–1596, 2022. [3] S. Casas, A. Sadat, and R. Urtasun, “Mp3: A unified model to map, perceive, predict and plan,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 14403– 14412, 2021. [4] B. Jiang, S. Chen, Q. Xu, B. Liao, J. Chen, H. Zhou, Q. Zhang, W. Liu, C. Huang, and X. Wang, “Vad: Vectorized scene representation for efficient autonomous driving,” in Proceedings of the IEEE/CVF International Conference on Computer Vision , pp. 8340–8350, 2023. [5] J. Zhang, S. Singh, et al. , “Loam: Lidar odometry and mapping in real-time.,” in Robotics: Science and systems , vol. 2, pp. 1–9, Berkeley, CA, 2014. [6] T. Shan and B. Englot, “Lego-loam: Lightweight and ground-optimized lidar odometry and mapping on variable terrain,” in 2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) , pp. 4758–4765, IEEE, 2018. [7] Q. Li, Y. Wang, Y. Wang, and H. Zhao, “Hdmapnet: An online hd map construction and evaluation framework,” in 2022 International Conference on Robotics and Automation (ICRA) , pp. 4628–4634, IEEE, 2022. [8] Y. Liu, T. Yuan, Y. Wang, Y. Wang, and H. Zhao, “Vectormapnet: End-to-end vectorized hd map learning,” in International Conference on Machine Learning , pp. 22352–22369, PMLR, 2023. [9] B. Liao, S. Chen, X. Wang, T. Cheng, Q. Zhang, W. Liu, and C. Huang, “Maptr: Structured modeling and learning for online vectorized hd map construction,” arXiv preprint arXiv:2208.14437 , 2022. [10] J. Shin, H. Jeong, F. Rameau, and D. Kum, “Instagram: Instance-level graph modeling for vectorized hd map learning,” IEEE Transactions on Intelligent Transportation Systems , 2025. [11] B. Liao, S. Chen, Y. Zhang, B. Jiang, Q. Zhang, W. Liu, C. Huang, and X. Wang, “Maptrv2: An end-to-end framework for online vectorized hd map construction,” International Journal of Computer Vision ,pp. 1–23, 2024. [12] S. Choi, J. Kim, H. Shin, and J. W. Choi, “Mask2map: Vectorized hd map construction using bird’s eye view segmentation masks,” in 
+
+European Conference on Computer Vision , pp. 19–36, Springer, 2024. [13] T. Yuan, Y. Liu, Y. Wang, Y. Wang, and H. Zhao, “Streammapnet: Streaming mapping network for vectorized online hd map construc-tion,” in Proceedings of the IEEE/CVF Winter Conference on Appli-cations of Computer Vision , pp. 7356–7365, 2024. [14] S. Wang, F. Jia, W. Mao, Y. Liu, Y. Zhao, Z. Chen, T. Wang, C. Zhang, X. Zhang, and F. Zhao, “Stream query denoising for vectorized hd-map construction,” in European Conference on Computer Vision , pp. 203– 220, Springer, 2024. [15] J. Chen, Y. Wu, J. Tan, H. Ma, and Y. Furukawa, “Maptracker: Track-ing with strided memory fusion for consistent vector hd mapping,” in European Conference on Computer Vision , pp. 90–107, Springer, 2024. [16] N. Kim, H. Seong, D. Ji, and S. Jang, “Unveiling the hidden: Online vectorized hd map construction with clip-level token interaction and propagation,” Advances in Neural Information Processing Systems ,vol. 37, pp. 111358–111381, 2025. [17] H. Caesar, V. Bankiti, A. H. Lang, S. Vora, V. E. Liong, Q. Xu, A. Krishnan, Y. Pan, G. Baldan, and O. Beijbom, “nuscenes: A multimodal dataset for autonomous driving,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,pp. 11621–11631, 2020. [18] B. Wilson, W. Qi, T. Agarwal, J. Lambert, J. Singh, S. Khandelwal, B. Pan, R. Kumar, A. Hartnett, J. K. Pontes, et al. , “Argoverse 2: Next generation datasets for self-driving perception and forecasting,” arXiv preprint arXiv:2301.00493 , 2023. [19] N. Carion, F. Massa, G. Synnaeve, N. Usunier, A. Kirillov, and S. Zagoruyko, “End-to-end object detection with transformers,” in 
+
+European conference on computer vision , pp. 213–229, Springer, 2020. [20] Z. Liu, X. Zhang, G. Liu, J. Zhao, and N. Xu, “Leveraging enhanced queries of point sets for vectorized map construction,” in European Conference on Computer Vision , pp. 461–477, Springer, 2024. [21] F. Zeng, B. Dong, Y. Zhang, T. Wang, X. Zhang, and Y. Wei, “Motr: End-to-end multiple-object tracking with transformer,” in European conference on computer vision , pp. 659–675, Springer, 2022. [22] F. Li, H. Zhang, S. Liu, J. Guo, L. M. Ni, and L. Zhang, “Dn-detr: Accelerate detr training by introducing query denoising,” in 
+
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 13619–13627, 2022. [23] S. Li, J. Lin, H. Shi, J. Zhang, S. Wang, Y. Yao, Z. Li, and K. Yang, “Dtclmapper: Dual temporal consistent learning for vectorized hd map construction,” IEEE Transactions on Intelligent Transportation Systems , 2024. [24] Z. Li, W. Wang, H. Li, E. Xie, C. Sima, T. Lu, Q. Yu, and J. Dai, “Bev-former: learning bird’s-eye-view representation from lidar-camera via spatiotemporal transformers,” IEEE Transactions on Pattern Analysis and Machine Intelligence , 2024. [25] H. Mittal, B. Okorn, and D. Held, “Just go with the flow: Self-supervised scene flow estimation,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 11177– 11185, 2020. [26] H. W. Kuhn, “The hungarian method for the assignment problem,” 
+
+Naval research logistics quarterly , vol. 2, no. 1-2, pp. 83–97, 1955. [27] S. Varghese, S. Gujamagadi, M. Klingner, N. Kapoor, A. Bar, J. D. Schneider, K. Maag, P. Schlicht, F. Huger, and T. Fingscheidt, “An un-supervised temporal consistency (tc) loss to improve the performance of semantic segmentation networks,” in Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 12–20, 2021. [28] Y. Sun, G. Wang, Q. Gu, C.-K. Tang, and Y.-W. Tai, “Deep video matting via spatio-temporal alignment and aggregation,” in Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 6975–6984, 2021. [29] T.-Y. Lin, P. Goyal, R. Girshick, K. He, and P. Doll´ ar, “Focal loss for dense object detection,” in Proceedings of the IEEE international conference on computer vision , pp. 2980–2988, 2017. [30] I. Loshchilov, F. Hutter, et al. , “Fixing weight decay regularization in adam,” arXiv preprint arXiv:1711.05101 , vol. 5, p. 5, 2017.

@@ -1,0 +1,892 @@
+Title: Conformal Fusion Under Missing Modalities
+
+URL Source: https://arxiv.org/pdf/2608.07183v1
+
+Published Time: Mon, 10 Aug 2026 00:53:57 GMT
+
+Number of Pages: 41
+
+Markdown Content:
+# Conformal Fusion Under Missing Modalities 
+
+Alireza Moayedikia amoayedikia@swin.edu.au 
+
+Department of Business Technology and Entrepreneurship Swinburne University of Technology Hawthorn, VIC 3122, Australia 
+
+Editor: 
+
+Abstract 
+
+Multimodal fusion architectures typically assume that all modalities are available at infer-ence time, yet sensor failures, acquisition variability, and cost constraints routinely result in incomplete observations in practice. Existing work on modality absence treats it as a prediction-accuracy problem and leaves a more basic question unanswered: whether a model’s confidence estimates remain calibrated when an entire input stream is removed. We argue that missing-modality robustness and calibrated uncertainty are not indepen-dent desiderata but a single coupled property, and we introduce Modality-Conditioned Conformal Fusion (MCCF), an architecture that addresses both at once. MCCF combines a multimodal bottleneck fusion backbone trained with modality dropout, per-modality evidential heads producing modality-decomposed Dirichlet distributions, and a Dempster-Shafer combination rule that fuses the per-modality evidence into a joint predictive distri-bution; an absent modality contributes vacuous evidence that is structurally ignored, so the fused uncertainty automatically reflects the reduced information without any test-time imputation. A Mondrian conformal calibration module keyed on the modality-presence mask then provides finite-sample group-conditional coverage simultaneously for every non-empty modality subset. To our knowledge, MCCF is the first method to deliver formal coverage guarantees that hold under arbitrary patterns of modality availability through architectural integration rather than post-hoc recalibration, and the evidential decompo-sition additionally yields per-modality vacuity scores that localise uncertainty to the spe-cific absent modality responsible—an interpretability property unavailable from post-hoc conformal methods applied to softmax outputs. Across a controlled synthetic problem and three real multimodal benchmarks spanning distinct task domains, MCCF holds its target coverage on every modality-presence subset, substantially reduces the systematic full-modality versus partial-modality coverage gap relative to a marginal split-conformal baseline on an identical backbone, and imposes no measurable accuracy cost relative to temperature-scaled and evidential baselines. 
+
+Keywords: Multimodal fusion, conformal prediction, evidential deep learning, missing modalities, uncertainty quantification, Dempster-Shafer theory, coverage guarantees. 
+
+1 Introduction 
+
+Multi-modal learning has become a central paradigm in deep learning, driven by the ob-servation that combining complementary data sources often yields representations that are richer and more robust than those derived from any single modality alone (Liang et al., 2023; Baltrušaitis et al., 2019). The foundational self-attention mechanism of the Trans-former (Vaswani et al., 2017) and lightweight attention modules such as Squeeze-and-1arXiv:2608.07183v1 [cs.LG] 7 Aug 2026 Moayedikia 
+
+Excitation (Hu et al., 2018) and CBAM (Woo et al., 2018) have provided the architectural building blocks that underpin modern fusion strategies. Architectures for multi-modal fusion have matured rapidly: contrastive alignment methods such as CLIP (Radford et al., 2021) and ImageBind (Girdhar et al., 2023) learn shared embedding spaces across modalities, while cross-attention and bottleneck fusion mechanisms (Nagrani et al., 2021; Jaegle et al., 2022) enable fine-grained information exchange at intermediate feature levels. These advances have produced strong results across vision-language, audio-visual, and video understanding benchmarks. A pervasive assumption in this literature, however, is that all modalities are available at inference time. In practice, this assumption is frequently violated. Sensors malfunction, environmental conditions degrade specific data streams, acquisition protocols vary across sites, and cost or logistical constraints may prevent the collection of all modalities for every sample. In infrastructure monitoring, for instance, ground-penetrating radar and infrared thermography are often deployed together for complementary subsurface and surface assess-ment, yet operational constraints routinely result in partial coverage where one modality is unavailable for a subset of inspections (Alani et al., 2020). Similar patterns arise in autonomous driving (camera occlusion, lidar failure (Bijelic et al., 2020)), clinical diagnos-tics (missing imaging modalities (Zhang et al., 2022)), and environmental sensing (sensor dropout). A small but growing body of work has begun to address the missing-modality problem in fusion architectures (Wu et al., 2026). Methods such as ShaSpec (Wang et al., 2023), SMIL (Ma et al., 2021), and prompt-based imputation strategies (Lee et al., 2023) pro-pose mechanisms for maintaining prediction accuracy when one or more input modalities are absent. These methods share a common framing: missing modalities are treated as a prediction accuracy problem, and the goal is to minimise the performance gap between the full-modality and partial-modality settings. What this framing omits is the question of con-fidence . When a modality is absent, the model has strictly less information than when it is present; a well-designed system should not only maintain reasonable predictions but should also know that it knows less, and communicate this to the end user through appropriately widened uncertainty estimates. Uncertainty quantification in deep learning has advanced substantially in parallel (Ab-dar et al., 2021). Deep ensembles (Lakshminarayanan et al., 2017), Laplace approxima-tions (Daxberger et al., 2021a), evidential deep learning (Sensoy et al., 2018; Amini et al., 2020), and conformal prediction (Angelopoulos and Bates, 2023) each offer distinct mecha-nisms for producing calibrated confidence estimates or prediction sets with coverage guar-antees. The decomposition of predictive uncertainty into aleatoric and epistemic compo-nents (Kendall and Gal, 2017) has become standard practice, and the practical importance of calibration in modern networks is well-established (Guo et al., 2017). Yet these methods have been developed and evaluated almost exclusively in single-modality settings. The ques-tion of how uncertainty should behave when the information available to a model changes structurally—not through noise or distribution shift, but through the discrete absence of an entire input stream—has received little attention. Among these methods, conformal prediction is the most appealing for safety-critical applications because it provides finite-sample coverage guarantees without distributional assumptions (Angelopoulos and Bates, 2023; Vovk et al., 2005). However, the standard 
+
+> 2Modality-Conditioned Conformal Fusion
+
+split-conformal procedure calibrates the non-conformity threshold on a held-out set drawn from the same distribution as the test data. When a modality is absent at inference time, the effective input distribution changes structurally: the test data no longer comes from the same distribution as the calibration data, violating the exchangeability assumption on which the coverage guarantee depends (Tibshirani et al., 2019). Naïvely applying conformal prediction in this setting provides no guarantee, and recomputing calibration quantiles for every possible modality subset is combinatorially expensive and requires labelled data for each configuration. This creates a compelling case for integrating conformal prediction into the architecture itself, so that the non-conformity score is conditioned on the available modality subset and the coverage guarantee holds by construction across configurations. This paper addresses the intersection of these lines of research. We argue that missing-modality robustness and calibrated uncertainty are not independent desiderata but are fun-damentally coupled: an architecture that is robust to modality absence without adjusting its uncertainty is, by definition, miscalibrated under partial observation, and the standard post-hoc application of conformal prediction does not resolve this coupling because the cal-ibration set is drawn from a fixed modality configuration that may not match the test-time configuration. The core technical challenge is to design a fusion mechanism in which un-certainty estimates respond automatically and proportionally to the information content of the available modality subset, with formal coverage guarantees that hold regardless of which modalities are present, achieved through architectural integration rather than post-hoc re-calibration. The contributions of this paper are as follows. • An architecture-integrated approach to uncertainty under modality absence. We pro-pose Modality-Conditioned Conformal Fusion (MCCF), which combines three compo-nents into a single trainable system: a multimodal bottleneck fusion backbone with modality-dropout training, per-modality evidential output heads producing modality-decomposed Dirichlet distributions, and a Dempster-Shafer combination rule that fuses the per-modality evidence into a joint predictive distribution. When a modality is ab-sent, its evidential head produces vacuous evidence that is structurally ignored by the combination rule, so the fused uncertainty automatically reflects the reduced informa-tion without any test-time intervention or imputation step. This is in contrast to prior fusion methods, which either fail on missing inputs or maintain unchanged confidence despite operating with strictly less data. • A Mondrian conformal calibration module with formal coverage across all modality subsets. We introduce a calibration scheme keyed on the binary modality-presence mask, partitioning the held-out calibration set into one group per modality subset and computing per-subset quantiles of a hybrid evidential-conformal non-conformity score. This provides exact finite-sample group-conditional coverage Pr( Y ∈ C(X) | S = s) ≥
+
+1 − α simultaneously for every non-empty modality subset s, without requiring a sep-arate calibration run for each configuration. The score function itself is shaped during training via a differentiable conformal set-size penalty, so the learned representations are optimised to produce tight prediction sets at the chosen miscoverage level. To our knowledge, this is the first method to provide formal coverage guarantees that hold un-
+
+> 3Moayedikia
+
+der arbitrary patterns of modality availability through architectural integration rather than post-hoc recalibration. • Modality-decomposed uncertainty attribution. Because each modality contributes a separate evidential head before Dempster-Shafer fusion, MCCF reports per-modality vacuity scores [u(1) , . . . , u (M )] alongside every prediction set. When a prediction set is uncomfortably large, the per-modality vacuity vector identifies which absent or low-information modality is responsible, enabling an end user to determine that collecting the corresponding data would meaningfully reduce uncertainty. This decomposition is not available from post-hoc conformal methods applied to softmax outputs, where the prediction set size is a function of the joint output alone and cannot be traced back to any specific input stream. • Empirical demonstration that prediction sets adapt to modality availability. We evalu-ate MCCF on a controlled synthetic problem at M = 4 modalities and three standard multimodal benchmarks spanning M = 2 to M = 3 modalities, and show that predic-tion set sizes automatically widen under modality absence while maintaining target coverage. We further show that post-hoc conformal baselines, which apply the cali-bration step to a pre-trained fusion network rather than integrating it during training, either lose coverage when calibration and test distributions differ in modality availabil-ity or produce uninformatively large prediction sets across all configurations. These results confirm that integration of conformal calibration into the architecture, rather than post-hoc application, is the technical move that makes mask-conditional coverage achievable with practical set sizes. The remainder of this paper is organised as follows. Section 2 reviews the relevant lit-erature on multi-modal fusion, missing-modality handling, and uncertainty quantification. Section 3 describes the proposed MCCF architecture. Section 4 presents the experimen-tal setup and results. Section 5 discusses limitations and future directions, and Section 6 concludes. 
+
+2 Related Work 
+
+This section reviews three research areas whose intersection defines the contribution of this paper: multi-modal fusion architectures (Section 2.1), methods for handling missing modal-ities (Section 2.2), and uncertainty quantification in deep learning (Section 2.3). We con-clude with a summary of open challenges and the specific research gap addressed by this work (Section 2.4). 
+
+2.1 Multi-Modal Fusion Architectures 
+
+Multi-modal fusion architectures are conventionally categorised by the stage at which modality-specific representations are combined (Baltrušaitis et al., 2019; Liang et al., 2023; Xu et al., 2023). Early fusion concatenates raw inputs or shallow features before processing through a shared encoder, preserving low-level cross-modal interactions but requiring all modalities to share a compatible input representation. Late fusion trains modality-specific encoders independently and combines their outputs at the decision level, offering modularity but 
+
+> 4Modality-Conditioned Conformal Fusion
+
+sacrificing the ability to model fine-grained inter-modal dependencies. Intermediate fusion strategies, which combine modality representations at one or more hidden layers, have be-come the dominant paradigm due to their flexibility. Within intermediate fusion, three architectural families have emerged. Cross-attention mechanisms, introduced to multi-modal settings by ViLBERT (Lu et al., 2019) and subse-quently refined in the Multimodal Transformer (MulT) (Tsai et al., 2019) and Flamingo (Alayrac et al., 2022), allow tokens from one modality to attend over tokens from another, enabling fine-grained information exchange. This approach is expressive but scales quadratically in the total number of tokens across modalities. Simpler single-stream approaches such as ViLT (Kim et al., 2021) demonstrate that competitive performance can be achieved by feed-ing all modalities through a single Transformer without modality-specific encoders, though at the cost of reduced flexibility for heterogeneous input types. Latent-bottleneck architectures address the scaling limitation of full cross-attention by routing all modality information through a small set of learned latent vectors. Perceiver IO (Jaegle et al., 2022) cross-attends inputs of arbitrary type and dimensionality into a compact latent array, processing them with self-attention before decoding with task-specific output queries. The architecture is modality-agnostic by construction—the same model handles text, images, audio, and point clouds—and scales linearly rather than quadratically in input size. Nagrani et al. (2021) proposed a more targeted version of this idea with the Multimodal Bottleneck Transformer (MBT), in which a small number of bottleneck tokens mediate information flow between modality-specific Transformer streams. On AudioSet, MBT achieved a 12.7% relative improvement over the prior state-of-the-art while signifi-cantly reducing the computational cost of cross-modal interaction. The bottleneck design is particularly relevant to the missing-modality setting because it creates a natural information chokepoint: when a modality is absent, its contribution to the bottleneck tokens is simply removed, and the architectural question becomes how the remaining pathway responds. Contrastive alignment methods take a different approach by learning a shared embedding space across modalities without requiring dense cross-modal interaction during inference. CLIP (Radford et al., 2021) trains image and text encoders with a symmetric InfoNCE loss (van den Oord et al., 2018) over web-scale pairs, yielding strong zero-shot transfer. Im-ageBind (Girdhar et al., 2023) extends this to six modalities—images, text, audio, depth, thermal, and IMU—using only image-paired data for each modality, demonstrating emergent cross-modal retrieval between modality pairs never co-observed during training. The image-anchored alignment strategy is relevant because it shows that not all modality combinations need to be seen during training for meaningful cross-modal representations to emerge, a property that has implications for generalisation under novel patterns of modality availabil-ity. The Vision Transformer (ViT) (Dosovitskiy et al., 2021) serves as the backbone encoder in many of these systems, and its calibration properties under distribution shift (Minderer et al., 2021) are relevant to the uncertainty considerations discussed in Section 2.3. Attention-based feature recalibration modules, though not multi-modal architectures per se, have become standard components within modality-specific encoders. Squeeze-and-Excitation (SE) blocks (Hu et al., 2018) adaptively recalibrate channel-wise feature responses, while CBAM (Woo et al., 2018) extends this to jointly model channel and spatial attention. These modules are widely used within the encoders of multi-modal systems and 
+
+> 5Moayedikia
+
+are relevant to the present work because their attention weights provide a natural signal for modality informativeness. Table 1 (Part A) summarises the key multi-modal fusion architectures discussed in this subsection. 
+
+2.2 Missing-Modality Handling 
+
+The problem of learning from and predicting with incomplete modality subsets has attracted increasing attention as multi-modal models move toward deployment in real-world settings where sensor availability cannot be guaranteed. Wu et al. (2026) provide a comprehen-sive survey of this area, categorising existing methods into data-processing approaches (im-putation and representation-level handling) and strategy-design approaches (architectural modifications and model combinations). A first class of approaches trains the model to be robust to modality absence through reg-ularisation or data augmentation. Modality dropout—randomly zeroing out entire modality streams during training—is the simplest such strategy and has been shown to improve ro-bustness at inference time, though the degree of improvement varies substantially across architectures and datasets (Neverova et al., 2016). SMIL (Ma et al., 2021) extends this idea by learning to generate Bayesian meta-representations for missing modalities, conditioned on the available modalities, and imputing them during inference. The approach maintains reasonable accuracy under single-modality absence but degrades when multiple modalities are simultaneously missing and does not provide any uncertainty estimate reflecting the quality of the imputation. A second class learns shared or aligned representations that are inherently robust to modality configuration changes. ShaSpec (Wang et al., 2023) decomposes representations into shared and modality-specific components, using the shared component as a fallback when modality-specific features are unavailable. This decomposition provides a principled mechanism for partial-observation inference but assumes a fixed shared-specific partition that may not hold across all tasks or domains. In the related setting of incomplete multi-view learning, Lin et al. (2022) demonstrated that dual contrastive prediction objectives can simultaneously align cross-view representations and recover missing views in a shared latent space, achieving strong performance under view absence without explicit generative imputation. Prompt-based methods (Lee et al., 2023) attach learnable prompt tokens condi-tioned on the set of available modalities, effectively signalling to the model which inputs are present; these methods are flexible but introduce additional parameters and have been eval-uated primarily in vision-language settings. Reza et al. (2025) recently demonstrated that parameter-efficient adaptation procedures—requiring fewer than 1% of total parameters— can partially bridge the performance gap due to missing modalities across a wide range of tasks and modality combinations. A third class addresses the missing-modality problem through dedicated architectural design. mmFormer (Zhang et al., 2022) proposes a Transformer-based architecture for multi-modal medical image segmentation that uses modality-aware self-attention and cross-attention to handle arbitrary subsets of MRI sequences at inference time. Ma et al. (2022) observed that standard multimodal Transformers such as ViLT exhibit drastic performance drops when modalities are missing, and proposed an optimal fusion strategy to recover 
+
+> 6Modality-Conditioned Conformal Fusion
+
+this loss. Cross-modal knowledge distillation offers a complementary strategy, transferring knowledge from a teacher network that has seen all modalities to a student network that operates under partial observation. This problem has received sustained attention in medical imaging, where missing modal-ities arise routinely from variable scanner availability, cost constraints, and patient drop-out. In multimodal brain tumour segmentation, Zhou (2023) proposed a unified network combining cross-modality and multi-scale feature fusion with a spatial-consistency latent-feature learning module, augmented by multi-task supervision that simultaneously segments tumours and reconstructs absent modalities to mitigate downstream information loss. A sub-sequent extension (Zhou, 2024) introduces disentangled representation learning that decou-ples fused features into region-specific factors and applies region-aware contrastive learning to sharpen tumour region-related signals, demonstrating that explicit disentanglement of modality-shared and target-specific factors improves multi-class segmentation quality. For Alzheimer’s disease diagnosis, where structural MRI and FDG-PET are routinely only par-tially available because PET acquisition is roughly an order of magnitude more expensive than MRI, Liu et al. (2021) proposed an auto-encoder-based multi-view completion frame-work (AEMVC) that complements the kernel matrix of incomplete views using latent repre-sentations derived from the complete view, regularised by graph constraints and a Hilbert-Schmidt independence criterion before a kernel-based multi-view classifier is applied. More recently, Xu et al. (2022) extended this direction to longitudinal AD progression prediction with both partial modality missing (only one imaging modality available at a visit) and visit missing (no imaging recorded at a visit) on ADNI, using a deep multi-modality fusion mod-ule that captures arbitrary modality-missing patterns alongside a collaboratively trained sequence-learning module for variable-length cognitive-score trajectories. These medical-imaging approaches engage seriously with the prediction-accuracy and imputation aspects of modality absence and report substantial gains over naive baselines; in common with the broader literature reviewed above, however, they do not measure or optimise the calibration of their confidence estimates under reduced information, nor do they provide formal coverage guarantees for predictions made with incomplete inputs. Across all three classes, the evaluation protocol focuses almost exclusively on prediction accuracy. The standard metric is the performance gap between the full-modality model and the same model evaluated under systematic modality ablation. Whether the model’s confidence estimates remain calibrated under modality absence—whether the model “knows what it does not know” when an input stream is removed—is not measured, reported, or dis-cussed in any of the works reviewed above. No missing-modality method has attempted to provide formal coverage guarantees for predictions made under partial observation, nor has any method proposed a mechanism for producing prediction sets whose size adjusts auto-matically to reflect the information lost through modality absence. This omission represents a significant limitation, because in safety-critical applications the reliability of a predic-tion under partial observation depends not only on accuracy but on whether the reported confidence accurately reflects the reduced information available. 
+
+> 7Moayedikia
+
+2.3 Uncertainty Quantification in Deep Learning 
+
+Uncertainty quantification methods for deep networks can be grouped by the type of mod-ification they require and the guarantees they provide. Abdar et al. (2021) provide a com-prehensive survey of techniques, applications, and open challenges in this area. Ensemble-based methods aggregate predictions from multiple independently trained copies of a model. Deep ensembles (Lakshminarayanan et al., 2017) remain one of the strongest baselines for both calibration and out-of-distribution detection, a finding confirmed by the large-scale evaluation of Ovadia et al. (2019), who showed that ensembles consistently out-perform other methods under dataset shift. MC dropout (Gal and Ghahramani, 2016) approximates Bayesian inference by applying dropout at test time and treating the result-ing stochastic predictions as samples from an approximate posterior. While widely adopted due to its simplicity, MC dropout has been shown to underestimate epistemic uncertainty in practice and is now generally considered dominated by ensembles and Laplace-based meth-ods on calibration metrics (Daxberger et al., 2021a). Kendall and Gal (2017) provided the influential framework for decomposing predictive uncertainty into aleatoric (data-inherent) and epistemic (model) components, a distinction that remains central to architectural deci-sions about where and how to estimate uncertainty. The Laplace approximation has experienced a practical revival through the work of Daxberger et al. (2021a), who demonstrated that applying a post-hoc Laplace approxima-tion to the last layer of a pre-trained network yields calibration quality competitive with deep ensembles at negligible additional cost. The method requires no retraining and no architectural modification—only a curvature estimate (diagonal or KFAC) over the final layer’s parameters. Subnetwork Bayesian inference (Daxberger et al., 2021b) extends this to larger subsets of the network, providing a tunable trade-off between computational cost and uncertainty quality. Wilson and Izmailov (2020) provide a broader perspective on the relationship between Bayesian deep learning and generalisation, arguing that approximate Bayesian methods capture useful information about the posterior even when the approxi-mation is crude. Evidential deep learning takes a fundamentally different approach by modifying the output head of the network to parameterise a higher-order distribution. For classification, Sensoy et al. (2018) replace the standard softmax with a Dirichlet distribution over class probabilities, building on the subjective logic framework of Jøsang (Jøsang, 2016), and enabling the network to express both aleatoric and epistemic uncertainty from a single forward pass. For regression, Amini et al. (2020) parameterise a Normal-Inverse-Gamma prior from which both predictive variance and epistemic confidence are extracted. The architectural modification is minimal—a change of activation in the final layer—but the theoretical foundations have been scrutinised. Bengs et al. (2022) demonstrated that the epistemic uncertainty component in evidential methods is not identifiable from the training loss alone, meaning that models with different epistemic uncertainty estimates can achieve identical loss values. This identifiability issue does not invalidate the approach but requires careful regularisation and empirical validation. Subsequent journal-length treatments have begun to address this concern by explicitly coupling evidential outputs with calibration objectives; Huang et al. (2025b), for instance, recently demonstrated in the International Journal of Approximate Reasoning that evidential time-to-event prediction can be made 
+
+> 8Modality-Conditioned Conformal Fusion
+
+calibration-aware through targeted training procedures, providing a template for combining evidential reasoning with formal coverage targets that the present work extends to the multimodal missing-data setting. Conformal prediction provides distribution-free coverage guarantees under the sole as-sumption of exchangeability. Rooted in the foundational framework of Vovk et al. (2005) and developed extensively in the statistics literature by Lei et al. (2018), whose JASA-published treatment established the split-conformal framework and its finite-sample validity proofs for regression, and recently surveyed by Angelopoulos and Bates (2023), conformal prediction constructs prediction sets C(Xtest ) satisfying Pr( Ytest ∈ C(Xtest )) ≥ 1 − α for any user-specified error rate α, without assumptions about the model class or data distribution. Coverage is marginal—averaged over the data distribution—which is a recognised limita-tion; Vovk (2013) established that exact pointwise conditional validity Pr( Y ∈ C(X) | X =
+
+x) ≥ 1 − α is impossible to attain without strong distributional assumptions, motivating in-termediate targets such as group-conditional (Mondrian) validity and the adaptive variants RAPS (Angelopoulos et al., 2021) and APS (Romano et al., 2020), which adjust set sizes to approximate conditional coverage. Gibbs and Candès (2021) extended conformal predic-tion to the online setting with adaptive conformal inference, providing coverage guarantees under temporal distribution shift. Tibshirani et al. (2019) showed that weighted conformal prediction can maintain valid coverage under covariate shift, provided the likelihood ratio between calibration and test distributions is estimable. This result is directly relevant to the missing-modality setting, where the effective input distribution changes discretely with modality availability; however, the likelihood ratio depends on which modalities are present, and estimating it for each possible subset requires either combinatorial enumeration or a modality-conditioned density model, neither of which has been proposed. The closest existing framework to the present work is the Conformal Prediction with Missing Data Augmentation (CP-MDA) line of work introduced by Zaffran et al. (2023). CP-MDA-Nested artificially masks calibration points so that their missingness patterns form supersets of the test point’s available modalities, and aggregates the resulting augmented sets to construct prediction sets that satisfy Mask-Conditional-Validity Pr( Y ∈ C(X) | S =
+
+s) ≥ 1 − α without requiring exact mask matching or likelihood-ratio estimation. This framework is the most direct precursor to MCCF, but it has been developed in a model-agnostic regression setting and treats the underlying predictor as a frozen black box: the prediction sets it produces are derived from a pre-trained point estimator, and the conformal objective plays no role during training. MCCF builds on the same mask-conditional principle but extends it in three respects: (i) the underlying predictor is an evidential head whose Dirichlet outputs already encode modality-decomposed uncertainty, (ii) the score function is shaped during training by a differentiable conformal set-size penalty rather than applied post-hoc to a fixed model, and (iii) the construction operates in classification, where evidence combination via Dempster-Shafer fusion ensures that absent modalities contribute vacuous opinions that are structurally ignored. The most recent extension combining evidential and conformal methods is the work of Karimi and Samavi (2024), which uses the evidence output of an EDL head as the non-conformity score, producing smaller prediction sets than standard conformal methods while preserving the finite-sample coverage guarantee; that work, however, operates in a single-modality, complete-data setting. 
+
+> 9Moayedikia
+
+A nascent line of work has begun to move conformal prediction from a post-hoc cal-ibration procedure to a component of end-to-end training, though two distinct objectives have emerged. Stutz et al. (2022) proposed ConfTr, which simulates the conformalisation procedure on each mini-batch during training and directly minimises a differentiable approx-imation of the prediction set size via a smooth-sorting operation, producing models whose learned representations are optimised to yield tight prediction sets at the chosen miscov-erage level. Einbinder et al. (2022) introduced a complementary approach—Conformalised Uncertainty-Aware Training (CUT)—which instead targets the empirical cumulative distri-bution function (CDF) of the conformity scores, applying a non-parametric Kolmogorov-Smirnov or Cramér-von Mises penalty to push the score distribution toward uniformity and thereby combat overconfidence. ConfTr and CUT therefore optimise distinct objec-tives: ConfTr focuses the gradient on the decision boundary at the calibrated quantile and minimises set size directly, while CUT regulates the entire score distribution to mitigate miscalibration. Our method adopts the ConfTr-style size penalty in Section 3.5 because its objective aligns directly with producing tight, modality-conditioned prediction sets; we do not employ the CDF-uniformity penalty because enforcing distributional uniformity glob-ally can interfere with the per-modality vacuity signal that MCCF uses for uncertainty attribution. Both works, however, operate in single-modality, single-distribution settings, and neither has been extended to architectures where the input structure itself changes between calibration and test time due to modality absence. Architecturally integrated uncertainty—as opposed to post-hoc uncertainty applied to a frozen model—remains rare. SNGP (Liu et al., 2020) replaces the final dense layer with a spectral-normalised Gaussian process layer that provides distance-aware uncertainty, achiev-ing strong out-of-distribution detection without ensembling. Minderer et al. (2021) showed that modern non-convolutional architectures, particularly Vision Transformers, are among the best-calibrated models after temperature scaling, suggesting that architectural choices interact with calibration in ways that are not yet fully understood. The closest existing work to the present paper on the evidential-multimodal side is the Trusted Multi-View Classification (TMC) framework of Han et al. (2023), published in IEEE TPAMI. TMC applies evidential deep learning to multi-view classification, treating each view as an independent source of Dirichlet evidence and combining them via Dempster-Shafer fusion. This provides a mechanism for dynamically weighting views by their estimated reliability, and the framework naturally handles the case where a view is uninformative (low evidence). Huang et al. (2025a) extended this direction to multimodal medical image seg-mentation, introducing contextual discounting coefficients that quantify the per-class relia-bility of each modality before combining evidence via Dempster’s rule. These works represent the most advanced fusion of evidential reasoning with multi-modal architectures, but they share three limitations relevant to the present paper. First, the Dempster-Shafer combina-tion rule provides heuristic uncertainty that is not calibrated in the frequentist sense: there is no finite-sample coverage guarantee, and the evidence combination can produce overcon-fident predictions when modalities conflict—a fragility known as Zadeh’s paradox that has motivated active work in the Information Fusion community on alternative combination operators, including the recent variational quantum solver-based formulation of Luo et al. (2024); such refinements address the combination mechanism itself but do not provide statis-tical coverage guarantees for the resulting predictions. Second, neither framework has been 
+
+> 10 Modality-Conditioned Conformal Fusion
+
+evaluated under systematic modality ablation where entire modalities are absent rather than merely noisy. Third, neither incorporates conformal calibration, meaning that even if the evidential scores are informative, there is no mechanism to translate them into prediction sets with provable coverage. Table 1 (Part B) summarises the key uncertainty quantification methods discussed above. 
+
+2.4 Summary and Open Challenges 
+
+The three bodies of work reviewed above have developed largely independently. The multi-modal fusion literature (Radford et al., 2021; Jaegle et al., 2022; Nagrani et al., 2021; Girdhar et al., 2023) has produced increasingly sophisticated architectures for combining heteroge-neous data types but has not engaged with the question of calibrated uncertainty under partial observation. The missing-modality literature (Wang et al., 2023; Ma et al., 2021; Lee et al., 2023; Reza et al., 2025; Zhang et al., 2022; Zhou, 2023, 2024; Liu et al., 2021; Xu et al., 2022) has addressed the prediction accuracy problem of modality absence but has not mea-sured or optimised the calibration of confidence estimates under reduced information, nor has any method provided formal coverage guarantees for predictions made with incomplete inputs. The uncertainty quantification literature (Lakshminarayanan et al., 2017; Daxberger et al., 2021a; Sensoy et al., 2018; Angelopoulos and Bates, 2023) has developed principled methods for producing calibrated predictions and prediction sets with coverage guarantees but has evaluated these methods almost exclusively in single-modality settings, where the information available to the model is fixed. The emerging work on end-to-end conformal training (Stutz et al., 2022; Einbinder et al., 2022) demonstrates that conformal prediction can be integrated into the training loop, but this has not been extended to multi-modal architectures or to settings where the input structure changes at test time. The work of Han et al. (2023) and Huang et al. (2025a) comes closest to bridging this gap on the evidential-fusion side, applying evidential reasoning to multi-view and multi-modal fusion. However, these approaches provide Dempster-Shafer-based uncertainty rather than formal statistical coverage guarantees, and critically, they have not been evaluated under the specific setting of complete modality absence at inference time. On the conformal side, the weighted conformal prediction framework of Tibshirani et al. (2019) provides the theoretical tool for maintaining coverage under distributional change, but has not been applied to the discrete distributional shift induced by modality absence, and its requirement for likelihood-ratio estimation creates a combinatorial burden when the number of possible modality subsets is large. The CP-MDA-Nested framework of Zaffran et al. (2023) resolves the likelihood-ratio difficulty for missing inputs but does so for a fixed pre-trained regressor, leaving open the question of how to couple mask-conditional conformal calibration with an architecture whose internal representations are themselves modality-aware. The gap at the intersection of these areas is both specific and consequential. No existing architecture produces uncertainty estimates that are simultaneously: (i) calibrated in the full-modality setting, (ii) automatically widened in proportion to the information lost when one or more modalities are absent, (iii) accompanied by formal coverage guarantees that hold under arbitrary patterns of modality availability, and (iv) achieved through architectural integration rather than post-hoc calibration, so that the coverage guarantee does not require a separate calibration set for each modality configuration. Furthermore, no existing method 
+
+> 11 Moayedikia
+
+decomposes the predictive uncertainty into components attributable to specific modalities, which would enable an end user to understand not just how uncertain the model is but why— specifically, which absent information source is responsible for the increased uncertainty. This gap is not merely theoretical. In deployment settings where multi-modal sens-ing is used for safety-critical decisions—structural health monitoring (Alani et al., 2020), autonomous navigation (Bijelic et al., 2020), clinical diagnosis (Zhang et al., 2022)—the combination of a confident prediction and a missing modality represents a latent failure mode. A model that maintains high accuracy under modality absence but does not adjust its confidence accordingly provides no mechanism for a human operator to distinguish be-tween a reliable prediction made with full information and an equally confident prediction made with reduced information. Closing this gap requires an architecture that treats modal-ity availability as a first-class input to the uncertainty estimation process, not as a nuisance variable to be marginalised out. 
+
+> 12
+
+Modality-Conditioned Conformal Fusion 
+
+> Table 1: Summary of reviewed methods. Part A: multi-modal fusion architectures. Part B: uncertainty quantification methods.
+> Part A — Multi-Modal Fusion Architectures
+> Reference  Approach  Fusion Stage  Missing-Modality  Key Limitation Lu et al. (2019)  ViLBERT: co-attentional Transformer layers Intermediate  None  Quadratic cross-modal cost Tsai et al. (2019)  MulT: directional pairwise cross-attention  Intermediate  None  Scales with modality pairs Radford et al. (2021)  CLIP: contrastive dual encoder with InfoNCE Late  Implicit (independent enc.) Coarse alignment only Kim et al. (2021)  ViLT: single-stream Transformer, no region feat. Intermediate  None  Drastic drop when modality missing Nagrani et al. (2021)  MBT: bottleneck tokens mediate cross-modal flow Intermediate  Not evaluated  Limited task diversity studied Jaegle et al. (2022)  Perceiver IO: modality-agnostic latent cross-attn Intermediate  Not evaluated  Output query design ad-hoc Lin et al. (2022)  Dual contrastive prediction for incomplete views Intermediate  Recovery via contrast  Pairwise view assumption Alayrac et al. (2022)  Flamingo: perceiver resampler for visual grounding Intermediate  None  Frozen LM limits adaptation Xu et al. (2023)  Transformer-based multimodal learning survey N/A (survey)  Partial coverage  Survey, not a method Girdhar et al. (2023)  ImageBind: image-anchored six-modality embedding Late  Partial (emergent retrieval) Variable alignment quality
+> Part B — Uncertainty Quantification Methods
+> Reference  Method  Arch. Modification  Guarantee  Key Limitation Vovk (2013)  Conditional validity impossibility result  N/A (theory)  Negative result  No constructive procedure Gal & Ghahramani (2016)  MC dropout as variational Bayesian approximation None  Approx. Bayesian  Underestimates epistemic UQ Kendall & Gal (2017)  Aleatoric/epistemic uncertainty decomposition Output head  None  Requires task-specific losses Lakshminarayanan et al. (2017) Deep ensembles: multiple independent models None (multiple models) Empirical  Multiplicative training cost Sensoy et al. (2018)  EDL: Dirichlet over class probabilities  Output head  None (heuristic)  Identifiability issues Amini et al. (2020)  Evidential regression: NIG prior, single-pass Output head  None (heuristic)  Requires regularisation Liu et al. (2020)  SNGP: spectral-normalised GP last layer  Last layer  Distance-aware  Spec. norm may hurt accuracy Daxberger et al. (2021)  Laplace Redux: post-hoc last-layer Bayes  None (post-hoc)  Approx. Bayesian  Curvature approx. limits Angelopoulos & Bates (2023)  Conformal prediction: distribution-free sets None (post-hoc)  Marginal coverage  Marginal, not conditional Romano et al. (2020)  APS: adaptive prediction sets for conditional coverage None (post-hoc)  Approx. conditional  Approximate only Stutz et al. (2022)  ConfTr: end-to-end set-size minimisation  Training loss  Marginal coverage  Single-modality only Einbinder et al. (2022)  CUT: CDF-uniformity penalty in training loss Training loss  Marginal coverage  Single-distribution only Zaffran et al. (2023)  CP-MDA-Nested: conformal under missing values None (post-hoc)  Mask-conditional  Regression; frozen predictor Han et al. (2023)  TMC: evidential multi-view with DS fusion Output head  DS heuristic  No formal coverage guarantee Karimi & Samavi (2024)  Evidential conformal: EDL as CP score  Output head  Marginal coverage  Classification only Huang et al. (2025)  Evidential multimodal fusion with discounting Output head  DS heuristic  Not tested under modality absence
+
+13 Moayedikia 
+
+3 Modality-Conditioned Conformal Fusion 
+
+This section describes the proposed MCCF architecture. We present the three components in sequence: the bottleneck fusion backbone (Section 3.2), the evidential uncertainty head with Dempster-Shafer combination (Section 3.3), and the Mondrian conformal calibration module (Section 3.4). We then describe the joint training procedure and inference algorithm (Section 3.5). 
+
+3.1 Problem Formulation 
+
+Consider a classification task with K classes and M modalities. Each sample consists of an input tuple x = ( x(1) , . . . , x (M )) and a label y ∈ { 1, . . . , K }. At inference time, not all modalities may be available. We represent the modality configuration by a binary mask s ∈{0, 1}M , where sm = 1 indicates that modality m is present and sm = 0 indicates absence. The goal is to produce, for each test input (x, s), a prediction set C(x, s) ⊆ { 1, . . . , K }
+
+satisfying the group-conditional coverage guarantee 
+
+Pr  Ytest ∈ C(Xtest , s) | Stest = s ≥ 1 − α (1) for every non-empty modality subset s ∈ { 0, 1}M \ { 0} and a user-specified miscoverage rate 
+
+α.Figure 1 illustrates the complete MCCF architecture. The system comprises three com-ponents: a bottleneck fusion backbone (Component A), per-modality evidential heads with Dempster-Shafer combination (Component B), and a Mondrian conformal calibration mod-ule (Component C). The following subsections describe each component in detail. 
+
+3.2 Component A: Bottleneck Fusion Backbone 
+
+The fusion backbone follows the Multimodal Bottleneck Transformer (MBT) design (Nagrani et al., 2021), in which modality-specific Transformer streams interact exclusively through a small set of shared bottleneck tokens. Each modality m is processed by a separate encoder Em that maps the raw input x(m)
+
+to a sequence of token representations h(m) = Em(x(m)) ∈ RNm×d, where Nm is the number of tokens and d is the embedding dimension. The choice of encoder is modality-specific: a convolutional backbone for images, an embedding layer for tabular features, or a patch-based Transformer for volumetric data. When modality m is absent ( sm = 0 ), its encoder output is gated to zero: h(m) ← h(m) · sm.A set of B learned bottleneck tokens z ∈ RB×d is shared across all modalities. Fol-lowing the MBT design, the first Lf − 1 layers of the Transformer process each modality stream independently via self-attention. From layer Lf onward, cross-modal interaction is restricted to the bottleneck tokens: each modality stream attends to the bottleneck tokens, and the bottleneck tokens attend to all modality streams, but modality streams do not at-tend to each other directly. This design compresses inter-modal information flow through the bottleneck, reducing the computational cost from O(( P 
+
+> m
+
+Nm)2) for full cross-attention to O(B · P 
+
+> m
+
+Nm).Each modality stream is prepended with a learned modality-identity token id m ∈ Rd
+
+that signals both the modality type and its presence or absence to the bottleneck. This is 
+
+> 14
+
+Modality-Conditioned Conformal Fusion 
+
+Component A 
+
+x(1) x(2) · · · x(M )
+
+Encoder E1 Encoder E2 · · · Encoder EM    
+
+> ×s1×s2×sMModDrop ( p= 0 .5)
+
+Component B α(1) = ReLU + 1 α(2) = ReLU + 1 · · · α(M ) = ReLU + 1
+
+MBT Bottleneck Fusion               
+
+> B= 4 bottleneck tokens ·Mid-fusion at Lf= 8 ·12-layer Transformer Modality identity tokens id 1, . . . , id M·Unimodal self-attn (layers 1–7) →Cross-attn via bottleneck (layers 8–12)
+
+α(global ) = ReLU (Wg ¯h(global )) + 1
+
+Dempster-Shafer Evidence Combination (TMC)              
+
+> α=L
+> m:sm=1 α(m)⊕α(global )Vacuous evidence α(m)=1when sm= 0
+
+Component C Non-conformity score: r(x, y, s) = 1 − πy (x, s) + λ · u(x, s)
+
+Mondrian Conformal Calibration                      
+
+> Per-subset quantile ˆqsfrom held-out Dcal ·Taxonomy κ=s·Coverage: Pr( Y∈C|S=s)≥1−α
+
+Prediction set C(x, s) Vacuity [u(1) , . . . , u (M )]
+
+Figure 1: Architecture of Modality-Conditioned Conformal Fusion (MCCF). Component A: modality-specific encoders with MBT bottleneck fusion and modality dropout ( pmod = 0 .5). Component B: per-modality Dirichlet evidential heads combined via Dempster-Shafer fu-sion; absent modalities contribute vacuous evidence ( α(m) = 1). Component C: Mondrian conformal calibration yielding group-conditional coverage Pr( Y ∈ C | S = s) ≥ 1 − α over every non-empty modality subset s.necessary for the downstream Mondrian conformal module, which conditions on the modality mask s.Based on the MBT ablation, which showed insensitivity across a 256-fold range of bot-tleneck sizes, we use B = 4 bottleneck tokens with mid-fusion starting at layer Lf = 8 of a 12-layer Transformer. 
+
+3.3 Component B: Evidential Uncertainty Head 
+
+The uncertainty head produces modality-decomposed Dirichlet distributions following the evidential deep learning framework (Sensoy et al., 2018) and the Trusted Multi-View Clas-sification (TMC) design (Han et al., 2023). 
+
+15 Moayedikia 
+
+Each modality m has a dedicated readout head that maps the modality-specific encoder output (before fusion) to an evidence vector: 
+
+e(m) = ReLU (Wm ¯h(m) + bm), α(m) = e(m) + 1 (2) where ¯h(m) is the mean-pooled encoder output for modality m, and α(m) ∈ RK>0 parame-terises a Dirichlet distribution Dir (p | α(m)) over class probabilities. The Dirichlet strength 
+
+S(m) = P 
+
+> k
+
+α(m) 
+
+> k
+
+quantifies total evidence, and the per-modality vacuity u(m) = K/S (m)
+
+measures epistemic uncertainty: when modality m is absent, e(m) ≈ 0 and u(m) ≈ 1, repre-senting complete ignorance. A global readout head operates on the fused bottleneck representation to produce a global evidence vector α(global ) via the same parameterisation. The per-modality and global evidence vectors are combined using Dempster’s rule of combination (Jøsang, 2016; Han et al., 2023). For two sources with Dirichlet parameters 
+
+α(a) and α(b), the combined parameters are 
+
+α(a⊕b) 
+
+> k
+
+= (α(a) 
+
+> k
+
+− 1)( α(b) 
+
+> k
+
+− 1) 
+
+K + α(a) 
+
+> k
+
++ α(b) 
+
+> k
+
+− 1 (3) applied iteratively over all present modalities and the global head: α = L 
+
+> m:sm=1
+
+α(m) ⊕
+
+α(global ). When a modality is absent, its vacuous opinion ( α(m) = 1, u(m) = 1 ) acts as a neutral element under Dempster’s rule and is structurally ignored in the combination. The evidential loss follows the TMC formulation (Han et al., 2023): 
+
+LEDL = X
+
+> i
+
+(yi − Eαi [p]) 2 + Var αi [p] (4) with a KL-to-uniform regulariser LKL = KL [Dir ( ˜ αi)∥Dir (1)] on the adjusted parameters 
+
+˜αi = yi + (1 − yi) ⊙ αi, annealed linearly from weight 0 to 1 over the first 10 epochs. The per-modality vacuity u(m) provides modality-decomposed uncertainty attribution: when a prediction set is large, a user can inspect which modalities have high vacuity and determine that collecting the corresponding data would reduce uncertainty. This inter-pretability is not available from post-hoc conformal methods applied to softmax outputs. 
+
+3.4 Component C: Mondrian Conformal Calibration 
+
+The conformal module converts the evidential output into prediction sets with formal cover-age guarantees. Standard split-conformal prediction (Angelopoulos and Bates, 2023; Vovk et al., 2005) calibrates a single non-conformity threshold on a held-out set, but this thresh-old is valid only under the distribution from which the calibration data was drawn. When modalities are missing, the effective input distribution changes, violating the exchangeability assumption. We resolve this using Mondrian conformal prediction (Vovk et al., 2005), which partitions the data into groups defined by a taxonomy function κ and provides coverage guarantees within each group independently. Closely related is the CP-MDA-Nested framework of Zaffran et al. (2023), which establishes mask-conditional validity for regression under missing inputs by augmenting calibration data so that the missingness patterns of the augmented 
+
+> 16 Modality-Conditioned Conformal Fusion
+
+points form supersets of the test mask. Our construction adapts the same mask-conditional principle to classification with evidential scoring and integrates the conformal objective into training, as detailed below. Setting κ(x, s) = s—the modality-presence mask—partitions the calibration set into 2M − 1 groups, one per non-empty modality subset. Within each group 
+
+s, the calibration and test points are exchangeable (conditioned on s, the input distribution is fixed), so the standard conformal guarantee applies per group. The modality-conditioned non-conformity score is defined as 
+
+r(x, y, s) = 1 − πy(x, s) + λ · u(x, s) (5) where πy = αy/S is the y-th coordinate of the Dirichlet mean (the predicted probability for class y), u = K/S is the combined vacuity, and λ is a hyperparameter tuned on a validation split. This hybrid score, following the evidential conformal approach of Karimi and Samavi (2024), produces smaller prediction sets than standard adaptive prediction sets (Romano et al., 2020) while incorporating epistemic uncertainty. Given a held-out calibration set Dcal , we compute, for each non-empty modality subset 
+
+s, the empirical quantile 
+
+ˆqs = Quantile  {r(xi, y i, si) : ( xi, y i) ∈ D cal , si = s}, ⌈(ns + 1)(1 − α)⌉/n s
+
+ (6) where ns = |{ i : si = s}| is the number of calibration points in group s. The prediction set for a test input is 
+
+C(xtest , stest ) = {y ∈ { 1, . . . , K } : r(xtest , y, stest ) ≤ ˆqstest } (7) By Theorem 1 of Vovk et al. (2005), and under the assumption that calibration and test points within each subset s are exchangeable, this construction satisfies the group-conditional coverage guarantee in Eq. (1) for every s simultaneously. We note that this is a deliberately weaker target than exact pointwise conditional coverage Pr( Y ∈ C | X =
+
+x, S = s) ≥ 1 − α, which Vovk (2013) showed is impossible to attain in a distribution-free setting; group-conditional validity keyed on the modality mask is the strongest finite-sample guarantee available in our setting and matches the mask-conditional validity target of CP-MDA-Nested (Zaffran et al., 2023). When within-subset exchangeability is violated (e.g., due to scanner drift across sites), Barber et al. (2023) provide the degradation bound: 
+
+Pr( Y ∈ C | S = s) ≥ 1−α−∆s, where ∆s is the total-variation distance between calibration and test distributions within subset s.For M modalities, the Mondrian partition yields 2M − 1 groups, each requiring at least 
+
+⌈1/α ⌉ calibration points for the basic guarantee and approximately 100 for stable quantile estimation. When the calibration set is too small for some subsets (e.g., M ≥ 5), subsets can be clustered by Hamming distance on s and calibrated jointly at the cost of weakening coverage from group-conditional to cluster-conditional. 
+
+3.5 Training Procedure 
+
+MCCF is trained end-to-end with three loss components and a modality-dropout schedule. During each training iteration, a modality-dropout mask si ∼ Bernoulli (1 − pmod )M is sampled independently for each sample, with the all-zero pattern rejected. We set pmod =
+
+> 17 Moayedikia
+
+0.5, substantially higher than the 10% rate of Neverova et al. (2016), because the conformal module requires calibrated behaviour across all 2M − 1 subsets, not just the full-modality case. This dropout rate is held constant throughout training; annealing toward the expected test-time rate would bias the calibration toward common subsets and degrade coverage for rare ones. The total loss is: 
+
+L = LEDL + λKL (t) · L KL + λset · L set + λdiv · L div (8) where LEDL and LKL are defined in Eqs. (4)–(6), λKL (t) = min(1 , t/ 10) is the annealing schedule, Lset is an optional ConfTr-style (Stutz et al., 2022) differentiable conformal set-size penalty computed within each mini-batch (50/50 split into calibration and prediction halves, with smooth sigmoid thresholding at temperature T = 1 ), and Ldiv is an auxiliary modality-reconstruction loss that encourages per-modality encoders to remain informative under modality dropout. We adopt the ConfTr set-size objective rather than the CUT CDF-uniformity penalty of Einbinder et al. (2022) because the former regularises the score function specifically at the decision boundary, leaving the score distribution elsewhere free to reflect per-modality vacuity differences that MCCF relies on for uncertainty attribution. The ConfTr component shapes the learned score function to produce small prediction sets but does not by itself provide a coverage guarantee (Stutz et al., 2022; Einbinder et al., 2022). The formal guarantee comes exclusively from the post-hoc Mondrian calibration step performed on a held-out calibration split after training is complete. At inference time, the modality mask stest is determined by the physically available modalities. The forward pass computes the combined Dirichlet parameters α(xtest , stest )
+
+and the non-conformity score r(xtest , y, stest ) for each candidate class y. The prediction set is constructed by including all classes whose score does not exceed the pre-computed quantile 
+
+ˆqstest for the observed modality subset. The per-modality vacuity vector [u(1) , . . . , u (M )] is re-turned alongside the prediction set, providing modality-decomposed uncertainty attribution. The computational overhead of the Mondrian conformal step at inference is O(K · log ns)
+
+per sample (one score computation per class, one binary search over the cached quantile), which is negligible relative to the forward pass through the fusion backbone. Algorithm 1 summarises the complete training and inference procedure. 
+
+> 18
+
+Modality-Conditioned Conformal Fusion 
+
+Algorithm 1 MCCF Training and Inference 
+
+Require: Training set Dtrain , calibration set Dcal , modalities M , dropout rate pmod , mis-coverage α, epochs Tmax 
+
+— Training —  
+
+> 1:
+
+for epoch t = 1 to Tmax do  
+
+> 2:
+
+λKL ← min(1 .0, t/ 10)  
+
+> 3:
+
+for each mini-batch B ⊂ D train do  
+
+> 4:
+
+for each sample i ∈ B do  
+
+> 5:
+
+Sample mask si ∼ Bernoulli (1 − pmod )M , reject si = 0 
+
+> 6:
+
+h(m) 
+
+> i
+
+← Em(x(m) 
+
+> i
+
+) · si,m for each m ▷ Modality dropout  
+
+> 7:
+
+α(m) 
+
+> i
+
+← ReLU (Wm ¯h(m) 
+
+> i
+
+) + 1 for each m 
+
+> 8:
+
+end for  
+
+> 9:
+
+h(global ) ← MBT ({h(m) 
+
+> i
+
+, s i,m , id m}Mm=1 ) 
+
+> 10:
+
+α(global ) 
+
+> i
+
+← ReLU (Wg ¯h(global ) 
+
+> i
+
+) + 1 
+
+> 11:
+
+αi ← L 
+
+> m:si,m =1
+
+α(m) 
+
+> i
+
+⊕ α(global ) 
+
+> i
+
+▷ Dempster combination  
+
+> 12:
+
+Compute L = LEDL + λKL LKL + λset Lset + λdiv Ldiv  
+
+> 13:
+
+Backpropagate and update parameters  
+
+> 14:
+
+end for  
+
+> 15:
+
+end for — Mondrian Calibration —  
+
+> 16:
+
+for each s ∈ { 0, 1}M \ { 0} do  
+
+> 17:
+
+Ds ← { (xi, y i) ∈ D cal : si = s} 
+
+> 18:
+
+Compute scores ri = r(xi, y i, s) for all i ∈ D s 
+
+> 19:
+
+ˆqs ← ⌈ (|D s| + 1)(1 − α)⌉/|D s| quantile of {ri} 
+
+> 20:
+
+end for — Inference — Require: Test input xtest , observed mask stest  
+
+> 21:
+
+Forward pass → α(xtest , stest ) 
+
+> 22:
+
+C(xtest ) ← { y : r(xtest , y, stest ) ≤ ˆqstest } 
+
+> 23:
+
+return C(xtest ), [u(1) , . . . , u (M )]
+
+4 Experimental Results 
+
+This section evaluates Modality-Conditioned Conformal Fusion (MCCF) against alternative uncertainty-quantification layers on a controlled synthetic problem and three standard mul-timodal benchmarks spanning distinct task domains. The evaluation is organised around four research questions that together establish the empirical case for the method. 
+
+RQ1: Does MCCF maintain the target coverage rate 1 − α under arbitrary patterns of modality availability at inference time? This is the most basic claim the method must support. The Mondrian construction promises group-conditional coverage simultaneously for every non-empty modality subset, so the framework’s headline guarantee fails the moment empirical coverage drifts away from target on any single subset. We test the claim across all benchmarks and all 2M − 1 non-empty modality-presence subsets, and we report both 
+
+19 Moayedikia 
+
+marginal coverage and per-subset coverage so that under-coverage on rare subsets cannot be masked by over-coverage on common ones. 
+
+RQ2: Does Mondrian per-subset calibration outperform marginal split-conformal calibra-tion when test inputs mix modality-presence patterns? This is the central methodological claim of the paper. Marginal split-conformal calibration is the standard post-hoc remedy and has been the default approach to conformal prediction in the multimodal literature; if MCCF cannot outperform it, the architectural integration is unjustified. We compare against MBT-Split-CP—identical to MCCF except that the conformal layer applies a single global quantile rather than per-subset quantiles—through two diagnostics: the full-modality vs. partial-modality coverage gap, and the maximum-minimum spread of per-subset coverage values. 
+
+RQ3: What is the accuracy cost, if any, of equipping the backbone with the evidential and conformal layers? The evidential head, Dempster-Shafer combination, and modality-dropout training all compete with pure classification loss during training, and the con-formal layer adds additional constraints at calibration time. It is therefore meaningful to ask whether MCCF regresses point-prediction accuracy relative to baselines that share its backbone but omit these components. We compare against MBT-Temperature and TMC under full-modality observation on all three real benchmarks, and we report MCCF’s marginal accuracy averaged across all modality-presence subsets so that the comparison covers deployment-realistic conditions in which the test-time modality configuration is de-termined by sensor availability rather than by the experimenter. 
+
+RQ4: Do the per-modality vacuity scores produced by the evidential head provide a use-ful signal for attributing uncertainty to specific absent or low-information modalities? This interpretability claim is independent of the coverage guarantee. Even if MCCF’s prediction sets were uncalibrated, a vacuity decomposition that tracked modality informativeness would still be useful for guiding sensor allocation, prioritising data collection, or explaining individ-ual predictions to an end user. We test the claim by examining whether per-subset vacuity covaries with per-subset accuracy in the expected order across modality configurations on all three real benchmarks. We address each research question in a dedicated subsection (Sections 4.2–4.5), drawing evidence from whichever benchmarks support or refute the claim most directly. Section 4.1 first establishes the shared experimental setup; the findings are consolidated in the Discus-sion (Section 5). 
+
+4.1 Experimental Setup 
+
+4.1.1 Datasets 
+
+We evaluate MCCF on four datasets spanning increasing task diversity: a synthetic vali-dation harness, digit classification, sentiment analysis, and humor detection. A controlled 
+
+synthetic problem with M = 4 modalities and K = 5 classes serves as the validation har-ness: the data-generating process is fully specified, the 2M − 1 = 15 modality-presence subsets can be enumerated exhaustively, and confounders that arise on real benchmarks (la-bel imbalance, modality-specific noise, encoder capacity) are deliberately abstracted away. 
+
+AVMNIST (Liang et al., 2021) pairs 28 × 28 MNIST digit images with 112 × 112 log-mel spectrograms of the corresponding spoken digit ( M = 2 , K = 10 , 2M − 1 = 3 non-empty 
+
+> 20 Modality-Conditioned Conformal Fusion
+
+subsets). CMU-MOSEI (Liang et al., 2021) provides pre-extracted text (GloVe-300), audio (COVAREP), and visual (Facet) features over 50-frame windows for sentiment classification (M = 3 , K = 7 Likert buckets, 2M − 1 = 7 non-empty subsets). UR-FUNNY (Hasan et al., 2019; Liang et al., 2021) casts humor detection from TED talks as a binary task ( M = 3 ,
+
+K = 2 , 2M − 1 = 7 non-empty subsets), with text (GloVe-300), audio (81-dimensional COVAREP), and visual (371-dimensional OpenFace2) features over 20-frame windows. The pairing of CMU-MOSEI and UR-FUNNY is deliberate. The two benchmarks share the same tri-modal text/audio/visual structure and the same affective-computing feature family, yet they differ in task domain (sentiment vs. humor) and—most importantly for this evaluation—in label cardinality ( K = 7 vs. K = 2 ). This lets us cross-check the framework’s behaviour under matched architectural conditions but distinct labelling regimes, and in particular at the low-cardinality extreme K = 2 , where conformal prediction sets are coarsest (each set is one of {{ 0}, {1}, {0, 1}} ) and the room for a marginal threshold to drift is structurally bounded. Two further benchmarks—IEMOCAP ( M = 4 ) and MM-IMDb (M = 2 multi-label)—are deferred to future work; the former requires restricted-access licensing, and the latter requires a multi-label conformal extension methodologically distinct from the single-label scope of this paper. Table 2 summarises the benchmarks evaluated here. Table 2: Datasets used in the experimental evaluation. All real benchmarks use the canonical MultiBench (Liang et al., 2021) distribution. The calibration column gives the size of the held-out set on which the Mondrian per-subset quantiles are fit.                               
+
+> Dataset MKTrain Calibration Test Subsets Synthetic 454,000 1,500 500 15 AVMNIST 210 55,000 5,000 10,000 3CMU-MOSEI 3716,139 1,995 4,643 7UR-FUNNY 3210,598 1,799 1,058 7
+
+The synthetic problem deserves a brief description as it is not drawn from an existing benchmark. For each class k and modality m we sample a centroid μ(m) 
+
+> k
+
+∈ Rdm from 
+
+N (0, σ 2 
+
+> c
+
+I) with σc = 1 .0, and reuse these centroids across the train, validation, calibration, and test splits . Per-sample features are then x(m) 
+
+> i
+
+= μ(m) 
+
+> yi
+
++ ε(m) 
+
+> i
+
+with ε(m) 
+
+> i
+
+∼ N (0, σ 2
+
+> n
+
+I) and 
+
+σn = 0 .3. The full procedure is given in Algorithm 2. The centroid reuse is a non-trivial design choice: an earlier iteration of the loader generated independent centroids per split, which subtly broke exchangeability and invalidated the conformal coverage guarantee even on synthetic data. The corrected formulation preserves the within-subset exchangeability assumption that the Mondrian calibrator requires (Vovk et al., 2005; Romano et al., 2020). For the real benchmarks, the train pool is split internally into a 10% validation slice; calibration and test splits follow the canonical MultiBench partition with stratified mask sampling at evaluation time so that all 2M − 1 non-empty modality-presence subsets are uniformly represented in the test set. 
+
+4.1.2 Baselines 
+
+We compare MCCF against three baselines that share the MBT backbone and modality-encoder bank but ablate one component each. MBT-Temperature (Guo et al., 2017) replaces 
+
+> 21 Moayedikia
+
+Algorithm 2 Synthetic Multimodal Data Generation 
+
+Require: Modalities M , classes K, dims {dm}Mm=1 , split sizes {Ns}s∈S 
+
+Require: Centroid scale σc, noise scale σn, presence rate pmod , seed z
+
+Ensure: Splits {D s}s∈S , each a list of (x, r, y ) tuples  
+
+> 1:
+
+Seed RNG with split-independent value z ▷ shared centroids preserve exchangeability  
+
+> 2:
+
+for k = 1 , . . . , K and m = 1 , . . . , M do  
+
+> 3:
+
+μ(m) 
+
+> k
+
+∼ N (0, σ 2 
+
+> c
+
+Idm ) 
+
+> 4:
+
+end for  
+
+> 5:
+
+for each split s ∈ S = {train , val , cal , test } do  
+
+> 6:
+
+Seed RNG with (z, s ) ▷ per-split noise and labels  
+
+> 7:
+
+for i = 1 , . . . , N s do  
+
+> 8:
+
+yi ∼ Uniform ({1, . . . , K }) 
+
+> 9:
+
+for m = 1 , . . . , M do  
+
+> 10:
+
+ε(m) 
+
+> i
+
+∼ N (0, σ 2
+
+> n
+
+Idm ) 
+
+> 11:
+
+x(m) 
+
+> i
+
+← μ(m) 
+
+> yi
+
++ ε(m) 
+
+> i
+> 12:
+
+end for  
+
+> 13:
+
+if s = train then  
+
+> 14:
+
+ri ∼ Bernoulli (pmod )M , reject if ri = 0 
+
+> 15:
+
+else  
+
+> 16:
+
+ri ← StratifiedSubset (2 M − 1)  
+
+> 17:
+
+end if  
+
+> 18:
+
+Append (xi, ri, y i) to Ds 
+
+> 19:
+
+end for  
+
+> 20:
+
+end for  
+
+> 21:
+
+return {D s}s∈S 
+
+the evidential and conformal layers with a softmax classifier post-hoc calibrated by temper-ature scaling; this isolates the contribution of the entire MCCF stack relative to a standard probabilistic-calibration reference. MBT-Split-CP (Vovk et al., 2005) applies marginal split-conformal prediction to the MBT softmax outputs; this isolates the contribution of the Mon-drian per-subset calibration relative to a marginal conformal layer that ignores the modality mask. TMC (Han et al., 2023) uses the same evidential-Dirichlet heads and Dempster-Shafer combination as MCCF but lacks the conformal calibration layer; this isolates the contribution of formal coverage guarantees relative to evidential probability outputs. Cells in subsequent tables marked “–” correspond to metrics that a method structurally does not produce: MBT-Temperature and TMC produce point predictions and therefore have no coverage or set-size values, while MBT-Split-CP produces prediction sets and therefore has no point-prediction accuracy. 
+
+4.1.3 Hyperparameters and protocol 
+
+MCCF is trained for 50 epochs (synthetic: 10 ) with AdamW at peak learning rate 3 ×
+
+10 −4, weight decay 10 −2, batch size 256 (synthetic: 32 ), cosine schedule with 5 warm-up epochs, and gradient norm clipping at 1.0. The KL regulariser anneals linearly over 
+
+> 22
+
+Modality-Conditioned Conformal Fusion 0 10 20 30 40    
+
+> Epoch
+> 0.50 0.55 0.60 0.65 0.70 0.75
+> Validation accuracy
+> warm-up KL at max
+> ±1 std (5 seeds) mean
+
+(a) AVMNIST. Final-epoch mean 0.7295 ± 0.0065 .1 10 20 30 40 50  
+
+> Training epoch
+> 0.42 0.44 0.46 0.48 0.50 0.52
+> Validation accuracy
+> λKL, max = 0.015
+
+(b) CMU-MOSEI. Final-epoch mean 0.467 ± 0.007 .10 20 30 40 50  
+
+> Training epoch
+> 0.56 0.58 0.60 0.62 0.64 0.66
+> Validation accuracy  warm-up
+> λKL, max = 0.05
+
+(c) UR-FUNNY (representa-tive seed). Figure 2: Training dynamics on the real benchmarks. For AVMNIST and CMU-MOSEI, shaded bands are ±1 standard deviation across five seeds; the UR-FUNNY panel shows a single representative seed’s validation trajectory. The five-epoch linear warm-up region is shaded; the vertical dotted line marks the epoch at which the KL annealing schedule reaches its maximum value λKL ,max . All curves climb through warm-up and stabilise once annealing saturates, indicating that the coverage numbers reported below are drawn from converged models. the first 30 epochs to λKL,max . Following the rule λKL,max ≈ 0.1/K established during AVMNIST tuning, we use λKL,max = 0 .01 for AVMNIST ( K = 10 ), 0.015 for CMU-MOSEI (K = 7 ), and 0.05 for UR-FUNNY ( K = 2 ). The ConfTr (Stutz et al., 2022) set-size objective is disabled across all real-benchmark experiments as the data-fit signal dominates; the Mondrian calibration step remains the sole source of the coverage guarantee. Training-time modality dropout is pmod = 0 .2 for AVMNIST ( M = 2 ) and 0.3 for both CMU-MOSEI and UR-FUNNY ( M = 3 ), held constant throughout training to avoid biasing the calibrator toward common subsets. Conformal calibration targets miscoverage α = 0 .1 throughout. All real-benchmark numbers are mean ± standard deviation across five random seeds; synthetic numbers also use five seeds. Figure 2 confirms that the training dynamics behave as designed. On AVMNIST and CMU-MOSEI, validation accuracy climbs monotonically across the 50-epoch budget with tight five-seed variance, and the EDL and KL loss components reach approximate equi-librium by epoch 30 once the annealing schedule saturates. On UR-FUNNY, validation accuracy rises rapidly through the warm-up phase and then oscillates within a narrow band around its converged value once the KL schedule saturates, reflecting the coarser optimisa-tion landscape of a binary task evaluated on a comparatively small validation slice. This establishes that the coverage numbers reported in subsequent sections are drawn from con-verged models rather than from arbitrary points on the training trajectory. 
+
+4.2 Coverage Validation Across Modality-Presence Subsets 
+
+Our first research question asks whether MCCF achieves the target coverage rate 1−α = 0 .90 
+
+under arbitrary patterns of modality availability at inference time. This is the most basic claim the method must support: a coverage guarantee that fails on partial-modality inputs would invalidate the entire framework. 
+
+23 Moayedikia 
+
+Table 3 reports five-seed marginal coverage across the four benchmarks. On the syn-thetic problem, MCCF achieves coverage 0.9072 ± 0.0067 , within 0.7 percentage points of the 0.90 target and with cross-seed standard deviation an order of magnitude smaller than the deviation from target. On AVMNIST the marginal coverage is 0.8902 ± 0.0035 , within 
+
+1.0 percentage point of target; on CMU-MOSEI it is 0.8944 ± 0.0121 , within 0.6 percentage points; and on UR-FUNNY it is 0.9019 ± 0.0089 , within 0.2 percentage points—the clos-est of all four benchmarks. Across every benchmark the empirical coverage is statistically indistinguishable from the nominal rate. Table 3: MCCF marginal coverage, mean ± std over 5 seeds, target 1−α = 0 .9. Per-subset spread is the maximum minus minimum of per-subset coverage values across all 2M − 1
+
+non-empty modality subsets.                                    
+
+> Benchmark Marginal coverage Per-subset spread |marginal −target |
+> Synthetic 0.9072 ±0.0067 0.091 ±0.030 0.007
+> AVMNIST 0.8902 ±0.0035 0.018 ±0.003 0.010
+> CMU-MOSEI 0.8944 ±0.0121 0.058 ±0.018 0.006
+> UR-FUNNY 0.9019 ±0.0089 0.085 ±0.011 0.002
+
+Marginal coverage is, however, the weakest test of the framework. The more demanding question is whether coverage is maintained within each modality-presence subset . Group-conditional coverage failures on under-represented subsets can be masked at the marginal level if the more common subsets over-cover compensatorily. Table 4 reports per-subset coverage on CMU-MOSEI for all 2M − 1 = 7 non-empty subsets, ordered by the number of present modalities. All seven subsets fall within ±2.2 percentage points of the 0.90 target, with the largest deviation occurring on the most informative subset (text-and-audio, 0.8957 )rather than on a partial-modality subset where the coverage guarantee would be most at risk. The synthetic study (omitted here for space; per-subset means lie in [0 .856 , 0.947] 
+
+across all 15 subsets) and AVMNIST (per-subset coverage {0.8929 , 0.8887 , 0.8889 } for the three subsets {(T, T ), (T, F ), (F, T )}) display the same pattern. Table 4: Per-subset MCCF coverage on CMU-MOSEI, mean ± std over 5 seeds. Modality flags: • = present, ◦ = absent. Modality order is (text, audio, visual). Target 0.9.                                
+
+> text audio visual Mean Std
+> Three modalities present
+> •••0.886 0.029
+> Two modalities present
+> ••◦0.896 0.014
+> •◦•0.886 0.020
+> ◦••0.902 0.027
+> One modality present
+> •◦◦0.902 0.015
+> ◦•◦0.881 0.015
+> ◦◦•0.907 0.032 24
+
+Modality-Conditioned Conformal Fusion (T,T) (T,F) (F,T)    
+
+> Presence subset
+> 0.5 0.6 0.7 0.8 0.9 1.0
+> Empirical coverage  1= 0.90 target
+> MCCF (ours) MBT + Split-CP
+
+(a) AVMNIST: three subsets. T A V T A T V A V T A V    
+
+> Modalities present (text / audio / visual)
+> 0.800 0.825 0.850 0.875 0.900 0.925 0.950 0.975 1.000
+> Empirical coverage
+> Target 1 − α= 0.90
+> MCCF MBT + Split-CP
+
+(b) CMU-MOSEI: seven sub-sets. T A V T A T V A V T A V   
+
+> Modalities present (text / audio / visual)
+> 0.80 0.85 0.90 0.95
+> Empirical coverage
+> Target 1 − α= 0.90
+> Split-CP partial bucket Split-CP full bucket MCCF per subset
+
+(c) UR-FUNNY: seven sub-sets. Figure 3: Empirical per-subset coverage against the nominal target 1 − α = 0 .90 (dashed grey). For AVMNIST and CMU-MOSEI, MCCF (blue) is shown against MBT + marginal Split-CP (red) on each subset. For UR-FUNNY, MCCF per-subset coverage (blue bars, ±1
+
+std) is shown against the two aggregate buckets the Split-CP harness emits—full-modality (red dotted, 0.901 ) and partial-modality (red dashed, 0.951 ). MCCF coverage tracks target across all subsets on all three benchmarks; Split-CP is structurally miscalibrated, as analysed in Section 4.3. The same per-subset audit holds on UR-FUNNY, the binary benchmark where confor-mal sets are coarsest. Across all seven non-empty subsets, per-subset coverage ranges from 
+
+0.877 (audio-only) to 0.922 (visual-only and text-and-audio), with every subset within 2.3
+
+percentage points of the 0.90 target. The largest under-coverage, audio-only at 0.877 , sits roughly one cross-seed standard deviation below target; the corresponding per-subset spread of 0.085 is the widest among the real benchmarks. This wider spread is an expected conse-quence of the binary task rather than a calibration failure: with K = 2 the prediction set can only take the values {0}, {1}, or {0, 1}, so empirical coverage moves in coarse increments, and each of the seven subsets is evaluated on only ∼150 stratified test points, against which binomial sampling noise at p = 0 .9 contributes a standard error of order 0.02 –0.04 . Within that tolerance the per-subset coverage remains pinned to target. Figure 3 visualises the per-subset coverage on all three real benchmarks alongside the 
+
+0.90 target. Two observations emerge. First, the MCCF per-subset coverage rates cluster around target on every benchmark, with no systematic bias toward over- or under-coverage on any specific subset type. Second, the cross-seed standard deviations are larger on partial-modality subsets than on full-modality, consistent with the smaller subset-conditional test sizes (test points are uniformly distributed across the 2M − 1 subsets, so each partial subset receives ntest /(2 M − 1) examples). On UR-FUNNY, the MCCF per-subset bars sit close to the 0.90 line while the marginal Split-CP partial-bucket reference (red dashed, 0.951 ) sits well above it—a foreshadowing of the structural miscalibration analysed in Section 4.3. The answer to RQ1 is therefore unambiguous: MCCF attains the target coverage rate on every modality-presence subset of every benchmark we evaluate, with deviations bounded by binomial sampling noise. The coverage guarantee that the method’s design promises is empirically borne out, including at the binary K = 2 extreme. 
+
+25 Moayedikia 
+
+Table 5: Mondrian per-subset vs. marginal split-conformal calibration, mean ± std over 5 seeds. The full-modality vs. partial-modality gap is the systematic difference |cov full −
+
+cov partial | between the five-seed mean full and partial coverages, where the partial average is taken over all subsets with at least one absent modality. For Split-CP the full/partial coverages are the two aggregate buckets the harness emits. On UR-FUNNY the full-modality subset is evaluated on only ∼150 stratified test points, so the per-seed |cov full − cov partial |
+
+averages 0.032 ; almost all of that is sampling noise (the per-seed sign is inconsistent), and the systematic gap reported below is 0.006 .                                                                      
+
+> Benchmark Method Marginal coverage Full coverage Partial coverage Full −partial gap AVMNIST MBT + Split-CP 0.7424 ±0.0030 0.8930 ±0.0070 0.6671 ±0.0061 0.226
+> MCCF 0.8902 ±0.0035 0.8929 ±0.0042 0.8888 ±0.0038 0.004
+> CMU-MOSEI MBT + Split-CP 0.9339 ±0.0054 0.8791 ±0.0150 0.9430 ±0.0049 0.064
+> MCCF 0.8944 ±0.0121 0.8864 ±0.0286 0.8957 ±0.0091 0.009
+> UR-FUNNY MBT + Split-CP 0.9439 ±0.0034 0.9015 ±0.0205 0.9509 ±0.0053 0.049
+> MCCF 0.9019 ±0.0089 0.9072 ±0.0416 0.9009 ±0.0086 0.006
+
+4.3 Mondrian vs. Marginal Conformal Calibration 
+
+Our second research question examines whether the per-subset calibration that produces the result of Section 4.2 actually requires the Mondrian construction, or whether a single marginal split-conformal threshold would have sufficed. This is the central methodological claim of the paper: marginal calibration is structurally inadequate when test inputs mix modality-presence patterns, and the Mondrian per-subset construction is the principled remedy. We compare MCCF against MBT-Split-CP, identical to MCCF except that the conformal layer applies a single global quantile of the non-conformity score rather than per-subset quantiles. Both methods share the same backbone, the same training schedule, and the same calibration split; they differ only in the calibration step. The comparison therefore isolates the contribution of Mondrian partitioning. Table 5 reports the metrics most diagnostic of the structural failure mode. The full-modality vs. partial-modality coverage gap quantifies the degree to which a method covers correctly under the easiest test condition (all modalities present) but fails under harder conditions (one or more modalities absent), or vice versa. We report it as the systematic gap 
+
+|cov full −cov partial | between the five-seed mean full- and partial-modality coverages, alongside the full and partial coverages themselves so that the direction of any miscalibration is visible. Several observations from Table 5. First, on AVMNIST , Split-CP’s full-modality cover-age is correctly at target ( 0.8930 ) but its partial-modality coverage collapses to 0.6671 —a 
+
+22 .6 percentage point gap that exceeds binomial sampling tolerance and replicates across every seed. MCCF’s systematic gap on the same benchmark is 0.004 , a 56 × reduction. The failure mode is the one the synthetic study predicted: a single marginal quantile averaged over a test distribution that mixes modality-presence patterns is systematically miscali-brated for any specific pattern, and the under-represented partial-modality patterns absorb the bulk of the calibration error. 
+
+26 Modality-Conditioned Conformal Fusion 
+
+Second, on CMU-MOSEI , Split-CP fails in the opposite direction: it under-covers the full-modality subset ( 0.8791 ) and over-covers the partial-modality average ( 0.9430 ). The sign is consistent across all five seeds. With three modalities and seven subsets, the marginal threshold pools test points whose underlying non-conformity score distributions differ sys-tematically, and the resulting quantile lies between the per-subset distributions, miscalibrat-ing each. The systematic gap is 0.064 for Split-CP versus 0.009 for MCCF—a 7× reduction, smaller than on AVMNIST because the seven-subset partition averages the structural mis-calibration across more sub-populations, but still well outside binomial noise. Third, on UR-FUNNY , the same structural over-coverage of partial subsets recurs but in muted form, exactly as the binary task structure predicts. Split-CP over-covers, reaching marginal coverage 0.9439 against the 0.90 target, and its partial-modality bucket ( 0.9509 ,std 0.0053 ) sits a systematic 4.9 percentage points above its full-modality bucket ( 0.9015 ). MCCF, by contrast, places full and partial coverage at 0.9072 and 0.9009 —statistically indistinguishable, with a systematic gap of 0.006 , an 8× reduction. The improvement is smaller than AVMNIST’s 56 × because, with only two classes, a marginal threshold simply has less room to drift: the prediction set is bounded to at most both labels, capping how badly any single subset can be miscalibrated. The structural defect of marginal calibration is therefore real on UR-FUNNY but bounded by cardinality, and MCCF removes what remains of it. A note on the UR-FUNNY gap is warranted. Because the full-modality subset is eval-uated on only ∼150 stratified test points, the per-seed full-modality coverage is itself noisy (std 0.042 ), so the naive per-seed quantity |cov full − cov partial | averaged over seeds inflates to 0.032 . That figure is dominated by sampling noise rather than systematic miscalibra-tion: the per-seed differences alternate in sign, and the difference of the five-seed mean 
+
+coverages—the quantity that actually reflects systematic bias—is only 0.006 . Split-CP, in contrast, yields the same value ( ∼0.049 ) under either computation because its over-coverage of partial subsets is a genuine, replicable effect. This asymmetry is itself the evidence: MCCF’s full-vs-partial gap is consistent with zero systematic bias, while Split-CP’s is not. Across the three real benchmarks, the per-subset coverage spread tells the same story. On AVMNIST it is 0.018 ± 0.003 for MCCF versus 0.226 ± 0.012 for Split-CP, a 12 .4×
+
+reduction; on CMU-MOSEI, 0.058 ± 0.018 for MCCF (against a 0.064 Split-CP full-vs-partial bucket gap); and on UR-FUNNY, 0.085 ± 0.011 for MCCF (against a 0.049 Split-CP bucket gap). On the binary benchmark MCCF’s per-subset spread modestly exceeds the Split-CP bucket gap in raw magnitude, but the two quantities are not comparable like-for-like: MCCF’s spread is the full max–min range over seven individually calibrated subsets near target, whereas the Split-CP figure is the gap between only two aggregate buckets, one of which ( 0.951 ) is systematically off target. The like-for-like comparison—the systematic full-vs-partial gap in Table 5—favours MCCF on every benchmark. The cost MCCF pays for this calibration is normally visible in prediction set size, but on UR-FUNNY the comparison in fact favours MCCF. On AVMNIST, MCCF marginal sets contain 5.65 classes on average versus 1.79 for Split-CP, and on CMU-MOSEI the comparison is 4.72 versus 4.55 ; in both cases Split-CP’s smaller sets are partly an artefact of sacrificing coverage on partial subsets. On UR-FUNNY, however, MCCF’s marginal set size is 1.72 against Split-CP’s 1.83 : MCCF is simultaneously better calibrated and tighter, 
+
+> 27 Moayedikia
+
+because Split-CP’s systematic over-coverage forces it to emit the two-class set {0, 1} more often than necessary. The answer to RQ2 is that Mondrian per-subset calibration is not an incremental refine-ment of marginal calibration but a structural requirement when test inputs mix modality-presence patterns. The systematic full-vs-partial gap collapses by 7–56 × across the three real benchmarks, with the magnitude of the improvement scaling with both the heterogene-ity of subset support and the label cardinality that bounds how far a marginal threshold can drift. 
+
+4.4 Accuracy Cost of the Coverage Guarantee 
+
+Our third research question addresses what the coverage guarantee costs in terms of top-1 prediction accuracy. The evidential head and Dempster-Shafer combination layer introduce additional parameters and an objective that competes with pure classification loss, and the modality-dropout schedule used during training reduces the effective batch size for any single modality configuration. It is therefore meaningful to ask whether MCCF’s accuracy regresses against point-prediction baselines on the same backbone. We compare MCCF’s marginal accuracy (averaged across all modality-presence sub-sets seen at test time) and full-modality accuracy (the conventional metric) against MBT-Temperature and TMC, both of which share the MCCF backbone and encoder bank but operate only in the point-prediction regime. Table 6 summarises the comparison. Table 6: Top-1 test accuracy, mean ± std over 5 seeds. Full-modality restricts evaluation to the (•, . . . , •) subset; marginal averages over all 2M − 1 non-empty subsets at the rates produced by stratified test-time sampling. MBT-Temperature and TMC report only the full-modality column because point-prediction baselines are conventionally evaluated under full observation.                                              
+
+> Benchmark Method Full-modality accuracy Marginal accuracy AVMNIST MBT + Temperature 0.7062 ±0.0021 –TMC 0.7164 ±0.0024 –MCCF (ours) 0.7130 ±0.0055 0.5742 ±0.0033
+> CMU-MOSEI MBT + Temperature 0.4537 ±0.0099 –TMC 0.4522 ±0.0059 –MCCF (ours) 0.4531 ±0.0192 0.4303 ±0.0049
+> UR-FUNNY MBT + Temperature 0.5883 ±0.0186 –TMC 0.5902 ±0.0114 –MCCF (ours) 0.6072 ±0.0461 0.5762 ±0.0192
+
+On AVMNIST , MCCF’s full-modality accuracy ( 0.7130 ) is statistically indistinguishable from MBT-Temperature ( 0.7062 ) and TMC ( 0.7164 ); all three lie within 1.1 percentage points of each other, comfortably inside the cross-seed standard deviation of MCCF itself (±0.55 pp). On CMU-MOSEI , MCCF’s full-modality accuracy ( 0.4531 ) is again statistically indistinguishable from MBT-Temperature ( 0.4537 ) and TMC ( 0.4522 ); the three methods lie within 0.1 percentage points of each other, well inside the cross-seed standard deviation of MCCF ( ±1.92 pp). On UR-FUNNY , MCCF’s full-modality accuracy ( 0.6072 ) is, if anything, 
+
+> 28 Modality-Conditioned Conformal Fusion
+
+marginally the strongest of the three, edging both MBT-Temperature ( 0.5883 ) and TMC (0.5902 ) by 1.7–1.9 percentage points, though the gap sits within the overlapping cross-seed standard deviations and should be read as parity rather than a win. On no benchmark does the evidential-conformal stack regress accuracy relative to the strongest point-prediction baseline on the same backbone. The marginal accuracy column for MCCF ( 0.5742 on AVMNIST, 0.4303 on MOSEI, 
+
+0.5762 on UR-FUNNY) records a different and complementary quantity: it averages per-formance across all modality-presence subsets, including the hardest ones (audio-only on AVMNIST; audio-only and visual-only on MOSEI and UR-FUNNY). The point-prediction baselines are not evaluated under partial observation at all—they are conventionally tested only on full-modality inputs—so this metric has no analogue in the comparison columns. The UR-FUNNY marginal-to-full gap is notably small ( 0.576 vs. 0.607 , a 3-point drop) be-cause on a binary task even the weakest single-modality subset retains accuracy near 0.55 ,well above the 0.50 chance floor; the corresponding gap on AVMNIST is far larger ( 0.574 vs. 
+
+0.713 ) because a ten-way digit task collapses to near-chance when only audio is available. Yet the marginal accuracy is the metric that matters in deployment, where the test-time modality configuration is determined by sensor availability rather than by the experimenter, and MCCF is the only method in the comparison that produces a well-defined value here at all. The answer to RQ3 is that the evidential-conformal stack imposes no measurable ac-curacy cost on any of the three real benchmarks relative to the strongest point-prediction baseline on the same backbone—and on UR-FUNNY it is marginally favourable—while addi-tionally producing calibrated prediction sets, per-subset conditional coverage, and modality-decomposed uncertainty attribution that the baselines structurally cannot. 
+
+4.5 Per-Modality Uncertainty Attribution 
+
+Our fourth research question concerns whether the per-modality vacuity scores produced by the evidential heads provide a useful signal for attributing uncertainty to specific absent or low-information modalities. This interpretability claim is independent of the coverage guar-antee: even if the prediction sets were uncalibrated, a vacuity decomposition that tracked modality informativeness would still be useful for guiding data collection or sensor alloca-tion decisions. We test the claim by examining whether per-subset vacuity covaries with per-subset accuracy across modality-presence configurations. On AVMNIST, mean vacuity rises monotonically from 0.186 on full modality to 0.243 
+
+on image-only to 0.367 on audio-only, while accuracy correspondingly decreases. The model correctly reports the highest uncertainty precisely on the subset where it genuinely cannot resolve the prediction—audio alone carries substantially less digit information than the im-age. On CMU-MOSEI the same monotonicity holds across more subsets. Table 7 reports CMU-MOSEI per-subset vacuity ordered by the number of present modalities, alongside the corresponding per-subset top-1 accuracy. Two observations from Table 7. First, vacuity is monotonic in the number of present modalities on CMU-MOSEI: every three-modality value is lower than every two-modality value, which is in turn lower than every one-modality value. Second, within fixed cardi-nality, vacuity orders the modalities by their informativeness in the expected way. Among 
+
+> 29 Moayedikia
+
+Table 7: CMU-MOSEI per-subset mean vacuity ¯u and per-subset top-1 accuracy, mean over 5 seeds. Modality flags: • = present, ◦ = absent. Modality order is (text, audio, visual). Vacuity decreases monotonically as additional modalities are made available.                                         
+
+> text audio visual Modalities ¯uAccuracy
+> •••30.173 0.453
+> ••◦20.202 0.436
+> •◦•20.211 0.455
+> ◦••20.278 0.407
+> •◦◦10.242 0.453
+> ◦•◦10.312 0.392
+> ◦◦•10.328 0.417
+
+the single-modality subsets, text-only has the lowest vacuity ( 0.242 ) and highest accuracy (0.453 ), consistent with the linguistic literature’s finding that lexical features dominate au-diovisual cues for sentiment classification. Among the two-modality subsets, the configura-tions including text ( 0.202 and 0.211 ) have lower vacuity than the configuration excluding text ( 0.278 ). The vacuity vector therefore not only quantifies uncertainty but attributes it to the absence of the most informative modality. UR-FUNNY reveals an even sharper version of the same attribution mechanism, and one that clarifies what the vacuity signal is fundamentally tracking. Table 8 reports the per-subset vacuity and accuracy. The striking feature is a near-bimodal split keyed on text presence: every text-present subset has vacuity in [0 .065 , 0.092] , while every text-absent subset has vacuity in [0 .189 , 0.196] —roughly a threefold jump the moment the linguistic stream is removed. This is the expected outcome for humor detection, where the punchline is overwhelmingly carried by language, and it sharpens the MOSEI finding that text dominates affective tasks. Table 8: UR-FUNNY per-subset mean vacuity ¯u and per-subset top-1 accuracy, mean over 5 seeds. Modality flags: • = present, ◦ = absent. Modality order is (text, audio, visual). Vacuity tracks the presence of the dominant (text) modality rather than the raw modality count.                                         
+
+> text audio visual Modalities ¯uAccuracy
+> •••30.065 0.607
+> ••◦20.082 0.585
+> •◦•20.075 0.586
+> ◦••20.190 0.557
+> •◦◦10.092 0.588
+> ◦•◦10.196 0.562
+> ◦◦•10.194 0.549
+
+Notably, strict monotonicity in modality count does not hold on UR-FUNNY: the single text-only subset ( ¯u = 0 .092 ) has substantially lower vacuity than the two-modality audio-
+
+> 30
+
+Modality-Conditioned Conformal Fusion 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45  
+
+> Mean evidential vacuity u
+> 0.3 0.4 0.5 0.6 0.7 0.8
+> Top-1 accuracy
+> full modality (T,T) image only (T,F) audio only (F,T)
+
+(a) AVMNIST: three subsets. 0.15 0.20 0.25 0.30 0.35   
+
+> Per-subset mean vacuity  ̄ u
+> 0.36 0.38 0.40 0.42 0.44 0.46 0.48
+> Per-subset top-1 accuracy
+> T A V T A T V A V TAV
+> 3 modalities 2 modalities 1 modality
+
+(b) CMU-MOSEI: seven sub-sets. 0.05 0.10 0.15 0.20   
+
+> Per-subset mean vacuity  ̄ u
+> 0.54 0.56 0.58 0.60 0.62
+> Per-subset top-1 accuracy
+> T A V T A T V A V TAV
+> text present text absent
+> 3 modalities 2 modalities 1 modality
+
+(c) UR-FUNNY: seven sub-sets. Figure 4: Per-subset top-1 accuracy plotted against per-subset mean evidential vacuity ¯u.Each point is a single modality-presence subset, averaged across five seeds. The negative correlation on all three benchmarks confirms that the evidential head’s uncertainty estimates track the actual difficulty of each modality configuration. On UR-FUNNY the points split into a low-vacuity text-present cluster and a high-vacuity text-absent cluster, showing that vacuity tracks modality informativeness rather than raw count. This per-modality attribu-tion is unavailable from post-hoc conformal methods applied to softmax outputs. and-visual subset ( ¯u = 0 .190 ). This is not a failure of the attribution mechanism but a more faithful expression of it. On CMU-MOSEI, where the three modalities are more comparably informative, vacuity and modality count happen to coincide; on UR-FUNNY, where one modality dominates, vacuity reveals that what it actually tracks is modality 
+
+informativeness , collapsing to a near-binary detector of whether the dominant text stream is present. Accuracy confirms the direction—text-present subsets score 0.585 –0.607 against text-absent 0.549 –0.562 —so the negative vacuity–accuracy correlation is preserved; vacuity is simply the more sensitive probe, separating the two regimes by a factor of three where accuracy separates them by four points, because on a near-chance binary task accuracy has little room to move while epistemic vacuity does not. Figure 4 visualises the relationship on all three real benchmarks. Per-subset mean vacu-ity and per-subset top-1 accuracy are negatively correlated throughout, with the AVMNIST and CMU-MOSEI subsets tracing a clean monotone trajectory and the UR-FUNNY subsets separating into the two text-present / text-absent clusters described above. The confor-mal layer then translates this signal into prediction sets that are large where the model is genuinely uncertain and small where it is confident, achieving the conditional calibration property that a single marginal threshold cannot. The answer to RQ4 is that the per-modality vacuity decomposition is informative across all three real benchmarks. Where modalities are comparably informative (CMU-MOSEI) it tracks modality count monotonically; where one modality dominates (UR-FUNNY) it tracks that modality’s presence directly, which is the more general statement of what the signal measures. In both regimes vacuity orders subsets by their downstream accuracy con-tribution, providing an interpretability property that post-hoc conformal methods applied to softmax outputs do not offer, because there the prediction set size is a function of the joint output alone and cannot be traced back to any specific input stream. 
+
+31 Moayedikia 
+
+5 Discussion 
+
+The experiments of Section 4 establish the empirical case for MCCF across four research questions, and three findings merit emphasis. First, on the coverage question that motivates the entire framework, MCCF attains the target 1 − α = 0 .90 rate on every modality-presence subset of every benchmark we evaluate—a controlled synthetic problem and three real benchmarks spanning digit classification, sentiment analysis, and humor detection, and ranging from M = 2 to M = 4 modalities and K = 2 to K = 10 classes—with deviations bounded by binomial sampling noise. Crucially, this holds at the binary K = 2 extreme of UR-FUNNY, where conformal prediction sets are coarsest and a single marginal threshold has the least room to err, as well as on AVMNIST and CMU-MOSEI where the failure of marginal calibration is most pronounced. The Mondrian per-subset construction is not an incremental refinement but a structural requirement: it reduces the systematic full-modality vs. partial-modality coverage gap by 7–56 × relative to a marginal split-conformal baseline on an identical backbone, with the magnitude of the improvement scaling with both the heterogeneity of subset support and the label cardinality that bounds how far a marginal quantile can drift. Second, this calibration is obtained without a measurable accuracy cost. On all three real benchmarks, MCCF’s full-modality top-1 accuracy is statistically indistinguishable from a temperature-scaled softmax baseline and from the evidential TMC baseline on the same backbone, and on UR-FUNNY it is marginally the strongest of the three. The evidential head, Dempster-Shafer combination, and high-rate modality-dropout schedule therefore buy calibrated, mask-conditional prediction sets and per-modality uncertainty attribution at no penalty to point-prediction quality—and, on the binary benchmark, MCCF additionally emits tighter prediction sets than the over-covering marginal baseline, so the calibration is in that case strictly beneficial along both axes. Third, the per-modality vacuity decomposition is empirically informative, and the con-trast between CMU-MOSEI and UR-FUNNY clarifies what it measures. Where the modal-ities are comparably informative, as on CMU-MOSEI, vacuity decreases monotonically in the number of present modalities. Where one modality dominates, as text does for humor on UR-FUNNY, that monotonicity in raw count breaks and vacuity instead becomes a near-binary detector of whether the dominant stream is present. The two observations are the same underlying mechanism: vacuity tracks the informativeness of the available modality subset, not its cardinality, and the cardinality ordering on MOSEI is a special case that holds only because no single modality there dominates. This attribution—localising an enlarged prediction set to the specific absent stream responsible for it—is unavailable from post-hoc conformal methods applied to softmax outputs, where the set size is a function of the joint output alone. 
+
+5.1 Limitations 
+
+Several limitations qualify these results and define the boundary of the present claims. The first is intrinsic to the Mondrian construction. Group-conditional coverage is purchased by partitioning the calibration set into one group per non-empty modality subset, and each group requires on the order of one hundred labelled points for a stable quantile estimate. The number of groups grows as 2M − 1, so for M ≥ 5 the calibration budget per subset 
+
+> 32 Modality-Conditioned Conformal Fusion
+
+becomes the binding constraint, and the Hamming-distance clustering fallback described in Section 3.4 must be invoked, weakening the guarantee from group-conditional to cluster-conditional. The benchmarks evaluated here ( M ≤ 4) do not exercise this regime, and the scaling behaviour of the clustering fallback remains to be characterised empirically. A second limitation concerns the binary baseline comparison on UR-FUNNY. The split-conformal harness records coverage only at the granularity of two aggregate buckets—full-modality and partial-modality—rather than for each of the seven individual subsets, so the apples-to-apples per-subset coverage spread that we report for AVMNIST and CMU-MOSEI is available for the Mondrian method but not for the marginal baseline on UR-FUNNY. The full-versus-partial gap we do report is the diagnostic the comparison turns on, but a complete per-subset spread for the marginal baseline on the binary task would require re-instrumenting the evaluation and is left to future work. Relatedly, the coarseness of a K = 2 task makes per-subset coverage estimates noisier than on the higher-cardinality benchmarks: the full-modality subset of UR-FUNNY is evaluated on only ∼150 stratified test points, which inflates naive per-seed gap statistics and necessitates the systematic-gap reporting adopted in Section 4.3. A third limitation is the exchangeability assumption underlying the coverage guarantee. The Mondrian guarantee holds when calibration and test points within each subset are ex-changeable; when this is violated—for instance by acquisition drift between the calibration and deployment populations—coverage degrades by the total-variation distance between the two distributions within the affected subset, as quantified by the bound of Barber et al. (2023) reproduced in Section 3.4. We do not measure this degradation empirically, as all benchmarks here draw calibration and test data from a common distribution. A fourth limitation is methodological scope: the construction is developed for single-label classifica-tion, and the multi-label setting, in which the prediction target is a subset of labels rather than a single class, requires a conformal extension we do not provide. Finally, the vacuity attribution is correlational. It identifies which absent modality co-occurs with elevated un-certainty, which is a useful signal for prioritising data collection, but it does not constitute a causal guarantee that acquiring that modality will reduce the prediction-set size for a given instance. 
+
+5.2 Future Work 
+
+The most direct extension is to broaden the benchmark coverage along the two axes the present evaluation leaves open. IEMOCAP ( M = 4 ) would extend the evaluation to higher modality count and multi-emotion classification, exercising the 2M − 1 = 15 subset parti-tion on real data and testing whether the calibration budget per subset remains sufficient before the clustering fallback is required; its use is currently gated by restricted-access li-censing rather than by any methodological obstacle. MM-IMDb ( M = 2 multi-label) would extend the framework to multi-label genre prediction, which requires generalising the non-conformity score and prediction-set construction from a single class to a label powerset—the conformal extension noted as out of scope above, and the natural next methodological step. Beyond benchmark breadth, three methodological directions follow from the present re-sults. The first is to relax the exchangeability assumption by combining the Mondrian parti-tion with weighted conformal prediction (Tibshirani et al., 2019), estimating a within-subset 
+
+> 33 Moayedikia
+
+likelihood ratio so that coverage is maintained under acquisition drift; the mask-conditioned structure of MCCF makes the relevant covariate—the modality mask—explicit, which may simplify the weighting. The second is to move the conformal target from group-conditional toward instance-conditional coverage using localised or adaptive conformal methods, trad-ing some of the finite-sample exactness of the Mondrian guarantee for prediction sets that adapt to features within a subset rather than only to the subset identity. The third is to exploit the differentiable conformal set-size objective more aggressively: it is disabled in the present real-benchmark experiments because the data-fit signal dominates, but in lower-data regimes—precisely the regimes where calibration budget is scarce—shaping the score function during training may recover tighter sets than post-hoc calibration alone. Finally, the domain-agnostic design of MCCF invites application to the safety-critical settings that motivate it. Clinical diagnosis, in which imaging modalities such as MRI and PET are routinely only partially available because of cost and acquisition constraints (Liu et al., 2021; Xu et al., 2022; Zhang et al., 2022), is a natural target: there the coupling of a confident prediction with a missing modality is exactly the latent failure mode that mask-conditional coverage is designed to surface, and the per-modality vacuity signal maps directly onto the clinical question of which additional scan would most reduce diagnostic uncertainty. We regard the transfer of MCCF to such a domain, with the attendant questions of encoder design for raw rather than pre-extracted inputs and of distribution shift across acquisition sites, as the most consequential direction this work opens. 
+
+6 Conclusion 
+
+This paper introduced Modality-Conditioned Conformal Fusion, an architecture that treats modality availability as a first-class input to the uncertainty-estimation process rather than as a nuisance variable to be marginalised away. By coupling a bottleneck fusion backbone trained with high-rate modality dropout, per-modality evidential heads whose vacuous opin-ions are structurally ignored by Dempster-Shafer combination when a modality is absent, and a Mondrian conformal calibrator keyed on the modality-presence mask, MCCF produces prediction sets that carry a formal finite-sample coverage guarantee simultaneously for every non-empty modality subset, that widen automatically in proportion to the information lost when modalities are absent, and that decompose their uncertainty into per-modality con-tributions. To our knowledge it is the first method to deliver coverage guarantees that hold under arbitrary patterns of modality availability through architectural integration rather than post-hoc recalibration. Across a controlled synthetic problem at M = 4 and three multimodal benchmarks span-ning M = 2 to M = 3 modalities, K = 2 to K = 10 classes, and three distinct task domains, MCCF held target coverage on every modality-presence subset, reduced the systematic full-versus-partial coverage gap by 7–56 × relative to a marginal split-conformal baseline on an identical backbone, imposed no measurable accuracy cost relative to temperature-scaled and evidential baselines, and produced per-modality vacuity scores that localise uncertainty to the most informative absent modality. These results indicate that missing-modality robust-ness and calibrated uncertainty are not independent objectives to be pursued separately but a single coupled property that is best achieved by building the modality mask into both the fusion mechanism and the calibration procedure. 
+
+> 34 Modality-Conditioned Conformal Fusion
+
+Code and Data Availability 
+
+All benchmarks are drawn from the publicly available MultiBench distribution (Liang et al., 2021); UR-FUNNY additionally derives from the dataset of Hasan et al. (2019). The MCCF implementation, configuration files, per-seed sweep scripts, and figure-generation code are available at https://github.com/amoayedikia/MCCF . All reported numbers are means over five random seeds; the exact seeds and hyperparameters are recorded in the released configuration files. 
+
+Acknowledgement 
+
+The author thanks colleagues at Swinburne University of Technology for helpful discussions. 
+
+> 35 Moayedikia
+
+References 
+
+Moloud Abdar, Farhad Pourpanah, Sadiq Hussain, Dana Rezazadegan, Li Liu, Moham-mad Ghavamzadeh, Paul Fieguth, Xiaochun Cao, Abbas Khosravi, U. Rajendra Acharya, Vladimir Makarenkov, and Saeid Nahavandi. A review of uncertainty quantification in deep learning: Techniques, applications and challenges. Information Fusion , 76:243–297, 2021. Amir M. Alani, Morteza Aboutalebi, and Gokhan Kilic. Applications of ground penetrating radar (GPR) in bridge deck monitoring and assessment. Journal of Applied Geophysics ,97:45–54, 2020. Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, Antoine Miech, Iain Barr, Yana Hasson, Karel Lenc, Arthur Mensch, Katherine Millican, Malcolm Reynolds, et al. Flamingo: A visual language model for few-shot learning. In Advances in Neural Information Processing Systems (NeurIPS) , 2022. Alexander Amini, Wilko Schwarting, Ava Soleimany, and Daniela Rus. Deep evidential regression. In Advances in Neural Information Processing Systems (NeurIPS) , 2020. Anastasios N. Angelopoulos and Stephen Bates. Conformal prediction: A gentle introduc-tion. Foundations and Trends in Machine Learning , 16(4):494–591, 2023. Anastasios N. Angelopoulos, Stephen Bates, Michael Jordan, and Jitendra Malik. Uncer-tainty sets for image classifiers using conformal prediction. In Proceedings of the Interna-tional Conference on Learning Representations (ICLR) , 2021. Tadas Baltrušaitis, Chaitanya Ahuja, and Louis-Philippe Morency. Multimodal machine learning: A survey and taxonomy. IEEE Transactions on Pattern Analysis and Machine Intelligence , 41(2):423–443, 2019. Rina Foygel Barber, Emmanuel J. Candès, Aaditya Ramdas, and Ryan J. Tibshirani. Con-formal prediction beyond exchangeability. Annals of Statistics , 51(2):816–845, 2023. Viktor Bengs, Eyke Hüllermeier, and Willem Waegeman. Pitfalls of epistemic uncertainty quantification through loss minimisation. In Advances in Neural Information Processing Systems (NeurIPS) , 2022. Mario Bijelic, Tobias Gruber, Fahim Mannan, Florian Kraus, Werner Ritter, Klaus Diet-mayer, and Felix Heide. Seeing through fog without seeing fog: Deep multimodal sensor fusion in unseen adverse weather. In Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition (CVPR) , pages 11682–11692, 2020. Erik Daxberger, Agustinus Kristiadi, Alexander Immer, Runa Eschenhagen, Matthias Bauer, and Philipp Hennig. Laplace Redux—effortless Bayesian deep learning. In Ad-vances in Neural Information Processing Systems (NeurIPS) , 2021a. Erik Daxberger, Eric Nalisnick, James U. Allingham, Javier Antorán, and José Miguel Hernández-Lobato. Bayesian deep learning via subnetwork inference. In Proceedings of the International Conference on Machine Learning (ICML) , 2021b. 
+
+> 36 Modality-Conditioned Conformal Fusion
+
+Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszkoreit, and Neil Houlsby. An image is worth 16x16 words: Transformers for image recognition at scale. In Proceedings of the International Conference on Learning Representations (ICLR) , 2021. Bat-Sheva Einbinder, Yaniv Romano, Matteo Sesia, and Yanfei Zhou. Training uncertainty-aware classifiers with conformalized deep learning. In Advances in Neural Information Processing Systems (NeurIPS) , 2022. Yarin Gal and Zoubin Ghahramani. Dropout as a Bayesian approximation: Representing model uncertainty in deep learning. In Proceedings of the International Conference on Machine Learning (ICML) , pages 1050–1059, 2016. Isaac Gibbs and Emmanuel Candès. Adaptive conformal inference under distribution shift. In Advances in Neural Information Processing Systems (NeurIPS) , 2021. Rohit Girdhar, Alaaeldin El-Nouby, Zhuang Liu, Mannat Singh, Kalyan Vasudev Alwala, Armand Joulin, and Ishan Misra. ImageBind: One embedding space to bind them all. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2023. Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q. Weinberger. On calibration of modern neural networks. In Proceedings of the International Conference on Machine Learning (ICML) , pages 1321–1330, 2017. Zongbo Han, Changqing Zhang, Huazhu Fu, and Joey Tianyi Zhou. Trusted multi-view classification with dynamic evidential fusion. IEEE Transactions on Pattern Analysis and Machine Intelligence , 45(2):2551–2566, 2023. Md Kamrul Hasan, Wasifur Rahman, Amir Bagher Zadeh, Jianyuan Zhong, Md Iftekhar Tanveer, Louis-Philippe Morency, and Mohammed Ehsan Hoque. UR-FUNNY: A mul-timodal language dataset for understanding humor. In Proceedings of the Conference on Empirical Methods in Natural Language Processing (EMNLP) , pages 2046–2056, 2019. Jie Hu, Li Shen, and Gang Sun. Squeeze-and-excitation networks. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 7132–7141, 2018. Ling Huang, Su Ruan, Pierre Decazes, and Thierry Denœux. Deep evidential fusion with uncertainty quantification and reliability learning for multimodal medical image segmen-tation. Information Fusion , 115:102648, 2025a. Ling Huang, Yucheng Xing, Swapnil Mishra, Thierry Denœux, and Mengling Feng. Evi-dential time-to-event prediction with calibrated uncertainty quantification. International Journal of Approximate Reasoning , 181:109403, 2025b. 
+
+> 37 Moayedikia
+
+Andrew Jaegle, Sebastian Borgeaud, Jean-Baptiste Alayrac, Carl Doersch, Catalin Ionescu, David Ding, Skanda Koppula, Daniel Zoran, Andrew Brock, Evan Shelhamer, et al. Per-ceiver IO: A general architecture for structured inputs and outputs. In Proceedings of the International Conference on Learning Representations (ICLR) , 2022. Audun Jøsang. Subjective Logic: A Formalism for Reasoning Under Uncertainty . Springer, 2016. Hamed Karimi and Reza Samavi. Evidential conformal prediction. In Conformal and Prob-abilistic Prediction with Applications (COPA) , volume 230 of PMLR , 2024. Alex Kendall and Yarin Gal. What uncertainties do we need in Bayesian deep learning for computer vision? In Advances in Neural Information Processing Systems (NeurIPS) ,2017. Wonjae Kim, Bokyung Son, and Ildoo Kim. ViLT: Vision-and-language transformer without convolution or region supervision. In Proceedings of the International Conference on Machine Learning (ICML) , pages 5583–5594, 2021. Balaji Lakshminarayanan, Alexander Pritzel, and Charles Blundell. Simple and scalable pre-dictive uncertainty estimation using deep ensembles. In Advances in Neural Information Processing Systems (NeurIPS) , 2017. Yi-Lun Lee, Yi-Hsuan Tsai, Wei-Chen Chiu, and Chen-Yu Lee. Multimodal prompting with missing modalities for visual recognition. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2023. Jing Lei, Max G’Sell, Alessandro Rinaldo, Ryan J. Tibshirani, and Larry Wasserman. Distribution-free predictive inference for regression. Journal of the American Statistical Association , 113(523):1094–1111, 2018. Paul Pu Liang, Yiwei Lyu, Xiang Fan, Zetian Wu, Yun Cheng, Jason Wu, Leslie Chen, Peter Wu, Michelle A. Lee, Yuke Zhu, et al. MultiBench: Multiscale benchmarks for mul-timodal representation learning. In Advances in Neural Information Processing Systems (NeurIPS), Datasets and Benchmarks Track , 2021. Paul Pu Liang, Amir Zadeh, and Louis-Philippe Morency. Foundations and recent trends in multimodal machine learning: Principles, challenges, and open questions. IEEE Transac-tions on Pattern Analysis and Machine Intelligence , 2023. Yijie Lin, Yuanbiao Gou, Xiaotian Liu, Jinfeng Bai, Jiancheng Lv, and Xi Peng. Dual con-trastive prediction for incomplete multi-view representation learning. IEEE Transactions on Pattern Analysis and Machine Intelligence , 44(11):8192–8206, 2022. Jeremiah Zhe Liu, Zi Lin, Shreyas Padhy, Dustin Tran, Tania Bedrax-Weiss, and Balaji Lakshminarayanan. Simple and principled uncertainty estimation with deterministic deep learning via distance awareness. In Advances in Neural Information Processing Systems (NeurIPS) , 2020. 
+
+> 38 Modality-Conditioned Conformal Fusion
+
+Yanbei Liu, Lianxi Fan, Changqing Zhang, Tao Zhou, Zhitao Xiao, Lei Geng, and Dinggang Shen. Incomplete multi-modal representation learning for Alzheimer’s disease diagnosis. 
+
+Medical Image Analysis , 69:101953, 2021. Jiasen Lu, Dhruv Batra, Devi Parikh, and Stefan Lee. ViLBERT: Pretraining task-agnostic visiolinguistic representations for vision-and-language tasks. In Advances in Neural Infor-mation Processing Systems (NeurIPS) , 2019. Huaping Luo, Qianli Zhou, Zhen Li, and Yong Deng. Variational quantum linear solver-based combination rules in Dempster-Shafer theory. Information Fusion , 102:102070, 2024. Mengmeng Ma, Jian Ren, Long Zhao, Sergey Tulyakov, Cathy Wu, and Xi Peng. SMIL: Multimodal learning with severely missing modality. In Proceedings of the AAAI Confer-ence on Artificial Intelligence , 2021. Mengmeng Ma, Jian Ren, Long Zhao, Davide Testuggine, and Xi Peng. Are multimodal transformers robust to missing modality? In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 18177–18186, 2022. Matthias Minderer, Josip Djolonga, Rob Romijnders, Frances Hubis, Xiaohua Zhai, Neil Houlsby, Dustin Tran, and Mario Lucic. Revisiting the calibration of modern neural networks. In Advances in Neural Information Processing Systems (NeurIPS) , 2021. Arsha Nagrani, Shan Yang, Anurag Arnab, Aren Jansen, Cordelia Schmid, and Chen Sun. Attention bottlenecks for multimodal fusion. In Advances in Neural Information Process-ing Systems (NeurIPS) , 2021. Natalia Neverova, Christian Wolf, Graham Taylor, and Florian Nebout. ModDrop: Adaptive multi-modal gesture recognition. IEEE Transactions on Pattern Analysis and Machine Intelligence , 38(8):1692–1706, 2016. Yaniv Ovadia, Emily Fertig, Jie Ren, Zachary Nado, D. Sculley, Sebastian Nowozin, Joshua V. Dillon, Balaji Lakshminarayanan, and Jasper Snoek. Can you trust your model’s uncertainty? evaluating predictive uncertainty under dataset shift. In Advances in Neural Information Processing Systems (NeurIPS) , 2019. Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen Krueger, and Ilya Sutskever. Learning transferable visual models from natural language supervision. In Proceedings of the International Conference on Machine Learning (ICML) , pages 8748– 8763, 2021. Md Kaykobad Reza, Ashley Prater-Bennette, and M. Salman Asif. Robust multimodal learning with missing modalities via parameter-efficient adaptation. IEEE Transactions on Pattern Analysis and Machine Intelligence , 47(2):742–754, 2025. Yaniv Romano, Matteo Sesia, and Emmanuel Candès. Classification with valid and adaptive coverage. In Advances in Neural Information Processing Systems (NeurIPS) , 2020. 
+
+> 39 Moayedikia
+
+Murat Sensoy, Lance Kaplan, and Melih Kandemir. Evidential deep learning to quantify clas-sification uncertainty. In Advances in Neural Information Processing Systems (NeurIPS) ,2018. David Stutz, Krishnamurthy Dvijotham, Ali Taylan Cemgil, and Arnaud Doucet. Learning optimal conformal classifiers. In Proceedings of the International Conference on Learning Representations (ICLR) , 2022. Ryan J. Tibshirani, Rina Foygel Barber, Emmanuel Candès, and Aaditya Ramdas. Con-formal prediction under covariate shift. In Advances in Neural Information Processing Systems (NeurIPS) , 2019. Yao-Hung Hubert Tsai, Shaojie Bai, Paul Pu Liang, J. Zico Kolter, Louis-Philippe Morency, and Ruslan Salakhutdinov. Multimodal transformer for unaligned multimodal language sequences. In Proceedings of the Association for Computational Linguistics (ACL) , pages 6558–6569, 2019. Aaron van den Oord, Yazhe Li, and Oriol Vinyals. Representation learning with contrastive predictive coding. arXiv preprint arXiv:1807.03748 , 2018. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Advances in Neural Information Processing Systems (NeurIPS) , pages 5998–6008, 2017. Vladimir Vovk. Conditional validity of inductive conformal predictors. Machine Learning ,92(2–3):349–376, 2013. Vladimir Vovk, Alexander Gammerman, and Glenn Shafer. Algorithmic Learning in a Ran-dom World . Springer, 2005. Hu Wang, Yuanhong Chen, Congbo Ma, Jodie Avery, Louise Hull, and Gustavo Carneiro. Multi-modal learning with missing modality via shared-specific feature modelling. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 2023. Andrew Gordon Wilson and Pavel Izmailov. Bayesian deep learning and a probabilistic perspective of generalization. In Advances in Neural Information Processing Systems (NeurIPS) , 2020. Sanghyun Woo, Jongchan Park, Joon-Young Lee, and In So Kweon. CBAM: Convolutional block attention module. In Proceedings of the European Conference on Computer Vision (ECCV) , pages 3–19, 2018. Renjie Wu, Hu Wang, Hsiang-Ting Chen, and Gustavo Carneiro. Deep multimodal learning with missing modality: A survey. Transactions on Machine Learning Research , 2026. Lei Xu, Hui Wu, Chunlong He, Jun Wang, Changqing Zhang, Feiping Nie, and Lifang Chen. Multi-modal sequence learning for Alzheimer’s disease progression prediction with incomplete variable-length longitudinal data. Medical Image Analysis , 82:102643, 2022. 
+
+> 40 Modality-Conditioned Conformal Fusion
+
+Peng Xu, Xiatian Zhu, and David A. Clifton. Multimodal learning with transformers: A survey. IEEE Transactions on Pattern Analysis and Machine Intelligence , 45(10):12113– 12132, 2023. Margaux Zaffran, Aymeric Dieuleveut, Julie Josse, and Yaniv Romano. Conformal prediction with missing values. In Proceedings of the International Conference on Machine Learning (ICML) , volume 202 of PMLR , pages 40578–40604, 2023. Yao Zhang, Nanjun He, Jiawei Yang, Yuexiang Li, Dong Wei, Yawen Huang, Yang Zhang, Zhiqiang He, and Yefeng Zheng. mmFormer: Multimodal medical transformer for incom-plete multimodal learning of brain tumor segmentation. In Proceedings of the International Conference on Medical Image Computing and Computer Assisted Intervention (MICCAI) ,pages 107–117, 2022. Tongxue Zhou. Feature fusion and latent feature learning guided brain tumor segmentation and missing modality recovery network. Pattern Recognition , 141:109665, 2023. Tongxue Zhou. Multi-modal brain tumor segmentation via disentangled representation learning and region-aware contrastive learning. Pattern Recognition , 149:110282, 2024.

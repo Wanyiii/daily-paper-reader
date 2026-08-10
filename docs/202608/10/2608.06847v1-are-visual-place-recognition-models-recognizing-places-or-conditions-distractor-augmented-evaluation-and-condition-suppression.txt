@@ -1,0 +1,537 @@
+Title: Are Visual Place Recognition Models Recognizing Places or Conditions? Distractor-Augmented Evaluation and Condition Suppression
+
+URL Source: https://arxiv.org/pdf/2608.06847v1
+
+Published Time: Mon, 10 Aug 2026 00:38:20 GMT
+
+Number of Pages: 8
+
+Markdown Content:
+# Are Visual Place Recognition Models Recognizing Places or Conditions? Distractor-Augmented Evaluation and Condition Suppression 
+
+Beomsu Kim, Minwoo Jung, and Giseop Kim ∗
+
+Abstract — Long-term Visual Place Recognition (VPR) is typi-cally evaluated by matching queries from one condition against a database from another. Crowdsourced map databases, however, may mix conditions and include images that resemble the query in condition but depict different places. In the presence of these distractors , a method may retrieve by condition similarity rather than place identity. We argue that this susceptibility arises because the discriminability of VPR methods allows them to encode information such as illumination, weather, and seasonal appearance in their descriptors. We therefore introduce 
+
+Distractor-Augmented Recall (DAR) to isolate and quantify the effect of distractors, and propose condition suppression to remove condition information from VPR descriptors. Across eleven meth-ods and six datasets, method rankings under DAR@1 differ from those under Recall@1 (R@1), while applying INLP and LEACE as condition suppression methods generally improves DAR@1 without reducing R@1. Thus, distractor robustness is distinct from standard retrieval performance and can be improved by suppressing condition information. 
+
+I. I NTRODUCTION 
+
+As visual Simultaneous Localization and Mapping (SLAM) systems become ubiquitous [4], their mapping databases will increasingly be crowdsourced—inherently mixed-condition, accumulating from repeated traversals, different users, and changing environments. This variability requires recognizing the same place across changes in condition, including illumi-nation, weather, season, and time of day, which constitutes the long-term Visual Place Recognition (VPR) problem [5, 6]. In such large crowdsourced databases, fine-grained discriminabil-ity is essential for distinguishing visually similar locations. However, condition discriminability can compete with place discriminability during retrieval. A mixed-condition database may contain both a true posi-tive image captured under a different condition and an image of another location captured under a condition similar to the query. We call the latter a distractor image . Condition discriminability can then cause a VPR method to retrieve based on condition similarity rather than place identity, an effect we call condition bias (Fig. 1(b)). We find that condition bias affects many current VPR methods, including those built on foundation models that provide broadly generalizable representations [1]. For example, in day-to-night retrieval, adding only 5% additional daytime images to the database can reduce Recall@1 (R@1) by up to 15.4 percentage points (pp) when these daytime images are retrieved instead of 
+
+> ∗
+
+Corresponding author. B. Kim and G. Kim are with the Department of Robotics and Mecha-tronics Engineering, DGIST, Daegu, Republic of Korea, {beomsu.kim, gsk }@dgist.ac.kr .M. Jung is with the Department of Mechanical Engineering, Seoul National University, Seoul, Republic of Korea, moonshot@snu.ac.kr .
+
+Single-condition DB Mixed-condition DB          
+
+> Day Night sim=0.59 ✓Night sim=0.31 ×
+> no distractor Night sim=0.43 ×Night sim=0.30 ×
+
+Query 
+
+(a) Non-distracting evaluation – correct retrieval           
+
+> Day Night sim=0.59 ✓Night sim=0.31 ×
+> Day sim=0.62 ×Night sim=0.43 ×Night sim=0.30 ×
+
+Query 
+
+(b) Our evaluation – distractor failure 
+
+Fig. 1. Evaluation without and with distractors, using AnyLoc [1] on the RobotCar dataset (25 m threshold) [2]. Numbers are similarity to the query. (a) The database holds the correct match and three nighttime images; the model retrieves the correct match. (b) After a daytime distractor from a different place is added, the model retrieves it instead of the true positive because of its higher similarity to the query. 
+
+true positives (Fig. 2). Yet baseline R@1 does not predict a method’s susceptibility to this failure mode, so distractor-induced degradation must be measured separately. Therefore, we introduce Distractor-Augmented Recall (DAR) to measure the effect of distractors, along with Recall Survival Rate (RSR) to separate it from baseline retrieval performance. DAR holds the query-database pair constant and adds only a controlled distractor set to the standard cross-condition database, so any change in performance is attributable to the distractors alone. Because DAR@ K is based on the standard Recall@ K (R@ K) metric, it can be compared directly against the baseline R@ K to quantify the effect of distractors. Beyond evaluating the effect of distractors, we also seek to arXiv:2608.06847v1 [cs.RO] 7 Aug 2026 Single-condition DB Mixed-condition DB AnyLoc         
+
+> R@1: 95.9% R@1: 80.5%
+> EigenPlaces
+> R@1: 91.5% R@1: 86.8%
+> Day query Night DB Day DB
+> Fig. 2. Top-1 retrieval on RobotCar for AnyLoc [1] and Eigen-Places [3], using the nighttime database alone (left) and with 5% daytime frames added (right). Lines connect each query to its top-1 retrieval (green if within 25 m, red otherwise). Traversals: day query 2014-11-18-13-20-12 , night database 2014-12-16-18-44-24 , day database 2014-12-12-10-45-15 .
+
+explain why it occurs and mitigate it. We argue that condition bias arises not because VPR methods lack the capacity to identify places, but because of over-discrimination, where they identify conditions as well as places. Therefore, we approach the problem from the perspective of concept erasure. Concept erasure is a framework for removing information about a particular concept, first studied in natural language processing (NLP) to remove gender bias in word embeddings [7]. In Sec. IV, we adapt linear concept erasure techniques to VPR as condition suppression , which post-processes descriptors to remove condition information while preserving place informa-tion (Fig. 3). Our contributions are:  
+
+> •
+
+We propose Distractor-Augmented Recall (DAR), an eval-uation protocol that measures VPR performance under the effect of distractors, along with a derived metric RSR that separates robustness to distractors from baseline retrieval performance.  
+
+> •
+
+We identify and study the problem of distractor robustness of VPR in the framework of concept erasure, using the no-tion of linear guardedness to formalize the goal of removing condition information.  
+
+> •
+
+We show that applying established concept erasure tech-niques to VPR descriptors for condition suppression gener-ally improves DAR@1 with negligible impact on baseline R@1. II. R ELATED WORK 
+
+A. Condition-Robust VPR 
+
+Early VPR methods relied on handcrafted representations to handle condition changes [8, 9]. With the advent of deep learn-     
+
+> Original Suppressed
+> Day query Night DB
+> Fig. 3. UMAP visualizations of AnyLoc descriptors extracted from RobotCar before and after condition suppression with INLP. Gray lines connect geometrical mutual nearest-neighbor pairs. Condition suppression reduces condition-based separation and improves place-based alignment. Traversals: day query 2014-11-18-13-20-12 ;night database 2014-12-16-18-44-24 .
+
+ing, VPR models commonly learn condition-robust descriptors by aligning same-place images captured under different con-ditions and separating different-place images. NetVLAD [10] uses a weakly supervised triplet ranking loss for this purpose, while multi-similarity loss [11], adopted by many recent VPR methods [12–18], focuses training on informative positive and negative pairs. A parallel line formulates VPR as aclassification task, assigning same-place images to the same class and different-place images to different classes [3, 19]. Other methods directly transform images, with earlier work relying on physics-based transformations [20, 21] and later work on learned models [22–24]. However, these methods do not explicitly model the relationship between descriptors and conditions. Closer to our work, Schubert et al. [25] operate directly on descriptors using per-condition Standardization of Descriptors (STD) to equalize their statistics across conditions, which we refer to simply as STD. We evaluate it alongside linear concept erasure methods [26, 27] in Sec. V-D. 
+
+B. Evaluation in Cross-Condition VPR 
+
+Cross-condition performance in VPR can be evaluated using datasets that provide traversals of the same place under differ-ent conditions without a fixed query/database split [2, 28–30]. Typically, two traversals are paired across conditions, with one used as the query set and the other as the database. Because each set is homogeneous in condition, this procedure does not introduce distractors. Schubert et al. [25] extended this pairing procedure to an in-sequence condition-change setup, allowing both the query and database sets to contain multiple conditions and thereby introducing distractors into the database. However, the distractor set varies with the query and database sets, making its effect difficult to isolate. Other benchmarks provide an explicit query/database split for cross-condition evaluation. Their databases may be sourced from Google Street View (GSV) [19, 31–34] or constructed from images spanning diverse weather, seasons, and times of day [35–37]. Nonetheless, methods are usually evaluated on these benchmarks using R@ K, which considers only the geometric relationship and does not separately measure the effect of distractors [3, 12, 14, 17, 19]. (a) Recall (b) DAR Cross-condition DB Distractors     
+
+> Fig. 4. Recall vs. DAR. A robot at the query pose retrieves from the database; the dashed circle is the positive-match threshold. (a)
+> Recall: all database images are cross-condition. (b) DAR: distractors are added to the database and appear among the negatives outside the circle.
+
+C. Linear Concept Erasure in NLP 
+
+Linear concept erasure was originally proposed in NLP to debias word embeddings. Bolukbasi et al. [7] identified a gender subspace in word2vec embeddings and debiased the embeddings by removing their projections onto this subspace. Gonen et al. [38] subsequently showed that this approach still leaves words clustered by gender, motivating more rigorous methods such as INLP [26] and LEACE [27], which we adopt in this work. INLP repeatedly fits a linear classifier to the target concept and projects the embeddings onto its null space, whereas LEACE [27] uses a closed-form transformation to erase the target concept from the embeddings. We repurpose these methods as condition suppression methods in Sec. V-D. III. D ISTRACTOR -A UGMENTED EVALUATION 
+
+A. From Recall to Distractor-Augmented Recall (DAR) 
+
+In a typical cross-condition R@ K evaluation (Fig. 4(a)), a single-condition query set is matched against a cross-condition database from a different condition, such as day–night or sunny–rainy. The cross-condition database contains images from a target condition different from the query condition, including positives within the spatial threshold and negatives outside it. We extend this setting by constructing, for each query, an augmented database comprising the cross-condition database and distractors (Fig. 4(b)). Distractors lie outside the positive-match threshold and are captured under a condition similar to that of the query. This setup creates the failure mode of interest: because of the condition bias, a method may prefer a distractor because its appearance is easier to match, instead of correctly retrieving the cross-condition positive. Because DAR@ K extends R@ K
+
+to distractor-augmented databases, it requires only the inputs that R@ K already uses, and it can be directly compared with R@ K to quantify the effect of distractors on retrieval performance. 
+
+B. Formalization of DAR and RSR 
+
+Let Q = {qi}NQ
+
+> i=1
+
+, C = {cj }NC
+
+> j=1
+
+, and D = {dl}ND 
+
+> l=1
+
+denote, respectively, the query, the cross-condition database, and the distractor image set, with associated positions YQ = {yQ 
+
+> i
+
+}NQ
+
+> i=1
+
+,
+
+YC = {yC 
+
+> j
+
+}NC
+
+> j=1
+
+, and YD = {yD 
+
+> l
+
+}ND
+
+> l=1
+
+, where all positions lie in Rn.Using distance threshold dthr , the cross-condition positive set and the per-query distractor set for qi are defined as 
+
+Pi = cj ∈ C ∥yQ 
+
+> i
+
+− yC 
+
+> j
+
+∥2 ≤ dthr ,
+
+Ni = dl ∈ D ∥yQ 
+
+> i
+
+− yD 
+
+> l
+
+∥2 > d thr . (1) The augmented database set for query qi is the union of the entire cross-condition database and the distractor set: 
+
+Ai = C ∪ N i.
+
+For a query qi, the method ranks the database images Ai by their similarity to qi. Writing rank qi (a) ∈ { 1, . . . , |A i|} for the position of a in this ranking (rank 1 being the top match), the top-K retrieved set is 
+
+RKi = { a ∈ A i : rank qi (a) ≤ K }.
+
+The method must rank a positive from Pi above the rest of 
+
+Ai, particularly above the distractors in Ni, whose condition is similar to the query’s and which are thus visually easier to match. DAR@ K is the fraction of queries for which the top-K
+
+retrievals contain at least one cross-condition positive: 
+
+DAR@ K = 1
+
+NQNQ
+
+X
+
+> i=1
+
+ RKi ∩ P i̸ = ∅  .
+
+A method’s DAR@K is upper-bounded by its R@K, DAR@K ≤ R@K, since adding distractors can only displace cross-condition positives from the top-K. As a protocol design choice, we adopt this distractor-augmentation policy and apply it consistently across all VPR methods; its construction is specified in Sec. V-A, and its sensitivity to distractor number, distance, and condition is analyzed in Sec. V-C. DAR@ K includes both baseline localization failures and failures caused by distractors. We isolate the latter with Recall Survival Rate (RSR)@ K,
+
+RSR@ K = DAR@ K
+
+R@ K .
+
+For a distractor set, RSR@ K is the fraction of successful retrievals preserved after distractor insertion. A value of 1 indicates full robustness; lower values indicate successes lost because distractors outrank cross-condition positives. Thus, R@ K measures absolute retrieval performance, whereas RSR@ K measures its robustness to distractors. IV. C ONDITION SUPPRESSION FOR VPR The preceding section introduced DAR as a way to mea-sure failures caused by condition-similar distractors. We now formulate condition suppression as a strategy for improving distractor robustness. 
+
+A. Place Identity and Condition Information 
+
+VPR methods typically encode each image as a descriptor and rank database images by their descriptor similarity to the query. These descriptors can capture both place identity and condition information. The latter includes attributes such as season and time of day and can vary independently of place identity; for example, the same place can be photographed in TABLE I. Benchmark datasets. XB3=Bumblebee XB3 camera, GSV=Google Street View. A retrieval is counted correct if it falls within the listed threshold: a distance in meters, or a frame tolerance for the frame-aligned datasets.                                           
+
+> Dataset Query Database #Query #Database Threshold Condition shift AmsterTime [39] new old 1,231 1,231 exact match modern →historical Gardens Point [29] day right night right 200 200 ±2 frames day/RGB →night/B&W Nordland [28] Summer Winter 27,592 27,592 ±1 frame sum →win RobotCar [2] 2014-11-18-13-20-12 2014-12-16-18-44-24 6,021 7,513 25 m day →night StLuciaMToD [30] 100909 0845 180809 1545 1,619 1,615 25 m morn. →aftn. SVOX [33] queries overcast gallery 872 17,166 25 m XB3 →GSV
+
+TABLE II. VPR method configurations. Dim =global descriptor dimensionality; Re-rank =number of top-ranked candidates re-ranked. 
+
+> ‡
+
+CricaVPR uses a cross-image encoder, so descriptors depend on the inference batch; following the original paper, we use a batch size of 16.                                                              
+
+> Method Backbone Aggregation Dim Train data Re-rank AnyLoc [1] DINOv2 ViT-G/14 VLAD (Urban, 32 clusters) 49152 ––BoQ [12] DINOv2 ViT-B/14 BoQ 12288 GSV-Cities –CosPlace [19] ResNet-101 GeM + FC 1024 SF-XL –CricaVPR ‡[13] DINOv2 ViT-B/14 multi-scale GeM + cross-image 10752 GSV-Cities –EigenPlaces [3] ResNet-50 GeM + FC 2048 SF-XL –MegaLoc [14] DINOv2 ViT-B/14 SALAD + projection 8448 5-set union –MixVPR [15] ResNet-50 Feature-Mixer 4096 GSV-Cities –SALAD [16] DINOv2 ViT-B/14 SALAD 8448 GSV-Cities –SALAD-CM [17] DINOv2 ViT-B/14 SALAD 8448 GSV-Cities + MSLS –SelaVPR [40] DINOv2 ViT-L/14 GeM 1024 MSLS + Pitts30k top 100 SelaVPR++ [18] DINOv2 ViT-L/14 GeM 4096 GSV+MSLS+SF-XL+P30k top 100
+
+summer or winter. In robotic SLAM and localization systems, localization should rely on place identity rather than condition information: place identity corresponds to the same physical location or map pose, whereas condition information reflects visual appearance that may be shared between the query and distractors from different places. Therefore, we post-process VPR descriptors to erase condition information and thereby improve retrieval robustness to distractors, a practice we refer to as condition suppression. 
+
+B. Formalization of Condition Suppression 
+
+We use the notion of linear guardedness from Bel-rose et al. [27] to formalize condition suppression as hiding condition labels from linear classifiers. Let X ∈ Rd be a random vector denoting a descriptor, Z ∈ { 0, 1}k its one-hot condition label, and η(x; θ) = W x + b a linear classifier with parameters θ = ( W, b ) ∈ Θ. X linearly guards Z if, for every convex loss function L,
+
+inf  
+
+> θ∈Θ
+
+E[L(η(X; θ), Z )] = inf 
+
+> c∈Rk
+
+E[L(c, Z )] , (2) 
+
+i.e. , the best linear classifier does no better than a trivial constant predictor that ignores the descriptor. We therefore measure suppression by the reduction in accuracy of linear classifiers trained to predict the condition labels (Sec. V-D). 
+
+C. Condition Suppression Methods 
+
+We compare three condition suppression transforms ( r :
+
+Rd → Rd) applied to each descriptor ( x). INLP [26] and LEACE [27] fit transformations directly from descriptors X
+
+and condition labels Z, whereas STD [25] uses Z only to partition X and estimates descriptor statistics separately for each condition. 
+
+a) INLP.: INLP iteratively fits a linear classifier to pre-dict the condition and obtains a projection Pi onto its null space at each iteration i. After m iterations, 
+
+rINLP (x) = Pm · · · P1x. 
+
+b) LEACE.: LEACE defines the transformation using the whitening matrix W = (Σ 1/2 
+
+> XX
+
+)+ and the orthogonal projection 
+
+PW ΣXZ = ( W ΣXZ )( W ΣXZ )+:
+
+rLEACE (x) = x − W +PW ΣXZ W  x − E[X].
+
+c) STD.: STD standardizes a descriptor xc from con-dition c using the condition-specific mean μc and standard deviation σc:
+
+rSTD (xc) = xc − μc
+
+σc
+
+.
+
+Originally proposed for linear concept erasure, INLP seeks linear guardedness by iteratively removing condition-predictive directions, whereas LEACE uses a closed-form transform. Although STD was not designed for linear guarded-ness, its per-condition standardization equalizes the condition means, which Belrose et al. [27] proved equivalent to linear guardedness. Thus, all three methods satisfy our objective of condition suppression. However, because STD requires condition labels at inference time, we treat it as a label-dependent baseline rather than a directly deployable method for unlabeled databases. V. E XPERIMENTS 
+
+A. Setup a) Datasets and VPR Methods.: Table I summarizes the datasets. We use RobotCar stereo centre images and the SVOX test set, subsample RobotCar, St. Lucia Multiple Times of Day (StLuciaMToD), and SVOX to 1 m spacing, and TABLE III. R@1, DAR@1, and RSR@1 in % across all six datasets. Green and light-green indicate the best and second-best results per column within each dataset, while red indicates the worst result per column within each dataset. For all three metrics, higher is better. The superscript on each Mean value gives that method’s rank on that metric (1 = best, 11 = worst).                                                                                                                                                                                                                                                                    
+
+> AmsterTime Gardens Point Nordland RobotCar StLuciaMToD SVOX Mean
+> Method R@1 DAR@1 RSR@1 R@1 DAR@1 RSR@1 R@1 DAR@1 RSR@1 R@1 DAR@1 RSR@1 R@1 DAR@1 RSR@1 R@1 DAR@1 RSR@1 R@1 DAR@1 RSR@1 AnyLoc 40.5 9.02 22.2 93.0 15.0 16.1 19.0 0.29 1.53 95.9 4.21 4.39 79.9 44.2 55.2 89.3 1.38 1.54 69.6 11 12.3 11 16.8 11
+> BoQ 62.1 42.1 67.7 98.5 37.5 38.1 81.6 14.1 17.2 99.5 85.3 85.8 99.9 99.6 99.7 98.4 86.9 88.4 90.0 260.9 366.1 3
+> CosPlace 50.4 34.0 67.6 77.0 18.5 24.0 39.7 4.30 10.8 91.5 38.1 41.7 99.6 98.9 99.3 89.7 76.6 85.4 74.6 10 45.1 854.8 7
+> CricaVPR 65.5 35.2 53.7 96.0 29.5 30.7 76.2 3.51 4.60 98.8 51.6 52.3 100 97.7 97.7 97.0 56.2 57.9 88.9 545.6 749.5 9
+> EigenPlaces 49.8 31.8 63.8 79.5 16.0 20.1 46.6 5.01 10.8 91.5 37.0 40.4 99.3 98.4 99.1 91.6 77.1 84.1 76.4 944.2 953.1 8
+> MegaLoc 63.3 42.2 66.8 92.5 12.5 13.5 86.7 36.5 42.1 98.8 79.7 80.7 99.9 99.6 99.7 97.7 90.1 92.3 89.8 360.1 465.8 4
+> MixVPR 39.9 21.4 53.5 84.5 9.00 10.7 54.3 2.19 4.04 89.9 32.5 36.1 99.5 97.7 98.1 96.1 71.2 74.1 77.4 839.0 10 46.1 10
+> SALAD 58.1 35.7 61.5 97.5 34.0 34.9 76.0 7.56 9.95 99.2 83.2 83.8 99.9 99.1 99.3 98.3 83.1 84.6 88.2 657.1 562.3 5
+> SALAD-CM 56.5 38.3 67.8 93.0 26.0 28.0 90.7 64.0 70.6 99.3 93.6 94.2 100 99.9 99.9 98.5 91.5 92.9 89.7 468.9 175.5 1
+> SelaVPR 52.1 32.1 61.6 95.0 32.0 33.7 69.6 3.86 5.55 98.2 71.2 72.5 99.5 98.2 98.6 95.8 71.7 74.8 85.0 751.5 657.8 6
+> SelaVPR++ 60.8 38.6 63.5 97.0 30.5 31.4 89.9 35.1 39.0 99.4 92.0 92.5 100 99.9 99.9 98.5 92.3 93.7 90.9 164.7 270.0 2
+> 025 50 75 100
+
+AmsterTime         
+
+> AnyLoc BoQ CosPlace CricaVPR EigenPlaces MegaLoc MixVPR SALAD SALAD-CM SelaVPR SelaVPR++
+
+Gardens Point Nordland      
+
+> 025 50 75 100 025 50 75 100
+
+RobotCar     
+
+> 025 50 75 100
+
+StLuciaMToD     
+
+> 025 50 75 100
+
+SVOX 
+
+R@1 (%) DAR@1 (%) 
+
+Fig. 5. DAR@1 vs. R@1 across all six datasets. The dashed diagonal marks DAR@1 = R@1. Points further below the diagonal indicate a larger absolute gap between R@1 and DAR@1. The dotted horizontal and vertical lines mark the mean DAR@1 and R@1 across the methods. 
+
+exclude queries without a ground-truth database match. We evaluate eleven VPR methods with publicly released weights, summarized in Table II. 
+
+b) Distractor Pool.: For the main results (Sec. V-B), we use the query set Q as the distractor pool. As defined in Equation (1), only images outside the positive spatial threshold are retained as distractors for each query, excluding the query itself and nearby same-place images. This isolates the query– database condition gap as the variable under study and yields maximally challenging distractors. 
+
+c) Condition Suppression.: We fit transforms to global descriptors using query versus database as the condition label. INLP uses 35 iterations of SGDClassifier (scikit-learn v1.8.0), with default settings except max iter =2500 and bal-anced class weights. LEACE uses a memory-efficient equiv-alent implementation to accommodate high-dimensional VPR descriptors. We exclude SelaVPR and SelaVPR++, whose quantized hashing and local re-ranking fall outside global descriptor transforms. 
+
+d) Fitting and Evaluation Split.: We fit condition sup-pression transforms on a spatially contiguous region around the map center, except in Fig. 9, where the fitting region is a slice from the map edge. This region contains 10% of the queries and all colocated database images; evaluation uses the remaining spatially disjoint places. This reflects a setting in which condition-labeled descriptors are collected at a small subset of locations and the fitted transform is applied elsewhere. For Fig. 8(a), LinearSVC with default hyperparameters is fitted and evaluated on separate spatial subsets of the evaluation partition, each balanced to fix the constant predictor baseline at 50%. 
+
+B. Standard Recall Does Not Predict Distractor Robustness 
+
+Table III shows that distractor robustness is distinct from standard Recall and must be measured directly with DAR. Mean DAR@1 reorders methods relative to mean R@1: SALAD-CM rises from fourth to first, while CricaVPR falls from fifth to seventh. Similar R@1 can conceal large differ-ences between methods in both DAR@1 and RSR@1. On RobotCar, AnyLoc and SelaVPR achieve similar R@1 (95.9% vs. 98.2%) but markedly different distractor robustness: Any-Loc attains 4.21% DAR@1 and 4.39% RSR@1, whereas SelaVPR attains 71.2% and 72.5%. Likewise, R@1 does not predict DAR@1 in Fig. 5. On RobotCar, methods consistently achieve high R@1, whereas their DAR@1 spans a wide range. On Gardens Point, points cluster in the bottom-right, showing that high R@1 does not imply high DAR@1. 
+
+C. What Makes Distractors Effective? 
+
+Distractors are effective even in small numbers, with addi-tional impact as their number grows. In Fig. 6(a), even at a distractor-to-query ratio of 0.1, several methods remain well below their baseline R@1. As more distractors are added, DAR@1 decreases for every method. This may be because incidental factors such as blur and occlusion vary across distractors, making larger sets more likely to contain highly effective ones. Distractors are most effective near the query, though distant ones can still be effective. In Fig. 6(b), DAR@1 increases for every method as the threshold grows, with the largest gains between 25 and 50 m, showing that nearby distractors are especially challenging. Yet some methods remain well below their baseline R@1 even at 200 m, indicating that the effect persists even when distractors are distant. 0 0.2 0.4 0.6 0.8 1025 50 75 100 
+
+Distractor-to-query ratio 
+
+(a) Distractor number 
+
+AnyLoc BoQ CosPlace CricaVPR EigenPlaces MegaLoc MixVPR SALAD SALAD-CM SelaVPR SelaVPR++ 25 50 100 150 200 ∞
+
+Minimum distractor distance (m) 
+
+(b) Distractor distance 
+
+> DAR@1 (%)
+
+Fig. 6. DAR@1 on RobotCar, as a function of (a) the distractor-to-query set-size ratio, varied by randomly sampling the distractor pool, and (b) the minimum distance from each query to its distractors, varied by including only distractors beyond the threshold. In both, DAR@1 reduces to the no-distractor R@1 at the limit (fraction 0;distance ∞, right of the dashed line). 
+
+sun,clouds (query) overcast rain night none 
+
+025 50 75 100 
+
+Distractor set DAR@1 (%) AnyLoc BoQ CosPlace CricaVPR EigenPlaces MegaLoc MixVPR SALAD SALAD-CM SelaVPR SelaVPR++ 
+
+Fig. 7. DAR@1 with distractors drawn from RobotCar traversals of differing conditions, ordered by mean DAR@1 across methods. 
+
+sun,clouds is the query set itself (the main results setting); none 
+
+is the no-distractor reference, equal to R@1. The number of distractor images is held constant across distractor sets. Traversals: sun,clouds 
+
+2014-11-18-13-20-12 (query), overcast 2014-12-12-10-45-15 , rain 2015-10-29-12-18-17 , night 2014-11-14-16-34-33 .
+
+Distractors are more effective when their condition is simi-lar to the query. This shows that distractor failures do not arise merely from increasing the number of retrieval candidates but reflect a systematic condition bias. In Fig. 7, using the query set itself ( sun , clouds ) yields the lowest DAR@1 for every method, while daytime distractors from related but different conditions ( overcast , rain ) produce a smaller drop because they differ in time and weather. By contrast, 
+
+night distractors matching the database condition are far less effective. 
+
+D. Condition Suppression Improves Distractor Robustness 
+
+Fig. 8 shows that condition suppression improves distractor robustness, but the effect depends on the suppression method. For INLP and LEACE, condition labels become less accessible to linear classifiers in 50 and 52 of 54 method–dataset pairs, respectively, compared with only 27 pairs for STD (Fig. 8(a)). This result carries over to retrieval: INLP and LEACE improve 
+
+CoP EgP AnL MxV CrV MgL SAL SCM BoQ                                           
+
+> +23 +10 +11 +6.5+8.3+2.2+21 +10 +5.8+6.4+5.6+2.8+18 +3.6+2.8+3.4 0 .0+5.4+15 +4.5+2.4+2.0 0 .0+3.4+8.4+3.7+4.5+2.2 0 .0+3.2+14 +4.1+4.6+2.7+2.2+0.1+7.7+5.2+5.8+3.0+0.5+0.5+14 +2.7+3.7+5.6−
+> 1.1+0.4+7.9+4.5+3.5+1.5+7.2+0.4
+> (a) Acc. reduction (pp)
+
+INLP                                             
+
+> +21 +7.5+8.1+6.5+9.4+3.4+21 +8.3+5.4+5.0+6.7+2.9+14 +3.2+2.9+3.7+2.2+4.6+14 +4.6+1.9+2.4 0 .0+3.4+7.4+4.2+4.1+2.3+7.8+3.1+14 +5.0+4.2+2.7+2.8+0.8+7.2+5.3+5.0+2.9+7.2+0.6+13 +5.6+3.7+4.3−
+> 0.5+1.5+7.5+3.7+2.7+1.7+7.2+0.6
+
+LEACE                                            
+
+> +14 +5.8+6.8+1.0+2.8−
+> 28 +15 +4.3+4.9−
+> 2.4−
+> 2.8−
+> 26 +8.0+8.5+2.0+0.5 0 .0−
+> 4.1+7.2+7.9+1.8−
+> 4.2 0 .0−
+> 24 +1.5+6.1+2.4−
+> 0.1−
+> 5.6−
+> 28 +6.7+2.8−
+> 0.8−
+> 5.9−
+> 2.2−
+> 36 +2.0+6.9−
+> 0.6−
+> 8.8−
+> 8.9−
+> 41 +7.5+4.5−
+> 5.7−
+> 10 −
+> 11 −
+> 38 +1.7−
+> 1.9−
+> 1.8−
+> 12 −
+> 22 −
+> 43
+
+STD 
+
+CoP EgP AnL MxV CrV MgL SAL SCM BoQ                                                                                                                            
+
+> +4.1+2.3+16 +2.0+2.2+0.1+4.9+2.4+19 +2.4+2.2−
+> 0.1+0.6+28 +37 +11 +2.2+16 +2.1+4.6+8.3+3.1+2.8+0.1+5.4+5.1+6.2+5.5−
+> 0.6+0.4+5.5+0.5+1.4+1.7+1.7−
+> 0.1+4.9+1.3+1.9+3.3−
+> 0.6 0 .0+2.7+0.5+0.2+0.5+0.6 0 .0+4.3+1.0+0.4+0.8 0 .0 0 .0
+> (b)  ∆DAR@1 (pp)  +3.8+0.6+12 +1.7+1.1+0.1+4.6+1.5+20 +2.3+1.7+0.1+0.5+24 +36 +8.9+3.3+8.8+2.0+3.7+8.2+3.2+2.8+0.1+4.7+4.7+5.3+5.3 0 .0+0.3+5.5+0.1+1.1+2.1+1.7 0 .0+4.1+0.8+1.5+2.6+0.6 0 .0+2.7+0.4+0.1+0.3 0 .0 0 .0+3.4+0.9+0.3+0.6 0 .0 0 .0+1.7−
+> 8.5+0.2+1.2−
+> 11 −
+> 0.2+2.8−
+> 8.5+7.8+2.0−
+> 11 −
+> 0.6+0.1+16 +14 +9.0−
+> 10 −
+> 8.2+1.4−
+> 5.2−
+> 2.5+2.1−
+> 7.8−
+> 0.8+3.2−
+> 7.5−
+> 8.2+5.6−
+> 15 −
+> 2.2+4.1−
+> 7.0−
+> 6.1+1.6−
+> 6.7−
+> 0.8
+> −
+> 0.3−
+> 7.4−
+> 6.4+2.8−
+> 16 −
+> 0.3+1.6−
+> 5.4−
+> 3.1−
+> 0.1−
+> 14 0 .0
+> −
+> 0.4−
+> 6.5−
+> 6.2−
+> 1.9−
+> 18 −
+> 0.1
+
+ND SV RC AT GP SL CoP EgP AnL MxV CrV MgL SAL SCM BoQ                              
+
+> +15 +0.4+0.7−
+> 0.7+2.2 0 .0+12 +0.3+1.1+1.7+1.7−
+> 0.1+12 +0.5+0.8+7.9+1.7+13 +9.7 0 .0+0.6+2.4−
+> 0.6+0.1+7.1 0 .0−
+> 0.1+1.0 0 .0 0 .0+0.8+0.1 0 .0+1.8 0 .0 0 .0+5.4−
+> 0.1 0 .0+1.6+0.6 0 .0+0.2−
+> 0.1 0 .0+1.3−
+> 1.1 0 .0+4.0 0 .0 0 .0+0.8 0 .0 0 .0
+> (c)  ∆R@1 (pp)
+
+ND SV RC AT GP SL                          
+
+> +15 −
+> 0.9+0.5+0.7+2.8−
+> 0.1+13 −
+> 0.4+1.2+2.5+0.6 0 .0+13 −
+> 0.3+0.8+6.2−
+> 1.1+8.9+10 0 .0+0.6+4.1+1.7 0 .0+6.4+0.1−
+> 0.1 0 .0 0 .0−
+> 0.1+0.8 0 .0 0 .0+0.9 0 .0 0 .0+5.6 0 .0 0 .0+0.7 0 .0 0 .0+0.2−
+> 0.1 0 .0−
+> 0.1 0 .0 0 .0+3.7 0 .0 0 .0−
+> 0.1 0 .0 0 .0
+
+ND SV RC AT GP SL                                       
+
+> +19 +0.4+1.3+0.4+5.0 0 .0+17 −
+> 0.8+1.6+2.8+1.1+0.2+19 −
+> 0.3+0.9+9.9+0.6−
+> 8.2+16 −
+> 0.1+1.0+4.3+2.2+0.1+10 +0.1 0 .0+3.3+0.6−
+> 0.1+1.3+0.1+0.1+1.7+1.7+0.1+7.3−
+> 0.4 0 .0+2.4−
+> 0.6 0 .0+0.3−
+> 0.5 0 .0+1.4−
+> 1.1 0 .0+4.6−
+> 0.3+0.1+0.6−
+> 0.6 0 .0
+
+Fig. 8. Per-(VPR method, dataset) results under each condition suppression method, with rows and columns ordered by mean ac-curacy reduction (descending). (a): linear-probe accuracy reduction (pp) relative to the unsuppressed baseline; higher is better. (b) and (c): DAR@1 and R@1 gain (pp). Datasets: RC=RobotCar, AT= AmsterTime, SV=SVOX, ND=Nordland, SL=StLucia, GP=Gardens Point. Methods: AnL=AnyLoc, EgP=EigenPlaces, MxV=MixVPR, CrV=CricaVPR, CoP=CosPlace, SAL=SALAD, MgL=MegaLoc, SCM=SALAD-CM, BoQ=BoQ. 
+
+DAR@1 for 46 and 47 pairs, respectively, compared with only 18 for STD (Fig. 8(b)). The clearest example is AnyLoc on RobotCar, where INLP improves DAR@1 by 37 pp. This sug-gests that AnyLoc already encodes sufficient place information and that condition suppression reveals its discriminability by removing interfering condition information. Condition suppression preserves baseline R@1 in most cases, and even improves it in some (Fig. 8(c)). R@1 decreases by at most 1.1 pp, except when STD reduces AnyLoc’s R@1 by 8.2 pp on StLuciaMToD. R@1 improves on Nordland in all cases, indicating benefits even when the retrieval database contains a single season. This may be because condition suppression removes within-season variation such as snow cover. Having studied the effect of condition suppression with DAR, we now evaluate it on a mixed-condition database. In Fig. 9, INLP demonstrates its ability to improve robustness to distractors on RobotCar, increasing R@1 by 16 pp for AnyLoc and 5.1 pp for EigenPlaces. It also generalizes across mild weather changes, as the added distractors differ from the fitted query condition ( overcast vs. sun,clouds ). Original Suppressed AnyLoc   
+
+> R@1: 80.4% R@1: 96.8%
+> EigenPlaces
+> R@1: 88.7% R@1: 93.8%
+
+Fitting Day query Night DB Day DB 
+
+Fig. 9. Top-1 retrieval on RobotCar for AnyLoc [1] and EigenPlaces [3], using the original descriptors (left) and condition-suppressed descriptors with INLP (right) on a mixed-condition database with 5% daytime frames added. Lines connect each query to its top-1 retrieval (green if within 25 m, red otherwise); 500 matches shown for visual clarity. Traversals (subsampled at 1 m): day query 2014-11-18-13-20-12 , night database 2014-12-16-18-44-24 , day database 2014-12-12-10-45-15 .
+
+TABLE IV. Performance equivalence of single- and multi-condition suppression across 54 method–dataset pairs. Differences are single minus multi-condition (pp); values are mean ± standard deviation, and n≤1 counts pairs within 1 pp.                          
+
+> ∆DAR@1 ∆R@1 Method mean ±std n≤1mean ±std n≤1
+> INLP 0.00 ±0.85 49 / 54 0.12 ±0.69 46 / 54 LEACE −0.25 ±0.58 47 / 54 −0.06 ±0.42 52 / 54
+
+TABLE V. Performance preservation on irrelevant condition pairs under sequential erasure across nine VPR methods. The pairs are sun, clouds (2014-11-18-13-20-12 )–overcast (2014-12-12-10-45-15 ) on RobotCar and spring–fall on Nord-land. Differences are original minus erasure (pp); values are mean ±
+
+standard deviation, and n≤1 counts pairs within 1 pp.                                             
+
+> ∆DAR@1 ∆R@1 Method Condition pair mean ±std n≤1mean ±std n≤1
+> INLP sun,clouds-overcast −0.23 ±0.56 8 / 9 −0.01 ±0.05 9 / 9 spring-fall −0.12 ±0.39 9 / 9 −0.15 ±0.14 9 / 9 LEACE sun,clouds-overcast −0.17 ±0.36 8 / 9 0.01 ±0.06 9 / 9 spring-fall −0.09 ±0.72 8 / 9 −0.34 ±0.50 8 / 9
+
+E. A Single Transform Can Suppress Multiple Conditions 
+
+A practical system should not require a separate transform for every condition pair. Because INLP and LEACE pro-duce linear transforms that can be composed, we combine their independently fitted transforms into a single transform. Table IV shows that the combined transform preserves the performance of the individual transforms. Table V further      
+
+> 00.10.20.30.40.5
+> −8
+> −6
+> −4
+> −20246
+
+(a) ∆DAR@1 (pp)        
+
+> INLP LEACE STD
+> 00.10.20.30.40.5
+> −1
+> −0.500.511.52
+
+(b) ∆R@1 (pp) 
+
+> Query fitting fraction
+
+Fig. 10. Performance change from condition suppression (suppressed minus original, pp) versus query fitting fraction, averaged over 54 method–dataset pairs. (a) DAR@1 and (b) R@1. At fraction 0, no suppression is applied; the evaluation fraction is fixed at 0.5.
+
+shows that it does not degrade performance on irrelevant condition pairs, allowing it to be applied safely to unknown conditions at deployment. We sequentially fit and compose transforms in the order Nordland, AmsterTime, Gardens Point, SVOX, RobotCar, and StLuciaMToD. For each subsequent dataset, we apply the cumulative transform from all earlier datasets, fit a new transform on the resulting descriptors, and compose it with the previous transforms. 
+
+F. How Much Fitting Data Is Needed? 
+
+Fig. 10 shows that STD is more sensitive to fitting-set size than INLP or LEACE and that at least 10% of the queries are needed to fit all condition suppression transforms without degrading average R@1. In Fig. 10(a), INLP and LEACE im-prove average DAR@1 with only 5% of the queries, whereas STD requires at least 15% and remains below them despite continuing to improve with more fitting data. In Fig. 10(b), using 5% degrades R@1 for INLP alone, so 10% is sufficient to avoid degradation across all three methods. VI. C ONCLUSION 
+
+We introduced DAR to test whether VPR methods retrieve by place identity or condition similarity. Because DAR@1 and RSR@1 can remain low and reorder methods despite high R@1, even methods with high R@1 can be affected by distractors. Distractor effectiveness depends on condition similarity to the query, and INLP and LEACE mitigate their impact. Together, these findings suggest that the errors arise from condition information interfering with retrieval rather than insufficient place information. Similar failures may occur within a single session when descriptors encode incidental conditions such as brightness; evaluating condition suppres-sion in such settings remains future work. REFERENCES [1] N. Keetha, A. Mishra, J. Karhade, K. M. Jatavallabhula, S. Scherer, M. Krishna, and S. Garg, “Anyloc: Towards universal visual place recognition,” IEEE Robot. Autom. Lett. , vol. 9, no. 2, pp. 1286–1293, 2023. [2] W. Maddern, G. Pascoe, C. Linegar, and P. Newman, “1 year, 1000 km: The oxford robotcar dataset,” Int. J. Robot. Res. , vol. 36, no. 1, pp. 3–15, 2017. [3] G. Berton, G. Trivigno, B. Caputo, and C. Masone, “Eigenplaces: Training viewpoint robust models for visual place recognition,” in Proc. IEEE/CVF Int. Conf. Comput. Vis. , pp. 11080–11090, 2023. [4] L. Carlone, A. Kim, T. Barfoot, D. Cremers, and F. Dellaert, “Slam Handbook: From Localization and Mapping to Spatial Intelligence,” 2025. [5] J. Nie, J.-M. Feng, D. Xue, F. Pan, W. Liu, J. Hu, and S. Cheng, “A training-free, lightweight global image descriptor for long-term visual place recognition toward autonomous vehicles,” IEEE Trans. Intell. Transp. Syst. , vol. 25, no. 2, pp. 1291–1302, 2023. [6] J. Kim, Y. Cho, and S.-E. Yoon, “Class-relational approach for visual place recognition under extreme appearance changes,” IEEE Robot. Autom. Lett. , 2026. [7] T. Bolukbasi, K.-W. Chang, J. Y. Zou, V. Saligrama, and A. T. Kalai, “Man is to computer programmer as woman is to homemaker? debiasing word embeddings,” Adv. Neural Inf. Process. Syst. , vol. 29, 2016. [8] M. Cummins and P. Newman, “Fab-map: Probabilistic localization and mapping in the space of appearance,” Int. J. Robot. Res. , vol. 27, no. 6, pp. 647–665, 2008. [9] M. J. Milford and G. F. Wyeth, “Seqslam: Visual route-based navigation for sunny summer days and stormy winter nights,” in IEEE Int. Conf. Robot. Autom. , pp. 1643–1649, IEEE, 2012. [10] R. Arandjelovic, P. Gronat, A. Torii, T. Pajdla, and J. Sivic, “Netvlad: Cnn architecture for weakly supervised place recognition,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. , pp. 5297–5307, 2016. [11] X. Wang, X. Han, W. Huang, D. Dong, and M. R. Scott, “Multi-similarity loss with general pair weighting for deep metric learning,” in 
+
+Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. , pp. 5022–5030, 2019. [12] A. Ali-Bey, B. Chaib-Draa, and P. Giguere, “Boq: A place is worth a bag of learnable queries,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. , pp. 17794–17803, 2024. [13] F. Lu, X. Lan, L. Zhang, D. Jiang, Y. Wang, and C. Yuan, “Cricavpr: Cross-image correlation-aware representation learning for visual place recognition,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. ,pp. 16772–16782, 2024. [14] G. Berton and C. Masone, “Megaloc: One retrieval to place them all,” in 
+
+Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. , pp. 2861–2867, 2025. [15] A. Ali-Bey, B. Chaib-Draa, and P. Giguere, “Mixvpr: Feature mixing for visual place recognition,” in Proc. IEEE/CVF Winter Conf. Appl. Comput. Vis. , pp. 2998–3007, 2023. [16] S. Izquierdo and J. Civera, “Optimal transport aggregation for visual place recognition,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. , pp. 17658–17668, 2024. [17] S. Izquierdo and J. Civera, “Close, but not there: Boosting geographic distance sensitivity in visual place recognition,” in Proc. Eur. Conf. Comput. Vis. , pp. 240–257, Springer, 2024. [18] F. Lu, T. Jin, X. Lan, L. Zhang, Y. Liu, Y. Wang, and C. Yuan, “Selavpr++: Towards seamless adaptation of foundation models for efficient place recognition,” IEEE Trans. Pattern Anal. Mach. Intell. ,2025. [19] G. Berton, C. Masone, and B. Caputo, “Rethinking visual geo-localization for large-scale applications,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. , pp. 4878–4888, 2022. [20] P. Corke, R. Paul, W. Churchill, and P. Newman, “Dealing with shadows: Capturing intrinsic scene appearance for image-based outdoor localisation,” in IEEE/RSJ Int. Conf. Intell. Robots Syst. , pp. 2085–2092, IEEE, 2013. [21] W. Maddern, C. McManus, B. Upcroft, W. Churchill, and P. Newman, “Illumination invariant imaging: Applications in robust vision-based localisation, mapping and classification for autonomous vehicles,” in 
+
+Proc. Workshop on Visual Place Recognition in Changing Environments, IEEE Int. Conf. Robot. Autom. , vol. 2, p. 3, IEEE, 2014. [22] H. Porav, W. Maddern, and P. Newman, “Adversarial training for adverse conditions: Robust metric localisation using appearance transfer,” in 
+
+IEEE Int. Conf. Robot. Autom. , pp. 1011–1018, IEEE, 2018. [23] A. Anoosheh, T. Sattler, R. Timofte, M. Pollefeys, and L. Van Gool, “Night-to-day image translation for retrieval-based localization,” in 
+
+IEEE Int. Conf. Robot. Autom. , pp. 5958–5964, IEEE, 2019. [24] L. Clement and J. Kelly, “How to train a cat: Learning canonical ap-pearance transformations for direct visual localization under illumination change,” IEEE Robot. Autom. Lett. , vol. 3, no. 3, pp. 2447–2454, 2018. [25] S. Schubert, P. Neubert, and P. Protzel, “Unsupervised learning methods for visual place recognition in discretely and continuously changing environments,” in IEEE Int. Conf. Robot. Autom. , pp. 4372–4378, IEEE, 2020. [26] S. Ravfogel, Y. Elazar, H. Gonen, M. Twiton, and Y. Goldberg, “Null it out: Guarding protected attributes by iterative nullspace projection,” in Proc. Annu. Meet. Assoc. Comput. Linguist. , pp. 7237–7256, 2020. [27] N. Belrose, D. Schneider-Joseph, S. Ravfogel, R. Cotterell, E. Raff, and S. Biderman, “Leace: Perfect linear concept erasure in closed form,” 
+
+Adv. Neural Inf. Process. Syst. , vol. 36, pp. 66044–66063, 2023. [28] N. S¨ underhauf, P. Neubert, and P. Protzel, “Are we there yet? challenging seqslam on a 3000 km journey across all four seasons,” in Proc. Workshop on Long-Term Autonomy, IEEE Int. Conf. Robot. Autom. ,p. 2013, Citeseer, 2013. [29] A. Glover and M. Milford, “Day and night, left and right,” 2014. [30] A. J. Glover, W. P. Maddern, M. J. Milford, and G. F. Wyeth, “Fab-map+ ratslam: Appearance-based slam for multiple times of day,” in 
+
+IEEE Int. Conf. Robot. Autom. , pp. 3507–3512, IEEE, 2010. [31] A. Torii, J. Sivic, T. Pajdla, and M. Okutomi, “Visual place recognition with repetitive structures,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. , pp. 883–890, 2013. [32] A. Torii, R. Arandjelovic, J. Sivic, M. Okutomi, and T. Pajdla, “24/7 place recognition by view synthesis,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. , pp. 1808–1817, 2015. [33] G. M. Berton, V. Paolicelli, C. Masone, and B. Caputo, “Adaptive-attentive geolocalization from few queries: A hybrid approach,” in Proc. IEEE/CVF Winter Conf. Appl. Comput. Vis. , pp. 2918–2927, 2021. [34] A. Ali-Bey, B. Chaib-Draa, and P. Giguere, “Gsv-cities: Toward appro-priate supervised visual place recognition,” Neurocomputing , vol. 513, pp. 194–203, 2022. [35] F. Warburg, S. Hauberg, M. Lopez-Antequera, P. Gargallo, Y. Kuang, and J. Civera, “Mapillary street-level sequences: A dataset for lifelong place recognition,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. , pp. 2626–2635, 2020. [36] Z. Chen, L. Liu, I. Sa, Z. Ge, and M. Chli, “Learning context flexible attention model for long-term visual place recognition,” IEEE Robot. Autom. Lett. , vol. 3, no. 4, pp. 4015–4022, 2018. [37] H. Jegou, M. Douze, and C. Schmid, “Hamming embedding and weak geometric consistency for large scale image search,” in Proc. Eur. Conf. Comput. Vis. , pp. 304–317, Springer, 2008. [38] H. Gonen and Y. Goldberg, “Lipstick on a pig: Debiasing methods cover up systematic gender biases in word embeddings but do not remove them,” in Proc. Conf. North Am. Chapter Assoc. Comput. Linguist. Hum. Lang. Technol. , pp. 609–614, 2019. [39] B. Yildiz, S. Khademi, R. M. Siebes, and J. Van Gemert, “Amstertime: A visual place recognition benchmark dataset for severe domain shift,” in Int. Conf. Pattern Recognit. , pp. 2749–2755, IEEE, 2022. [40] F. Lu, L. Zhang, X. Lan, S. Dong, Y. Wang, and C. Yuan, “Towards seamless adaptation of pre-trained models for visual place recognition,” in Proc. Int. Conf. Learn. Represent. , 2024.

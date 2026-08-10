@@ -41,7 +41,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-09</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-10</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 21 篇</strong>
@@ -51,7 +51,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>8</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-09 21:18:25 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-10 21:24:39 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共处理21篇论文，精读8篇、速读13篇，焦点集中在3D高斯泼溅与动态场景重建。</p>
-<p>最值得看的是《DynActiveGS》与《UniqueSplat》，均获9分高分，分别突破动态重建和可泛化三维重建。</p>
-<p>建议先精读这两篇高分工作，再以速读中的多模态学习与文字超分作延伸参考。</p>
+<p>今日共处理21篇论文，精读8篇、速读13篇，其中两篇满分工作聚焦跨模态重识别与可执行场景程序3D重建。最值得关注的是《Dual-Space Modality Consistency Learning》与《Scenix》双双获得9.0分，前者统一跨模态检索，后者用程序化表示突破稀疏视角重建；速读中《CAAT》与室内外城市生成也达8.0分。若你对3D视觉感兴趣，可从Scenix和GOPI入手；若关注机器人操作，建议优先细读CAAT。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -76,9 +74,9 @@
     <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="DynActiveGS: Active Gaussian Splatting for Dynamic Scene Reconstruction">DynActiveGS: Active Gaussian Splatting for Dynamic Scene Reconstruction</span></li><li><span class="dpr-home-dashboard-paper-title" title="UniqueSplat: View-conditioned 3D Gaussian Splatting for Generalizable 3D Reconstruction">UniqueSplat: View-conditioned 3D Gaussian Splatting for Generalizable 3D Reconstruction</span></li><li><span class="dpr-home-dashboard-paper-title" title="Geospatial-Prior Guidance for 3D Semantic Scene Completion">Geospatial-Prior Guidance for 3D Semantic Scene Completion</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Dual-Space Modality Consistency Learning for Universal Cross-Modal Re-Identification">Dual-Space Modality Consistency Learning for Universal Cross-Modal Re-Identification</span></li><li><span class="dpr-home-dashboard-paper-title" title="Scenix: Sparse-View 3D Scene Reconstruction via Executable Scene Programs">Scenix: Sparse-View 3D Scene Reconstruction via Executable Scene Programs</span></li><li><span class="dpr-home-dashboard-paper-title" title="InstanceSplat: Instance-Aware Feed-Forward 3D Gaussian Splatting for Scene Understanding">InstanceSplat: Instance-Aware Feed-Forward 3D Gaussian Splatting for Scene Understanding</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>5</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>2</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>4</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -89,9 +87,9 @@
     <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Latency-Tolerant Cloud-Edge Collaborative Vision-Language-Action Models via Emergent Representational Specialization">Latency-Tolerant Cloud-Edge Collaborative Vision-Language-Action Models via Emergent Representational Specialization</span></li><li><span class="dpr-home-dashboard-paper-title" title="iStructTab: Structured Feature Sequencing for Multimodal Learning of Image and Tabular Data">iStructTab: Structured Feature Sequencing for Multimodal Learning of Image and Tabular Data</span></li><li><span class="dpr-home-dashboard-paper-title" title="Coupled Continuous-Discrete Generation for Scene Text Image Super-Resolution">Coupled Continuous-Discrete Generation for Scene Text Image Super-Resolution</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CAAT: Contact-Aware Attention Scaling and Tactile Masking for Data-Efficient Contact-Rich Manipulation">CAAT: Contact-Aware Attention Scaling and Tactile Masking for Data-Efficient Contact-Rich Manipulation</span></li><li><span class="dpr-home-dashboard-paper-title" title="To See a World in a Living Context: Unified Indoor-Outdoor Urban World Generation">To See a World in a Living Context: Unified Indoor-Outdoor Urban World Generation</span></li><li><span class="dpr-home-dashboard-paper-title" title="GOPI: Generation-Oriented 3D Pose Inference for Furniture Insertion from Single-View RGB-D Indoor Scenes">GOPI: Generation-Oriented 3D Pose Inference for Furniture Insertion from Single-View RGB-D Indoor Scenes</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>7</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>6</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>8</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>3</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>2</strong></span></div>
 </section>
 </div>
 
