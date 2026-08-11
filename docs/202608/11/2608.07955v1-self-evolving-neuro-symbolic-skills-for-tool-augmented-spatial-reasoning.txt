@@ -1,0 +1,1592 @@
+Title: Self-Evolving Neuro-Symbolic Skills for Tool-Augmented Spatial Reasoning
+
+URL Source: https://arxiv.org/pdf/2608.07955v1
+
+Published Time: Tue, 11 Aug 2026 00:34:47 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+# Self-Evolving Neuro-Symbolic Skills for Tool-Augmented Spatial Reasoning 
+
+## Shi-Yu Tian 1,2 ∗, Zhuo-Xia Wang 1,2 ∗, Xuan-Yi Zhu 1,2 , Zhi Zhou 1,Xinwei Yang 3, Kun-Yang Yu 1,2 , Ming Yang 1,2 , Yang Chen 1, Yu-Feng Li 1,2 †
+
+> 1
+
+National Key Laboratory for Novel Software Technology, Nanjing University, China 
+
+> 2
+
+School of Artificial Intelligence, Nanjing University, China 
+
+> 3
+
+College of Computer Science, Sichuan University 
+
+Abstract 
+
+Large vision-language models have achieved strong perfor-mance in multimodal reasoning, but they remain unreliable on fine-grained spatial tasks that demand both precise spatial per-ception and fine-grained geometric computation beyond end-to-end generation. Tool augmentation offers a natural solution, while existing methods either plan tool calls from scratch with-out explicit dependency constraints or rely on fixed pipelines that are redundant and generalize poorly across spatial tasks. An effective spatial reasoning agent should instead accumu-late reusable experience and adaptively compose it for new problems. To this end, we propose NeSy-Spatial, a neuro-symbolic framework for self-evolving spatial skills. NeSy-Spatial abstracts tool interactions and geometric operations into typed executable atomic instructions and composes them into two complementary skill types: Tool-Use Skills for orga-nizing tool execution and Geometry Skills for structured ge-ometric reasoning. During inference, NeSy-Spatial retrieves and executes relevant skills in a closed-loop process. During evolution, it analyzes buffered successful and failed trajecto-ries to refine skill structures and prune unreliable or inactive entries. Experiments on three spatial reasoning benchmarks show that NeSy-Spatial consistently improves reasoning ac-curacy with more precise tool utilization. 
+
+## 1 Introduction 
+
+Large vision-language models (LVLMs) have made substan-tial progress in general visual understanding (OpenAI 2023), yet they remain unreliable for fine-grained spatial reason-ing (Yang et al. 2025a; Chen et al. 2025c). Unlike generic visual understanding, spatial reasoning often requires ex-plicit geometric reasoning and intermediate verification be-yond end-to-end generation. Such reasoning is difficult to accomplish using LVLMs alone, as it depends on precise vi-sual perception and structured geometric computation. Tool augmentation has therefore emerged as an effective solu-tion (Zhang et al. 2025; Yu et al. 2026; Tian et al. 2026), enabling LVLMs to leverage specialized vision models and external executors such as depth estimators (Yang et al. 2024) or reconstruction models (Wang et al. 2025a) to obtain reli-able intermediate evidence for reasoning. However, existing tool-augmented methods mainly follow two paradigms. One line of work dynamically plans tool calls from a general-purpose toolbox for each query (Tian et al. 2026; Wu et al. 2026), while another executes a manually 
+
+> ∗
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. 
+
+Figure 1: Limitations of tool-augmented spatial reasoning agents: dynamic planning may violate tool dependencies, while fixed pipelines can be redundant and generalize poorly. designed pipeline tailored to a specific class of spatial rea-soning tasks (Cho et al. 2026; Chen et al. 2026a). Although dynamic planning is highly flexible, it lacks explicit con-straints on tool dependencies and execution order. As a result, agents may generate invalid tool sequences—for example, invoking a Python interpreter before acquiring prerequisite information, such as grounded object coordinates or point cloud representations, causing subsequent reasoning to fail. In contrast, fixed pipelines enforce a valid execution order but often invoke unnecessary tools regardless of task com-plexity. Even simple queries may trigger the entire workflow, leading to redundant computation and reduced efficiency, while handcrafted pipelines are difficult to generalize across diverse spatial reasoning scenarios. Therefore, a spatial reasoning agent should abstract re-trievable and composable skills from historical trajectories, rather than planning from scratch or relying on fixed tem-plates. However, this goal presents two challenges. First, spa-tial skills involve both tool invocation and geometric process-ing. Existing methods typically rely on a Python interpreter to perform ad hoc computations over tool outputs, resulting in limited robustness and success rates. Second, skills are difficult to extract directly from trajectories, as successful trajectories may contain redundant steps, while failed ones may still include locally effective operations. The key chal-lenge is therefore to identify reusable atomic instructions and arXiv:2608.07955v1 [cs.AI] 8 Aug 2026 compose them into high-level skills that jointly support tool execution and geometric reasoning. To overcome this, we propose NeSy-Spatial, a neuro-symbolic framework for self-evolving skills in spatial rea-soning. Rather than simply expanding the available toolset, NeSy-Spatial extracts atomic instructions from spatial rea-soning trajectories and further composes them into reusable high-level skills. Specifically, we define two complementary types of skills: Tool-Use Skill and Geometry Skill . Tool-Use Skills organize the execution of external tools, where atomic instructions correspond to individual tool calls and high-level skills encode their execution order and dependency structure. 
+
+Geometry Skills structure geometric reasoning, where atomic instructions correspond to executable functional code blocks and high-level skills abstract reusable operations such as coordinate transformation, distance computation, and con-sistency checking. NeSy-Spatial continuously learns and abstracts skills dur-ing online interaction, and further leverages the evolving skill library to guide subsequent reasoning. This process consists of two stages: inference and evolution. During inference, NeSy-Spatial retrieves, instantiates, and executes relevant skills in a closed-loop process, dynamically adapting subse-quent reasoning based on intermediate results. During evolu-tion, the model mines new atomic instructions and local rules from both successful and failed execution trajectories, inte-grates them with existing skills, and removes unreliable or inactive entries according to verification results and usage patterns. Experiments on three datasets show that NeSy-Spatial consistently improves spatial reasoning accuracy while achieving more precise tool utilization. Our contributions are summarized as follows: 
+
+• We introduce a neuro-symbolic definition of spatial skills that unifies tool invocation and geometric computation through typed executable atomic instructions. 
+
+• We propose NeSy-Spatial, a skill self-evolution frame-work that updates atomic instructions and high-level Tool-Use and Geometry Skills from buffered trajectories through analysis, fusion, and pruning. 
+
+• We evaluate NeSy-Spatial on multiple spatial reasoning benchmarks, showing improvements over base static tool-use agents and fixed-pipeline methods in performance. 
+
+## 2 Related Work 
+
+2.1 Spatial Reasoning 
+
+Spatial reasoning is the ability to interpret geometric rela-tionships between objects and their environment (Chen et al. 2024a; Liu, Emerson, and Collier 2023; Yang et al. 2025a). It is fundamental to robotic perception and embodied intelli-gence (Liu et al. 2025), as well as autonomous driving (Chen et al. 2024b). Recent benchmarks extend earlier static set-tings to multi-view observations, viewpoint changes, scale estimation, and dynamic scenes, including BLINK (Fu et al. 2024), CVBench (Tong et al. 2024), VSI-Bench (Yang et al. 2025a), and STI-Bench (Li et al. 2025b). Our evaluation covers MMSI (Yang et al. 2025b), MindCube (Chen et al. 2026b), and OmniSpatial (Jia et al. 2025). Despite advances in general perception, vision-language models still strug-gle with multi-step spatial inference, precise scale estima-tion (Chen et al. 2025a), and viewpoint-dependent reason-ing (Li et al. 2025a). Existing solutions include task-specific fine-tuning (Cheng et al. 2024), progressive training, 3D-aware representa-tions (Xu et al. 2024), and modular systems that invoke visual tools for detection, depth estimation, reconstruction, or geometric measurement (Chen et al. 2025b; Han et al. 2025). Recent tool-augmented agents include SpatialScore’s SpaAge-PE and SpaAge-ReAct (Wu et al. 2026), Spatial-CLAW (Cho et al. 2026), GCA (Chen et al. 2026a), and LAST (Tian et al. 2026). Although explicit visual and geo-metric operations improve spatial reasoning, these methods primarily optimize individual reasoning pipelines rather than accumulating, reusing, and refining procedures across tasks. 
+
+2.2 Skill Self-evolution 
+
+Skill self-evolution enables agents to abstract reusable knowl-edge from past interactions to improve future task solving. Reflection-based methods revise reasoning through feed-back, self-critique, or external validation (Shinn et al. 2023; Madaan et al. 2023; Gou et al. 2024), while experience-driven methods retrieve knowledge abstracted from histori-cal trajectories (Zhao et al. 2024; Shao et al. 2026). Skill-memory systems further maintain reusable skills or work-flows to guide future actions (Wang et al. 2023, 2024, 2025b). Together, these studies show that agent experience can be accumulated and reused. However, prior studies largely ad-dress text reasoning, web navigation, coding, or games, repre-senting skills as instructions, workflows, or programs. Tool-augmented spatial reasoning instead requires coordination among visual perception, geometric computation, and multi-step inference. It therefore calls for reusable procedures that specify when to invoke tools, how to interpret their outputs, and how to transfer successful geometric reasoning across spatial tasks. 
+
+## 3 Method 
+
+3.1 Problem Setup 
+
+We study online tool-augmented spatial reasoning. At episode t, the agent receives xt = ( It, q t) ∈ I × Q and predicts ˆyt ∈ Y using a tool set T = Tvis ∪ T py and a skill library Lib t = ( At, St). The Python executor is exposed as a single tool-level atomic instruction, while its internal geometric computation is constructed from reusable Geom-etry Skills. At reasoning step k, the working memory Mt,k 
+
+maintains the accumulated evidence, symbolic variables, ex-ecution history, verifier outcomes, and answer hypothesis. During an episode, Lib t is fixed. Under our test-then-update protocol, each prediction is recorded exactly once before its ground-truth answer is revealed; the label is then used only to evaluate that prediction and assess the completed trajectory τt, which is appended to the trajectory buffer Bt.Once the buffer reaches Nbuf , self-evolution extracts and in-tegrates reusable structures and prunes unreliable or inactive entries to obtain Lib t+1 ; otherwise, the library remains un-changed. Thus, all library updates occur between episodes, Figure 2: Overview of NeSy-Spatial. Left: the agent retrieves and executes skills for closed-loop spatial reasoning. Center top: the Skill Library organizes atomic instructions into reusable high-level skills. Center bottom: execution trajectories record the shared reasoning process. Right: trajectory analysis, skill fusion, and pruning enable continual self-evolution. as illustrated in Figure 2. 
+
+3.2 Neuro-Symbolic Skill Formulation 
+
+Spatial reasoning must couple learned perception with ver-ifiable geometric computation. At a fixed episode, we omit the time index and write the skill library as 
+
+Lib =  A, S, S = Stool ∪ S geo , (1) where A is a set of executable atomic instructions, while 
+
+Stool and Sgeo contain Tool-Use and Geometry Skills, re-spectively. Both skill types are represented by atomic-action nodes, ordering edges, and an instantiation context. 
+
+Atomic Instructions An atomic instruction is a typed ex-ecutable operation with a local verifier: 
+
+a =  ea, v a
+
+, ea : Ua → O a, va : Oa → { 0, 1}.
+
+(2) Here ea maps atom-specific typed inputs Ua to outputs Oa,and va validates the output. We partition A into controller-visible tool atoms Atool and internal geometry atoms Ageo .The former wraps visual tools and the Python executor, each as one atomic instruction; the latter contains reusable code blocks for geometric transformation, numerical comparison, and relation verification. Geometry atoms are executed inside the Python tool rather than selected as independent controller actions. 
+
+High-Level Skills We represent each high-level skill as a node–edge–context structure: 
+
+s =  V, E, κ , V ⊆ A , E ⊆ V × V, (3) where V contains atomic instructions, E specifies their ex-ecution dependencies, and κ stores the context required for instantiation. Tool-Use and Geometry Skills share this rep-resentation but differ in their node types and execution roles. A Tool-Use Skill s ∈ S tool organizes controller-visible tool atoms into a reusable workflow. Its nodes satisfy V ⊆ A tool ,its edges define execution dependencies, and its context stores object bindings, tool arguments, and available evi-dence. Python is treated as an atomic tool node to keep the controller action space compact, while its internal computa-tion is handled separately by Geometry Skills .A Geometry Skill s ∈ S geo provides a reusable and ver-ifiable implementation for a Python tool call. Its nodes sat-isfy V ⊆ A geo , its edges encode data dependencies, and its context records reference frames, units, predicates, and nu-merical evidence. When invoking a Python tool, the model retrieves relevant Geometry Skills to guide code construction before submitting the generated code to the interpreter. Fig-ure 4 illustrates representative skills and their organizational structure. 
+
+3.3 Skill-Guided Spatial Reasoning 
+
+During inference episode t, NeSy-Spatial performs state-adaptive spatial reasoning over (It, q t). As shown in the left panel of Figure 2, each iteration follows four stages: Skill Retrieval, Action Selection, Tool/Code Execution, and State Update. Figure 3 illustrates how these skills organize tool execution and are subsequently refined through failure diag-nosis. With Lib t fixed, the loop repeats until the accumulated state is sufficient to produce an answer. 
+
+Skill Retrieval At each iteration, a retrieval interface con-verts the question and current state into a structured decision context and queries the skill library for a small candidate set: 
+
+Ct,k = LLM Retrieve (It, q t, M t,k ; St). (4) Figure 3: Qualitative example of skill-guided spatial reasoning and skill evolution. Left: NeSy-Spatial composes visual and geometric tools to solve a perspective-taking question. Right: failure diagnosis identifies missing grounding dependencies, updates the Tool-Use Skill, and enables the revised pipeline to produce the correct answer on a subsequent sample. 
+
+Tool-Use Skill: Camera-Pose Relation Use when: A target camera must be located relative to a refer-ence camera from two images.           
+
+> VGGT.reconstruct Input: images, question →Output: reconstruction
+> ⇓
+> PythonTool.code Input: reconstruction, question →Output: answer
+
+Stop when: Both camera poses are available for computing their relation in the reference camera frame. 
+
+Geometry Skill: Camera-Frame Direction Matching Use when: Camera extrinsics, grounded 3D points, and direc-tional options are available.           
+
+> RobustCenter(points_w) →center_w WorldToCamera(center_w, E_ref) →center_c Normalize(center_c[x,z]) →dir_xz MatchOption(dir_xz, options) →choice
+
+Output: The matched direction 
+
+Figure 4: Examples of Tool-Use and Geometry Skills. Here Ct,k ⊆ S t may contain Tool-Use or Geometry Skills. The interface is implemented with task-specific instruction templates that expose the target and reference objects, rela-tion, available evidence, and required geometric operation. 
+
+Action Selection Given the retrieved candidates and cur-rent state, the controller selects the next action: 
+
+ut,k = LLM Select (It, q t, M t,k , Ct,k ),ut,k ∈ { stop } ∪  Ct,k ∩ S tool ,t 
+
+ ∪ A tool ,t . (5) The controller may terminate with the current answer, acti-vate or resume a retrieved Tool-Use Skill, or directly call a compatible tool atom. Geometry Skills are not independent controller actions; they are instantiated within the Python atom during execution. 
+
+Tool/Code Execution The selected action executes either a single tool atom or the next dependency-ready node of an active Tool-Use Skill. The resulting observation is returned immediately for state update, so the skill can be interrupted after any node. Visual tool atoms return perceptual evidence directly. When execution reaches the Python atom, the agent binds the required artifacts from Mt,k and instantiates a com-patible retrieved Geometry Skill. Its code blocks execute in dependency order and return both numerical outputs and ver-ifier outcomes to the Python node. This preserves a compact tool-level action space while making geometric computation structured and verifiable. 
+
+State Update After execution, the controller incorporates the new observation and verifier outcomes into its working memory. For a non-terminal action, the complete iteration is 
+
+ It, q t, M t,k 
+
+ Retrieve 
+
+−−−−−→ C t,k 
+
+> Select
+
+−−−−→ ut,k ,ut,k 
+
+> Exec
+
+−−−→ (ot,k , ν t,k ) Update 
+
+−−−−→ Mt,k +1 .
+
+(6) Here ot,k is the execution output, while νt,k ∈ { 0, 1} indi-cates whether execution and local verification succeed. Un-less the controller selects stop , the updated state initiates the next retrieval round; otherwise, the current answer hy-pothesis is returned as the final answer. After final-answer evaluation, the completed trace is stored for later batch-wise self-evolution. 
+
+3.4 Skill Self-Evolution 
+
+NeSy-Spatial evolves a single skill library from batches of completed trajectories. The trajectory produced by episode t
+
+is 
+
+τt =
+
+ (Mt,k , u t,k , o t,k , ν t,k )Kt
+
+> k=1
+
+, ˆyt
+
+
+
+,
+
+Bt+1 = Bt ∪ { τt}.
+
+(7) where Kt is the number of executed node-level steps, ˆyt is the final answer, and Bt+1 is the buffer before evolution. Self-evolution is triggered only when |B t+1 | ≥ Nbuf ; otherwise, 
+
+Lib t+1 = Lib t and Bt+1 = Bt+1 . Once triggered, NeSy-Spatial analyzes the buffered trajectories, fuses the extracted Table 1: Average accuracy (%) over the online stream, broken down by dataset-specific subtasks and capability groups. The best and second-best results within each backbone block are highlighted in bold and underlined, respectively. Method MMSI MindCube OmniSpatial Attr. Motion Pos. Rel. MSR Overall Rot. Ard. Amg. Overall Dyn. Persp. Overall 
+
+GPT-5.4 
+
+SpaAge-PE 38.24 48.00 37.50 40.00 39.50 57.14 64.71 57.99 58.50 55.42 53.85 54.50 SpaAge-ReAct 52.94 52.00 39.58 42.22 44.00 71.43 58.82 52.66 54.50 59.04 53.85 56.00 LAST 37.64 51.00 42.37 48.79 44.09 48.92 60.23 68.24 66.21 60.24 55.63 57.54 GCA 35.29 52.00 48.96 53.33 48.00 64.29 52.94 73.37 71.01 63.89 58.97 61.00 
+
+AWM 31.25 54.24 45.64 40.00 43.01 53.85 38.46 57.93 56.14 65.43 52.88 58.38 ASI 38.71 52.17 31.18 42.50 37.43 42.86 41.18 50.89 49.50 63.86 52.99 57.50 NeSy-Spatial 41.18 56.00 52.08 46.67 49.50 64.29 58.82 73.37 71.50 66.27 55.56 60.27 
+
+Gemini 2.5 Pro 
+
+SpaAge-PE 41.21 47.96 52.13 57.82 51.00 71.52 58.91 69.79 69.08 51.82 59.81 56.37 SpaAge-ReAct 44.11 48.00 57.29 51.13 52.50 64.19 58.83 74.50 72.38 59.02 55.53 57.08 LAST 30.67 48.00 58.23 54.28 51.38 68.04 70.78 60.14 61.60 60.25 53.64 56.38 GCA 32.35 52.00 60.42 48.89 52.00 85.67 76.47 62.13 65.03 61.45 61.54 61.53 AWM 55.88 60.00 65.62 55.56 61.00 78.57 64.71 61.54 63.00 65.06 68.38 66.97 ASI 50.00 68.00 64.58 51.11 59.70 85.71 70.58 59.76 62.50 63.86 64.10 64.01 NeSy-Spatial 52.94 72.03 66.67 53.33 61.50 85.73 64.71 84.02 82.50 67.47 73.50 70.94 
+
+structures with the current library, and prunes unreliable or inactive entries. The processed buffer is then cleared, while its aggregated invocation statistics are retained. 
+
+Trajectory Analysis A single trajectory may contain in-cidental failures or task-specific choices, so NeSy-Spatial extracts reusable structures only after accumulating suffi-cient evidence in the buffer. Each buffered trajectory is de-composed into executed operations, arguments, produced ar-tifacts, consumed variables, and local outcomes. The ana-lyzer then aggregates their dependency patterns and returns atomic-instruction updates together with supported and in-valid skill fragments: 
+
+ ∆At, bG+ 
+
+> t
+
+, bG−
+
+> t
+
+ = LLM Analyze (Bt+1 ). (8) Here ∆At contains newly required or revised atomic instruc-tions, while bG+ 
+
+> t
+
+and bG− 
+
+> t
+
+contain supported and invalid skill fragments, respectively. For example, a supported fragment may require invoking atom ai before aj , whereas an invalid fragment records that this transition repeatedly causes exe-cution or verifier failures. Aggregating multiple trajectories reduces the influence of isolated errors and exposes depen-dencies that recur across tasks. 
+
+Skill Fusion Extracted atoms and fragments may dupli-cate, extend, or conflict with existing skills. The fusion mod-ule therefore compares them with the unified library and produces a structurally revised library: 
+
+Lib fuse  
+
+> t+1
+
+= LLM Fusion 
+
+ Lib t, ∆At, bG+ 
+
+> t
+
+, bG−
+
+> t
+
+. (9) We write Lib fuse  
+
+> t+1
+
+= ( Afuse  
+
+> t+1
+
+, Sfuse  
+
+> t+1
+
+). Fusion first reconciles 
+
+∆At with At by adding a novel typed instruction or replacing an existing implementation when the new version better sat-isfies its local verifier. It then edits high-level skills through three operations: adding a supported fragment, deleting a redundant or incompatible dependency, or replacing an af-fected subgraph while preserving the remainder of the skill. Tool-organizing fragments update Tool-Use Skills, whereas fragments that transform or verify numerical evidence up-date Geometry Skills. All edits are applied directly to the unified library. 
+
+Skill Pruning Fusion revises the library structure, while pruning removes unreliable or inactive entries according to their invocation history. For each z ∈ A fuse  
+
+> t+1
+
+∪ S fuse  
+
+> t+1
+
+, let nt(z)
+
+be its number of invocations and ER t(z) the fraction of in-vocations that end in an execution or local-verifier failure. We further define its inactivity age as Age t(z) = t − tlast (z)
+
+and its tenure as Tenure t(z) = t − tadd (z), where tlast (z)
+
+and tadd (z) denote the most recent invocation and inser-tion episodes, respectively. Before the first invocation, we set 
+
+tlast (z) = tadd (z).Given an error-rate threshold ρerr , an inactivity limit Tidle ,and a minimum support threshold nmin , we prune z when 
+
+Prune t(z) = nt(z) ≥ nmin ∧ ER t(z) > w t(z)ρerr 
+
+
+
+∨ Age t(z) > w t(z)Tidle 
+
+.
+
+(10) Both thresholds are adapted by the tenure-dependent reten-tion factor 
+
+wt(z) = 1 + λ Tenure t(z)1 + Tenure t(z) ,
+
+where λ ≥ 0 is chosen such that (1 + λ)ρerr ≤ 1. Thus, FTCS ↑ Python Success Rate ↑                                                                                                        
+
+> Method MMSI MindCube OmniSpatial Avg. MMSI MindCube OmniSpatial Avg.
+> GPT-5.4
+> SpaAge 77.08 87.50 90.39 84.99 94.45 85.71 86.19 88.78 LAST 83.32 90.00 87.64 86.99 92.27 80.32 65.23 79.27 GCA 85.35 90.71 83.73 86.60 90.99 90.38 79.76 87.04 AWM 88.75 91.84 81.58 87.39 79.01 75.41 57.63 70.68 ASI 83.33 85.19 85.71 84.74 77.78 83.33 92.68 84.60 NeSy-Spatial 97.89 91.19 94.59 94.56 97.76 89.20 99.39 95.45 Gemini 2.5 Pro
+> SpaAge 33.53 26.76 54.01 38.10 35.05 14.64 64.66 38.12 LAST 85.18 82.17 83.06 83.47 69.75 82.31 78.23 76.76 GCA 65.15 85.14 87.56 79.28 70.25 91.86 80.56 80.89 AWM 84.53 91.43 89.44 88.46 91.07 81.63 92.65 88.45 ASI 79.87 80.00 77.98 79.28 95.22 56.03 78.85 76.70 NeSy-Spatial 81.71 92.96 91.33 88.67 97.45 97.86 93.33 96.21
+
+Figure 5: Left: FTCS and Python success rate across spatial reasoning benchmarks; the best and second-best results within each block are highlighted in bold and underlined, respectively. Right: the evolution of the number of retained skills throughout the online stream. 
+
+wt(z) grows from 1 toward 1 + λ, providing longer-lived en-tries with bounded protection, while nmin prevents pruning after only a few noisy failures. Entries without any invocation history are evaluated only by inactivity. After removing all marked atoms and skills, we repair or discard skills that de-pend on a pruned atom, yielding the updated library Lib t+1 .
+
+## 4 Experiments 
+
+4.1 Experimental Setup 
+
+Datasets and Models. We evaluate NeSy-Spatial on MMSI (Yang et al. 2025b), MindCube (Chen et al. 2026b), and OmniSpatial (Jia et al. 2025) using GPT-5.4 and Gemini 2.5 Pro as the two API backbones. For MMSI, we use all four subsets: Attribute, Motion, Positional Relation, and Multi-Step Reasoning (MSR). For MindCube, we use all three sub-sets: Rotation, Around, and Among. Following GCA (Chen et al. 2026a), we evaluate OmniSpatial on two subsets, Dy-namic Reasoning and Perspective Taking. 
+
+Comparison Methods. We compare against the general in-ductive agents AWM (Wang et al. 2024) and ASI (Wang et al. 2025b), as well as domain-specific spatial reason-ing agents with different tool-use mechanisms. SpaAge-PE and SpaAge-ReAct from SpatialScore (Wu et al. 2026) let the LVLM plan tool calls directly over a provided toolbox, whereas GCA (Chen et al. 2026a) first maps each problem into a unified geometric formalization before invoking tools. All methods are evaluated with the same tool set and inter-face configuration; LAST (Tian et al. 2026) differs in that its spatial skills are predefined. For all methods evaluated in the online setting, we report the average accuracy over all samples in the online stream. 
+
+Evaluation Metrics. We report prequential answer accuracy, where each prediction is evaluated before its label is used for skill evolution. Tool execution is measured by First-Pass Compositional Tool-Chain Success Rate (FTCS) and Python success rate. For samples Spipe invoking at least two distinct task tools, 
+
+FTCS = 1
+
+|S pipe |
+
+X
+
+> s∈S pipe
+
+cs,
+
+where cs = 1 if all task-tool calls succeed without a failed attempt, and 0 otherwise. Python success rate is the fraction of successful PythonTool.code calls, counting retries separately. 
+
+Implementation Details. We initialize the skill library with 
+
+Nseed = 3 seed skills for MMSI and MindCube, and 
+
+Nseed = 4 for OmniSpatial. Skill evolution is triggered after every Nbuf = 20 completed trajectories. For skill pruning, we set the minimum invocation support to nmin = 5 , the base error-rate threshold to ρerr = 0 .4, the inactivity limit to Tidle = 100 episodes, and the tenure-dependent reten-tion coefficient to λ = 0 .5, satisfying (1 + λ)ρerr ≤ 1.The same hyperparameters are used across all datasets and LVLM backbones. We provide all prompts used in the pa-per, the complete set of evolved rules, and the remaining hyperparameter settings in the appendix. 
+
+4.2 Main Results 
+
+NeSy-Spatial improves spatial reasoning performance and achieves state-of-the-art results. As shown in Table 1, NeSy-Spatial achieves the best Overall accuracy in five of the six backbone–dataset settings. With GPT-5.4, NeSy-Spatial reaches 49.50 on MMSI and 71.50 on MindCube, outperforming the strongest baselines by 1.50 and 0.49 per-centage points, respectively, while remaining competitive on OmniSpatial (60.27 vs. 61.00). With Gemini 2.5 Pro, it achieves the highest Overall accuracy on all three bench-marks, outperforming the strongest baselines by 0.50, 10.12, and 3.97 percentage points on MMSI, MindCube, and Om-niSpatial, respectively. These consistent gains across differ-40 50 60 70 80 90 A MindCube             
+
+> Ours 71.5 Frozen 59.0
+> BMMSI
+> Ours 49.5 Frozen 46.0
+> 525 50 75 100 40 50 60 70 80 90 COmniSpatial
+> Ours 60.0 Frozen 57.5
+> 525 50 75 100
+> DMacro Average
+> Ours 60.3 Frozen 54.2
+> Cumulative accuracy (%) Online stream progress (%)
+
+Figure 6: Cumulative prequential accuracy of NeSy-Spatial and Frozen throughout the online stream. Frozen keeps the initial skill library fixed without online evolution. ent backbones and benchmarks demonstrate the effectiveness of NeSy-Spatial for spatial reasoning. 
+
+NeSy-Spatial improves tool utilization efficiency and execution accuracy. The left panel of Figure 5 reports SpaAge-PE and SpaAge-ReAct jointly as SpaAge. With GPT-5.4, NeSy-Spatial achieves the highest average FTCS of 94.56 and Python success rate of 95.45, outperforming the strongest baseline averages by 7.17 and 6.67 percentage points, respectively. Across datasets, it leads both metrics on MMSI and OmniSpatial and remains close to the best on MindCube, demonstrating consistent gains beyond the av-erages. With Gemini 2.5 Pro, NeSy-Spatial again achieves the best average FTCS and Python success rate, exceeding the strongest baselines by 0.21 and 7.76 points, respectively. It attains the highest Python success rate on all three bench-marks and the highest FTCS on MindCube and OmniSpatial, while trailing LAST by 3.47 points in FTCS on MMSI. To-gether, these results show that NeSy-Spatial more reliably completes compositional tool chains on the first pass while improving the accuracy of individual Python executions. 
+
+4.3 Further Analysis 
+
+Online skill evolution yields consistent overall gains in spatial reasoning performance. Figure 6 compares the cu-mulative prequential accuracy of NeSy-Spatial with Frozen, whose initial skill library (i.e., the knowledge base) remains fixed throughout the stream, corresponding to the setting without evolution. Because cumulative estimates based on only a few observations are highly volatile, the curves are displayed from 5% stream progress, after 10 samples have been processed; each point nevertheless includes all obser-vations from the start of the stream. The curves become more stable as evaluation proceeds, and NeSy-Spatial establishes sustained gains over Frozen across all three benchmarks. By the end of the stream, NeSy-Spatial finishes 12.5, 3.5, and 2.5 percentage points higher on MindCube, MMSI, and Table 2: Ablation study of skill evolution, Tool-Use Skills, and Geometry Skills using GPT-5.4.                         
+
+> Skill Type Evolution Accuracy (%) ↑
+> Tool-Use Geometry MindCube MMSI OmniSpatial
+> ✓✓59.00 46.00 57.49
+> ✓✓60.00 43.50 57.59
+> ✓✓69.50 47.00 58.00
+> ✓✓✓71.50 49.50 60.27
+
+OmniSpatial, respectively. The macro-average accuracy sim-ilarly improves from 54.2% to 60.3%, showing that online skill evolution provides consistent benefits across the three benchmarks. Together, the endpoint margins and full-stream trajectories show that these gains persist as evaluation con-tinues rather than arising from a brief early advantage. 
+
+Skill evolution selectively expands the library rather than accumulating skills indiscriminately. The right panel of Figure 5 tracks how the number of retained skills changes throughout online evolution. Overall, the library expands from 3 to 17 skills on MindCube, from 3 to 9 on MMSI, and from 4 to 20 on OmniSpatial. However, this growth is not monotonic: the library size decreases at multiple stages as unreliable or inactive skills are removed. These downward steps indicate that the pruning strategy actively controls re-dundancy and prevents unbounded accumulation. The result-ing trajectories reflect a dynamic balance between incorpo-rating reusable skills from new experience and retaining only those that remain useful. 
+
+Each component plays a distinct and complementary role in the full framework. As shown in Table 2, dis-abling skill evolution while retaining both skill types re-duces accuracy by 12.50, 3.50, and 2.78 percentage points on MindCube, MMSI, and OmniSpatial, respectively. Remov-ing Tool-Use Skills causes corresponding drops of 11.50, 6.00, and 2.68 points, whereas removing Geometry Skills lowers accuracy by 2.00, 2.50, and 2.27 points. The full con-figuration consistently performs best across all three bench-marks, demonstrating that online evolution provides substan-tial gains while Tool-Use and Geometry Skills contribute complementary execution and reasoning capabilities. 
+
+## 5 Conclusion 
+
+This paper presented NeSy-Spatial, a self-evolving neuro-symbolic framework for tool-augmented spatial reasoning. It organizes typed atomic instructions for tool interaction and geometric computation into interruptible Tool-Use Skills and reusable Geometry Skills. Across three benchmarks and two LVLM backbones, NeSy-Spatial achieves the best aggregate accuracy in five of six settings and the highest average FTCS and Python success rate. Online results show sustained accu-racy gains with experience, while library-size changes indi-cate that pruning removes unreliable or inactive skills instead of allowing indiscriminate growth. Evaluation is limited to selected benchmarks and tool environments; future work will examine broader tasks and transfer to unseen settings. References 
+
+Chen, B.; Xu, Z.; Kirmani, S.; Ichter, B.; Sadigh, D.; Guibas, L.; and Xia, F. 2024a. Spatialvlm: Endowing vision-language models with spatial reasoning capabilities. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 14455–14465. Chen, L.; Wu, P.; Chitta, K.; Jaeger, B.; Geiger, A.; and Li, H. 2024b. End-to-end autonomous driving: Challenges and frontiers. IEEE Transactions on Pattern Analysis and Machine Intelligence .Chen, P.; Lou, Y.; Cao, S.; Guo, J.; Fan, L.; Wu, Y.; Yang, L.; Ma, L.; and Ye, J. 2025a. SD-VLM: Spatial Measuring and Understanding with Depth-Encoded Vision-Language Models. arXiv preprint arXiv:2509.17664 .Chen, S.; Uy, M. A.; Song, C. H.; Ladhak, F.; Murali, A.; Qu, Q.; Birchfield, S.; Blukis, V.; and Tremblay, J. 2025b. SpaceTools: Tool-Augmented Spatial Reasoning via Double Interactive RL. arXiv preprint arXiv:2512.04069 .Chen, Z.; Lu, X.; Zheng, Z.; Li, P.; He, L.; Zhou, Y.; Shao, J.; Zhuang, B.; and Sheng, L. 2026a. Geometrically-constrained agent for spatial reasoning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,38689–38699. Chen, Z.; Zhang, M.; Yu, X.; Luo, X.; Sun, M.; Pan, Z.; An, X.; Feng, Y.; Pei, P.; Cai, X.; et al. 2026b. Think with 3d: Geometric imagination grounded spatial reasoning from limited views. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2613–2624. Chen, Z.; Zhang, M.; Yu, X.; Luo, X.; Sun, M.; Pan, Z.; Feng, Y.; Pei, P.; Cai, X.; and Huang, R. 2025c. Think with 3d: Geometric imagination grounded spatial reasoning from limited views. arXiv preprint arXiv:2510.18632 .Cheng, A.-C.; Yin, H.; Fu, Y.; Guo, Q.; Yang, R.; Kautz, J.; Wang, X.; and Liu, S. 2024. Spatialrgpt: Grounded spatial reasoning in vision-language models. Advances in Neural Information Processing Systems , 37: 135062–135093. Cho, S.; Hachiuma, R.; Badki, A.; Su, H.; Lee, B.-K.; Song, C. H.; Liu, S.; Radhakrishnan, S.; Kim, S.; Wang, Y.-C. F.; et al. 2026. SpatialClaw: Rethinking Action Interface for Agentic Spatial Reasoning. arXiv preprint arXiv:2606.13673 .Fu, X.; Hu, Y.; Li, B.; Feng, Y.; Wang, H.; Lin, X.; Roth, D.; Smith, N. A.; Ma, W.-C.; and Krishna, R. 2024. Blink: Multi-modal large language models can see but not perceive. In Eu-ropean Conference on Computer Vision , 148–166. Springer. Gou, Z.; Shao, Z.; Gong, Y.; shen, y.; Yang, Y.; Duan, N.; and Chen, W. 2024. CRITIC: Large Language Models Can Self-Correct with Tool-Interactive Critiquing. In Kim, B.; Yue, Y.; Chaudhuri, S.; Fragkiadaki, K.; Khan, M.; and Sun, Y., eds., International Conference on Learning Representations ,volume 2024, 57734–57811. Han, Y.; Chi, C.; Zhou, E.; Rong, S.; An, J.; Wang, P.; Wang, Z.; Sheng, L.; and Zhang, S. 2025. TIGeR: Tool-Integrated Geometric Reasoning in Vision-Language Mod-els for Robotics. arXiv preprint arXiv:2510.07181 .Jia, M.; Qi, Z.; Zhang, S.; Zhang, W.; Yu, X.; He, J.; Wang, H.; and Yi, L. 2025. Omnispatial: Towards comprehensive spatial reasoning benchmark for vision language models. 
+
+arXiv preprint arXiv:2506.03135 .Li, D.; Li, H.; Wang, Z.; Yan, Y.; Zhang, H.; Chen, S.; Hou, G.; Jiang, S.; Zhang, W.; Shen, Y.; et al. 2025a. ViewSpatial-Bench: Evaluating Multi-perspective Spatial Localization in Vision-Language Models. arXiv preprint arXiv:2505.21500 .Li, Y.; Zhang, Y.; Lin, T.; Liu, X.; Cai, W.; Liu, Z.; and Zhao, B. 2025b. Sti-bench: Are mllms ready for pre-cise spatial-temporal world understanding? arXiv preprint arXiv:2503.23765 .Liu, F.; Emerson, G.; and Collier, N. 2023. Visual spatial rea-soning. Transactions of the Association for Computational Linguistics , 11: 635–651. Liu, Y.; Chen, W.; Bai, Y.; Liang, X.; Li, G.; Gao, W.; and Lin, L. 2025. Aligning cyber space with physical world: A comprehensive survey on embodied ai. IEEE/ASME Trans-actions on Mechatronics .Madaan, A.; Tandon, N.; Gupta, P.; Hallinan, S.; Gao, L.; Wiegreffe, S.; Alon, U.; Dziri, N.; Prabhumoye, S.; Yang, Y.; Gupta, S.; Majumder, B. P.; Hermann, K.; Welleck, S.; Yazdanbakhsh, A.; and Clark, P. 2023. Self-Refine: Itera-tive Refinement with Self-Feedback. In Oh, A.; Naumann, T.; Globerson, A.; Saenko, K.; Hardt, M.; and Levine, S., eds., Advances in Neural Information Processing Systems ,volume 36, 46534–46594. Curran Associates, Inc. OpenAI. 2023. GPT-4. Technical report. Shao, J.-J.; Yin, H.; Lyu, Y.; Yu, X.; Guo, L.-Z.; Tsang, I.; Kwok, J.; and Li, Y.-F. 2026. Lifting traces to logic: Programmatic skill induction with neuro-symbolic learning for long-horizon agentic tasks. In Forty-third International Conference on Machine Learning .Shinn, N.; Cassano, F.; Gopinath, A.; Narasimhan, K.; and Yao, S. 2023. Reflexion: language agents with verbal rein-forcement learning. In Oh, A.; Naumann, T.; Globerson, A.; Saenko, K.; Hardt, M.; and Levine, S., eds., Advances in Neu-ral Information Processing Systems , volume 36, 8634–8652. Curran Associates, Inc. Tian, S.-Y.; Zhou, Z.; Yu, K.-Y.; Yang, M.; Chen, Y.; Shang, Z.; Guo, L.-Z.; and Li, Y.-F. 2026. Last: Leveraging tools as hints to enhance spatial reasoning for multimodal large language models. arXiv preprint arXiv:2604.09712 .Tong, P.; Brown, E.; Wu, P.; Woo, S.; IYER, A. J. V.; Akula, S. C.; Yang, S.; Yang, J.; Middepogu, M.; Wang, Z.; et al. 2024. Cambrian-1: A fully open, vision-centric exploration of multimodal llms. Advances in Neural Information Pro-cessing Systems , 37: 87310–87356. Wang, G.; Xie, Y.; Jiang, Y.; Mandlekar, A.; Xiao, C.; Zhu, Y.; Fan, L.; and Anandkumar, A. 2023. Voyager: An open-ended embodied agent with large language models. arXiv preprint arXiv:2305.16291 .Wang, J.; Chen, M.; Karaev, N.; Vedaldi, A.; Rupprecht, C.; and Novotny, D. 2025a. VGGT: Visual Geometry Grounded Transformer. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 5294– 5306. Wang, Z. Z.; Gandhi, A.; Neubig, G.; and Fried, D. 2025b. In-ducing programmatic skills for agentic tasks. arXiv preprint arXiv:2504.06821 .Wang, Z. Z.; Mao, J.; Fried, D.; and Neubig, G. 2024. Agent workflow memory. arXiv preprint arXiv:2409.07429 .Wu, H.; Huang, X.; Chen, Y.; Zhang, Y.; Wang, Y.; and Xie, W. 2026. Spatialscore: Towards comprehensive evaluation for spatial intelligence. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,31029–31041. Xu, R.; Wang, X.; Wang, T.; Chen, Y.; Pang, J.; and Lin, D. 2024. Pointllm: Empowering large language models to un-derstand point clouds. In European Conference on Computer Vision , 131–147. Springer. Yang, J.; Yang, S.; Gupta, A. W.; Han, R.; Fei-Fei, L.; and Xie, S. 2025a. Thinking in space: How multimodal large language models see, remember, and recall spaces. In Pro-ceedings of the Computer Vision and Pattern Recognition Conference , 10632–10643. Yang, L.; Kang, B.; Huang, Z.; Zhao, Z.; Xu, X.; Feng, J.; and Zhao, H. 2024. Depth Anything V2. arXiv:2406.09414. Yang, S.; Xu, R.; Xie, Y.; Yang, S.; Li, M.; Lin, J.; Zhu, C.; Chen, X.; Duan, H.; Yue, X.; et al. 2025b. Mmsi-bench: A benchmark for multi-image spatial intelligence. arXiv preprint arXiv:2505.23764 .Yu, K.-Y.; Zhou, Z.; Tian, S.-Y.; Yang, X.-W.; Jia, Z.-Y.; Yang, M.; Cheng, Z.-J.; Guo, L.-Z.; and Li, Y.-F. 2026. Thinking with Tables: Enhancing Multi-Modal Tabular Un-derstanding via Neuro-Symbolic Reasoning. arXiv preprint arXiv:2603.24004 .Zhang, Y.-F.; Lu, X.; Yin, S.; Fu, C.; Chen, W.; Hu, X.; Wen, B.; Jiang, K.; Liu, C.; Zhang, T.; et al. 2025. Thyme: Think beyond images. arXiv preprint arXiv:2508.11630 .Zhao, A.; Huang, D.; Xu, Q.; Lin, M.; Liu, Y.-J.; and Huang, G. 2024. Expel: Llm agents are experiential learners. In Pro-ceedings of the AAAI Conference on Artificial Intelligence ,volume 38, 19632–19642. Supplementary Material 
+
+Section A reports implementation settings, native tools, and skill representations. Section B presents end-to-end infer-ence and online-evolution cases. Section C summarizes the retained learned skills, and Section D provides the complete prompt templates used for inference and evolution. 
+
+## A Implementation Details 
+
+A.1 Hyperparameter Settings 
+
+We report the implementation settings used for skill initial-ization, online induction, candidate fusion, empirical skill maintenance, and inference. Most settings are shared across datasets and LVLM backbones, while dataset-specific set-tings are listed separately. 
+
+Skill Initialization. We initialize the online library with a small set of dataset-specific Tool-Use seed skills. These seeds provide initial pipeline structures, while the mutable skill li-brary is subsequently updated from online interaction trajec-tories. 
+
+Online Induction and Fusion. Online induction starts after an initial warm-up period. Interaction traces are organized by routing family before being summarized into candidate skills. Candidate skills are subsequently fused with the mutable skill library. 
+
+Skill Selection and Library Capacity. At inference time, the selector first observes compact descriptions of the available skills and retrieves a small subset relevant to the current problem. Complete executable definitions are exposed only for the selected skills, reducing prompt length and irrelevant context. 
+
+Empirical Skill Maintenance. Newly induced skills enter a probationary state. Their invocation statistics and task out-comes are accumulated during subsequent episodes. A skill can be promoted after obtaining sufficient empirical support, whereas consistently unsuccessful skills are removed from the mutable library. The initial seed skills are protected from this retirement procedure. Table 3: Shared settings for initialization, online induction, selection, and empirical maintenance.                  
+
+> Setting Value Initialization
+> MMSI seed skills 3MindCube seed skills 3OmniSpatial seed skills 4
+> Online induction and fusion
+> Warm-up trajectories 10 Same-family trace batch 5Repeated-failure support 2Pending-trace fallback threshold 40 Candidate fusion batch 2Maximum traces per induction prompt 20 Prototype trace window 80
+> Skill selection and capacity
+> Maximum selected skills per query 4Maximum skills in the mutable library 24
+> Empirical maintenance
+> Zero-correct retirement support 2Minimum invocation support 5Minimum retained accuracy 0.4 Inactivity threshold 100
+
+Runtime and Inference Settings. All experiments use the simple agent runtime. Queries are processed in waves of five. We allow a larger reasoning budget for MMSI because its questions typically require longer multi-view geometric pipelines. GroundingDINO is fixed as the object-detection backend across LVLM backbones, preventing changes in the reasoning model from simultaneously changing the visual grounding component. Table 4: Dataset-specific inference settings.         
+
+> Dataset Maximum turns Wave size
+> MMSI 12 5MindCube 85OmniSpatial 85
+
+A.2 Native Tool Library 
+
+The agent is equipped with a fixed library of native neuro-symbolic tools shared across all three benchmarks. These tools provide visual grounding, 3D reconstruction, pose es-timation, metric-scale recovery, text recognition, symbolic camera-layout analysis, and executable numerical reasoning. A Tool-Use skill organizes calls to these native tools into a task-specific pipeline. Table 5: Native tool atoms available to the agent. 
+
+Tool atom Function  
+
+> SemanticDetector.detect
+
+Localizes named objects or regions and returns labeled 2D bounding boxes. 
+
+> GeometricReconstructor. reconstruct
+
+Recovers camera extrinsics, dense 3D points, confidence maps, and depth from one or more images. 
+
+> GeometricReconstructor. project_box_to_3d_points
+
+Lifts a selected 2D bounding box into its corresponding points in the reconstructed 3D scene. 
+
+> ObjPoseEstimator. predict_obj_pose
+
+Estimates an object-centric position and orientation from a selected object box. 
+
+> MetricScaleEstimator. estimate_scale
+
+Estimates the conversion from reconstruction coordinates to metric units.  
+
+> EasyOCR.ocr
+
+Reads visible text that may provide identity, ordering, or metric cues. 
+
+> LanguageToCamera. visualize_camera_layout
+
+Converts caller-provided numeric view angles and labels into a symbolic camera-layout representation.  
+
+> PythonTool.code
+
+Generates and executes Python code over workspace variables for deterministic geometric computation. 
+
+Tool outputs are stored as typed workspace variables and can be consumed by later steps. For example, a detector output can be passed to 3D projection, the projected points can be combined with camera extrinsics, and a geometry skill can use these variables to compute the final spatial decision. The visual foundation models supporting these tools are treated as internal backends rather than planner-visible tool atoms. Specifically, GroundingDINO supports open-vocabulary detection, VGGT supports multi-view recon-struction, MoGe supports metric-scale estimation, and the object-pose backend provides orientation evidence. Fixing these backends ensures that changing the LVLM backbone does not simultaneously change the underlying visual tool implementation. We additionally use Planner.reason as an internal semantic transition for role binding, option interpretation, and skill retrieval. Since it does not invoke an external per-ception or computation module, it is not counted as a native tool execution. 
+
+A.3 Skill Representation and Retrieval 
+
+The skill library contains two complementary types of reusable experience: Tool-Use skills and geometry skills . A Tool-Use skill represents a structured pipeline composed of executable tool atoms, whereas a geometry skill stores a reusable computational kernel together with its applicabil-ity conditions. Geometry skills are internally represented as 
+
+python code lines. Table 6: Overview of the two reusable skill types. 
+
+Aspect Tool-Use skill Geometry skill 
+
+Represents Executable evidence-collection pipeline Deterministic numerical decision kernel Retrieved for Tool ordering and semantic-role completion Reference-frame computation and option selection Stored as Ordered atoms, bindings, and a stopping condition Python helpers, usage constraints, and a decision function Produces Structured workspace evidence A serializable decision or diagnostic 
+
+Tool-Use Skill Representation A Tool-Use skill is stored as a high-level pipeline. Its docstring describes when the skill should be retrieved, while steps specify the or-dered tool atoms and their semantic responsibilities. The 
+
+stopping_condition defines when the pipeline has collected sufficient evidence to return control to the plan-ner. Listing 1 presents an abridged pipeline skill for a single-anchor spatial reasoning problem. 
+
+Listing 1: Tool-Use Skill Representation 
+
+1 {
+
+2 "id": "mindcube_single_anchor_grounding_skeleton", 
+
+3 "rule_type": "Tool-Use", 
+
+4 "level": "high_level", 
+
+5 "docstring": "Use for viewpoint or movement questions that 
+
+6 require grounding one named target object.", 
+
+7 "steps": [
+
+8 {
+
+9 "atom": "GeometricReconstructor.reconstruct", 
+
+10 "instruction": "Recover the shared scene geometry and 
+
+11 camera poses." 
+
+12 }, 
+
+13 {
+
+14 "atom": "SemanticDetector.detect", 
+
+15 "instruction": "Detect the named target object ." 
+
+16 }, 
+
+17 {
+
+18 "atom": "GeometricReconstructor. project_box_to_3d_points", 
+
+19 "instruction": "Project the selected target box into the 
+
+20 shared 3D frame." 
+
+21 }, 
+
+22 {
+
+23 "atom": "PythonTool.code", 
+
+24 "instruction": "Compute the requested spatial relation in 
+
+25 the specified camera frame." 
+
+26 }
+
+27 ], 
+
+28 "stopping_condition": "The target has been grounded in 3D and 
+
+29 the requested relation can be deterministically evaluated.", 
+
+30 "status": "seed" 
+
+31 }The pipeline representation separates reusable structure from instance-specific bindings. For example, the skill spec-ifies that a target must be detected and projected, while the target name, source view, selected bounding box, reference camera, and answer-option mapping are bound from the cur-rent question at execution time. 
+
+Geometry Skill Representation A geometry skill is repre-sented as a self-contained computational kernel. Internally, the kernel may contain multiple helper routines, each im-plementing an atomic geometric operation, such as robust point aggregation, coordinate transformation, option pars-ing, or directional scoring. These routines are composed into a high-level decision function and stored as a single Geom-etry skill. Listing 2 shows the internal composition of a represen-tative geometry skill. For readability, metadata are rendered as comments and the executable kernel is shown as ordi-nary Python; the actual record serializes the same lines in its 
+
+code_lines field. Function bodies are abbreviated, while the decomposition follows the stored rule. 
+
+Listing 2: Geometry Skill Kernel 
+
+1 # id: camera_frame_object_quadrant_choice 
+
+2 # rule_type: Geometry; level: high_level 
+
+3 # usage: 
+
+4 # - Require camera extrinsics, a reference-camera index, 
+
+5 # grounded target points, and an explicit option mapping. 
+
+6 # - Interpret +X as right and +Z as forward. 
+
+7 # - Return a diagnostic when geometry or option semantics 
+
+8 # are missing or ambiguous. 
+
+910 def _to_numpy(value): 
+
+11 # Convert tensors or array-like inputs to NumPy. 
+
+12 ... 
+
+13 14 def _normalize(vector): 
+
+15 # Validate and normalize a direction vector. 
+
+16 ... 
+
+17 18 def _extract_points_and_weights(target_points): 
+
+19 # Unpack 3D points and optional confidence weights. 
+
+20 ... 
+
+21 22 def _robust_center(points, weights=None): 
+
+23 # Estimate a confidence-weighted or median center. 
+
+24 ... 
+
+25 26 def _world_to_camera(point, extrinsic): 
+
+27 # Transform a world point into camera coordinates. 
+
+28 ... 
+
+29 30 def _parse_option_direction(option): 
+
+31 # Convert option semantics into an XZ direction. 
+
+32 ... 
+
+33 34 def reusable_decision(reconstruction, ref_camera_index, 
+
+35 option_vectors, target_points_world): 
+
+36 points, weights = _extract_points_and_weights( 
+
+37 target_points_world) 
+
+38 center_world = _robust_center(points, weights) 
+
+39 center_camera = _world_to_camera( 
+
+40 center_world, 
+
+41 reconstruction.extrinsic[ref_camera_index]) 
+
+42 target_direction = _normalize( 
+
+43 [center_camera[0], center_camera[2]]) 
+
+44 option_directions = {
+
+45 key: _parse_option_direction(value) 
+
+46 for key, value in option_vectors.items() 
+
+47 }
+
+48 scores = score_options( 
+
+49 target_direction, option_directions) 
+
+50 return select_best_option_or_diagnostic(scores) 
+
+51 52 # status: active 
+
+53 # empirical_stats: seen=145, matched=39, used=39, 
+
+54 # correct_after_use=24, 
+
+55 # incorrect_after_use=15 
+
+The helper routines provide a modular decomposition of the geometry kernel: 
+
+• _extract_points_and_weights binds projec-tion outputs to the expected numerical inputs; 
+
+• _robust_center aggregates noisy 3D observations; 
+
+• _world_to_camera enforces the requested reference frame; 
+
+• _parse_option_direction converts answer se-mantics into comparable geometric vectors; and 
+
+• reusable_decision composes these operations into an auditable high-level decision kernel. These helper routines are not independently retrieved by the skill selector. Instead, the selector retrieves the high-level geometry skill through its docstring, after which the complete kernel and its usage constraints are exposed to the reasoning model. The empirical_stats field is updated from subse-quent trajectories. Here, matched denotes retrieval by the selector, whereas used indicates that the skill was actually executed. The outcome counters record whether samples an-swered after using the skill were judged correct or incorrect. These statistics support empirical promotion and retirement, but are not exposed to the first-stage selector. 
+
+Two-Stage Skill Retrieval Providing every complete skill to the reasoning model would introduce substantial context length and irrelevant executable details. We therefore use two-stage retrieval. In the first stage, each pipeline is reduced to a compact selection payload containing its identifier, type, level, docstring, and a bounded structural hint. 
+
+Listing 3: Compact Selector Payload 
+
+1 {
+
+2 "id": "mindcube_single_anchor_grounding_skeleton", 
+
+3 "rule_type": "pipeline", 
+
+4 "level": "high_level", 
+
+5 "docstring": "Use for viewpoint or movement questions that 
+
+6 require grounding one named target object.", 
+
+7 "structure_hint": "GeometricReconstructor. reconstruct >8 SemanticDetector.detect >
+
+9 GeometricReconstructor.project_box_to_3d_points >
+
+10 PythonTool.code | roles=target,anchor,camera" 
+
+11 }
+
+Given the question, a compact workspace summary, and these selection payloads, the selector returns only the identi-fiers of relevant skills: 
+
+Listing 4: Skill-Selector Output 
+
+1 {
+
+2 "selected_rule_ids": [
+
+3 "mindcube_single_anchor_grounding_skeleton" 
+
+4 ], 
+
+5 "rationale": "The question names one target and requires 
+
+6 evaluating its relation in a specified viewpoint ." 
+
+7 }
+
+In the second stage, the complete stored representation is expanded only for the selected skills. For a Tool-Use skill, the planner receives the ordered atoms, step instructions, and stopping condition. For a geometry skill, it receives the usage constraints and reusable code kernel. This design preserves semantic and executable information after selection while keeping the initial retrieval context compact. 
+
+## B Case Studies 
+
+B.1 End-to-End Tool Execution 
+
+We present representative examples to illustrate how the agent retrieves skills, executes native tools, reuses geome-try kernels, and derives its final answer from explicit tool outputs. 
+
+Case 1: Camera-Motion Reasoning on MindCube This case illustrates how a Tool-Use skill and a Geometry skill work together to solve a camera-motion question. The input consists of two views of the same scene, and the agent must determine the motion of the camera from the first view to the second. 
+
+Input. The question asks: 
+
+Question. Based on these two views in Figure 7 showing the same scene, in which direction did I move from the first view to the second view? 
+
+Options. (A) diagonally forward and right; (B) directly right; (C) diagonally forward and left; and (D) directly left. 
+
+Skill Retrieval. The selector first examines the compact de-scriptions of the available Tool-Use skills. Since the ques-tion requires reasoning about the relative motion between two cameras, it retrieves mindcube_recon_then_py thon_skeleton . After selection, the complete pipeline is exposed to the agent. 
+
+Retrieved Tool-Use Skill Internal ID. mindcube_recon_then_python_ske leton 
+
+Applicability. Use when a multi-view reconstruction directly contains the camera geometry required by the question and no explicit object grounding is needed. 
+
+Step 1: Reconstruct the shared scene. 
+
+Call GeometricReconstructor.reconstruct on all input images to recover their shared geometry and camera poses. 
+
+↓
+
+Step 2: Resolve the spatial relation. 
+
+Pass the reconstruction output to PythonTool.code and use a Geometry skill to compute the camera-frame motion and map it to one of the answer choices. 
+
+Stopping condition. Stop when the recovered geometry sup-ports a unique benchmark-formatted answer without addi-tional object grounding. 
+
+The retrieved skill determines the high-level execution order, while leaving the benchmark-specific geometric com-putation to the subsequent Geometry skill. 
+
+Scene Reconstruction. Following the retrieved pipeline, the agent invokes GeometricReconstructor.recon struct on the two input images. The tool successfully produces a shared reconstruction and estimates the extrinsic parameters of both cameras. This operation converts the original visual question into a structured geometric problem. The camera motion can now be computed in a common coordinate system instead of being inferred directly from appearance. 
+
+Geometry Reasoning. Once the camera poses are available, the selector retrieves camera0_motion_option_fr om_extrinsics . The skill defines the first camera as the reference frame and interprets the displacement of the second camera relative to it. The following listing shows the core structure of the re-trieved Geometry skill. Low-level validation and diagnostic statements are omitted for clarity. 
+
+CAMERA-MOTION GEOMETRY KERNEL 
+
+1 # Geometry skill: 
+
+2 # camera0_motion_option_from_extrinsics 
+
+3 def reusable_decision(extrinsic, options_text): 
+
+4 ext = normalize_extrinsics(extrinsic) 
+
+56 center_0 = camera_center(ext[0]) 
+
+7 center_1 = camera_center(ext[1]) 
+
+89 motion_world = center_1 - center_0 
+
+10 motion_cam0 = to_camera0_frame( 
+
+11 motion_world, ext[0] 
+
+12 )
+
+13 14 direction = normalize_xz(motion_cam0) 
+
+15 options = parse_motion_options(options_text) 
+
+16 17 return select_best_direction( (a) First input view (b) Second input view 
+
+Figure 7: Original input images for the MindCube camera-motion case. The task asks for the camera motion from the first view to the second view.    
+
+> 18 direction, options
+> 19 )
+
+The helper routines implement atomic geometric opera-tions, including extrinsic normalization, camera-center re-covery, reference-frame conversion, option parsing, and di-rection comparison. The high-level Geometry skill composes these operations into a reusable decision kernel. For this instance, the kernel identifies both a leftward com-ponent and a forward component in the second camera’s motion.   
+
+> Final Decision. Result. The recovered motion is diagonally forward-left, cor-responding to option C, which agrees with the ground-truth answer.
+
+Execution path: two-view input → Tool-Use skill retrieval 
+
+→ scene reconstruction → Geometry skill retrieval → nu-merical execution → C.
+
+Case 2: Grounded Object-Direction Reasoning on MMSI 
+
+This case requires both visual grounding and camera-frame geometric reasoning. Unlike Case 1, the target location can-not be obtained from the camera poses alone. The agent must first identify the specified object and lift its image-space lo-cation into the reconstructed 3D scene.  
+
+> Input.
+
+The question asks:    
+
+> Question. When you took the photo in Image 2 in Figure 8, where was the painting with a black frame and white back-ground in relation to you?
+> Options. (A) rear right; (B) rear left; (C) front left; and (D) directly to the left.
+> Skill Retrieval.
+
+The question names one target object and asks for its position relative to the observer in a specified image. The selector therefore retrieves mmsi_single_an chor_grounding_skeleton .    
+
+> Retrieved Tool-Use Skill Internal ID. mmsi_single_anchor_grounding_s keleton
+> Applicability. Use when a question asks where one named object or scene region is located relative to an observer or a camera-defined reference frame.
+> Step 1: Reconstruct the scene.
+> Call GeometricReconstructor.reconstruct to
+
+(a) First input view (b) Second input view 
+
+Figure 8: Original input images for the MMSI grounded-direction case. The painting is grounded in Image 1, while its direction is evaluated relative to the observer in Image 2. 
+
+recover a shared 3D scene and the camera poses of the input images. 
+
+↓
+
+Step 2: Ground the target. 
+
+Call SemanticDetector.detect to localize the named object in an input image. 
+
+↓
+
+Step 3: Lift the target into 3D. 
+
+Call GeometricReconstructor.project_box_t o_3d_points to project the selected detection into the shared 3D scene. 
+
+↓
+
+Step 4: Resolve the camera-frame relation. 
+
+Pass the reconstruction and grounded target points to Pyth onTool.code . Apply a Geometry skill to express the target relative to the requested camera and select the corresponding option. 
+
+Stopping condition. Stop when the target has been grounded in 3D and its direction in the requested camera frame maps to one unique answer. 
+
+The retrieved skill determines both the required tool se-quence and the data flow between the tools: the detector supplies a bounding box to the projection tool, and the pro-jected points are subsequently consumed by the geometric decision kernel. 
+
+Scene Reconstruction. Following the retrieved pipeline, the agent first invokes GeometricReconstructor.rec onstruct on the two images. The operation successfully recovers a common 3D scene and estimates the poses of both cameras. The resulting reconstruction provides the transformation required to express an object observed in Image 1 relative to the observer in Image 2. 
+
+Target Grounding. The agent invokes SemanticDetect or.detect with the description “the painting with a black frame and white background.” The detector returns multiple candidate boxes. By inspecting their visual locations, the agent selects the small framed artwork near the bar opening in Image 1. The selected box is then passed to GeometricRecon structor.project_box_to_3d_points . This op-eration lifts the painting from its two-dimensional bounding box into a set of points in the shared 3D coordinate frame. At this stage, the workspace contains both pieces of evi-dence required for geometric reasoning: the Image 2 camera pose and the 3D points associated with the painting. 
+
+Geometry Reasoning. The selector retrieves camera_fra me_object_quadrant_choice . This skill determines the direction of a grounded object relative to a selected cam-era and maps that direction to the semantic labels in the answer choices. The core structure of the retrieved Geometry skill is shown below. Input validation and diagnostic branches are omitted for clarity. 
+
+CAMERA-FRAME OBJECT-QUADRANT KERNEL 
+
+1 # Geometry skill: 
+
+2 # camera_frame_object_quadrant_choice 
+
+34 def reusable_decision( 
+
+5 reconstruction, 
+
+6 ref_camera_index, 
+
+7 option_vectors, 
+
+8 target_points_world, 
+
+9 target_point_weights 
+
+10 ): 
+
+11 center_world = robust_weighted_center( 
+
+12 target_points_world, 13 target_point_weights 
+
+14 )
+
+15 16 center_camera = world_to_camera( 
+
+17 center_world, 
+
+18 reconstruction.extrinsic[ 
+
+19 ref_camera_index 
+
+20 ]
+
+21 )
+
+22 23 direction = normalize_xz(center_camera) 
+
+24 options = parse_direction_options( 
+
+25 option_vectors 
+
+26 )
+
+27 28 return select_best_direction( 
+
+29 direction, options 
+
+30 )
+
+For this instance, the agent binds the reference camera to Image 2 and passes the projected painting points as the target. The helper operations estimate a robust target center, transform it from the shared world frame into the Image 2 camera frame, and compare its planar direction with the four candidate relations. The resulting camera-frame direction is front-left. 
+
+Final Decision. Result. The grounded painting is front-left in the Image 2 camera frame, corresponding to option C.
+
+Execution path: two-image input → Tool-Use skill retrieval 
+
+→ scene reconstruction → target detection → 3D projection 
+
+→ Geometry skill retrieval → camera-frame reasoning →
+
+C.
+
+Case 3: Allocentric Relation Reasoning on OmniSpa-tial This case demonstrates allocentric spatial reasoning, in which the required reference frame belongs to a visible entity rather than to the camera. The agent must estimate the orientation of a projection screen and determine the position of an electric fan from the screen’s viewpoint. 
+
+Input. The question asks: 
+
+Question. In Figure 9, where is the electric fan, seen from the projection screen’s viewpoint? 
+
+Options. (A) right and (B) left. 
+
+Skill Retrieval. The selector identifies the projection screen as the reference entity, the electric fan as the target entity, and left–right as the requested relation. It retrieves omnisp atial_allocentric_pairwise_role_comple tion_skeleton .
+
+Retrieved Tool-Use Skill Internal ID. omnispatial_allocentric_pairwi se_role_completion_skeleton 
+
+Applicability. Use for a visible-entity viewpoint question con-taining one oriented reference entity and one target entity, where the target must be classified in the reference entity’s 
+
+Figure 9: Original input image for the OmniSpatial allocen-tric case. The electric fan is localized relative to the projection screen’s object-centric viewpoint. 
+
+coordinate frame. 
+
+Step 1: Bind the semantic roles. 
+
+Identify the reference entity, target entity, requested relation, and option meanings separately. 
+
+↓
+
+Step 2: Reconstruct the scene. 
+
+Call GeometricReconstructor.reconstruct to establish a shared 3D coordinate frame. 
+
+↓
+
+Step 3: Ground both entities. 
+
+Call SemanticDetector.detect separately for the reference and target. One aggregate detection cannot fill both roles. 
+
+↓
+
+Step 4: Estimate the reference orientation. 
+
+Call ObjPoseEstimator.predict_obj_pose on the selected reference box to establish its object-centric frame. 
+
+↓
+
+Step 5: Lift both entities into 3D. 
+
+Call GeometricReconstructor.project_box_t o_3d_points for both selected boxes in the same recon-struction. 
+
+↓
+
+Step 6: Resolve the allocentric relation. 
+
+Pass the reference pose and both 3D anchors to PythonTo ol.code , then apply a Geometry skill to classify the target in the reference frame. 
+
+Stopping condition. Stop when the reference identity and orientation, target identity, same-frame 3D anchors, and option mapping jointly support one answer. This skill is more constrained than a simple visual left– right heuristic. In particular, it requires explicit orientation evidence for the reference entity and does not permit the cam-era frame to be silently substituted for the reference frame. 
+
+Scene Reconstruction. The agent invokes GeometricR econstructor.reconstruct on the input image. The tool recovers a 3D representation of the scene that will be shared by the subsequent grounding and pose-estimation steps. 
+
+Role-Specific Grounding. The agent invokes SemanticDe tector.detect twice with role-specific prompts: once for the projection screen and once for the electric fan. Both calls return one valid detection. Keeping these calls separate preserves the semantic dis-tinction between the reference and target. The screen detec-tion defines the entity whose viewpoint is requested, while the fan detection defines the entity whose relative position must be determined. 
+
+Reference-Frame Construction. The selected screen box is passed to ObjPoseEstimator.predict_obj_pose .The resulting semantic 6D pose provides the orientation of the screen and defines its local left–right frame. The agent then projects both the screen box and the fan box through GeometricReconstructor.project _box_to_3d_points . This produces two point sets in the same reconstructed world frame: one for the reference screen and one for the target fan. 
+
+Geometry Reasoning. With the reference pose and both 3D anchors available, the selector retrieves allocentric_ left_right_from_reference_pose .The following listing shows the central computation of the retrieved Geometry skill. Validation and diagnostic branches are omitted for clarity. 
+
+ALLOCENTRIC LEFT–RIGHT GEOMETRY KERNEL 
+
+1 # Geometry skill: 
+
+2 # allocentric_left_right_from_reference_pose 
+
+34 def decide_allocentric_left_right( 
+
+5 reference_pose, 
+
+6 reference_points_3d, 
+
+7 target_points_3d, 
+
+8 option_to_side 
+
+9 ): 
+
+10 reference_center = robust_center( 
+
+11 reference_points_3d 
+
+12 )
+
+13 target_center = robust_center( 
+
+14 target_points_3d 
+
+15 )
+
+16 17 object_to_world = (
+
+18 reference_pose.T_obj2world.copy() 
+
+19 )
+
+20 object_to_world[:3, 3] = reference_center 
+
+21 world_to_reference = invert( 
+
+22 object_to_world 
+
+23 )
+
+24 25 target_local = transform_point( 
+
+26 target_center, 
+
+27 world_to_reference 
+
+28 )
+
+29 30 side = (
+
+31 "right" 
+
+32 if target_local[0] > 0
+
+33 else "left" 
+
+34 )
+
+35 36 return option_for_side( 
+
+37 side, option_to_side 
+
+38 )
+
+The skill first estimates robust centers for the screen and fan. It then combines the screen center with its estimated orientation to construct a screen-centric coordinate frame. The fan center is transformed into this frame, and the sign of its local lateral component determines whether it lies to the screen’s left or right. For this instance, the transformed fan position has a posi-tive rightward component in the screen-centric frame. 
+
+Final Decision. Result. The fan lies to the screen’s right in the screen-centric frame, corresponding to option A.
+
+Execution path: single-image input → Tool-Use skill re-trieval → scene reconstruction → reference and target detec-tion → reference pose estimation → paired 3D projection →
+
+Geometry skill retrieval → allocentric transformation → A.
+
+B.2 Online Skill Evolution 
+
+The preceding cases demonstrate how existing skills guide inference. We next show how the skill library itself changes during online interaction. We separately examine the evolu-tion of a Tool-Use skill and a Geometry skill. 
+
+Case 4: Evolution of a Tool-Use Skill In Figure 10, this case concerns four-view MindCube questions in which an observer starts from a specified viewpoint, turns left or right, moves forward, and must decide whether the movement ap-proaches a named destination object. 
+
+Initial Skill. For this task family, the initial library contains 
+
+four_view_turn_move_symbolic_layout_ro ot . The skill reconstructs the shared scene and resolves the observer’s orientation after the specified turn. 
+
+Initial Tool-Use Skill Internal ID. four_view_turn_move_symbolic_l ayout_root 
+
+Applicability. Use for same-position multi-view questions that provide an ordered camera layout and ask about turning left or right from a named view. 
+
+Pipeline. 
+
+GeometricReconstructor.reconstruct 
+
+↓
+
+LanguageToCamera.visualize_camera_layout 
+
+Stopping condition. Stop when the shared scene and the ob-(a) Front (b) Left (c) Back (d) Right 
+
+Figure 10: Original four-view input for the evolved Tool-Use skill. 
+
+> server’s post-turn orientation have been recovered.
+
+This pipeline is sufficient for questions that only ask which direction the observer faces after turning. However, it does not fully solve questions that additionally ask whether mov-ing forward approaches a specific destination object.  
+
+> Observed Failure.
+
+In unsuccessful trajectories, the initial pipeline correctly reconstructed the scene and resolved the post-turn viewpoint, but then stopped. Consequently, the workspace contained the observer’s final orientation but not the location of the named destination. For example, after resolving a left turn from Image 2, the agent could determine that the observer would face the direction represented by Image 3. However, it had not yet grounded the target object in Image 3 and therefore could not determine whether forward movement would reduce the distance to that object. The missing evidence was thus not another camera-layout operation. It was a destination-grounding and movement-comparison stage after the symbolic turn had been resolved.  
+
+> Residual Induction.
+
+The online induction process groups suc-cessful and unsuccessful trajectories from the same task fam-ily. Both groups share the following parent prefix:   
+
+> scene reconstruction →symbolic turn resolution.
+
+Successful trajectories continue with two additional se-mantic operations:  
+
+> ground the named destination in the turned-facing view →
+> evaluate whether forward movement approaches it.
+
+In contrast, the unsuccessful trajectories terminate after the shared prefix. This comparison identifies the latter two oper-ations as a reusable residual extension of the parent pipeline. Importantly, the induction process uses more than the atom sequence. The trace records specify that the detector must ground the destination entity in the turned-facing image , and that the numerical step must evaluate distance change in the 
+
+post-turn observer frame . 
+
+> Branch Fusion.
+
+Fusion preserves the original pipeline and creates a specialized branch for turn-then-move questions that mention a destination object. The new branch is stored as four_view_turn_move_target_grounding_b ranch .  
+
+> Tool-Use Skill After Online Fusion Internal ID. four_view_turn_move_target_gro unding_branch
+> Parent skill.
+> four_view_turn_move_symbolic_layout_root
+> Retained parent prefix.
+> GeometricReconstructor.reconstruct
+> ↓
+> LanguageToCamera.visualize_camera_layout
+> Online extension.
+> SemanticDetector.detect
+> ↓
+> PythonTool.code
+> The detector grounds the named destination in the image corre-sponding to the resolved post-turn orientation. The numerical step then determines whether forward motion in that frame decreases the distance to the grounded destination.
+> New stopping condition. Stop only after the turned-facing view, destination grounding, and forward-motion comparison jointly produce a yes–no answer.
+
+The fusion operation therefore does not overwrite the more general parent skill. The original pipeline remains applicable to pure viewpoint questions, while the new branch handles the narrower turn-then-move task family.  
+
+> Later Reuse.
+
+In a subsequent query, the observer starts from Image 2, turns left, moves forward, and asks whether the movement gets closer to a smoking machine. The selector retrieves the evolved branch and instantiates its open seman-tic slots using the current question.   
+
+> Instantiated Evolved Tool-Use Skill Internal ID. four_view_turn_move_target_gro unding_branch
+> Current semantic bindings.
+> Starting viewpoint: Image 2 Turn operation: left turn Resolved facing view: Image 3 Destination entity: smoking machine Requested decision: whether forward movement approaches the destination
+> Instantiated execution. 1. Shared-scene reconstruction
+> GeometricReconstructor.reconstruct
+> Recover the shared geometry and camera poses from the four ordered views.
+> ↓
+> 2. Post-turn viewpoint resolution
+> LanguageToCamera.visualize_camera_layout
+> Bind Image 2 as the starting viewpoint and apply a left turn. The resulting forward direction is aligned with Image 3.
+> ↓
+> 3. Destination grounding
+> SemanticDetector.detect
+> Detect the smoking machine specifically in Image 3, which is the resolved post-turn reference view.
+> ↓
+> 4. Forward-motion comparison
+> PythonTool.code
+> Use the reconstruction, resolved camera layout, and grounded destination to determine whether moving forward decreases the distance to the smoking machine.
+> Output.
+> The forward movement approaches the destination: A. Yes .
+
+The first generated numerical program contains an execution-level syntax error. The agent regenerates the com-putation while preserving the retrieved pipeline, semantic bindings, and reference frame. The corrected execution re-turns A. Yes .
+
+Evolution path: partial parent pipeline → recurring miss-ing destination evidence → trace-level residual induction →
+
+candidate branch fusion → instantiated evolved skill → suc-cessful execution. 
+
+Case 5: Evolution of a Geometry Skill This case shows how repeated sample-specific computations are converted into a reusable Geometry skill. In figure 7, the task fam-ily consists of two-view camera-motion questions that ask whether the second camera moved left, right, diagonally forward-left, or diagonally forward-right relative to the first camera.  
+
+> Initial Execution.
+
+The initial Tool-Use skill already provides the appropriate high-level pipeline:   
+
+> scene reconstruction →numerical reasoning over camera extrinsics.
+
+However, the initial library does not contain a specialized Geometry skill for converting two world-to-camera extrinsics into one of the benchmark motion choices. Consequently, 
+
+PythonTool.code must generate this computation inde-pendently for each sample. Different trajectories implement the same underlying op-erations in slightly different ways: invert camera extrinsics, recover camera centers, compute the displacement between the views, and compare its lateral and forward components with the answer choices.  
+
+> Recurring Computation.
+
+The online trace buffer contains multiple two-view motion trajectories with the same seman-tic objective and data requirements. A successful trajectory correctly recovers the second cam-era center, expresses its displacement relative to the first cam-era, and selects the corresponding diagonal motion option. Another trajectory attempts the same computation but uses brittle option parsing and fallback behavior. When the cur-rent options are not extracted correctly, its sample-specific program can return an unrelated or incorrectly mapped label. The two trajectories therefore reveal both the reusable computation and the behavior that must not be retained: 
+
+> Recurring Geometry Pattern Required inputs.
+> A stack containing at least two world-to-camera extrinsic ma-trices and a set of answer choices describing left, right, or diagonal-forward camera motion.
+> Shared computation.
+> recover camera centers
+> ↓
+> express camera-1 displacement in the camera-0 frame
+> ↓
+> retain the lateral and forward components
+> ↓
+> parse the current option semantics
+> ↓
+> select the best-supported motion option
+> Observed failure mode.
+> A sample-specific implementation may silently use hard-coded option labels or a default answer when option parsing, extrinsic validation, or motion estimation fails.
+
+Because the traces share the same reference frame, in-put schema, geometric transformation, and output seman-tics, they form one code-control family rather than unrelated Python programs.  
+
+> Atomic-Operation Induction.
+
+The induction process decom-poses the recurring programs into a small set of reusable geometric operations: 
+
+• normalize and validate the extrinsic stack; 
+
+• recover a camera center from a world-to-camera trans-form; 
+
+• express camera displacement in the first-camera frame; 
+
+• parse direction semantics from the current answer choices; 
+
+• score direct and diagonal motion candidates; and 
+
+• return a diagnostic instead of fabricating an answer when the required evidence is invalid. These operations are not stored as independently retriev-able skills. They are composed as helper routines inside one self-contained high-level Geometry kernel.  
+
+> Geometry-Skill Fusion.
+
+Fusion produces the candidate Ge-ometry skill camera0_motion_option_from_ext rinsics . The skill records not only the reusable code but also its applicability conditions, input bindings, reference-frame convention, and failure guards. 
+
+Evolved Geometry Skill Internal ID. camera0_motion_option_from_ext rinsics 
+
+Function. 
+
+Choose among direct-left, direct-right, diagonal-forward-left, and diagonal-forward-right options by expressing the second camera’s motion in the first camera’s coordinate frame. 
+
+Input contract. 
+
+The input must contain at least two valid world-to-camera extrinsics. The first camera defines the reference frame, with positive horizontal motion pointing right and positive depth motion pointing forward. 
+
+Option contract. 
+
+The answer choices must contain recognizable left, right, and forward-motion semantics. Their option letters are parsed from the current question rather than fixed in the skill. 
+
+Failure guards. 
+
+The skill returns a diagnostic when the extrinsic stack is miss-ing or malformed, fewer than two cameras are available, the motion magnitude is degenerate, or the options cannot be parsed. 
+
+The core structure of the evolved kernel is shown below. Detailed validation messages and scoring adjustments are omitted for clarity. 
+
+EVOLVED CAMERA-MOTION GEOMETRY KERNEL 
+
+1 # Geometry skill: 
+
+2 # camera0_motion_option_from_extrinsics 
+
+34 def reusable_decision(extrinsic, options_text): 
+
+5 ext, error = normalize_extrinsics( 
+
+6 extrinsic 
+
+7 )
+
+8 if error is not None: 
+
+9 return diagnostic(error) 
+
+10 11 options = parse_motion_options( 
+
+12 options_text 
+
+13 )
+
+14 if not options: 
+
+15 return diagnostic( 
+
+16 "no_recognized_motion_options" 
+
+17 )
+
+18 19 center_0 = camera_center(ext[0]) 
+
+20 center_1 = camera_center(ext[1]) 
+
+21 22 motion_world = center_1 - center_0 
+
+23 motion_cam0 = to_camera0_frame( 
+
+24 motion_world, ext[0] 
+
+25 )
+
+26 27 motion_xz = normalize_motion( 
+
+28 motion_cam0[[0, 2]] 
+
+29 )
+
+30 if motion_xz is None: 
+
+31 return diagnostic( 
+
+32 "motion_too_small_or_invalid" 
+
+33 )
+
+34 35 scores = {
+
+36 option["label"]: motion_score( 
+
+37 motion_xz, option 
+
+38 )
+
+39 for option in options 
+
+40 }
+
+41 42 return max (scores, key=scores.get) 
+
+Compared with the original sample-specific programs, the evolved skill makes the reference frame explicit, parses the current option mapping, and replaces unsafe default answers with observable diagnostics. 
+
+Later Retrieval and Reuse. The later query presented in Case 1 again asks for the motion between two camera views. Its Tool-Use pipeline first invokes GeometricReconstru ctor.reconstruct , producing the required camera ex-trinsics. At the subsequent Python step, the Geometry selector ini-tially sees the compact description of camera0_motion _option_from_extrinsics . After selecting it, the runtime exposes the complete usage conditions and reusable kernel. The current reconstruction and answer choices are then bound to the kernel’s inputs. 
+
+Instantiated Evolved Geometry Skill Internal ID. camera0_motion_option_from_ext rinsics 
+
+Current bindings. 
+
+Extrinsic input: camera poses returned by the current recon-struction Reference frame: the first input camera Compared camera: the second input camera Current options: direct-left, direct-right, diagonal-forward-left, and diagonal-forward-right 
+
+Execution. 
+
+The kernel recovers both camera centers, expresses the dis-placement of the second camera in the first-camera frame, and compares its lateral and forward components with the current option semantics. 
+
+Output. 
+
+The recovered motion is diagonally forward and left, produc-ing option C for this instance. 
+
+The result illustrates the full Geometry-skill evolution cy-cle: sample-specific computation is observed in traces, recur-ring atomic operations are induced, fusion creates a guarded reusable kernel, and the resulting skill is retrieved to guide later numerical execution. 
+
+Evolution path: independent generated programs → recur-ring geometric pattern → atomic-operation induction →
+
+guarded Geometry kernel → later retrieval and reuse. 
+
+## C Evolved Skill Inventory 
+
+The following tables list the skills retained after online evo-lution. Initial seed skills are excluded, and readable names replace internal identifiers. Table 7: Evolved skill inventory for MindCube. 
+
+Skill type Skill name Tool-Use 
+
+Four-View Behind-Me Camera Layout Explicit Turn-View Symbolic Layout Four-View Turn-and-Move Symbolic Layout Behind-Me Camera Layout with Behind-View Option Grounding Behind-Me Resolved-View Option Grounding Query-View Candidate Grounding with a Target-Pose Frame Four-View Turn-and-Move Target Grounding Query-View Candidate Grounding with a Query-View Target Pose Behind-Me Symbolic Layout followed by Option Grounding Turned-View Target Grounding Turned-View Target Grounding V2 
+
+Geometry 
+
+Camera-0 Motion from Extrinsics Right-Turn Distance Change to a Target Left-Turn Proximity in the Camera Frame 
+
+Table 8: Evolved skill inventory for MMSI. 
+
+Skill type Skill name Tool-Use 
+
+Single-Anchor Grounding with Camera-Layout Binding Reconstruction and Camera-Layout Reasoning for Egomotion Dual-Landmark Grounding for Observer-Relative Comparison 
+
+Geometry 
+
+Object-Side Reasoning from Pose Bearing Camera-Frame Object-Quadrant Selection Absolute Compass-Side Reasoning from a Reference View 
+
+Table 9: Evolved skill inventory for OmniSpatial. 
+
+Skill type Skill name Tool-Use 
+
+Refined Entity Redetection after Grounding Review Camera-Arrival Grounding Review Detection and Grounding Ambiguity Review Allocentric Pairwise Grounding-Readiness Review Egocentric Relation Failure Review Allocentric Egocentric-Relation Review Reference-Frame Relation Counting Grounding-Consistency Review Viewpoint-Conditioned Region Membership Allocentric Axial-Relation Review 
+
+Geometry Camera-Relative Travel-Time Selection Allocentric Left–Right Reasoning from Reference Pose 
+
+## D Prompt Templates 
+
+This section presents the core prompts used during inference and online skill evolution. To improve readability, we orga-nize each prompt into four parts: Purpose , Inputs , Instruc-tions , and Output format . Full prompts will be available after the code release. 
+
+SKILL RETRIEVAL PROMPT 
+
+Purpose. Select a small set of reusable rules that are relevant to the current task and workspace context. The selector sees only compact rule descriptions at this stage. 
+
+Inputs. 
+
+• <TASK_INSTRUCTION> 
+
+• <CONTEXT_SUMMARY> 
+
+• <RULE_TYPE> 
+
+• <TARGET_ACTION_IF_APPLICABLE> 
+
+• <SELECTION_CONTEXT> 
+
+• <CANDIDATE_RULES_JSON> 
+
+• <MAX_RULES> 
+
+• optional <ERROR_FEEDBACK> 
+
+Instructions. 
+
+1. Select only rules whose docstring fits the current task and context. 2. Use structure_hint only to distinguish other-wise similar rules. 3. Do not select a rule merely because one word or one tool overlaps. 4. It is valid to select no rules if none are specific enough. 5. Return at most <MAX_RULES> rule ids. 
+
+Strict output format.               
+
+> 1{
+> 2"selected_rule_ids": [
+> 3"rule_id_if_useful"
+> 4],
+> 5"rationale": "brief reason for the selection, or why none apply"
+> 6}
+
+If no rule is useful, return:              
+
+> 1{
+> 2"selected_rule_ids": [],
+> 3"rationale": "no candidate rule is specific enough for this task"
+> 4}
+> INFERENCE PLANNER PROMPT
+
+Purpose. Act as the planner for a tool-using spatial reasoning agent. At each turn, choose exactly one top-level decision: use one complete Tool-Use skill, execute one immediate tool action, or return the final answer. 
+
+Inputs. 
+
+• <TASK_INSTRUCTION> 
+
+• <WORKSPACE_SUMMARY> 
+
+• <RECENT_OBSERVATIONS> 
+
+• <CANDIDATE_BLOCK_RULES> 
+
+• <AVAILABLE_TOOL_SCHEMAS> 
+
+• optional <ERROR_FEEDBACK> 
+
+Instructions. 
+
+1. Choose exactly one decision type: 
+
+• decision_type="rule" : select one reusable high-level rule by id; 
+
+• decision_type="action" : emit one im-mediate tool action or the final answer. 2. A block rule is a semantically complete reusable procedure, not an arbitrary tool-call fragment. 3. The executor does not decide final answers; return a final answer only when workspace evidence is sufficient. 4. Use missing_information to list unresolved semantic roles, such as the reference frame, refer-ence entity, target, candidate set, requested relation, or option mapping. 5. One aggregate detection cannot fill multiple seman-tic roles. 6. Prefer one small tool action at a time unless multiple calls are clearly independent. 7. For spatial direction, distance, or orientation, prefer explicit geometry and deterministic computation. 8. For an object-centric viewpoint, use object-pose ev-idence when a visible entity defines the reference orientation. 
+
+Strict output format. 
+
+Rule decision:                          
+
+> 1{
+> 2"decision_type": "rule",
+> 3"use_rule": true,
+> 4"selected_rule_id": "exact_rule_id ",
+> 5"selected_rule_reason": "why this complete rule matches the current need",
+> 6"missing_information": [
+> 7"unresolved semantic role"
+> 8],
+> 9"tool_calls": [],
+> 10 "final_answer": null
+> 11 }
+
+Immediate action:                                  
+
+> 1{
+> 2"decision_type": "action",
+> 3"use_rule": false,
+> 4"selected_rule_id": null,
+> 5"selected_rule_reason": "why an immediate action is needed",
+> 6"missing_information": [
+> 7"unresolved semantic role"
+> 8],
+> 9"tool_calls": [
+> 10 {
+> 11 "tool_name": "Tool.method",
+> 12 "output_variable": "workspace_name",
+> 13 "args": {}
+> 14 }
+> 15 ],
+> 16 "final_answer": null
+> 17 }
+
+Final answer:                       
+
+> 1{
+> 2"decision_type": "action",
+> 3"use_rule": false,
+> 4"selected_rule_id": null,
+> 5"selected_rule_reason": "workspace already satisfies the task",
+> 6"missing_information": [],
+> 7"tool_calls": [],
+> 8"final_answer": "answer derived from workspace evidence"
+> 9}
+> TOOL-USE SKILL INDUCTION PROMPT
+
+Purpose. Infer one reusable pipeline extension from a batch of compact traces. The goal is to grow a narrower child pipeline from an existing reusable trunk whenever possible. 
+
+Inputs. 
+
+• <ATOM_CONTRACTS_JSON> 
+
+• <CURRENT_PIPELINE_KB_JSON> 
+
+• <TRACE_BATCH_JSON> • optional <ERROR_FEEDBACK> 
+
+Instructions. 
+
+1. Group traces by task family and required computa-tion. 2. A valid family must contain at least two traces with the same semantic roles, evidence needs, and deci-sion pattern, including at least one correct trace. 3. Generate at most one candidate from one supported family. 4. Use operation="branch" when an existing parent pipeline supplies a reusable trunk. 5. Record only the missing or replaced semantic oper-ations in extension_steps ; fusion will materi-alize the complete child. 6. Use operation="new_root" only when no reusable parent exists. 7. Do not generate incomplete fragments such as reconstruction-only, retry-only, or isolated detec-tion/projection steps. 8. Do not invent tools, and do not place Geometry skill ids inside a Tool-Use pipeline. 9. The stopping condition must describe a semantically complete and observable workspace state. 
+
+Strict output format.                                                  
+
+> 1{
+> 2"candidate_rules": [
+> 3{
+> 4"id": "short_snake_case_extension",
+> 5"rule_type": "pipeline_delta",
+> 6"operation": "branch",
+> 7"parent_rule_id": "existing_pipeline_id",
+> 8"docstring": "narrow task family and added evidence need",
+> 9"extension_steps": [
+> 10 {
+> 11 "atom": "Tool.method",
+> 12 "instruction": "missing semantic operation",
+> 13 "bindings": {
+> 14 "required_arg": "$semantic_workspace_slot"
+> 15 },
+> 16 "output": "semantic_output_name"
+> 17 }
+> 18 ],
+> 19 "stopping_condition": "semantically complete child result"
+> 20 }
+> 21 ],
+> 22 "rationale": "supporting trace family and recurring gap"
+> 23 }
+
+If no supported reusable program exists, return:          
+
+> 1{
+> 2"candidate_rules": [],
+> 3"rationale": "no supported reusable program exists"
+> 4}
+> GEOMETRY SKILL INDUCTION PROMPT
+
+Purpose. Induce a reusable geometry kernel for 
+
+PythonTool.code from execution records. The in-duced rule should capture a complete recurring com-putation, together with its applicability conditions and failure guards. 
+
+Inputs. 
+
+• <CURRENT_CODE_CONTROL_KB_JSON> 
+
+• <PYTHON_TRACE_BATCH_JSON> 
+
+• optional <ERROR_FEEDBACK> 
+
+Instructions. 
+
+1. Group records by the same computation, required variables, reference frame, and output decision. 2. A valid family must contain at least two traces, in-cluding at least one correct execution. 3. Prefer families where correct and incorrect traces expose a concrete reusable difference. 4. Generalize the complete decision computation rather than a trivial helper or a shared code sub-string. 5. usage must specify required variables, shapes, reference-frame assumptions, and per-call bindings. 6. code_lines must define one self-contained reusable kernel, possibly with helper functions and one decision function. 7. Missing or malformed evidence must return a diag-nostic rather than a fabricated answer. 8. Do not encode sample ids, one-off object names, option letters, or sample-specific answers. 
+
+Strict output format.                                                       
+
+> 1{
+> 2"candidate_rules": [
+> 3{
+> 4"id": "short_snake_case_kernel ",
+> 5"rule_type": "code_control",
+> 6"level": "high_level",
+> 7"docstring": "narrow coding scenario and evidence conditions ",
+> 8"usage": [
+> 9"required inputs, frames, modes, and bindings",
+> 10 "conditions under which the kernel must not be used"
+> 11 ], 12 "code_lines": [
+> 13 "def reusable_decision( required_values, mode):",
+> 14 "#complete reusable computation",
+> 15 "return result"
+> 16 ]
+> 17 }
+> 18 ],
+> 19 "rationale": "why the traces share one reusable computation"
+> 20 }
+
+If unsupported, return:          
+
+> 1{
+> 2"candidate_rules": [],
+> 3"rationale": "no supported reusable computation exists"
+> 4}
+> SKILL FUSION PROMPT
+
+Purpose. Fuse the mutable main library and the candi-date library into a bounded active library. For Tool-Use skills, fusion materializes complete child pipelines; for Geometry skills, it merges reusable kernels. 
+
+Inputs. 
+
+• <MAX_RULES> 
+
+• <READ_ONLY_PARENT_RULES_JSON> 
+
+• <MUTABLE_MAIN_KB_JSON> 
+
+• <CANDIDATE_KB_JSON> 
+
+• <TRACE_PROOF_RESERVOIR_JSON> 
+
+• optional <ERROR_FEEDBACK> 
+
+Instructions. 
+
+1. Preserve the schema of Tool-Use pipelines and Ge-ometry kernels. 2. Parent pipelines are read-only references and must not be rewritten. 3. For pipeline_delta candidates with 
+
+operation="branch" , preserve the reusable parent trunk and insert the extension where it semantically belongs. 4. Never emit pipeline_delta directly into the active library; always materialize a complete child. 5. Merge duplicate children and discard unsupported, overly broad, or sample-specific records. 6. Discard children that still fail to reach the evidence state claimed by their docstring. 7. Tool-Use pipelines may reference only native tool atoms and planner reasoning transitions. 8. When trace-supported fusion is enabled, provide one pipeline_proofs entry for every new or materially changed pipeline. 
+
+Strict output format.                                                  
+
+> 1{
+> 2"rules": [
+> 3{
+> 4"id": "complete_reusable_skill ",
+> 5"rule_type": "pipeline_or_code_control",
+> 6"...": "fields from the corresponding schema"
+> 7}
+> 8],
+> 9"pipeline_proofs": [
+> 10 {
+> 11 "rule_id": "materialized_pipeline",
+> 12 "segments": [
+> 13 {
+> 14 "steps": [
+> 15 {
+> 16 "atom": "Tool.method",
+> 17 "input_keys": [" required_arg"],
+> 18 "semantic_roles": [" target", "camera"]
+> 19 }
+> 20 ],
+> 21 "prototype_trace_ids": [
+> 22 "correct_trace_1",
+> 23 "correct_trace_2"
+> 24 ],
+> 25 "counterexample_trace_ids": [
+> 26 "incorrect_trace_1",
+> 27 "incorrect_trace_2"
+> 28 ]
+> 29 }
+> 30 ]
+> 31 }
+> 32 ]
+> 33 }
+> GEOMETRY-GUIDED CODE GENERATION PROMPT
+
+Purpose. Generate the executable wrapper for 
+
+PythonTool.code . The code generator receives the current variables, their schemas, the reference-frame re-quirements, and optionally a retrieved Geometry skill. 
+
+Inputs. 
+
+• <USER_REQUEST> 
+
+• <REFERENCE_FRAME_DESCRIPTION> 
+
+• <COMPUTATIONAL_OBJECTIVE> 
+
+• <CONTEXT_DESCRIPTION> 
+
+• <VARIABLE_SCHEMAS_AND_DOCUMENTATI ON> 
+
+• <SELECTED_CODE_CONTROL_DOCSTRING> 
+
+• <SELECTED_CODE_CONTROL_USAGE> 
+
+• <SELECTED_REUSABLE_KERNEL> • optional <PREVIOUS_EXECUTION_ERROR> 
+
+Instructions. 
+
+1. Write one Python function that implements the re-quested computation. 2. Use only a reusable kernel whose input contract matches the current variables and objective. 3. Bind kernel inputs to current workspace values. 4. Do not redefine the selected helper block. 5. Adapt only the wrapper, current option mapping, indices, thresholds, and return format. 6. Verify the computation using the supplied variable documentation. 7. For multiple-choice questions, evaluate the current options rather than relying on fixed option letters. 8. Missing or incomparable evidence should result in a diagnostic rather than a fabricated answer. 9. The returned result must be serializable. 
+
+Strict output format. 
+
+When a reusable Geometry kernel is selected:               
+
+> 1{
+> 2"use_code_blocks": [
+> 3"exact_geometry_skill.kernel"
+> 4],
+> 5"execute_code":
+> 6"def execute(current_variables):\n\
+> 7result =reusable_decision(...)\n \
+> 8return result"
+> 9}
+
+Otherwise, return exactly one Python code block defin-ing:
