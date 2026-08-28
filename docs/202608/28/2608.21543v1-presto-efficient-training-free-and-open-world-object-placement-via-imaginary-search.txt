@@ -1,0 +1,240 @@
+Title: presto: Efficient, Training-free, and Open-world Object Placement via Imaginary Search
+
+URL Source: https://arxiv.org/pdf/2608.21543v1
+
+Published Time: Tue, 25 Aug 2026 00:08:13 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# presto: Efficient, Training-free, and Open-world Object Placement via Imaginary Search 
+
+Weixuan Ding 1, Shang Liu 2, Hanyu Pei 2, and Zeyan Liu 2,⋆  
+
+> 1
+
+Wuhan University, Wuhan Hubei Province, China 
+
+weixuan.ding@outlook.com  
+
+> 2
+
+University of Louisville, Louisville KY, USA 
+
+{shang.liu, hanyu.pei, zeyan.liu}@louisville.edu 
+
+Abstract. Object placement is critical in image composition, requir-ing spatially and semantically coherent positioning of objects within di-verse scenes. Existing approaches typically rely on hand-crafted rules or supervised learning on limited datasets, which restricts their general-ization and interpretability, especially in open-world scenarios involving novel objects and scenes. In this work, we reformulate open-world object placement as a heuristic search task guided by reasoning from a Multi-modal Large Language Model (MLLM). We introduce presto , a zero-shot, training-free framework that operates within an imaginary action space to iteratively refine object position and scale. Our coarse-to-fine search strategy ensures fast convergence, and we evaluate two decision-making variants: Metric-guided Selection and MLLM-as-a-judge. Experiments across multiple benchmarks show that presto achieves state-of-the-art performance, particularly in previously unseen, open-world settings. Hu-man studies further reveal that the MLLM-as-a-judge variant produces more perceptually coherent placements than metric-driven approaches, highlighting a gap between standard evaluation metrics and human vi-sual judgment. 
+
+Keywords: Multimodal Large Language Model · Object Placement · Chain-of-Thought. 
+
+## 1 Introduction 
+
+Image composition involves synthesizing a composite image by inserting a fore-ground object into a background scene [30]. This task underpins a wide range of applications, including image editing [6], augmented reality [17], artistic de-sign [55], and synthetic data generation for training vision models [32,35]. A central challenge is resolving inconsistencies between the inserted object and the background in terms of boundary alignment, appearance, geometry, occlusion, and semantic coherence [30]. While diffusion-based generative models have made substantial progress in visual blending [51,45,7,41], the object placement prob-lem, which is to determine spatially and semantically plausible positions and scales, remains underexplored.  
+
+> ⋆
+
+Corresponding author. arXiv:2608.21543v1 [cs.CV] 21 Aug 2026 2 W. Ding et al. 
+
+Existing object placement methods can be broadly categorized into two groups. Early rule-based approaches rely on handcrafted constraints to determine object position and scale [34,11,54,10], but often result in implausible or incon-sistent placements. More recent supervised methods train end-to-end models on annotated datasets [39,53,58,43,44,55,33]. While these methods show promise in controlled settings, they suffer from several key limitations: (1) High train-ing cost: Supervised approaches require significant resources, including time-intensive annotation of positive and negative placements, and considerable com-putational overhead for training and tuning. (2) Limited dataset coverage: Datasets such as OPA [25] cover only a narrow set of object categories (e.g., 47 types) and may include suboptimal or biased annotations, which limits generalization to open-world scenarios. (3) Lack of interpretability: These models typically offer little insight into why certain placements are preferred, making their decisions difficult to understand or trust. In contrast, real-world object placement demands open-world generalization ,which is the ability to position novel objects in unseen scenes without task-specific training. This requires both spatial reasoning (e.g., ensuring physical support and valid occlusion) and semantic understanding (e.g., placing a cake on a table, not on a keyboard). The task also involves a continuous solution space, where many valid placements may exist simultaneously. Multimodal Large Language Models (MLLMs), such as GPT-4o [14], offer strong potential for this task. They combine visual perception with common-sense reasoning and have demonstrated success across diverse vision-language tasks, including object detection [37,47], embodied AI [29,15], and multimodal generation [56]. In particular, Chain-of-Thought (CoT) prompting has further enhanced their ability to reason through complex problems. Motivated by these strengths, we investigate whether prompting-based MLLMs can be applied to open-world object placement. We find that although these models exhibit strong general reasoning, they struggle with this task, especially when dealing with separate foreground and background inputs. To address this, we reformulate object placement as a heuristic search problem guided by MLLM reasoning, rather than a one-shot prediction. We instantiate this idea with Presto , a training-free, zero-shot framework for open-world object placement. Presto generates multiple initial placement candi-dates and iteratively refines their position and scale within an imaginary action space—a defined set of possible transformations—based on step-by-step feed-back from the MLLM. A multiscale search strategy enables rapid convergence by starting with coarse adjustments and progressively narrowing the search space. We also introduce two selection strategies: ❶ Metric-guided Selection, which op-timizes an existing evaluation metric, and ❷ MLLM-as-a-judge, which prompts the MLLM itself to assess placement plausibility. Experiments on several bench-marks show that Presto achieves state-of-the-art performance, outperforming supervised baselines. It especially excels in novel, open-world scenarios, where existing methods often fail to generalize. Notably, although MLLM-as-a-judge presto: Efficient, Training-free, and Open-world Object Placement 3(a) Overview 
+
+Stage 1 - Initialization Stage 2 - Heuristic Optimization  
+
+> …[Question] Where is it reasonable to place the {bus} in the image? … …[Answer] … Coordinate [x,y]
+> Selection
+> [Question] …Which direction should the {bus} move for better placement? A. Move left B. Move right C. Move up D. Move down E. No movement needed
+> …C. Move up…
+> Selection
+> [Question] …Which of the following do you recommend to make the {bus} have a reasonable size? A. Enlarge the object’s size… B. Reduce the object’s size… C. No size change needed…
+> …A. Enlarge…
+
+(b) Selection (c) Imaginary Action Space   
+
+> Selection
+> MLLM-as-a-judge
+> [Question] …Choose the image with {bus} placed more reasonably … A. Image 1 is more reasonable B. Image 2 is more reasonable C. A tie
+> …B. Image 2 is …
+> Metric-guided
+> OPA Score = ?
+> RA NK 1 RA NK 3 RA NK 2 SimOPA
+> Movement Resizing
+
+Fig. 1. Visualization of qualitative comparison of the proposed method and the base-lines on OPA dataset. Foreground is outlined in red 
+
+scores lower on automatic metrics, it performs better in human evaluations, re-vealing a disconnect between current metrics and human perceptual judgment. Our contributions are as follows: 
+
+– We are the first to reformulate open-world object placement as a heuris-tic search problem guided by MLLM reasoning, enabling iterative spatial refinement beyond one-shot predictions. 
+
+– We present Presto , a lightweight, training-free, and generalizable framework that leverages MLLM-guided actions to optimize object position and scale, achieving strong performance across both benchmarks and human evalua-tions. 
+
+– We compare two selection strategies and find that MLLM-based judgments align more closely with human preferences, suggesting a gap between current metrics and perceptual quality. 
+
+## 2 Related Works 
+
+Object placement is a computer vision task that involves inserting a fore-ground object into a background image in a way that looks natural and contextu-ally appropriate [30]. A reasonable placement requires carefully choosing the ob-ject’s location, size, and shape so that it fits seamlessly into the scene. This helps avoid unrealistic outcomes like disproportionately sized objects, awkward occlu-sions of background, or physically impossible positioning. Traditional approaches are mostly rule-based, relying on geometric and depth constraints [34,11], class-specific consistency [54], or appearance consistency heatmaps [10]. However, 4 W. Ding et al. 
+
+these methods often lack precision and practical usability. More recent tech-niques use deep neural networks, which can be categorized into category-specific and instance-specific methods [30]. Category-specific methods [36,17,8,9,40] pre-dict plausible bounding boxes for object categories, providing a generalized solution for all instances within the same category. Instance-specific methods [39,53,58,43,44,55,33] determine the best transformations for each unique pair of foreground and background images. Notably, a key evaluation tool in this line of work is SimOPA [25], a binary classifier trained to distinguish rational and irrational composites. It is widely used as the benchmark for assessing placement quality [58,44,43,55,33]. 
+
+Multimodal Large Language Models (MLLMs) are designed to process and reason over inputs from multiple modalities. Leading models typically use a unified encoder-decoder architecture, where multimodal inputs are first trans-formed into a shared embedding space and then decoded to generate coherent text outputs. This area has advanced rapidly, especially with the rise of commer-cial models like GPT-4V [1], Gemini 2.0 [38], and Claude 3 [2]. Vision-Language Models (VLMs) such as BLIP-2 [19], OpenFlamingo [3], MiniGPT-4 [59], and LLaVA [24,23,18] are trained on paired image and text data to align visual and textual understanding. Models such as VideoChat [20] and Video-ChatGPT [27] extend these capabilities to video understanding. Recent progress in MLLMs has focused on improving reasoning capabilities. 
+
+Chain-of-Thought (CoT) reasoning [46] encourages large language mod-els to solve problems step by step, improving performance on complex tasks and making decision-making transparent. While traditional CoT follows a lin-ear, sequential chain, newer approaches explore more flexible structures like trees [26,50] and graphs [5]. These developments have led to more dynamic and interpretable rationales in multimodal reasoning [42]. 
+
+## 3 Preliminaries 
+
+3.1 Problem Definition 
+
+Given a background image Ib, a foreground image If , and a mask Mf outlin-ing the foreground object, the object placement process generates a composite image Ic along with its corresponding composite mask Mc. The composition is achieved through a placement function F . Following the formulation in [58,55], this task is simplified to solving the optimal placement parameters ξ = ( x, y, r ).Specifically, x and y specify the position coordinates of the foreground object within the background. r is the scaling factor that resizes the foreground object. This process can be formulated as: 
+
+⟨I c, Mc⟩ = Fx,y,r (Ib, If , Mf ) (1) We can frame object placement as an optimization problem. Our objective is to find the placement parameters (x∗, y ∗, r ∗) that maximize a quality score 
+
+Q (e.g., measured by SimOPA [25]). Q assesses how well the composition aligns visually and contextually with the original scene. This optimization problem can be formulated as: presto: Efficient, Training-free, and Open-world Object Placement 5           
+
+> Table 1. Comparison of different MLLM reasoning techniques on 100 foreground-background pairs randomly selected from the OPA dataset. Method Accuracy ↑
+> Zero-shot Prompting
+> GPT-4o 71.0 DeepSeek-VL2 63.0 o4-mini 65.0
+> Chain-of-Thought Prompting
+> GPT-4o+Zero-shot CoT 78.0 GPT-4o+CCoT 74.0 GPT-4o+Visual Sketchpad 44.0
+> Our Method, Presto
+> GPT-4o+ Presto -Metric 99.0
+> GPT-4o+ Presto -MLLM 95.0
+
+ξ∗ = ⟨x∗, y ∗, r ∗⟩ = arg max 
+
+> x,y,r
+
+Q Fx,y,r (Ib, If , Mf ) (2) While most state-of-the-art methods use specially trained end-to-end models to predict (x, y, r ), we aim to leverage the general knowledge and reasoning capabilities of MLLMs, enabling a more practical, training-free alternative. Specifically, we adopt an MLLM which takes as input both images and a textual instruction P and returns a textual response. For object placement, the image inputs include the foreground image If , the foreground mask Mf , and the background image Ib. The instruction P describes the task, provides context, and encourages reasoning. A successful response should output the predicted placement parameters (ˆ x, ˆy, ˆr). This process can be formally defined as: 
+
+ˆξ = ⟨ˆx, ˆy, ˆr⟩ = MLLM (Ib, If , Mf , P ) (3) In this setup, the optimization is performed implicitly by the MLLM through its internal reasoning. The quality of the prompt P plays a crucial role in guid-ing the model’s output and determining the final composite image Ic. The full prompt design used in our method is detailed in Appendix E. 
+
+3.2 Key Observations and Motivation 
+
+MLLMs have recently demonstrated strong performance across a variety of vision-language tasks, including visual grounding [52,48], object recognition [57], and object detection [37,47]. In particular, MLLMs have shown the ability to ac-curately localize objects and regions within images [49,21]. These capabilities suggest that MLLMs possess a strong understanding of both visual and textual information, making them well-suited for addressing the challenges of object placement. Using prompting-based methods with MLLMs instead of training dedicated predictors provides important advantages: (1) Resource Efficiency: Prompting does not require training or fine-tuning, making it lightweight in terms of memory 6 W. Ding et al. 
+
+and devices. It can be deployed using cloud APIs or even chatbots. (2) Time Efficiency: Without the overhead of model training, prompting-based workflows can be executed immediately. (3) Data Efficiency: Prompting does not require curated training datasets, which is particularly beneficial for object placement tasks where collecting accurate annotations is difficult and expensive. (4) Open-world Generalization: MLLMs can handle novel object-background pairs, not limited by predefined categories. (5) Interpretability: The reasoning behind decisions is transparent, clearly outlined step-by-step in the MLLM’s responses. Motivated by these advantages, we first evaluated several advanced models and prompting strategies on the object placement task using the OPA dataset [25]. We tested the zero-shot performance of GPT-4o [14], o4-mini [31], and DeepSeek-VL2 [48], the latter being specifically designed for visual grounding. Among these, GPT-4o achieved the highest accuracy at 71%, where accuracy is defined as the percentage of placements classified as “rational” by SimOPA. We then applied reasoning-augmented prompting methods to GPT-4o, including Zero-shot CoT [16], CCoT [28], and Visual SketchPad [13]. However, none of these approaches produced consistently accurate placements or reliable rationales. As shown in Table 1, the overall accuracy remained low. The best result was 78% (Zero-shot CoT), while the worst dropped to 44%. We attribute this pitfall to several fundamental differences between object placement and visual grounding: (1) Visual grounding operates on a single image, while object placement requires joint reasoning over two separate inputs. (2) Unlike grounding, which localizes existing content, object placement involves generating new content that must be contextually and spatially coherent with the background. (3) The object placement task lacks discrete ground-truth labels, and plausible placements vary continuously depending on position, scale, and semantic fit. To address these challenges, we propose approaching object placement as a heuristic search guided by MLLM reasoning. Rather than attempting to de-termine the optimal placement in a single step, we decompose the task into a sequence of incremental decisions. At each step, the model evaluates potential adjustments (e.g., position, size) and selects the most promising one. In this way, the placement is gradually refined and optimized. This iterative process mirrors how human beings approach similar tasks through successive thinking, adjustment, and feedback. 
+
+## 4 The Presto Framework 
+
+4.1 Overview 
+
+Our proposed framework, Presto , integrates MLLM-driven decision-making into a local search algorithm similar to hill climbing. Presto has three main stages: initialization, iterative heuristic optimization, and selection. In the initialization stage, the MLLM generates multiple initial candidate placements. These candidates are evaluated for semantic quality, and the one with the highest coherence, denoted I(0)  
+
+> c
+
+, serves as the starting point for opti-mization. The placement is described by its initial parameters ξ(0) = ( x(0) , y (0) , r (0) ).presto: Efficient, Training-free, and Open-world Object Placement 7
+
+Following initialization, Presto iteratively refines the placement through two separate adjustments: (1) movement , which changes the object’s position (x, y ),and (2) resizing , which alters the object’s size r. These steps are conducted sep-arately because MLLMs struggle to optimize position and size simultaneously. Our empirical observations also indicate that the position impacts semantic ra-tionality more significantly than the size, which aligns with common sense. Thus, 
+
+Presto prioritizes movement before resizing in each iteration. To ensure computational efficiency, our optimization is designed to converge in just a few iterations. We employ a multiscale search strategy that begins with large movement and resizing steps to broadly explore the solution space, and gradually reduces step sizes using a decay factor α. This approach resembles learning rate schedules in deep learning and enables a smooth transition from coarse exploration to fine-grained refinement. 
+
+Presto also uses an elitism mechanism that consistently retains the best so-lution. In each iteration, it explores candidate placements through controlled movement and resizing actions. The best candidate is selected for the next iter-ation to continue the search. This process repeats until convergence or an early stopping criterion is met, e.g., when no improvements are found over several iterations. An overview of the framework is shown in Figure 1, and the full optimization procedure is described in Appendix C. 
+
+4.2 Imaginary Action Space 
+
+We formally define an imaginary action space characterized by placement pa-rameters (x, y, r ). The foreground object’s actual position is normalized to co-ordinates (x, y ) ∈ [0 , 1] , which represents its horizontal and vertical distances proportionally from the top-left corner of the background image. The scaling factor r ∈ (0 .0, 1.0] specifies the object’s size ratio relative to the background dimensions. Let wb and hb denote the width and height of the background image, and 
+
+wf and hf denote those of the foreground object. The resized dimensions of the foreground object, denoted by (ws, h s), are computed as: 
+
+ws = r · wb, hs = ws · hf /w f , (4) Instead of annotating the objects’ bounding boxes directly, which is the stan-dard practice in visual grounding and object detection, we convert bounding boxes into coordinates to make them better suited for use with MLLMs. Given the center position (x, y ), the bounding box (a, b, c, d ) representing left, bottom, right, and top edges is calculated as: 
+
+a = x · wb − 12 wt, b = y · hb − 12 ht
+
+c = x · wb + 12 wt, d = y · hb + 12 ht
+
+(5) The continuous action space is discretized into two subspaces: ❶ Movement Action Subspace: MoveUp, MoveDown, MoveLeft, and MoveRight. ❷ Resizing Action Subspace: Enlarge and Reduce. 8 W. Ding et al. 
+
+Because MLLMs struggle to accurately predict appropriate step sizes, we manually set the initial step sizes for both movement and resizing. The opti-mization problem is highly non-convex, with many sub-optimal placement con-figurations. The objective function is mostly flat (i.e., most placements are ir-rational), with small, sensitive regions where slight changes matter. To explore this complex space effectively, we use a wide range of initial step sizes, such as 0.05 to 0.95 for movement and 0.3 to 3.0 for resizing. Each action is symbolically represented by a unique alphabetic encoding for clarity when prompting MLLM. At each step, the MLLM selects an action based on the current state, and the corresponding operation is executed using the current step size. Additionally, we introduce void actions, “No movement needed” and “No resizing needed”, which allow the MLLM to indicate convergence. 
+
+Presto achieves significantly greater compactness than standard search algo-rithms, as it uses an MLLM to deterministically choose a single movement out of four and a resizing action out of two at each step. This reduces the search space by 87.5%. Our ablation study (Section 5.4) shows that MLLM enables better convergence given an iteration budget. 
+
+4.3 Selection 
+
+The selection stage in Presto is designed to identify placements with the highest semantic coherence. Our Presto framework uses both predefined metrics and MLLM to guide the selection: ❶Metric-guided Selection: This strategy is similar to fitness scoring in genetic algorithms. A predefined metric is used to rank placement candidates. In our Presto framework, we use SimOPA, which takes a synthetic composite image and its corresponding mask as input and returns a score indicating the plausibility of the placement. ❷ MLLM-as-a-judge: To leverage the MLLM’s built-in visual and commonsense knowledge, we let it directly assess object placements. The MLLM compares synthesized image pairs and selects the one with the more reasonable placement. Since placement quality can be subjective and influenced by many factors, we prompt the MLLM to focus specifically on the foreground object’s position and scale. For MLLM-as-a-judge, we implement a tournament-style selection process: candidates are compared in sequential pairs based on their initial ordering, with the less plausible option eliminated in each round. This process continues until a single best placement remains. Full details are provided in Appendix C. Although SimOPA is the most widely adopted metric for evaluating place-ment, we find that MLLM-based judgments align more closely with human per-ception. A detailed comparison of the two strategies is presented in Section 5.3. 
+
+## 5 Experiment 
+
+5.1 Settings and Metrics 
+
+We evaluate Presto using GPT-4o as the backbone MLLM [14]. During initial-ization, we set the number of initial candidates k = 4 and use a default scaling presto: Efficient, Training-free, and Open-world Object Placement 9TERSE PlaceNet GracoNet Presto-MLLM Presto-Metric IOPRE CSANet CA-GAN 
+
+Fig. 2. Example placements by Presto and the state-of-the-art methods. The fore-ground objects are outlined in red. 
+
+ratio of 0.2. In the iterative heuristic optimization phase, we use a decay factor 
+
+α = 0 .7 and limit the maximum number of iterations to T = 3 . More details on hyperparameter choices and ablation analysis can be found in Section 5.4. We follow prior work and use SimOPA accuracy and FID [12] to measure placement credibility, and LPIPS [54] to measure placement diversity. We con-duct experiments on the OPA dataset [25], which consists of 73,470 images col-lected from MS COCO [22], with 1,389 backgrounds, and 4,137 foreground ob-jects across 47 categories. Additionally, we test on the OPAZ dataset [33], which includes novel objects and scenes not present in OPA, for open-world evaluation. Detailed descriptions are illustrated in Appendix A. 
+
+Table 2. Comparison results on OPA and OPAZ datasets. Presto -Metric: Presto -with Metric-guided Selection. Presto -MLLM: Presto with MLLM-as-a-judge. Hum: Average rationality ratings (out of 10) of the placements by survey participants. Method OPA OPAZ LPIPS ↑
+
+Hum ↑ Acc ↑ FID ↓ Hum ↑ Acc ↑ FID ↓
+
+TERSE [39] 3.86 0.679 46.94 3.11 0.340 81.1 0PlaceNet [53] 3.43 0.683 36.69 3.90 0.367 63.6 0.160 GracoNet [58] 4.54 0.847 27.75 3.66 0.431 59.1 0.206 CA-GAN [43] 3.79 0.792 23.21 3.74 0.347 49.0 0.268 CSANet [44] 4.10 0.863 20.88 4.24 0.426 45.1 0.274 
+
+IOPRE [55] 4.42 0.895 21.59 3.63 0.586 27.8 0.214 CSENet [33] - 0.940 17.51 - 0.618 42.1 0.137 
+
+Presto -Metric 7.09 0.958 23.05 5.97 0.757 35.9 0.171 
+
+Presto -MLLM 7.09 0.926 19.79 7.20 0.620 57.1 0.119 
+
+5.2 Main Results 
+
+We compare Presto with seven state-of-the-art object placement techniques that are detailed in Appendix B. As shown in Table 1, on the OPA dataset, Presto with 10 W. Ding et al. 
+
+Metric-guided Selection achieves the highest accuracy of 0.958, outperforming all baselines. Even without optimizing for SimOPA, Presto with MLLM-as-a-judge achieves a strong accuracy of 0.926, surpassing six of the seven baselines. It is important to note that all baselines are supervised models trained directly on the OPA dataset, leveraging prior knowledge of object placement within similar domains. In contrast, the MLLM backbone has never seen the OPA dataset during training, and Presto operates in a zero-shot, training-free setting. Furthermore, Presto is efficient with fast convergence: the Metric-guided variant converges in just 1.02 iterations on average, while the MLLM-as-a-judge variant converges in 2.61 iterations. In terms of FID, Presto also performs well. With Metric-guided Selection, it achieves a score of 23.05, outperforming four baselines. The MLLM-as-a-judge variant performs even better, beating six baselines. These results suggest that 
+
+Presto generates visually realistic placements. Also, while Presto is outperformed by CSENet in FID, we demonstrate in Section 5.3 that human evaluators find 
+
+Presto ’s placements more realistic. For the OPAZ dataset, the overall accuracy drops due to the increased diffi-culty, as expected. Nevertheless, both variants of Presto outperform all baselines in accuracy. Notably, Metric-guided Selection achieves a 23.9% to 41.7% accu-racy improvement, demonstrating Presto ’s strong generalization to open-world object placement scenarios. In terms of FID, Metric-guided Presto outperforms six of seven baselines, trailing only IOPRE. However, note that it achieves a 17.1% higher accuracy than IOPRE. 
+
+Presto achieves satisfactory diversity, although its LPIPS scores are lower than those of some state-of-the-art baselines. Interestingly, we observe that 
+
+Presto ’s placements remain stable across different temperature settings, suggest-ing that the MLLM leverages its understanding of the visual context to make consistent, well-informed decisions without introducing random variation. The MLLM-as-a-judge strategy yields an even lower LPIPS score of 0.119, further indicating that its perceptual judgments are more stable than those driven by the SimOPA when evaluating similar placement configurations. Methods like CA-GAN and CSANet achieve higher LPIPS scores, but often at the expense of accuracy. In contrast, Presto achieves a better balance: it maintains reasonable diversity while avoiding the uncontrolled variability which leads to unrealistic or irrational placements. Notably, Presto outperforms CSENet, the most accurate baseline, in both accuracy and diversity. 
+
+5.3 Qualitative and Human Evaluation 
+
+Figure 2 presents visual comparisons between object placements generated by 
+
+Presto and six state-of-the-art baselines. CSENet is excluded due to the unavail-ability of their model checkpoint. Across examples, Presto consistently produces more plausible placements in terms of object location and scale. We attribute this improvement to two key factors: (1) the incorporation of common sense rea-soning via MLLMs, which prevents clearly illogical placements (e.g., clocks are mounted on walls rather than on people; fire hydrants are placed near sidewalks presto: Efficient, Training-free, and Open-world Object Placement 11 SimOPA: 0.9193 Human: 1.33 Human: 6.83 Human: 3.75 Human: 5.20 Human: 3.13 Human: 9.00 SimOPA: 0.9999 SimOPA:
+0.0002 SimOPA:
+0.7892 SimOPA: 1.0000 SimOPA: 0.0052 
+
+Fig. 3. Comparison between OPA scores and human ratings. Selections made by the MLLM are outlined in green. 
+
+rather than in the middle of roads); and (2) the MLLM’s understanding of spa-tial context, especially relative scale (e.g., airplanes appear smaller than nearby traffic lights due to distance; the teddy bear is appropriately scaled relative to other toys on the bed). More examples are provided in Appendix D. 
+
+Table 3. Ablation study on the role of MLLM. Metric w/o MLLM optimization only initialization only Presto -Metric 
+
+Credibility acc. ↑ 0.79 0.93 0.90 0.99 
+
+FID ↓ 89.1 83.7 82.9 80.5 
+
+Diversity LPIPS ↑ 0.136 0.043 0.154 0.167 
+
+To validate these observations, we conducted an anonymous user study using an online questionnaire. Each participant evaluated 15 composite images ran-domly drawn from the OPA or OPAZ datasets. For each image, three versions were shown: (1) the original background, (2) the composite with the inserted object highlighted in red, and (3) the composite without the outline. Partici-pants rated the rationality of the object placement on a 10-point scale. A rubric guides them to focus on depth, relative size, occlusion, physical support, and semantic appropriateness, and ignore factors such as resolution, lighting, and color matching. The questionnaire design is presented in Appendix F. The study was approved by the Institutional Review Board (IRB) at our University. We collected 1,320 ratings from 88 responses from faculty and stu-dents. As shown in Table 2, placements generated by Presto received significantly higher ratings than those from all baseline methods. On both OPA and OPAZ, 12 W. Ding et al. 
+
+the baselines averaged between 3.11 and 4.54, with slightly lower scores on OPAZ. In contrast, Presto achieved average ratings of 7.09 on OPA and 5.97 and 7.2 on OPAZ. Notably, the MLLM-as-a-judge variant received higher human ratings than the Metric-guided Selection strategy, despite achieving lower accuracy. This dis-crepancy suggests a misalignment between SimOPA and human perceptual judg-ments. As shown in Figure 3, certain placements that received high SimOPA scores were rated as irrational by users, while placements generated by the MLLM-as-a-judge variant were consistently rated as more reasonable. These results support our hypothesis: MLLMs not only guide object placement more rationally than existing methods, but also provide more perceptually aligned evaluations than existing metrics. 
+
+5.4 Ablation Study                                            
+
+> Table 4. Ablation study on choices of initial candidates number k, initial scaling factor
+> r(0), and decay factor α.Metric kr(0) α
+> 1480.1 0.2 0.5 0.3 0.7 1.0
+> Credibility acc. ↑0.94 0.99 0.93 0.51 0.99 0.78 0.95 0.99 0.92 FID ↓86.8 80.5 89.2 82.0 80.5 74.5 80.3 80.5 81.1
+> Diversity LPIPS ↑0.138 0.167 0.194 0.105 0.167 0.152 0.151 0.167 0.181
+
+We evaluate the effect of three key hyperparameters: the number of initial candidates k, the initial scaling factor r(0) , and the decay factor α. Experiments are conducted on 100 randomly selected image pairs from the OPA dataset. As shown in Table 4, setting k = 4 achieves the best balance. Smaller values reduce the diversity of initial placements, while larger values increase noise in MLLM predictions, leading to less accurate results. For the initial scaling factor, a moderate value of 0.2 outperforms both smaller (0.1) and larger (0.5) settings, providing better flexibility for size adjustment. Finally, we test decay factors 
+
+α = 0 .3, 0.7, 1.0 and observe that while performance is generally stable, a larger α
+
+tends to overly restrict the search space, causing early convergence to suboptimal placements. We further analyze the role of the MLLM by disentangling its contributions to initialization and iterative heuristic optimization. The maximum number of iterations is set to 3. We first remove MLLM entirely, replacing both stages with random actions. This results in a performance drop of over 20%, underscoring the importance of MLLM guidance. Next, we isolate each component to evalu-ate its individual contribution. When the MLLM is used only for optimization, accuracy improves by 14% over the baseline. When used only for initialization, the improvement is 18%. We also apply Presto to more affordable, open-source MLLMs such as Qwen-VL2.5-7B [4] and DeepSeek-VL2-27B [48]. As shown in Table 5, the results highlight Presto ’s strong generalization across different model sizes. Qwen-VL2.5 presto: Efficient, Training-free, and Open-world Object Placement 13 
+
+Table 5. Ablation study on the generalizability across MLLMs. Metric Dataset Qwen-VL2.5 DeepSeek-VL2 Qwen-VL2.5 +Presto -Metric DeepSeek-VL2 +Presto -Metric Accuracy ↑ OPA 0.34 0.63 0.85 0.91 OPAZ 0.32 0.38 0.61 0.71 
+
+achieves SimOPA accuracies of 85% and 61%, outperforming four and six state-of-the-art methods, respectively. Moreover, Presto consistently improves perfor-mance across all models, boosting accuracy by 51% and 29% for Qwen-VL2.5-7B, and by 28% and 33% for DeepSeek-VL2-27B. 
+
+## 6 Conclusion 
+
+In this work, we tackle the limitations of current object placement methods that rely on heavy training and annotated data. We reformulate the task as a heuristic search problem and propose Presto , a novel, zero-shot, training-free framework. 
+
+Presto uses MLLM-guided decisions within an imaginary search space to iter-atively adjust an object’s position and scale. Experiments on OPA and OPAZ datasets show that Presto achieves outstanding results without category-specific supervision, outperforming baselines on both standard metrics and human align-ment. Its plug-and-play design and strong generalization make it suitable for open-world applications. 
+
+## References 
+
+1. Achiam, J., et al.: Gpt-4 technical report. arXiv:2303.08774 (2023) 2. Anthropic: Introducing the next generation of claude. https://www.anthropic. com/news/claude-3-family (2024) 3. Awadalla, A., Gao, I., Gardner, J., Hessel, J., Hanafy, Y., Zhu, W., et al.: Openflamingo: An open-source framework for training large autoregressive vision-language models. arXiv:2308.01390 (2023) 4. Bai, S., Chen, K., Liu, X., et al.: Qwen2.5-vl technical report. arXiv preprint arXiv:2502.13923 (2025) 5. Besta, M., Blach, N., Kubicek, A., et al.: Graph of thoughts: Solving elaborate problems with large language models. In: AAAI (2024) 6. Chen, B.C., Kae, A.: Toward Realistic Image Compositing With Adversarial Learn-ing. In: CVPR (2019) 7. Chen, X., Huang, L., Liu, Y., Shen, Y., Zhao, D., Zhao, H.: Anydoor: Zero-shot object-level image customization. In: CVPR (2024) 8. Dvornik, N., Mairal, J., Schmid, C.: Modeling visual context is key to augmenting object detection datasets. In: ECCV (2018) 9. Dvornik, N., Mairal, J., Schmid, C.: On the importance of visual context for data augmentation in scene understanding. IEEE Transactions on Pattern Analysis and Machine Intelligence (2019) 10. Fang, H., Sun, J., Wang, R., Gou, M., et al.: Instaboost: Boosting instance seg-mentation via probability map guided copy-pasting. In: ICCV (2019) 14 W. Ding et al. 11. Georgakis, G., Mousavian, A., Berg, A.C., Kosecka, J.: Synthesizing training data for object detection in indoor scenes. In: Robotics: Science and Systems (RSS XIII) (2017) 12. Heusel, M., Ramsauer, H., Unterthiner, T., et al.: Gans trained by a two time-scale update rule converge to a local nash equilibrium (2017) 13. Hu, Y., Sothers: Visual sketchpad: Sketching as a visual chain of thought for mul-timodal language models. arXiv:2406.09403 (2024) 14. Hurst, A., et al.: Gpt-4o system card. arXiv:2410.21276 (2024) 15. Kapelyukh, I., Ren, Y., Alzugaray, I., et al.: Dream2Real: Zero-shot 3D object rearrangement with vision-language models. In: ICRA (2024) 16. Kojima, T., Gu, S.S., Reid, M., Matsuo, Y., Iwasawa, Y.: Large language models are zero-shot reasoners. In: NeurIPS (2022) 17. Lee, D., Liu, S., Gu, J., Liu, M.Y., Yang, M.H., Kautz, J.: Context-aware synthesis and placement of object instances. In: NeurIPS (2018) 18. Li, B., Zhang, Y., Guo, D., Zhang, R., Li, F., Zhang, H., Zhang, K., et al.: Llava-onevision: Easy visual task transfer. arXiv:2408.03326 (2024) 19. Li, J., Li, D., et al.: Blip-2: Bootstrapping language-image pre-training with frozen image encoders and large language models. In: ICML (2023) 20. Li, K., He, Y., Wang, Y., Li, Y., Wang, W., Luo, P., Wang, Y., et al.: Videochat: Chat-centric video understanding. arXiv:2305.06355 (2023) 21. Li, L.H., Zhang, P., Zhang, H., Yang, J., Li, C., Zhong, Y., Wang, L., et al.: Grounded language-image pre-training. arXiv:2112.03857 (2022) 22. Lin, T.Y., Maire, M., Belongie, S., Hays, J., Perona, P., Ramanan, D., et al.: Microsoft coco: Common objects in context. In: ECCV (2014) 23. Liu, H., Li, C., Li, Y., Lee, Y.J.: Improved baselines with visual instruction tuning. arXiv:2310.03744 (2024) 24. Liu, H., Li, C., Wu, Q., Lee, Y.J.: Visual instruction tuning. In: NeurIPS (2023) 25. Liu, L., Zhang, B., Li, J., Niu, L., Liu, Q., Zhang, L.: OPA: Object placement assessment dataset. arXiv:2107.01889 (2021) 26. Long, J.: Large language model guided tree-of-thought. arXiv:2305.08291 (2023) 27. Maaz, M., Rasheed, H., Khan, S., Khan, F.S.: Video-chatgpt: Towards detailed video understanding via large vision and language models. arXiv:2306.05424 (2023) 28. Mitra, C., Huang, B., Darrell, T., Herzig, R.: Compositional Chain-of-Thought Prompting for Large Multimodal Models. In: CVPR (2024) 29. Ni, F., Hao, J., Wu, S., Kou, L., Liu, J., et al.: Generate subgoal images before act: Unlocking the chain-of-thought reasoning in diffusion model for robot manipulation with multimodal prompts. In: CVPR (2024) 30. Niu, L., Cong, W., Liu, L., et al.: Making images real again: A comprehensive survey on deep image composition. arXiv:2106.14490 (2025) 31. OpenAI El-Kishky, A., Wei, A., Saraiva, A., et al.: Competitive programming with large reasoning models. arXiv:2502.06807 (2025) 32. Ouyang, X., Cheng, Y., Jiang, Y., Li, C.L., Zhou, P.: Pedestrian-synthesis-gan: Generating pedestrian data in real scene and beyond. arXiv:1804.02047 (2018) 33. Qin, Y., Xu, J., Wang, R., Chen, X.: Think Before Placement: Common Sense Enhanced Transformer for Object Placement. In: ECCV (2025) 34. Remez, T., Huang, J., Brown, M.: Learning to segment via cut-and-paste. In: ECCV (2018) 35. Song, Z., He, Z., Li, X., Ma, Q., et al.: Synthetic datasets for autonomous driving: A survey. IEEE Transactions on Intelligent Vehicles (2024) 36. Tan, F., Bernier, C., Cohen, B., Ordonez, V., Barnes, C.: Where and who? auto-matic semantic-aware person composition. In: WACV (2018) presto: Efficient, Training-free, and Open-world Object Placement 15 37. Tang, J., Zheng, G., Yu, J., Yang, S.: Cotdet: Affordance knowledge prompting for task driven object detection. In: ICCV (2023) 38. Team, G., Anil, R., Borgeaud, S., Alayrac, J.B., Yu, J., et al.: Gemini: a family of highly capable multimodal models. arXiv:2312.11805 (2023) 39. Tripathi, S., Chandra, S., Agrawal, A., Tyagi, A., Rehg, J.M., Chari, V.: Learning to Generate Synthetic Data via Compositing. In: CVPR (2019) 40. Volokitin, A., Susmelj, I., Agustsson, E., Van Gool, L., Timofte, R.: Efficiently detecting plausible locations for object placement using masked convolutions. In: ECCV (2020) 41. Wang, H., Peng, J., He, Q., et al.: Unicombine: Unified multi-conditional combi-nation with diffusion transformer. arXiv:2503.09277 (2025) 42. Wang, Y., Wu, S., Zhang, Y., Yan, S., Liu, Z., et al.: Multimodal chain-of-thought reasoning: A comprehensive survey. arXiv:2503.12605 (2025) 43. Wang, Y., Feng, Y., Wu, J., Xu, H., Zheng, J.: CA-GAN: Object Placement via Coalescing Attention based Generative Adversarial Network. In: ICME (2023) 44. Wang, Y., Feng, Y., Zheng, J.: Learning Object Placement via Convolution Scoring Attention. In: BMVC (2024) 45. Wang, Y., Zhang, W., Zheng, J., Jin, C.: Primecomposer: Faster progressively combined diffusion for image composition with attention steering. In: ACM MM (2024) 46. Wei, J., Wang, X., Schuurmans, D., et al.: Chain-of-thought prompting elicits rea-soning in large language models. In: NeurlIPS (2022) 47. Wu, Y., Wang, Y., Tang, S., Wu, W., et al.: Dettoolchain: A new prompting paradigm to unleash detection ability of mllm. In: ECCV (2024) 48. Wu, Z., Chen, X., Pan, Z., Liu, X., Liu, W., Dai, D., Gao, H., Ma, Y., Wu, C., et al.: DeepSeek-VL2: Mixture-of-Experts Vision-Language Models for Advanced Multimodal Understanding. arXiv:2412.10302 (2024) 49. Xiao, L., Yang, X., Lan, X., Wang, Y., Xu, C.: Towards visual grounding: A survey. arXiv:2412.20206 (2024) 50. Yao, S., Yu, D., Zhao, J., Shafran, I., Griffiths, T., et al.: Tree of thoughts: Delib-erate problem solving with large language models (2023) 51. Zhang, B., Duan, Y., Lan, J., Hong, Y., et al.: Controlcom: Controllable image composition using diffusion model. arXiv:2308.10040 (2023) 52. Zhang, H., et al.: Llava-grounding: Grounded visual chat with large multimodal models. arXiv:2312.02949 (2023) 53. Zhang, L., et al.: Learning Object Placement by Inpainting for Compositional Data Augmentation. In: ECCV (2020) 54. Zhang, R., Isola, P., Efros, A.A., Shechtman, E., et al.: The unreasonable effective-ness of deep features as a perceptual metric. In: CVPR (2018) 55. Zhang, S., et al.: Interactive Object Placement with Reinforcement Learning. In: ICML (2023) 56. Zhou, E., et al.: Minedreamer: Learning to follow instructions via chain-of-imagination for simulated-world control. arXiv:2403.12037 (2024) 57. Zhou, Q., Zhou, R., Hu, Z., Lu, P., Gao, S., Zhang, Y.: Image-of-thought prompting for visual reasoning refinement in multimodal large language models. arXiv:2405.13872 (2024) 58. Zhou, S., Liu, L., Niu, L., Zhang, L.: Learning Object Placement via Dual-Path Graph Completion. In: ECCV (2022) 59. Zhu, D., Chen, J., Shen, X., Li, X., Elhoseiny, M.: Minigpt-4: Enhancing vision-language understanding with advanced large language models. In: ICLR (2024)

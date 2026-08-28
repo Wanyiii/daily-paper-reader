@@ -1,0 +1,237 @@
+Title: Grounding Isn't Knowing: Do VLMs Need Object Localization for Spatial Reasoning?
+
+URL Source: https://arxiv.org/pdf/2608.23074v1
+
+Published Time: Tue, 25 Aug 2026 02:26:38 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Grounding Isn’t Knowing: Do VLMs Need Object Localization for Spatial Reasoning? 
+
+## Xiwei Liu 1, Yulong Li 1, Xinlin Zhuang 1,2 , Xuhui Li 1, Zhixiang Lu 3,Haolin Yang 1, Imran Razzak 1, Yutong Xie 1∗
+
+> 1
+
+Mohamed bin Zayed University of Artificial Intelligence 
+
+> 2
+
+The Chinese University of Hong Kong, 3University Of Liverpool 
+
+Abstract 
+
+Vision-language models (VLMs) can answer spatial ques-tions, yet the mechanisms connecting object grounding to spa-tial reasoning remain poorly understood. It is underexplored whether spatial reasoning internally requires precise objects localization, or can bypass explicit localization through global layout cues. In this work, we investigate two representa-tive model families, LLaVA-1.5 and Qwen2.5-VL, using a suite of mechanistic interpretability tools, including token ablation, layer-wise probing, attention knockout, and causal mediation analysis. We find that spatial relation prediction follows a staged grounding-to-reasoning process in which object-aligned tokens establish coarse target-reference an-chors, while precise bounding-box boundaries are not re-quired. Positional information becomes decodable before re-lation decisions emerge, and a small set of attention heads mediates the causal effects of both localization and spatial reasoning. The two tasks share early grounding-related pro-cessing but ultimately rely on partially distinct specialized pathways. Through rigorous experiments, we provide a token-, layer-, and head-level account of how VLMs transform object grounding into spatial relations, showing that knowing where objects are is not equivalent to knowing how they relate. 
+
+## Introduction 
+
+Spatial reasoning is essential for interacting with and reason-ing about the visual world. Modern vision-language models (VLMs) (Bai et al. 2025a; Comanici et al. 2025) can answer questions about relative object positions, including whether one object is to the left of, behind, or in front of another (Ka-math, Hessel, and Chang 2023; Chen et al. 2025). Yet a cor-rect answer does not establish that the model has localized the queried objects or derived the relation from their posi-tions. The same prediction may arise from object-specific evidence, coarse scene layout, contextual regularities, or lan-guage priors (Li et al. 2025c; Schaumlöffel, Vilas, and Roig 2026). Benchmark accuracy therefore reveals what a model predicts, but provides limited insight into how object ground-ing is transformed into a spatial decision (Tong et al. 2024). Unlike text, an image is inherently organized across two spatial dimensions. Most VLMs nevertheless inherit a Trans-former pipeline that partitions an image into patches and 
+
+> ∗
+
+Corresponding author. 
+
+serializes them as a one-dimensional token sequence (Doso-vitskiy et al. 2020). Because sequence order does not explic-itly preserve the image’s native two-dimensional topology, spatial structure must be recovered through positional en-codings and interactions among visual tokens (Chu et al. 2024; Huang et al. 2025b). Fixed-resolution models com-monly use learnable absolute position embeddings, whereas dynamic-resolution architectures can encode horizontal and vertical coordinates through two-dimensional rotary position embeddings (2D-RoPE) (Huang et al. 2025a). These mech-anisms preserve where visual tokens occur, but do not by themselves establish which tokens belong to the queried ob-jects or how those objects relate (Li et al. 2025c; Bousselham et al. 2024; Zhang et al. 2025b; Li et al. 2025b). Recent studies have strengthened explicit visual ground-ing in VLMs through localized visual tokenization, spatial prompting, grounded visual reasoning, and specialized local-ization heads (Ma et al. 2024; Dorkenwald et al. 2024; Kang et al. 2025). Coordinate-based instruction tuning has also im-proved spatial-relation performance, suggesting a functional connection between localization supervision and spatial rea-soning (Ranasinghe et al. 2024). However, these findings show that localization can be learned or exploited, not that a model must compute precise object locations before answer-ing a relational query. Emerging evaluations further reveal that strong performance on conventional grounding bench-marks can coexist with severe failures on discriminative re-lational queries (Li et al. 2026). Whether localization is a prerequisite, a parallel capability, or a correlated outcome of spatial reasoning therefore remains underexplored. These advances expose a conceptual ambiguity: precise localization, relational grounding, and spatial reasoning are often evaluated as if they were interchangeable. Precise lo-calization requires recovering object boundaries, relational grounding requires binding the target and reference to spa-tially anchored representations, and spatial reasoning re-quires transforming those representations into a directed re-lation. Recent training frameworks and benchmarks increas-ingly separate object localization from broader spatial under-standing (Li et al. 2025a; Jia et al. 2025), while preference-based and token-based grounding methods optimize coordi-nate fidelity as a distinct objective (Qiu et al. 2025; Ren et al. 2026). This distinction motivates our central question: must a VLM precisely localize both objects before predicting their arXiv:2608.23074v1 [cs.CV] 24 Aug 2026 t-SNE Dimension 2 t-SNE Dimension 2 PCA Dimension 2 PCA Dimension 2 (a) PE in LLaVA (Row) (b) PE in LLaVA (Col) (c) With 2D-RoPE (d) Without 2D-RoPE t-SNE Dimension 1 t-SNE Dimension 1 PCA Dimension 1 PCA Dimension 1 Figure 1: (a) and (b): The geometry of the 1D absolute position embedding in LLaVA-1.5-7B. The visualization is performed via t-SNE for dimensionality reduction. The labels are set to row IDs and column IDs, respectively. (c) and (d): The PCA results of the direction vectors for left of / right of / in front of / behind with and without position embedding in Qwen2.5-7B. relation, or can it reach the correct decision from coarser object-grounded layout signals? To resolve this question, we investigate LLaVA-1.5 and Qwen2.5-VL across tokens, layers, and attention heads, com-bining object-region interventions, layer-wise probing, at-tention knockout, causal mediation, and targeted head abla-tion (Neo et al. 2025; Bi et al. 2025). Together, these analyses reveal a consistent but nontrivial separation between precise localization and spatial reasoning in how object-grounded evidence is represented and routed. Our main findings are: 1 Precise localization is not required for spatial rea-soning . Removing object-interior evidence sharply degrades coordinate recovery while largely preserving directional judgments, showing that accurate bounding boxes are not a necessary intermediate for relation prediction. 2 Spatial reasoning relies more on coarse object lay-out than on exact boundary geometry . Relation accuracy remains stable after removing fine boundary evidence but declines when interventions extend into the surrounding con-text, indicating that coarse object-centered layout provides a more relevant spatial signal than exact geometry. 3 Position precedes relation without forming a strict serial bottleneck. Object positions become decodable in in-termediate layers, whereas relation answers emerge later and may remain correct despite localization failures. 4 Localization and spatial reasoning are mediated by sparsely overlapping attention circuits. Object-grounded evidence is carried by a small set of shared heads, while being largely transformed through task-specific pathways. 
+
+## Background 
+
+Sequential Visual Representation in VLMs. A vision-language model typically consists of a visual encoder fV , a modality connector fC , and a language model fL. Given an image XV , the visual encoder first partitions it into an H ×W
+
+grid of patches, P = ( p1, . . . , pNV ) ∈ RNV ×DV , where 
+
+NV = HW and DV is the dimension of the visual encoder. The grid is then flattened in raster order, such that the patch at row r and column c is assigned the sequence index i = rW +
+
+c. The visual encoder and connector transform the patch sequence into language-compatible visual embeddings, 
+
+V = fC (fV (P)) ∈ RNV ×DL . (1) Given text embeddings T ∈ RNT ×DL , fL receives 
+
+H(0) = [ V; T] ∈ R(NV +NT )×DL . (2) Although rasterization allows images to be processed as token sequences, it does not explicitly preserve their original two-dimensional organization. Positional encoding is there-fore required to make attention computations sensitive to spatial structure (Dosovitskiy et al. 2020; Liu et al. 2023). 
+
+Position Encoding. Position encoding in visual transform-ers can be broadly divided into absolute and relative. Given an input sequence X = ( x1, . . . , xN ) ∈ RN ×D , absolute position encoding assigns a vector ei to each sequence posi-tion before being passed into the Transformer blocks: 
+
+˜X = X + E = ( x1 + e1, . . . , xN + eN ). (3) The position vectors may be fixed or learnable. For a fixed-resolution image, each sequence index corresponds to a per-sistent patch coordinate. Consequently, a one-dimensional position-embedding table can still encode the row and col-umn structure of the original image grid. Relative position encoding instead introduces the displacement between to-kens into the attention computation. Rotary position embed-ding applies a position-dependent rotation f (·) to queries and keys (Su et al. 2024). For query qm and key kn at positions 
+
+m and n, their inner product can be written as 
+
+⟨f (qm, m ), f (kn, n )⟩ = Re 
+
+h
+
+qmk∗
+
+> n
+
+ei( m−n)θ i
+
+, (4) where (·)∗ denotes complex conjugation and θ is a preset angular frequency. The resulting attention score depends ex-plicitly on the relative displacement m − n.For two-dimensional visual inputs, each token is assigned coordinates si = ( xi, y i). The query and key representations are divided into horizontal and vertical subspaces, giving 
+
+⟨f (qi, x i, y i), f (kj , x j , y j )⟩
+
+= Re 
+
+h
+
+qxi (kxj )∗ei( xi−xj )θ + qyi (kyj )∗ei( yi−yj )θ i
+
+. (5) Thus, 2D RoPE represents spatial interactions through the relative displacement ∆sij = ( xi − xj , y i − yj ), allowing the same positional mechanism to ggeneralize consistently across varying image resolutions and sequence lengths. In this work, we study LLaVA-1.5 and Qwen2.5-VL as representative instantiations of these two widely used mech-anisms. LLaVA-1.5 uses learnable one-dimensional abso-lute position embeddings in its visual encoder (Liu et al. 2023), whereas Qwen2.5-VL employs 2D RoPE to support dynamic-resolution inputs (Bai et al. 2025b). 
+
+From Positional Geometry to Object Grounding. To verify how absolute and relative position encodings preserve spatial structure, we first apply t-SNE to reduce the dimen-sionality of the position embedding from LLaVA-1.5-7B to two dimensions. As visualized in Figure 1(a)(b), the geo-metric structure of the absolute position embedding exhibits distinct rows and columns. In the 2D-RoPE setting, we sum-marize an object o by mean-pooling its aligned visual tokens, 
+
+¯ho = 1
+
+|S o|
+
+X
+
+> i∈S o
+
+hi, (6) and characterize a target-reference pair using the direction vector dt,r = ¯ht − ¯hr . Figure 1(c)(d) demonstrates the collinearity and orthogonality of the direction vectors, while the geometry breaks down without 2D RoPE. These observations show that VLM representations pre-serve recoverable spatial geometry, but encoding spatial structure does not explain how it supports relation reason-ing. A model may first recover object boundaries and com-pare them, or infer the relation directly from coarse object-centered cues. If localization is necessary, relation accuracy should decline when bounding-box localization fails. Oth-erwise, relation judgments may remain correct as long as coarse spatial grounding is preserved. We test this distinction through controlled interventions and trace the information across visual tokens, decoder layers, and attention heads. 
+
+## Preliminaries 
+
+Dataset and Task 
+
+To ensure that our analyses isolate the object-level visual ev-idence used by VLMs for spatial perception, we construct a carefully curated dataset derived from the What’s Up bench-mark (Kamath, Hessel, and Chang 2023). 
+
+Base Dataset and Filtering. We use controlled real-world images from What’s Up Subsets A and B. Subset A contains objects positioned on , under , left of , or right of a table, chair, or armchair. We remove samples labeled on or under and retain only the left-right relations. Subset B contains pairs of household objects arranged in front of , behind , left of , or 
+
+right of one another, all of which are retained. We further annotate the target and reference objects with bounding boxes and segmentation masks. After filtering, the dataset contains 1,228 object annotations across 614 images, including 206 
+
+images from Subset A and 408 images from Subset B. 
+
+Object-Removed Control Set. Contextual cues can lead to 
+
+hallucinated detections , where models predict the presence of an object solely from background context. To control for this effect, we construct an auxiliary object-removed variant of the dataset. For each image, the target object is removed and the missing region is inpainted using LaMa (Suvorov Mug behind cup Book in front of cap Book right of cap Bowl left of cap 
+
+> (a) Source image (a) Base image
+
+Figure 2: Examples in the curated What’s Up dataset. et al. 2022), which reconstructs background structure with high realism. We retain only those image pairs for which a model correctly identifies the object in the original image but fails to do so in the inpainted counterpart. This ensures that subsequent analyses rely on real object evidence rather than contextual correlations. Examples of the inpainted dataset are provided in Figure 2. More details are shown in Supplement. We evaluate models on two complementary visual tasks: localizing the target and reference objects and predicting their spatial relation. For each task, we design a different prompt for the same image. See detailed prompts in Supplement. 
+
+Localization. We prompt the model to predict target and reference bounding boxes separately. Each parsed prediction is compared with its ground-truth box using intersection over union (IoU). We report target and reference localization as the mean success rate at IoU thresholds of 0.5, 0.7, and 0.9. 
+
+Spatial Reasoning. We use the original four-way multiple-choice protocol from What’s Up, preserving its subset-specific distractors. Accuracy is the proportion of predicted target-to-reference relations that match the ground-truth. 
+
+## Experiments 
+
+We examine localization and spatial reasoning at progres-sively finer scales. Token interventions test whether object evidence is necessary for relation prediction, layer-wise anal-yses trace when relevant information emerges and is used, and head-level mediation and ablation identify the attention components that route grounded evidence into outputs. 
+
+Visual Information Ablation 
+
+We conduct an ablation study to investigate the contribution of visual input tokens to the performance of the VLMs. 
+
+Method. We ablate visual information at the LLM input, i.e., after the multimodal projection but before positional encodings and autoregressive processing. To remove image-specific content while preserving domain-consistent embed-ding statistics, we replace the original visual token embed-dings with a global average visual embedding computed once over the ImageNet (Deng et al. 2009) validation set. 
+
+(i) Object Tokens : We rasterize each segmentation mask onto the visual-token grid and select all tokens that overlap with it by at least one pixel. To probe for boundary sensitivity and context dependence, we shrink or dilate the mask by 1 or 2 token padding. This produces nested regions ranging from the object interior to its surrounding context. Models: LLaVA-1.5 7B LLaVA-1.5 13B Qwen2.5-VL 7B Strategy Token (%) Loc-T (%) Loc-R (%) Rel. (%) Loc-T (%) Loc-R (%) Rel. (%) Token (%) Loc-T (%) Loc-R (%) Rel. (%) Baseline 0 10.15 14.81 24.82 29.91 39.03 40.23 0 84.53 86.64 96.11 
+
+− 1 Padding 1.77 8.79 ↓1.36 14.33 ↓0.48 24.61 ↓0.21 23.51 ↓6.40 39.25 ↑0.22 40.07 ↓0.16 2.24 84.58 ↑0.05 86.75 ↑0.11 95.93 ↓0.18 
+
+Target 4.94 4.78 ↓5.37 14.71 ↓0.10 24.59 ↓0.23 2.01 ↓27.90 39.90 ↑0.87 40.05 ↓0.18 4.23 19.60 ↓64.93 86.32 ↓0.32 94.79 ↓1.32 
+
++ 1 Padding 9.52 0.38 ↓9.77 17.59 ↑2.78 24.57 ↓0.25 0.12 ↓29.79 36.91 ↓2.12 27.85 ↓12.38 6.71 2.55 ↓81.98 84.69 ↓1.95 89.74 ↓6.37 
+
+− 1 Padding 2.59 10.53 ↑0.38 14.12 ↓0.69 24.75 ↓0.07 29.64 ↓0.27 31.38 ↓7.65 39.90 ↓0.33 3.26 84.26 ↓0.27 88.60 ↑1.96 96.42 ↑0.31 
+
+Reference 7.64 10.58 ↑0.43 7.11 ↓7.70 24.59 ↓0.23 29.15 ↓0.76 2.33 ↓36.70 39.41 ↓0.82 6.46 84.31 ↓0.22 25.57 ↓61.07 95.77 ↓0.34 
+
++ 1 Padding 14.33 10.91 ↑0.76 0.11 ↓14.70 24.42 ↓0.40 27.69 ↓2.22 0.24 ↓38.79 36.32 ↓3.91 10.16 83.28 ↓1.25 4.34 ↓82.30 92.83 ↓3.28 
+
+Random (3 seeds) 
+
+1.77 10.23 ↑0.08 14.72 ↓0.09 24.88 ↑0.06 29.74 ↓0.17 39.43 ↑0.40 40.28 ↑0.05 2.24 84.46 ↓0.07 86.51 ↓0.13 95.97 ↓0.14 
+
+4.94 9.75 ↓0.40 16.85 ↑2.04 24.63 ↓0.19 29.38 ↓0.53 39.18 ↑0.15 39.92 ↓0.31 4.23 84.35 ↓0.18 86.47 ↓0.17 95.38 ↓0.73 
+
+9.52 9.38 ↓0.77 13.26 ↓1.55 24.51 ↓0.31 29.15 ↓0.76 38.96 ↓0.07 39.27 ↓0.96 6.71 83.29 ↓1.24 85.71 ↓0.93 94.51 ↓1.60 
+
+2.59 10.12 ↓0.03 15.11 ↑0.30 24.68 ↓0.14 29.69 ↓0.22 39.52 ↑0.49 39.96 ↓0.27 3.26 84.22 ↓0.31 86.34 ↓0.30 95.85 ↓0.26 
+
+7.64 10.37 ↑0.22 14.38 ↓0.43 24.77 ↓0.05 29.26 ↓0.65 38.94 ↓0.09 39.54 ↓0.69 6.46 83.96 ↓0.57 84.68 ↓1.96 95.03 ↓1.08 
+
+14.33 9.51 ↓0.64 14.89 ↑0.08 24.47 ↓0.35 28.88 ↓1.03 38.71 ↓0.32 39.06 ↓1.17 10.16 83.64 ↓0.89 83.88 ↓2.76 95.12 ↓0.99 
+
+Table 1: Performance under token ablation. Baseline removes no token. Target and reference ablations replace visual tokens selected from the corresponding object masks with a global average visual embedding; padding variants shrink or dilate the object-token mask by one token. Token (%) is the average percentage of image tokens replaced. Loc-T (Target) and Loc-R (Reference) report localization accuracy averaged over IoU @0.5/0.7/0.9, and Rel. reports spatial relation accuracy. (a) Position Probe (b) X/Y Axis Position Probe (c) Logit Lens Accuracy Accuracy Accuracy Layer Layer Layer 
+
+Figure 3: Layer-wise positional decoding and logit lens. (a) Joint two-dimensional position-probe accuracy across the LLM decoder layers of LLaVA-1.5-7B, LLaVA-1.5-13B, and Qwen2.5-VL-7B. (b) Axis-specific position-probe accuracy. (c) Spatial-relation answer accuracy obtained at each layer by applying a training-free logit lens to the final prompt-token representation. Error bars and shaded regions denote the standard error across samples. 
+
+(ii) Random Tokens : As a control, we replace an equal number of randomly selected visual tokens for each object-aligned intervention. Results are averaged over three seeds. 
+
+Result. Table 1 shows that object-aligned tokens selec-tively support localization. Target-token ablation reduces Loc-T by 5.37, 27.90, and 64.93 points for LLaVA-7B, LLaVA-13B, and Qwen-7B, respectively, while reference-token ablation reduces Loc-R by 7.70, 36.70, and 61.07 points. Localization of the unablated object remains stable, and matched random removal causes substantially smaller changes. Yet relation accuracy drops by at most 1.32 points under the original masks despite large localization losses. Mask dilation increasingly impairs relation predic-tion, whereas erosion produces weaker localization effects. Thus, precise localization depends on object-internal evi-dence, while relation prediction remains robust until the in-tervention reaches the surrounding context. 
+
+Position Decoding 
+
+Token ablation shows relation prediction can survive the loss of evidence required for localization. We next ask whether this dissociation is reflected in when positional and relation information becomes identifiable across decoder depth. 
+
+Method. To evaluate positional identifiability, we train sep-arate linear classifiers at each decoder layer to predict the two-dimensional grid position of every image token. The horizontal (x) and vertical (y) coordinates are predicted in-dependently, and a joint prediction is correct only when both coordinates are recovered. The classifiers are trained for 10 epochs on 50,000 ImageNet images and evaluated on the What’s Up images. To trace when relation-specific informa-tion becomes accessible to the model’s output, we further employ the logit lens, a training-free method for interpreting intermediate activations (nostalgebraist 2020). At each layer, the final prompt-token representation is passed through the model’s final normalization and language-model head. We then compare the logits assigned to the answer options. 
+
+Results. Figure 3 reveals that positional information in-creases rapidly, peaking around layer 14 for LLaVA-7B, layer 12 for LLaVA-13B, and layer 10 for Qwen-7B before grad-ually declining. The axis-specific probes show consistent trends, confirming that both horizontal and vertical coor-dinates remain recoverable across substantial portions of the decoder. In contrast, the logit lens reveals markedly differ-Llava-1.5 13B Qwen2.5-VL 7B Figure 4: Performance after attention knockout. We block attention to object-aligned visual tokens within grouped decoder layers and across all layers. Lines and bars report localization and spatial-relation accuracy, respectively, under the Padding=0 (P0) and Padding=1 (P1) settings. Object-token knockout is compared with a size-matched random-token control. Solid and dash-dotted horizontal lines indicate the localization and spatial-relation accuracy of the unmodified model. ent answer-formation dynamics. Qwen2.5-VL remains near chance in early layers but rises sharply after layer 19, reach-ing approximately 97% accuracy at the final layer. LLaVA-7B remains near chance throughout, whereas LLaVA-13B im-proves gradually to approximately 40%. These results show that positional decodability alone does not guarantee correct spatial reasoning. The temporal separation between position recovery and answer emergence is consistent with a staged process in which spatial layouts are represented before being transformed into relation-specific decisions. 
+
+Attention Knockout 
+
+Layer-wise probes reveal when spatial information is acces-sible, but not whether later computations actually use it. We therefore investigate where the model extracts and processes object-grounded visual information. 
+
+Method. We apply attention knockout (Geva et al. 2023; Neo et al. 2025) to block attention from all post-image tokens to object-aligned visual tokens. This intervention prevents object information from being extracted within the selected layers. We group consecutive layers into groups of four and block all attention heads within each group. We also perform knockout across all layers as a global intervention. We mea-sure the resulting changes in localization and spatial-relation accuracy using our curated What’s UP subset. 
+
+Results. The results are shown in Figure 4. For LLaVA-1.5-13B, object-token knockout produces the largest localization decline in layers 16–19, while spatial-relation accuracy re-mains comparatively stable under most local interventions. Blocking attention across all layers reduces localization to nearly zero and lowers relation accuracy toward chance level. For Qwen2.5-VL-7B, localization is most sensitive to inter-ventions in layers 16–23. Spatial-relation accuracy is also affected by several early and middle layer groups. Global object-token knockout again produces the strongest degrada-tion in both tasks and is more disruptive than the matched random control. The similar trends under Padding = 0/1 indicate that these effects are not determined by a single choice of object-token boundaries. These results reveal only partial overlap between the layers supporting localization and spatial-relation prediction. Precise localization depends most strongly on specific intermediate layers, whereas re-lation prediction draws on information distributed across a broader processing range. Nevertheless, the global interven-tion shows that spatial reasoning still depends on information extracted from object-aligned tokens. This distinction moti-vates our subsequent head-level analysis of the pathways that transform object grounding into spatial decisions. 
+
+Causal Mediation Analysis 
+
+Attention-Knockout presents evidence that the mechanisms underlying localization and spatial reasoning are concen-trated within a narrow region of the language model’s pro-cessing pipeline. We therefore apply causal mediation anal-ysis (CMA) (Yang et al. 2025; Wang et al. 2023; Meng et al. 2022) using activation patching to identify which attention heads causally contribute to solving the visual task. 
+
+Method. For each model, we curate up to 50 source-base pairs. The source image contains the target object, while the base image removes it using LaMa inpainting (Figure 2). For each attention head, we patch its source prompt-token acti-vations into the corresponding base run. The counterfactual output measures whether the patched head restores informa-tion lost through object removal (Figure 5). All runs are evaluated under teacher forcing using mean token-level negative log-likelihood (NLL). We score only numerical coordinate tokens for localization and the ground-truth answer token for a binary spatial-relation query. Let 
+
+Lsrc , Lbase , and Lpatched denote the corresponding NLL values. We define the Mediation Fraction as 
+
+MF = Lbase − Lpatched 
+
+Lbase − Lsrc 
+
+. (7) MF measures the fraction of the source-base gap restored by the patched head. MF ≈ 1 indicates that the patched head recovers most of the source-base performance gap; MF 
+
+≈ 0 indicates little contribution, while MF < 0 indicates (a) Source Clean Run   
+
+> Is the book in front of the cap?
+> Visual Encoder (ViT) LLM Layers
+> P
+> Yes No
+> Logit
+> Is the book in front of the cap?
+> Visual Encoder (ViT) LLM Layers
+> P
+> Yes No
+> Logit
+> Is the book in front of the cap?
+> Visual Encoder (ViT) LLM Layers
+> P
+> Yes No
+> Logit
+> (b) Base Counterfactual Run (c) Patched Counterfactual Run Transformer Layer Attention Head Forward Passing Activation Patching
+
+Figure 5: Causal mediation via activation patching. We compare three model runs: (a) the source clean run, where the object is present and the model produces the correct answer; (b) the base counterfactual run, where the target object is removed and the model fails; and (c) the patched counterfactual run, where we transfer hidden activations from a selected attention head in the source run into the base run. Improvements in the patched prediction indicate that the transferred head carries task-relevant information. This procedure is repeated head-wise to quantify each head’s causal contribution. 
+
+Figure 6: Head-level causal mediation analysis. Mediation Fraction (MF) scores for every attention head across the decoder layers, shown separately for the localization and spatial reasoning tasks. misleading or interfering effects. To limit affirmative bias in the binary relation task, we retain only pairs where the source prediction is correct and object removal degrades the answer. This paired design ensures that NLL changes reflect the recovery of object-dependent relational evidence. 
+
+Results. Figure 6 reports head-level MF scores. Consis-tent with attention knockout, high-MF heads concentrate in the early–mid layers of LLaVA-1.5 and the mid-late layers of Qwen2.5-VL. In LLaVA-1.5-13B, both tasks show their strongest effects around layers 11-16, but rely on substantially different heads within this shared range. In Qwen2.5-VL-7B, localization effects are weaker and more dispersed, whereas relation mediation concentrates around layers 16-20. Most heads outside these regions have MF scores near zero. Mediation is sparse and largely task-specific. Among the top 10 heads, localization and relation prediction share only 3 heads in LLaVA-1.5-13B and 2 heads each in LLaVA-1.5-7B and Qwen2.5-VL-7B. The corresponding overlaps among the top 50 heads are only 3, 7, and 3. Thus, apparent overlap at the layer level masks substantial specialization at the head level. Negative MF values across all models further suggest that some isolated source activations are incompatible with the base-image computation and interfere with the correct prediction. Overall, localization and relation prediction reuse limited intermediate computation, but their dominant causal effects are mediated by largely distinct attention heads. 
+
+Head Ablation Analysis 
+
+CMA reveals a small number of attention heads with high MF scores per task. To determine whether these heads are necessary rather than merely correlated with performance, we progressively remove them in a cumulative ablation study. 
+
+Method. We rank attention heads separately by their mean MF for localization and spatial relations. As controls, low-importance heads have the smallest mean absolute MF, while negative heads have the lowest signed MF across both tasks. We progressively ablate a proportion of the total number of heads by setting their outputs to zero during the forward pass and evaluate localization and binary relation accuracy. Each pruning curve is summarized by normalized AUC (nAUC), where lower values indicate greater sensitivity. 
+
+Results. Figure 7 shows that removing task-important heads is substantially more damaging than removing low-importance heads. Localization declines fastest under the localization ranking, whereas relation accuracy is most sen-sitive to relation-important heads, confirming that CMA identifies functionally necessary components. Relation ac-curacy also drops strongly when localization-important heads are removed, indicating that both tasks reuse object-grounded intermediate representations despite limited head overlap. Ablating negative-MF heads produces gradual, model-dependent declines rather than consistent improve-ments. Negative mediation therefore reflects incompatibility (a) Localization Accuracy (b) Relation Accuracy Figure 7: Performance under cumulative ablation of attention heads. (a) Localization and (b) spatial-relation accuracy as increasing fractions of localization-important, relation-important, unimportant, and negative-MF heads are ablated. during isolated activation patching, not necessarily a harmful role during normal inference. Together with attention knock-out, these results support a staged mechanism in which shared object-grounded representations are transformed by largely specialized heads into precise locations or spatial decisions. 
+
+## Related Work 
+
+Spatial Reasoning in VLMs. Spatial reasoning has been evaluated from complementary perspectives. VSR examines a broad range of relations in natural images, while BLINK isolates perception-intensive abilities such as relative depth, visual correspondence, and multi-view reasoning (Fu et al. 2024). TopViewRS further separates object recognition, lo-calization, and relational inference in controlled top-view en-vironments (Li et al. 2024). Beyond evaluation, SpatialVLM introduces large-scale 3D supervision for qualitative and quantitative spatial reasoning (Chen et al. 2024), whereas SpatialRGPT incorporates region representations and depth cues to support grounded relational judgments (Cheng et al. 2024). These studies establish that spatial reasoning remains challenging and can benefit from explicit spatial supervi-sion. However, neither benchmark performance nor training gains determine whether a model must recover precise object locations before predicting a relation. 
+
+Explicit Grounding in Multimodal Models. A parallel line of work equips multimodal models with explicit object grounding. Kosmos-2 (Peng et al. 2023) and Shikra (Chen et al. 2023b) generate coordinates directly within the lan-guage sequence, while Ferret combines discrete coordinates with continuous region features to support multi-granularity referring and grounding (You et al. 2024). GPT4RoI (Zhang et al. 2025a) and PVIT (Chen et al. 2023a) inject region-level features into visual instructions. More recent systems extend grounding from bounding boxes to pixel-level masks through reasoning segmentation, grounded conversation, and multi-object segmentation (Lai et al. 2024; Rasheed et al. 2024; Ren et al. 2024; Zhang et al. 2024; Li et al. 2025c; Schaumlöffel, Vilas, and Roig 2026). Collectively, these methods show that precise localization can be learned, elicited, or decoded from VLM representations, but not that such precision is causally required for spatial reasoning, since grounding supervision and output interfaces are introduced jointly. 
+
+Mechanistic Analysis of Multimodal Computation. Re-cent interpretability studies have begun to trace how visual evidence is transformed inside VLMs. Attention-lens anal-ysis identifies distinct stages of visual enrichment and se-mantic refinement in intermediate layers (Jiang et al. 2025), while layer-wise information decomposition characterizes the transition from visual evidence to language-dominated predictions (Li et al. 2025c; Wu, Zhang, and Zhou 2026). Sparse feature analysis connects latent visual concepts to their downstream use in generated answers (Lim et al. 2026), and head-level interventions reveal that cross-modal retrieval can be concentrated in a small fraction of attention heads (Sun et al. 2026). These findings suggest that visual computation is both depth-dependent and functionally sparse. Most exist-ing analyses, however, only explain a single output behavior such as recognition, retrieval, or hallucination. 
+
+## Conclusion 
+
+Do VLMs really need object localization for spatial rea-soning? Our results provide a qualified answer: VLMs re-quire object grounding, but not precise localization. Spatial relations can survive severe localization failures, provided that coarse object-centered layout remains available. Thus, grounding is necessary evidence, but knowing exact object boundaries is not equivalent to knowing how objects relate. Whether this mechanism generalizes to crowded scenes, 3D relations, and temporal reasoning remains open. References 
+
+Bai, S.; Cai, Y.; Chen, R.; Chen, K.; Chen, X.; Cheng, Z.; Deng, L.; Ding, W.; Gao, C.; Ge, C.; et al. 2025a. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 .Bai, S.; Chen, K.; Liu, X.; Wang, J.; Ge, W.; Song, S.; Dang, K.; Wang, P.; Wang, S.; Tang, J.; Zhong, H.; Zhu, Y.; Yang, M.; Li, Z.; Wan, J.; Wang, P.; Ding, W.; Fu, Z.; Xu, Y.; Ye, J.; Zhang, X.; Xie, T.; Cheng, Z.; Zhang, H.; Yang, Z.; Xu, H.; and Lin, J. 2025b. Qwen2.5-VL Technical Report. arXiv:2502.13923. Bi, J.; Guo, J.; Tang, Y.; Wen, L. B.; Liu, Z.; Wang, B.; and Xu, C. 2025. Unveiling visual perception in language models: An attention head analysis approach. In Proceedings of the Computer Vision and Pattern Recognition Conference ,4135–4144. Bousselham, W.; Petersen, F.; Ferrari, V.; and Kuehne, H. 2024. Grounding everything: Emerging localization prop-erties in vision-language transformers. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 3828–3837. Chen, B.; Xu, Z.; Kirmani, S.; Ichter, B.; Sadigh, D.; Guibas, L.; and Xia, F. 2024. Spatialvlm: Endowing vision-language models with spatial reasoning capabilities. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 14455–14465. Chen, C.; Qin, R.; Luo, F.; Mi, X.; Li, P.; Sun, M.; and Liu, Y. 2023a. Position-enhanced visual instruction tun-ing for multimodal large language models. arXiv preprint arXiv:2308.13437 .Chen, K.; Zhang, Z.; Zeng, W.; Zhang, R.; Zhu, F.; and Zhao, R. 2023b. Shikra: Unleashing multimodal llm’s referential dialogue magic. arXiv preprint arXiv:2306.15195 .Chen, S.; Zhu, T.; Zhou, R.; Zhang, J.; Gao, S.; Niebles, J. C.; Geva, M.; He, J.; Wu, J.; and Li, M. 2025. Why is spatial reasoning hard for vlms? an attention mechanism perspective on focus areas. arXiv preprint arXiv:2503.01773 .Cheng, A.-C.; Yin, H.; Fu, Y.; Guo, Q.; Yang, R.; Kautz, J.; Wang, X.; and Liu, S. 2024. Spatialrgpt: Grounded spatial reasoning in vision-language models. Advances in Neural Information Processing Systems , 37: 135062–135093. Chu, X.; Su, J.; Zhang, B.; and Shen, C. 2024. Visionllama: A unified llama backbone for vision tasks. In European Conference on Computer Vision , 1–18. Springer. Comanici, G.; Bieber, E.; Schaekermann, M.; Pasupat, I.; Sachdeva, N.; Dhillon, I.; Blistein, M.; Ram, O.; Zhang, D.; Rosen, E.; et al. 2025. Gemini 2.5: Pushing the fron-tier with advanced reasoning, multimodality, long context, and next generation agentic capabilities. arXiv preprint arXiv:2507.06261 .Deng, J.; Dong, W.; Socher, R.; Li, L.-J.; Li, K.; and Fei-Fei, L. 2009. Imagenet: A large-scale hierarchical image database. In 2009 IEEE conference on computer vision and pattern recognition , 248–255. Ieee. Dorkenwald, M.; Barazani, N.; Snoek, C. G.; and Asano, Y. M. 2024. Pin: Positional insert unlocks object locali-sation abilities in vlms. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,13548–13558. Dosovitskiy, A.; Beyer, L.; Kolesnikov, A.; Weissenborn, D.; Zhai, X.; Unterthiner, T.; Dehghani, M.; Minderer, M.; Heigold, G.; Gelly, S.; et al. 2020. An image is worth 16x16 words: Transformers for image recognition at scale. arXiv preprint arXiv:2010.11929 .Fu, X.; Hu, Y.; Li, B.; Feng, Y.; Wang, H.; Lin, X.; Roth, D.; Smith, N. A.; Ma, W.-C.; and Krishna, R. 2024. Blink: Multi-modal large language models can see but not perceive. In Eu-ropean Conference on Computer Vision , 148–166. Springer. Geva, M.; Bastings, J.; Filippova, K.; and Globerson, A. 2023. Dissecting Recall of Factual Associations in Auto-Regressive Language Models. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Pro-cessing , 12216–12235. Huang, M.; Jiang, B.; Zheng, D.; Hu, H.; Han, K.; and Chen, X. 2025a. Positional Preservation Embedding for Multimodal Large Language Models. arXiv preprint arXiv:2510.22936 .Huang, R.; Ma, X.; Kong, R.; Yuan, Z.; and Zhang, P. 2025b. OMEGA: Optimized Multimodal Position Encoding Index Derivation with Global Adaptive Scaling for Vision-Language Models. arXiv preprint arXiv:2511.00821 .Jia, M.; Qi, Z.; Zhang, S.; Zhang, W.; Yu, X.; He, J.; Wang, H.; and Yi, L. 2025. Omnispatial: Towards comprehensive spatial reasoning benchmark for vision language models. 
+
+arXiv preprint arXiv:2506.03135 .Jiang, Z.; Chen, J.; Zhu, B.; Luo, T.; Shen, Y.; and Yang, X. 2025. Devils in middle layers of large vision-language models: Interpreting, detecting and mitigating object hallu-cinations via attention lens. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,25004–25014. Kamath, A.; Hessel, J.; and Chang, K.-W. 2023. What’s “up” with vision-language models? investigating their strug-gle with spatial reasoning. In Proceedings of the 2023 Con-ference on Empirical Methods in Natural Language Process-ing , 9161–9175. Kang, S.; Kim, J.; Kim, J.; and Hwang, S. J. 2025. Your large vision-language model only needs a few attention heads for visual grounding. In Proceedings of the Computer Vision and Pattern Recognition Conference , 9339–9350. Lai, X.; Tian, Z.; Chen, Y.; Li, Y.; Yuan, Y.; Liu, S.; and Jia, J. 2024. Lisa: Reasoning segmentation via large lan-guage model. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 9579–9589. Li, C.; Zhang, C.; Zhou, H.; Collier, N.; Korhonen, A.; and Vulić, I. 2024. Topviewrs: Vision-language models as top-view spatial reasoners. In Proceedings of the 2024 Confer-ence on Empirical Methods in Natural Language Processing ,1786–1807. Li, H.; Li, D.; Wang, Z.; Yan, Y.; Wu, H.; Zhang, W.; Shen, Y.; Lu, W.; Xiao, J.; and Zhuang, Y. 2025a. Spatialladder: Progressive training for spatial reasoning in vision-language models. arXiv preprint arXiv:2510.08531 .Li, R.; Li, L.; Ren, S.; Tian, H.; Gu, S.; Li, S.; Yue, Z.; Wang, Y.; Ma, W.; Yang, Z.; et al. 2026. Groundingme: Exposing the visual grounding gap in mllms through multi-dimensional evaluation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 2412–2422. Li, Y.; Wang, H.; Ding, X.; Wang, H.; and Li, X. 2025b. Token activation map to visually explain multimodal llms. In Proceedings of the IEEE/CVF International Conference on Computer Vision , 48–58. Li, Y.; Zhao, C.; Zang, Z.; Yuan, C.; and Wang, X. 2025c. Reading Images Like Texts: Sequential Image Un-derstanding in Vision-Language Models. arXiv preprint arXiv:2509.19191 .Lim, H.; Choi, J.; Kim, T.; Heo, B.; Choo, J.; and Han, D. 2026. VisualScratchpad: Inference-time Visual Con-cepts Analysis in Vision Language Models. arXiv preprint arXiv:2603.07335 .Liu, H.; Li, C.; Wu, Q.; and Lee, Y. J. 2023. Visual instruction tuning. Advances in neural information processing systems ,36: 34892–34916. Ma, C.; Jiang, Y.; Wu, J.; Yuan, Z.; and Qi, X. 2024. Groma: Localized visual tokenization for grounding mul-timodal large language models. In European Conference on Computer Vision , 417–435. Springer. Meng, K.; Bau, D.; Andonian, A.; and Belinkov, Y. 2022. Locating and editing factual associations in GPT. In Pro-ceedings of the 36th International Conference on Neural Information Processing Systems , NIPS ’22. Red Hook, NY, USA: Curran Associates Inc. ISBN 9781713871088. Neo, C.; Ong, L.; Torr, P.; et al. 2025. Towards Interpret-ing Visual Information Processing in Vision-Language Mod-els. In The Thirteenth International Conference on Learning Representations .nostalgebraist. 2020. Interpreting GPT: The Logit Lens. Peng, Z.; Wang, W.; Dong, L.; Hao, Y.; Huang, S.; Ma, S.; and Wei, F. 2023. Kosmos-2: Grounding Multimodal Large Language Models to the World. arXiv:2306.14824. Qiu, H.; Gao, P.; Lu, L.; Zhang, X.; Shao, L.; and Lu, S. 2025. Spatial Preference Rewarding for MLLMs Spatial Un-derstanding. In Proceedings of the IEEE/CVF International Conference on Computer Vision , 720–730. Ranasinghe, K.; Shukla, S. N.; Poursaeed, O.; Ryoo, M. S.; and Lin, T.-Y. 2024. Learning to localize objects im-proves spatial reasoning in visual-llms. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 12977–12987. Rasheed, H.; Maaz, M.; Shaji, S.; Shaker, A.; Khan, S.; Cholakkal, H.; Anwer, R. M.; Xing, E.; Yang, M.-H.; and Khan, F. S. 2024. Glamm: Pixel grounding large multimodal model. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 13009–13018. Ren, X.; Wang, Z.; Hou, L.; Tang, P.; Wang, G.; and Ma, C. 2026. Grounding everything in tokens for multimodal large language models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition ,41171–41181. Ren, Z.; Huang, Z.; Wei, Y.; Zhao, Y.; Fu, D.; Feng, J.; and Jin, X. 2024. Pixellm: Pixel reasoning with large multimodal model. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 26374–26383. Schaumlöffel, T.; Vilas, M. G.; and Roig, G. 2026. Mech-anisms of Object Localization in Vision-Language Models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 31356–31365. Su, J.; Ahmed, M.; Lu, Y.; Pan, S.; Bo, W.; and Liu, Y. 2024. Roformer: Enhanced transformer with rotary position embedding. Neurocomputing , 568: 127063. Sun, R.; Qiu, Q.; Li, J.; Tang, Z.; Lou, Y.; and Zhang, M. 2026. Mechanistic Insights into Functional Sparsity in Multimodal LLMs via CoRe Heads. arXiv preprint arXiv:2606.05843 .Suvorov, R.; Logacheva, E.; Mashikhin, A.; Remizova, A.; Ashukha, A.; Silvestrov, A.; Kong, N.; Goka, H.; Park, K.; and Lempitsky, V. 2022. Resolution-robust large mask in-painting with fourier convolutions. In Proceedings of the IEEE/CVF winter conference on applications of computer vision , 2149–2159. Tong, S.; Liu, Z.; Zhai, Y.; Ma, Y.; LeCun, Y.; and Xie, S. 2024. Eyes wide shut? exploring the visual shortcomings of multimodal llms. In Proceedings of the IEEE/CVF con-ference on computer vision and pattern recognition , 9568– 9578. Wang, K. R.; Variengien, A.; Conmy, A.; Shlegeris, B.; and Steinhardt, J. 2023. Interpretability in the Wild: a Circuit for Indirect Object Identification in GPT-2 Small. In The Eleventh International Conference on Learning Representa-tions .Wu, H.; Zhang, Y.; and Zhou, X. 2026. How Vision Becomes Language: A Layer-wise Information-Theoretic Analysis of Multimodal Reasoning. arXiv preprint arXiv:2602.15580 .Yang, Y.; Campbell, D.; Huang, K.; Wang, M.; Cohen, J.; and Webb, T. 2025. Emergent Symbolic Mechanisms Support Abstract Reasoning in Large Language Models. Proceedings of Machine Learning Research , 267: 70515–70549. You, H.; Zhang, H.; Gan, Z.; Du, X.; Zhang, B.; Wang, Z.; Cao, L.; Chang, S.-F.; and Yang, Y. 2024. Ferret: Refer and ground anything anywhere at any granularity. In Inter-national Conference on Learning Representations , volume 2024, 57153–57180. Zhang, S.; Sun, P.; Chen, S.; Xiao, M.; Shao, W.; Zhang, W.; Liu, Y.; Chen, K.; and Luo, P. 2025a. GPT4RoI: Instruc-tion Tuning Large Language Model on Region-of-Interest. arXiv:2307.03601. Zhang, Y.; Ma, Z.; Gao, X.; Shakiah, S.; Gao, Q.; and Chai, J. 2024. Groundhog: Grounding large language models to holistic segmentation. In Proceedings of the IEEE/CVF con-ference on computer vision and pattern recognition , 14227– 14238. Zhang, Z.; Yadav, S.; Han, F.; and Shutova, E. 2025b. Cross-modal information flow in multimodal large language mod-els. In Proceedings of the Computer Vision and Pattern Recognition Conference , 19781–19791.

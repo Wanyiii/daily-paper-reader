@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-26</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-28</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 0 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 51 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>38</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-26 22:59:35 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-28 04:51:14 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日无新推荐，系统未产出可展示论文。</p>
+<p>今日精读聚焦单图3D场景生成与动态场景视觉语言推理，共完成38篇精读、13篇速读。最值得关注的是满分论文《SceneReGen》实现单图高质量3D重建，以及《CL4D》为动态场景多模态理解提供新范式。后续可优先体验这两个方向的代码与演示，并留意速读中跨模态定位和LiDAR配准的实用进展。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">0 篇</strong>
+    <strong class="dpr-home-dashboard-count">38 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="SceneReGen: Generative Reconstruction of 3D Scenes from a Single Image">SceneReGen: Generative Reconstruction of 3D Scenes from a Single Image</span></li><li><span class="dpr-home-dashboard-paper-title" title="CL4D: Contrastive Language-4D Pretraining for Vision-Language Reasoning in Dynamic Scenes">CL4D: Contrastive Language-4D Pretraining for Vision-Language Reasoning in Dynamic Scenes</span></li><li><span class="dpr-home-dashboard-paper-title" title="USR-Drive: Unified Driving Scene Representation via Joint Denoising of 3D Gaussians and Boxes">USR-Drive: Unified Driving Scene Representation via Joint Denoising of 3D Gaussians and Boxes</span></li></ul>
   </div>
-
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>19</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>14</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>5</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -84,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">0 篇</strong>
+    <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="DynCur-Geo: Dynamic Curiosity Reward Shaping for Multimodal Active Geo-Localization">DynCur-Geo: Dynamic Curiosity Reward Shaping for Multimodal Active Geo-Localization</span></li><li><span class="dpr-home-dashboard-paper-title" title="LT-Mem: Volatility-Aware Spatio-Temporal Memory for Lifelong Scene Understanding">LT-Mem: Volatility-Aware Spatio-Temporal Memory for Lifelong Scene Understanding</span></li><li><span class="dpr-home-dashboard-paper-title" title="CVSD-Reg: Cross-Modal Visual Semantic Prior Distillation for Robust LiDAR Registration">CVSD-Reg: Cross-Modal Visual Semantic Prior Distillation for Robust LiDAR Registration</span></li></ul>
   </div>
-
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>10</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>2</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
 </section>
 </div>
 
