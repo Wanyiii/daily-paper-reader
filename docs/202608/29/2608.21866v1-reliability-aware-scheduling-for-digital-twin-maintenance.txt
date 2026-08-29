@@ -1,0 +1,687 @@
+Title: Reliability-Aware Scheduling for Digital Twin Maintenance
+
+URL Source: https://arxiv.org/pdf/2608.21866v1
+
+Published Time: Tue, 25 Aug 2026 00:31:48 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# Reliability-Aware Scheduling for Digital Twin Maintenance 
+
+Milica Jankov, Carlo Fischione 
+
+School of Electrical Engineering and Computer Science, KTH Royal Institute of Technology, Stockholm, Sweden Email: {milicaj, carlofi }@kth.se 
+
+Abstract —In Industrial Internet of Things systems, learning-enabled Digital Twins (DTs) support remote monitoring by using data reported by distributed devices to maintain digital representations of physical processes. When uplink resources are limited, a base station cannot collect new observations from every device at every communication slot and must decide which devices should transmit. This decision becomes challenging when the physical process changes after the DT models have already been trained. In such cases, recent observations alone may not keep the DT accurate, because the learned model may no longer match the underlying process. This paper studies how to schedule observation requests so that the DT maintained at the base station remains close to the true physical process. We define the Ensemble Disagreement Indicator (EDI) as an uncertainty measure computed at the base station from the spread among estimates produced by independently trained DT predictors. Building on EDI, we propose R-VoU, a reliability-aware value-of-update scheduler that prioritizes the observations expected to most improve the DT by reducing a cost based on uncertainty and predicted DT error. The DT is further adjusted online using the difference between received observations and current predictions. Experiments on process manufacturing data show that, under limited communication budgets, R-VoU achieves the lowest combined cost and DT estimation error among the compared schedulers that use only information available before each scheduling decision. 
+
+Index Terms —Digital twins, value of update, pull scheduling, concept drift, online adaptation, Industrial Internet of Things 
+
+I. I NTRODUCTION 
+
+Industrial Internet of Things (IIoT) systems increasingly rely on learning-enabled Digital Twins (DTs) for remote mon-itoring, anomaly detection, and control. The setting considered here involves learning-enabled receiver-side DTs maintained at a base station (BS). Each DT uses intermittently received measurements to estimate and track the state of an evolving physical process [1], [2]. In resource-constrained uplink net-works, the BS cannot receive fresh measurements from all devices continuously. We therefore consider a pull-based update scheme, in which the BS requests observations from selected devices under a per-slot communication budget [3], [4]. The resulting scheduling question is which devices should be pulled so that the BS-maintained DTs remain reliable , i.e., accurate and synchronized with the physical process [5]. This question becomes more difficult under concept drift ,which refers to deployment-time changes in operating con-
+
+> This project has received funding from the European Union’s Horizon Europe programme under grant agreement No. 101137954. The authors would like to thank the BATTwin consortium for supporting this research.
+
+ditions or process regimes that make models trained on historical data less aligned with the current physical pro-cess [6]. Under concept drift, temporal freshness alone is not enough to guarantee DT reliability. Even a recently updated DT may be inaccurate if its predictor is mismatched to the current operating regime. This issue is especially relevant in industrial process manufacturing, where limited communica-tion opportunities must support accurate state tracking under changing process conditions [1]. Existing freshness metrics and related scheduling methods provide useful baselines for reliability, but they do not fully capture the failure mode induced by concept drift. Age of Information, Age of Incorrect Information, Query Age of Information, and Value of Information methods rank updates according to elapsed time, mismatch, query relevance, or expected utility [3], [7]–[9]. However, under concept drift, reducing receiver-side uncertainty and reducing receiver-side DT error are related but not identical reliability objectives. To clarify the reliability objective, we distinguish between receiver-side epistemic uncertainty and receiver-side DT error. Epistemic uncertainty refers to uncertainty about the learned DT model itself [10]. It arises when the current prediction is not well supported by the available training data, for example when concept drift moves the process to an operating regime that was weakly represented during training. To capture this uncertainty, we define the Ensemble Disagreement Indicator (EDI) from the disagreement among independently trained ensemble predictors, following the deep ensemble approach [11].We will show that EDI is observable at the BS because it is computed solely from receiver-side DT states and does not require the latent physical state. Receiver-side DT error is defined separately as the mis-match between the DT estimate and the true physical state, and thus directly quantifies tracking accuracy. Because the true physical state monitored by the devices is not available to the scheduler at runtime, this error is latent and must be predicted from BS-observable information. Thus, EDI provides a BS-observable uncertainty signal, whereas DT error is the latent reliability target. The main contribution of this paper is the design of R-VoU, a novel reliability-aware uplink pull scheduler for receiver-side DT maintenance under concept drift. Under a one-step predictive formulation, R-VoU allocates pull opportunities to the devices expected to provide the largest positive reductions arXiv:2608.21866v1 [cs.NI] 22 Aug 2026 Fig. 1. Pull-maintenance architecture. At each slot, the BS pulls up to K
+
+> devices. The received observations refresh the selected receiver-side DTs and provide prediction residuals for online correction.
+
+in DT reliability cost. The second contribution formulates the reliability model by defining EDI as a BS-observable uncertainty signal from DT ensemble disagreement, distin-guishing it from latent DT error, and using pull residuals for online correction. The third contribution investigates the design and analysis of the learned scheduling rule. We train action-conditioned predictors for next-slot EDI and DT error risk, derive a closed-form rule for selecting up to K devices, establish a selection-loss bound, and validate the method on process manufacturing data. II. S YSTEM MODEL AND PULL -S CHEDULING PROBLEM 
+
+We consider a centralized time-slotted pull-maintenance system with one base station (BS) and N devices. This system model follows pull-based freshness and status-update models, where a receiver or controller requests updates from selected devices under limited communication opportunities [3], [4], [12]. The BS maintains one receiver-side DT per device and can successfully receive fresh observations from at most K
+
+devices per slot. In each slot, the BS schedules the devices to pull; devices that are not scheduled do not transmit. We abstract communication through successful receptions and focus on allocating the limited pull opportunities so that the receiver-side DTs remain reliable under concept drift. Fig. 1 summarizes the architecture. Pulled observations refresh the selected DTs and reveal prediction residuals, defined as the differences between received observations and current DT predictions. These residuals update a shared online correction module that helps the receiver-side DTs adapt under concept drift. 
+
+A. Receiver-Side DT with Online Correction 
+
+We consider a time-slotted system indexed by t ∈ Z≥0.The device set is N = {1, . . . , N }. For each device n ∈ N ,let Xn(t) ∈ Rd denote the latent physical state at slot t,where d is the dimension of the per-device state. This state is not directly available at the BS. The BS therefore maintains a receiver-side DT estimate and receives information about 
+
+Xn(t) only through noisy observations obtained from suc-cessful pulls. We model each device as evolving under a latent operating regime En(t). Changes in En(t) correspond to the concept drift setting introduced in Section I. The state evolves according to 
+
+Xn(t + 1) = fn
+
+ Xn(t); En(t) + Wn(t), (1) where fn(·; En(t)) : Rd → Rd is the state transition map of device n under regime En(t). The map is not restricted to be linear, and Wn(t) ∈ Rd is zero-mean process noise. When device n is successfully pulled at slot t, the BS receives the observation 
+
+Yn(t) = Xn(t) + Vn(t), (2) where Vn(t) is zero-mean measurement noise. We denote the successful pull event by un(t) = 1 . If un(t) = 0 , then no fresh observation from device n is received at slot t.For each device n, the BS stores M pretrained base predictors {Gθ(m)
+
+> n
+
+: Rd → Rd}Mm=1 , where m indexes the ensemble member. The parameters θ(m) 
+
+> n
+
+are trained offline and kept fixed during deployment. Since the ensemble members are trained independently, their disagreement can be used as a BS-side measure of epistemic uncertainty, i.e., uncertainty about the learned DT model [10]. To adapt the frozen base predictors under concept drift, we introduce an online correction module based on recursive least squares (RLS) [13], which sequentially estimates the linear correction parameters from received residual samples. Let qn(t) ∈ Rp denote a BS-observable adaptation context for device n. For ensemble member m, the correction is 
+
+Cϕ(m)
+
+> t
+
+(qn(t)) = W (m)
+
+> t
+> ⊤
+
+qn(t), ϕ(m) 
+
+> t
+
+= ( W (m) 
+
+> t
+
+, P (m) 
+
+> t
+
+),
+
+(3) where W (m) 
+
+> t
+
+∈ Rp×d is the RLS coefficient matrix and P (m)
+
+> t
+
+is the RLS covariance matrix. The coefficient matrix W (m)
+
+> t
+
+is shared across devices for the same ensemble member m.The correction remains device-dependent through the context 
+
+qn(t).Let ˜X(m) 
+
+> n
+
+(t + 1) denote the base prediction before applying the online correction, and let ˆX(m) 
+
+> n
+
+(t+1) denote the corrected receiver-side DT estimate. The base prediction is updated as 
+
+˜X(m) 
+
+> n
+
+(t + 1) = 
+
+(Gθ(m)
+
+> n
+
+ Yn(t), un(t) = 1 ,Gθ(m)
+
+> n
+
+  ˆX(m) 
+
+> n
+
+(t), un(t) = 0 . (4) Thus, the base prediction uses the newly received observation when un(t) = 1 and the previous corrected DT estimate when 
+
+un(t) = 0 . The corrected estimate is then given by 
+
+ˆX(m) 
+
+> n
+
+(t + 1) = ˜X(m) 
+
+> n
+
+(t + 1) + Cϕ(m)
+
+> t
+
+ qn(t). (5) A pulled observation also provides information for online adaptation. Let ˜X(m) 
+
+> n
+
+(t) denote stored pre-correction base estimate for the current slot, obtained by the recursion in (4) at the previous update. When device n is pulled, we define the base-residual target 
+
+b(m) 
+
+> n
+
+(t) ≜ Yn(t) − ˜X(m) 
+
+> n
+
+(t). (6) This residual is the additive correction that would make the current base prediction match the received observation. For each ensemble member m, the adaptation batch at slot t
+
+contains one pair (qn(t), b (m) 
+
+> n
+
+(t)) for every successfully pulled device: B(m) 
+
+> t
+
+≜ (qn(t), b (m) 
+
+> n
+
+(t)) : un(t) = 1 . (7) The RLS state is updated according to 
+
+ϕ(m) 
+
+> t+1
+
+= A(m)RLS 
+
+ ϕ(m) 
+
+> t
+
+, B(m)
+
+> t
+
+, (8) where A(m)RLS denotes the standard RLS update operator ap-plied to the pulled batch [13]. If no device is pulled at slot 
+
+t, then B(m) 
+
+> t
+
+= ∅ and ϕ(m) 
+
+> t+1
+
+= ϕ(m) 
+
+> t
+
+. Because the RLS coefficient matrix W (m) 
+
+> t
+
+is shared across devices for each ensemble member m, a base-residual target obtained from one pulled device can update this shared coefficient matrix and thereby affect future corrections for other devices with related contexts. The ensemble-mean receiver-side DT estimate is 
+
+¯Xn(t) ≜ 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+ˆX(m) 
+
+> n
+
+(t). (9) We define the Ensemble Disagreement Indicator (EDI) as the average per-component sample variance of the corrected DT ensemble, 
+
+In(t) ≜ 1
+
+d(M − 1) 
+
+> M
+
+X
+
+> m=1
+
+ˆX(m) 
+
+> n
+
+(t) − ¯Xn(t) 22
+
+. (10) Because In(t) depends only on receiver-side DT states, it is observable at the BS and provides a causal uncertainty signal. Larger values indicate stronger ensemble disagreement and hence greater epistemic uncertainty. Under model mismatch, EDI may increase during passive propagation and decrease after informative receptions. Tracking accuracy is described by a separate metric. We define the receiver-side DT error as the mismatch between the ensemble-mean estimate and the latent physical state, 
+
+en(t) ≜ 1
+
+d ¯Xn(t) − Xn(t) 2 . (11) This error depends on Xn(t), which is not available to the BS during runtime. Hence, en(t) is not directly observable by the scheduler. In offline experiments with recorded trajectories, the reference physical state is used to compute en(t) for training labels and evaluation. Thus, EDI provides a BS-observable uncertainty signal, whereas DT error is the latent reliability target that must be inferred from the information available at the BS. 
+
+B. Reliability-Aware Pull-Scheduling Objective 
+
+At the beginning of each slot t, the BS decides which devices to pull before receiving any new observations. Let 
+
+u(t) ≜ (u1(t), . . . , u N (t)) ∈ { 0, 1}N denote the slot-t pull-decision vector. Under the successful-reception abstraction, 
+
+un(t) = 1 means that device n is pulled and its observation is received by the BS during slot t. If un(t) = 0 , no fresh observation from device n is received in that slot. The BS can receive observations from at most K devices per slot, where K ∈ { 0, . . . , N }. Hence, the feasible action set is 
+
+UK ≜
+
+(
+
+u ∈ { 0, 1}N :
+
+> N
+
+X
+
+> n=1
+
+un ≤ K
+
+)
+
+. (12) We also define the set of pulled devices as 
+
+St ≜ {n ∈ N : un(t) = 1 }.
+
+After the BS selects St, it receives {Yn(t) : n ∈ St}.These observations refresh the selected receiver-side DT states through (4) and (5). They also provide residual targets for the RLS adaptation batches in (7). Devices that are not pulled evolve through the skip branch of (4) and provide no new residual information in that slot. The scheduling decision is causal. Thus, u(t) must be chosen using only information available at the BS before any observations are received during slot t. Let I(t) ≜
+
+(I1(t), . . . , I N (t)) collect the current EDI values across de-vices. Let Mt ≜ {ϕ(m) 
+
+> t
+
+}Mm=1 denote the current RLS cor-rection state, and let Dres  
+
+> t
+
+denote the residual information obtained from previous pulls. The dynamic scheduler infor-mation is 
+
+Ht ≜
+
+
+
+{I(τ )}τ ≤t, {u(τ )}τ <t , Dres  
+
+> t
+
+, Mt
+
+
+
+. (13) The receiver-side DT error vector e(t) ≜ (e1(t), . . . , e N (t)) is not included in Ht, because it depends on the latent physical states and is not available to the runtime scheduler. The scheduler is also provided with fixed device metadata. For each device n, let ξn ∈ Rr denote metadata that is known before scheduling and does not change over time, and let ωn >
+
+0 denote the reliability priority weight of the device. A causal pull-scheduling policy is a sequence π = {πt}t≥0 such that 
+
+πt :  Ht, {ξn}Nn=1 , {ωn}Nn=1 
+
+ 7 → u(t) ∈ U K .
+
+Thus, the policy uses the history of EDI values, past pull decisions, residual history, the current RLS correction state, and fixed device metadata. It cannot use the latent DT error vector e(t).Since EDI and DT error have different scales, we normalize them using training-set constants sI > 0 and se > 0, fixed during evaluation. For a design parameter α ∈ [0 , 1] , the per-device reliability cost is 
+
+Jn(t) ≜ ωn
+
+
+
+α In(t)
+
+sI
+
++ (1 − α) en(t)
+
+se
+
+
+
+. (14) The parameter α balances EDI and DT error: α = 1 yields an EDI-only objective, while α = 0 gives an objective based only on DT error. We propose the following reliability-aware pull-scheduling problem: 
+
+min  
+
+> π
+
+lim sup  
+
+> T→∞
+
+1
+
+T
+
+> T
+
+X
+
+> t=1
+
+Eπ
+
+" NX
+
+> n=1
+
+Jn(t)
+
+#
+
+, (15) where the expectation is taken over the process noise, mea-surement noise, latent regime evolution, and any randomiza-tion in the policy. Problem (15) provides an ideal objective, but it does not directly yield a causal scheduling policy for the BS. Its direct solution would require modeling the controlled evolution of 
+
+In(t), en(t), and Mt under pull decisions, skipped updates, online RLS adaptation, and concept drift. Moreover, en(t) is not observable by the BS during deployment. We therefore cannot solve the ideal problem directly. Instead, Section III in-vestigates a learned one-step prediction model that estimates, from BS-observable information, the next-slot EDI and DT error risk under skip and pull actions. These estimates are then used to compute the predicted reliability-cost reduction of each pull decision. III. R ELIABILITY -A WARE PREDICTIVE PULL SCHEDULING 
+
+In this section, we introduce R-VoU, a reliability-aware value-of-update scheduler based on learned one-step predic-tions. Offline, R-VoU learns action-conditioned predictors for next-slot EDI and DT error risk from BS-observable features, whereas online, the BS evaluates each device under the skip and pull actions using the current context. The predictions are combined into a reliability cost, and the BS selects up to K
+
+devices with the largest positive predicted cost reductions. 
+
+A. Prediction Under Skip and Pull Actions 
+
+For each device n, let 
+
+zn(t) = ψn(Ht, ξ n) (16) denote the scheduling feature vector available before the slot-t pull decision. It is constructed from BS-observable information Ht and the fixed device metadata ξn. The latent DT error en(t) is not included. To train the action-conditioned predictors, we use a local hypothetical action index a ∈ { 0, 1}, distinct from the realized scheduling variable un(t). The index a defines the skip (a =0) and pull (a = 1) branches used to construct prediction targets, while un(t) denotes the actual pull decision made by the BS at slot t. For each training pair (n, t ), we define the next-slot prediction target as 
+
+y(a) 
+
+> n,t
+
+≜
+
+"
+
+y(a)
+
+> I,n,t
+
+y(a)
+
+> e,n,t
+
+#
+
+=
+
+Ian(t + 1) 
+
+ean(t + 1) 
+
+
+
+, a ∈ { 0, 1}. (17) The superscript a denotes the next-slot outcome obtained under the corresponding hypothetical branch. During training only, the recorded trajectories are used to construct targets for both actions, skip and pull, using the same DT recursion and, when needed, the same RLS update as at runtime. In the pull branch, the received observation is used to form the base-residual target Yn(t) − ˜X(m) 
+
+> n
+
+(t). In the skip branch, no new residual target is formed for device n.At runtime, the scheduler does not observe the targets in (17). It only uses predictors trained from them. 
+
+B. Shared Linear Prediction Heads 
+
+R-VoU uses shared prediction heads across devices. Let 
+
+˜zn(t) = [1 , z n(t)⊤]⊤
+
+be the feature vector augmented with an intercept term. For each action a ∈ { 0, 1}, the predicted EDI and DT error risk at slot t + 1 are 
+
+byan(t + 1) ≜
+
+bIan(t + 1) 
+
+bean(t + 1) 
+
+
+
+= B⊤ 
+
+> a
+
+˜zn(t). (18) Here, Ba is the coefficient matrix of the prediction head for action a. Its two columns are denoted by βI,a and βe,a , which map the feature vector ˜zn(t) to the EDI prediction and the DT error risk prediction, respectively. Let Ttr denote the set of device-slot pairs used for training. For each action a ∈ { 0, 1}, where a = 0 denotes skip and a =1 denotes pull, the corresponding prediction head is learned by weighted multi-output ridge regression [14]. The output-weighting matrix is Γ = diag(1 , μ e), where μe controls the relative weight of the DT error target: 
+
+bBa ∈ arg min 
+
+> Ba
+
+X
+
+> (n,t )∈T tr
+
+Γ1/2 B⊤ 
+
+> a
+
+˜zn(t) − y(a)
+
+> n,t
+
+ 22
+
++ λreg ∥Ba∥2 
+
+> F
+
+.
+
+(19) Here, λreg controls the ℓ2 regularization. All features are standardized using training-set statistics. Since EDI and DT error are nonnegative quantities, negative predictions are set to zero before computing reliability costs. The priority weight 
+
+ωn is not used by the prediction heads and enters only through the reliability cost. 
+
+C. Reliability-Aware Value of Update 
+
+The action-conditioned predictions are converted into a predicted reliability cost using the same normalization as in (14). For device n and action a ∈ { 0, 1},
+
+bJ an (t + 1) ≜ ωn
+
+"
+
+α bIan(t + 1) 
+
+sI
+
++ (1 − α) bean(t + 1) 
+
+se
+
+#
+
+. (20) Here, a = 0 denotes skip and a = 1 pull, while α ∈ [0 , 1] 
+
+balances predicted uncertainty and DT error risk. The reliability-aware value of update is defined as the predicted cost reduction obtained by pulling the device rather than skipping it: 
+
+bV rel  
+
+> n
+
+(t) ≜ bJ 0 
+
+> n
+
+(t + 1) − bJ 1 
+
+> n
+
+(t + 1) . (21) Thus, a positive value indicates that pulling device n is pre-dicted to reduce the next-slot reliability cost. The uncertainty-only predictive ablation is obtained by setting α = 1 ; we denote this ablation by EDI-VoU. 
+
+D. Top-K-Positive Rule and Selection-Loss Bound 
+
+Given the predicted costs, R-VoU solves the following one-step predictive scheduling problem: 
+
+min 
+
+> u(t)∈U K
+> N
+
+X
+
+> n=1
+
+h
+
+(1 − un(t)) bJ 0 
+
+> n
+
+(t + 1) + un(t) bJ 1 
+
+> n
+
+(t + 1) 
+
+i
+
+.
+
+(22) For the ranking step, we define the reliability score of device 
+
+n at slot t as sn(t) ≜ bV rel  
+
+> n
+
+(t).
+
+Thus, sn(t) is the predicted reduction in reliability cost obtained by pulling device n rather than skipping it. For any vector x = ( x1, . . . , x N ), we define TopK +(x) as the set of indices corresponding to the largest strictly positive entries of 
+
+x, up to the budget K. Equivalently, 
+
+TopK +(x) ∈ arg max   
+
+> S⊆N ,|S|≤ K
+
+X
+
+> n∈S
+
+xn,
+
+with the convention that entries with xn ≤ 0 are not selected. Therefore, TopK + returns K devices only when at least K
+
+entries of x are positive. 
+
+Lemma 1 (Top-K positive selection rule) . Let 
+
+bSt = TopK +(s(t)) , s(t) = ( s1(t), . . . , s N (t)) .
+
+Define the binary decision vector u⋆(t) by u⋆n(t) = 1{n ∈ bSt}, n = 1 , . . . , N. 
+
+Then u⋆(t) is an optimal solution of (22) . The pull set induced by this decision is bSt. Hence, the scheduler pulls up to K
+
+devices and pulls exactly K devices only when at least K
+
+devices have positive reliability scores. Proof sketch. Substituting (21) into (22) removes terms in-dependent of u(t), so the problem becomes maximizing PNn=1 un(t)sn(t) subject to P 
+
+> n
+
+un(t) ≤ K. Thus, the rule sets un(t) = 1 for the devices with the largest positive scores, up to the budget K, and sets the remaining entries to zero. □
+
+Because sn(t) is computed from the predicted reduction in the composite reliability cost, it generalizes uncertainty-only scheduling. Two devices with similar predicted EDI reduction can be ranked differently if their predicted DT error risk reductions differ. We next give a current-slot guarantee that connects selection quality to reliability-score prediction accuracy. Let V⋆n(t)
+
+be a reference reliability value for device n, and define 
+
+V⋆(t) ≜ (V⋆ 
+
+> 1
+
+(t), . . . , V⋆N (t)) . Using TopK +, we define two selected sets: S⋆t is the set selected by the reference reliability values, and bSt is the set selected by R-VoU using the learned reliability scores: 
+
+S⋆t = TopK +(V⋆(t)) , bSt = TopK +(s(t)) .
+
+The selection loss incurred by using the learned scores is 
+
+Lsel ,⋆ t ≜ X
+
+> n∈S⋆t
+
+V⋆n(t) − X 
+
+> n∈bSt
+
+V⋆n(t). (23) 
+
+Proposition 2 (Prediction-error selection-loss bound) . Sup-pose that the learned reliability scores satisfy 
+
+|sn(t) − V ⋆n(t)| ≤ εn(t), n = 1 , . . . , N. 
+
+Then 
+
+0 ≤ L sel ,⋆ t ≤ X
+
+> n∈S⋆t
+
+εn(t) + X 
+
+> n∈bSt
+
+εn(t) ≤ 2Kε max (t), (24) 
+
+where εmax (t) = max n εn(t).Proof sketch. The nonnegativity follows because S⋆t maxi-mizes the reference score. Adding and subtracting the learned scores in (23), and using P  
+
+> n∈bSt
+
+sn(t) ≥ P
+
+> n∈S⋆t
+
+sn(t), which follows from bSt = TopK +(s(t)) , leaves only the prediction errors on S⋆t and bSt. Bounding these errors by εn(t) gives the first inequality in (24); the last inequality follows from 
+
+|S⋆t |, | bSt| ≤ K. □
+
+Proposition 2 shows that the quality of the current-slot selection depends on how accurately the learned reliability scores approximate the reference values: if these score errors are small, then the loss relative to the reference selection is also small and is bounded by 2Kε max (t). A useful choice for the reference value is the true one-step reliability value 
+
+V⋆n(t) = J 0,⋆ n (t + 1) − J 1,⋆ n (t + 1) , (25) where J a,⋆ n (t + 1) is the reliability cost under the reference next-slot outcome for action a.
+
+E. Runtime Policy 
+
+At runtime, the prediction heads are fixed, while the RLS correction state Mt = {ϕ(m) 
+
+> t
+
+}Mm=1 continues to evolve from 
+
+Algorithm 1 Runtime R-VoU at Slot t                                                                        
+
+> Require: Ht,Mt, K, α, s I, s e,{ωn, ξ n}Nn=1 , learned heads bB
+> 1: for n= 1 , . . . , N do
+> 2: zn(t)←ψn(Ht, ξ n)
+> 3: Compute bJ0
+> n(t+ 1) and bJ1
+> n(t+ 1) using (18)–(20)
+> 4: sn(t)←bJ0
+> n(t+ 1) −bJ1
+> n(t+ 1)
+> 5: end for
+> 6: St←TopK +(s(t))
+> 7: Pull {Yn(t) : n∈St}and set un(t) = 1{n∈St}
+> 8: For all m, form B(m)
+> t← { (qn(t), Y n(t)−˜X(m)
+> n(t)) : n∈St}
+> 9: Update all DT states using (4)–(5) with u(t)and Mt
+> 10: For all m, update ϕ(m)
+> t+1 ← A (m)RLS (ϕ(m)
+> t,B(m)
+> t)
+> 11: Mt+1 ← { ϕ(m)
+> t+1 }Mm=1
+
+the observations received through successful pulls. Algo-rithm 1 summarizes the causal R-VoU policy. For fixed feature dimension, score computation is O(N ),and selecting St by sorting costs O(N log N ). The correction state Mt is used during slot t, while the updated state Mt+1 
+
+is used from the next slot onward. IV. N UMERICAL EVALUATION 
+
+We evaluate R-VoU using recorded measurements from a battery production process, which serves as a representative example of IIoT process monitoring. In such settings, dis-tributed sensing tracks the evolution of a physical process, while communication constraints limit how many observations can be collected at each slot. Each sampled location is represented by a scalar state, so d = 1 . The monitored spatial profile is modeled by N = 10 uniformly sampled positions, where ξn is the normalized distance of position n to the nearest profile boundary. Boundary positions receive larger priority weights. A stable segment X1 is used to pre-train the device-level ensemble predictors, while a later segment X2
+
+is used for evaluation under concept drift. Unless otherwise stated, each device uses M = 5 base predictors and the shared online correction module. We compare R-VoU with weighted Age of Information (wAoI), EDI-VoU, and round-robin (RR) under budgets K ∈{1, 2, 3, 4}. EDI-VoU is the uncertainty-only ablation obtained by setting α = 1 , while R-VoU uses α = 0 .3. To enable a comparison with Age of Incorrect Information (AoII), which combines information mismatch with the time spent in an incorrect state [8], we include AoII † as a noncausal refer-ence. In our DT setting, such mismatch is the instantaneous error between the receiver-side DT estimate and the recorded reference state. AoII † prioritizes devices using this mismatch together with the time elapsed since the last successful pull. Since the recorded reference trajectory is not available to the BS before scheduling during deployment, AoII † is not a causal runtime scheduler. The predictive heads are trained on a prefix of 40% of X2
+
+and evaluated on a disjoint suffix. The feature vector zn(t)
+
+contains only pre-decision BS-observable features: EDI, edge-position weights, past residual summaries, covariance uncer-tainty, and local coupling terms. We report measured EDI JI ,receiver-side DT error Je, and the composite reliability cost 
+
+JJ .Fig. 2. Representative position under concept drift. During a passive interval, EDI increases with DT error; after a successful reception, EDI drops sharply. 
+
+A. EDI as a DT-Reliability Signal under Concept Drift 
+
+We first evaluate whether EDI is associated with receiver-side DT error using passive slots, i.e., slots without a success-ful pull for the considered position. Pooling 2805 passive slots gives a positive Spearman correlation ρ = 0 .3265 . The pooled mean DT error increases from 0.710 μm in the lowest EDI quintile to 3.540 μm in the highest, corresponding to a 4.99 ×
+
+increase. Fig. 2 further illustrates that EDI rises during a no-reception drift interval and drops after a successful update. These results motivate combining EDI with predicted DT error in R-VoU. 
+
+B. Reliability-Aware Pull Scheduling 
+
+Table I reports the scheduling results. Among the causal schedulers, R-VoU achieves the lowest receiver-side DT error 
+
+Je and the lowest composite reliability cost JJ across all evaluated budgets. Its gains over the strongest causal baseline reach up to 5.5% in Je and 2.1% in JJ . The policy that minimizes measured EDI JI varies across budgets, which further shows that EDI alone is not equivalent to receiver-side DT reliability. The noncausal AoII † benchmark achieves the lowest Je by using recorded DT error computed before scheduling, which is unavailable to the BS at runtime. In contrast, R-VoU uses only BS-observable information, remains close to AoII † at larger budgets, and achieves the lowest JJ at K = 4 .The online correction module further improves receiver-side DT reliability. At K = 3 , enabling RLS correction reduces 
+
+Je and JJ by 55 .9% and 28 .4% , respectively, relative to the same R-VoU policy without correction. V. C ONCLUSION 
+
+This paper studied reliability-aware pull scheduling for receiver-side DT maintenance under limited uplink resources and concept drift. We defined EDI as a BS-observable uncer-tainty signal from ensemble disagreement and distinguished it from receiver-side DT error, which is latent at runtime. This distinction motivated R-VoU, a value-of-update scheduler that predicts next-slot EDI and DT error risk and pulls devices according to the predicted reduction in composite reliability 
+
+TABLE I SCHEDULING PERFORMANCE FOR N = 10 ACROSS BUDGETS 
+
+K ∈ { 1, 2, 3, 4}.                                                                      
+
+> K= 1 K= 2
+> Metric wAoI RR EDI-VoU R-VoU AoII †wAoI RR EDI-VoU R-VoU AoII †
+> JI2.64 4.10 3.44 3.72 3.48 3.12 3.85 5.93 4.00 4.11
+> Je 82.93 100.88 85.62 78.38 76.25 75.89 84.25 117.78 73.62 67.67
+> JJ101.43 128.15 108.68 100.70 97.69 94.86 88.37 125.36 86.52 74.35
+> K= 3 K= 4
+> Metric wAoI RR EDI-VoU R-VoU AoII †wAoI RR EDI-VoU R-VoU AoII †
+> JI3.57 8.28 10.17 2.75 4.20 4.36 6.50 2.05 3.06 3.29
+> Je 69.13 84.81 99.19 66.14 64.98 66.18 76.96 65.67 64.13 63.74
+> JJ110.28 152.60 180.42 108.69 108.48 109.22 133.83 103.87 101.89 102.26
+> †
+
+Noncausal benchmark using the recorded source–receiver mismatch. 
+
+cost. Experiments on recorded process manufacturing data showed that EDI is positively associated with DT error, but is not sufficient as a standalone reliability objective. Across the evaluated budgets, R-VoU achieved the lowest composite reliability cost and receiver-side DT error among the causal schedulers. The online correction module further improved reliability through residual-based adaptation. Future work will study richer DT error risk predictors and longer-horizon scheduling policies. REFERENCES [1] F. Tao, H. Zhang, A. Liu, and A. Y. C. Nee, “Digital twin in industry: State-of-the-art,” IEEE Transactions on Industrial Informatics , vol. 15, no. 4, pp. 2405–2415, 2019. [2] M. Kountouris and N. Pappas, “Semantics-empowered communication for networked intelligent systems,” IEEE Communications Magazine ,vol. 59, no. 6, pp. 96–102, 2021. [3] F. Chiariotti, J. Holm, A. E. Kalør, B. Soret, S. K. Jensen, T. B. Pedersen, and P. Popovski, “Query age of information: Freshness in pull-based communication,” IEEE Transactions on Communications ,vol. 70, no. 3, pp. 1606–1622, 2022. [4] P. Agheli, N. Pappas, P. Popovski, and M. Kountouris, “Effective com-munication: When to pull updates?” in ICC 2024 - IEEE International Conference on Communications , 2024, pp. 183–188. [5] N. Zhang, R. Bahsoon, N. Tziritas, and G. Theodoropoulos, “Knowl-edge equivalence in digital twins of intelligent systems,” ACM Trans. Model. Comput. Simul. , vol. 34, no. 1, Jan. 2024. [6] J. Lu, A. Liu, F. Dong, F. Gu, J. Gama, and G. Zhang, “Learning under concept drift: A review,” IEEE Transactions on Knowledge and Data Engineering , vol. 31, no. 12, pp. 2346–2363, 2019. [7] Y. Sun, I. Kadota, R. Talak, and E. Modiano, Age of information: A new metric for information freshness . Springer Nature, 2022. [8] A. Maatouk, S. Kriouile, M. Assaad, and A. Ephremides, “The age of incorrect information: A new performance metric for status updates,” 
+
+IEEE/ACM Transactions on Networking , vol. 28, no. 5, pp. 2215–2228, 2020. [9] A. Molin, H. Esen, and K. Johansson, “Scheduling networked state estimators based on value of information,” Automatica , vol. 110, p. 108578, 2019. [10] E. H¨ ullermeier and W. Waegeman, “Aleatoric and epistemic uncertainty in machine learning: an introduction to concepts and methods,” Machine Learning , vol. 110, no. 3, p. 457–506, 2021. [11] B. Lakshminarayanan, A. Pritzel, and C. Blundell, “Simple and scalable predictive uncertainty estimation using deep ensembles,” in Proceedings of the 31st International Conference on Neural Information Processing Systems , 2017, p. 6405–6416. [12] S. Kriouile and M. Assaad, “When to pull data from sensors for minimum age of incorrect information,” in 2023 21st International Symposium on Modeling and Optimization in Mobile, Ad Hoc, and Wireless Networks (WiOpt) , 2023, pp. 603–610. [13] A. Sayed and T. Kailath, “A state-space approach to adaptive rls filtering,” IEEE Signal Processing Magazine , vol. 11, no. 3, pp. 18– 60, 1994. [14] A. E. Hoerl and R. W. Kennard, “Ridge regression: biased estimation for nonorthogonal problems,” Technometrics , vol. 42, no. 1, p. 80–86, 2000.

@@ -1,0 +1,565 @@
+Title: OccluRank: Controllable Occlusion-Aware Layout-to-Image Generation by Adding Just an Ordinal Rank
+
+URL Source: https://arxiv.org/pdf/2608.20932v1
+
+Published Time: Mon, 24 Aug 2026 00:38:52 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# OccluRank: Controllable Occlusion-Aware Layout-to-Image Generation by Adding Just an Ordinal Rank 
+
+## Wenyang Hong 1∗, Yuan Wang 2∗, Yanbin Hao 1†, Lanqing Xue 3, Ke Wang 4,Xiang Wang 5, Kuien Liu 1,6 , Richang Hong 1
+
+> 1
+
+Hefei University of Technology 
+
+> 2
+
+School of Cyber Science and Technology, University of Science and Technology of China 
+
+> 3
+
+LCFC 
+
+> 4
+
+ByteDance Inc. 
+
+> 5
+
+School of Artificial Intelligence and Data Science, University of Science and Technology of China 
+
+> 6
+
+Institute of Software, Chinese Academy of Sciences haoyanbin@hfut.edu.cn 
+
+Abstract 
+
+Layout-to-image generation enables explicit spatial control through bounding-box layouts, yet bounding boxes specify only instance locations and cannot represent their occlusion order. Existing methods may rely on additional geometric con-ditions, employ complex inference procedures, or aggregate independently constructed instance representations without explicitly modeling their occlusion-dependent interactions. We propose OccluRank , a simple and controllable occlusion-aware layout-to-image framework that augments each bound-ing box with only one ordinal rank. OccluRank encodes the user-specified occlusion order through lightweight rank-based conditioning and introduces an Order-aware Instance In-teraction (OII) module to jointly update rank-conditioned instance representations before aggregation. This allows the specified order to guide information exchange among occlud-ing instances without additional geometric inputs or special-ized inference-time optimization. We further construct Occlu-Layout , a synthetic training dataset whose occlusion order and amodal annotations are derived directly from known scene ge-ometry rather than estimated from partially occluded images using auxiliary prediction models. For comprehensive eval-uation, we introduce OccluLayout-Bench , which uses mul-tiple multimodal large language model evaluators to assess instance presence, spatial layout, attributes, and occlusion or-der, together with FID for overall image quality. Experiments show that OccluRank more reliably preserves target instances, follows specified layouts, and realizes desired occlusion rela-tionships while maintaining comparable attribute consistency and overall image quality. 
+
+Code — https://github.com/Wenyang-hong/OccluRank 
+
+## 1 Introduction 
+
+Recent advances in layout-to-image generation (Wang et al. 2025; Peng et al. 2025; Zhang et al. 2025b; Wu et al. 2025; Dahary et al. 2024) have enabled precise control over object 
+
+> ∗
+
+These authors contributed equally. 
+
+> †
+
+Corresponding author. 
+
+placement and instance-level semantics through bounding-box layouts, supporting applications such as advertising de-sign, content creation, and scene editing (Li et al. 2023; Zheng et al. 2023; Xie et al. 2023; Zhao et al. 2023; Xiang et al. 2025). However, bounding-box layouts remain insuffi-cient for scenes involving object occlusion, such as crowded scenes, human-object interactions, and layered compositions. This limitation arises because bounding boxes specify only the spatial extent of each instance, without indicating its oc-clusion order relative to others. Consequently, existing meth-ods may produce incorrect occlusion relationships, merged objects, or attribute confusion (Agrawal et al. 2026; Liang et al. 2025). We refer to the task of jointly controlling ob-ject layouts and their occlusion order as occlusion-aware layout-to-image generation .This task poses two key challenges. (1) Occlusion-dependent instance interaction: Existing methods (Zhang et al. 2025b; Xiang et al. 2025) improve object localization, instance–attribute binding, and semantic separation, but pri-marily isolate instance semantics rather than explicitly mod-eling their interactions under occlusion. IFAdapter (Wu et al. 2025) provides a natural basis for this task by independently constructing instance representations and combining them through gated semantic aggregation. However, this mecha-nism mainly regulates the contribution of each instance rep-resentation without explicitly modeling occlusion-dependent interactions, which may lead to ambiguous layering, miss-ing instances, or cross-instance feature mixing, as shown in Figure 1(a). (2) Simple and controllable order specification: 
+
+Effective interaction also requires explicit guidance on which instance should appear in front. However, IFAdapter is ag-nostic to user-specified occlusion order, leaving the resulting arrangement to the model’s generative prior and thus limit-ing controllability. Recent methods introduce explicit order information through complex conditions or order-dependent inference mechanisms (Agrawal et al. 2026; Yang et al. 2025; Liang et al. 2025). Methods based on complex conditions re-quire additional inputs. SeeThrough3D, as exemplified in Figure 1(b), further requires scene parameters and prepro-arXiv:2608.20932v1 [cs.CV] 21 Aug 2026 IFAdapter  Ours                               
+
+> Front
+> Gated Fusion
+> SeeThrough3D Ours
+> Front
+> Order -aware Instance
+> Interaction (OII)
+> Order -aware Instance
+> Interaction (OII)
+> OSCR (3D boxes \colors \camera view) Masks
+> scooter
+> bed
+> motorcycle
+> (a) (b)
+> Input :2DLayout Input :2D Layout +order Input : 3D layout + camera + masks Input :2D Layout + order
+> 1234123
+> Multimodal Diffusion Interaction
+> Order -agnostic ✓Order -specific !Complex conditions ✓Simple conditions
+> Back Back
+> !
+
+Figure 1: Comparison with representative occlusion-control approaches. (a) IFAdapter is order-agnostic and cannot re-liably produce the desired occlusion order, whereas Occlu-Rank uses ordinal ranks and OII for explicit order control. (b) SeeThrough3D requires more complex geometric condi-tions, including an Occlusion-Aware Scene Representation (OSCR) and instance masks, whereas OccluRank assigns only one ordinal rank to each instance. cessing, whereas inference-based methods rely on staged de-noising and iterative latent optimization, resulting in a more involved and computationally demanding inference proce-dure. Therefore, incorporating user-specified occlusion order through a simple condition compatible with standard layout-to-image generation remains an open challenge. To address these challenges, we introduce OccluRank ,a controllable occlusion-aware layout-to-image framework that augments each bounding box with only one ordinal rank. OccluRank combines lightweight rank-based order condi-tioning with an Order-aware Instance Interaction (OII) 
+
+module to support user-specified occlusion order and model interactions among occluding instances. Specifically, each instance is assigned an ordinal rank according to the user-specified occlusion order, in addition to the conventional global prompt, instance description, and bounding box. The rank is encoded as a learnable embedding and injected into the corresponding instance representation, enabling explicit order control without additional complex geometric inputs. OII then models occlusion-dependent interactions before fea-ture aggregation. For each latent position covered by multi-ple instance bounding boxes, it organizes the corresponding rank-conditioned features as instance tokens and jointly up-dates them using an instance-wise Transformer. This allows the specified order to guide information exchange among oc-cluding instances. As shown in Figure 1, OccluRank better preserves the involved instances and more faithfully follows the specified occlusion order. Beyond model design, effective training and evaluation require reliable occlusion supervision and detailed instance-level annotations. Existing public datasets either lack fine-grained instance descriptions (Agrawal et al. 2026) or rely on auxiliary models to infer occlusion order and complete object geometry from partially occluded images (Li and Ding 2026). Because the latter properties are not directly observ-able, the inferred annotations may contain errors in occlusion relationships or hidden object regions. We therefore construct 
+
+OccluLayout from controllable 3D scenes whose geometry, object arrangement, and camera parameters are known be-fore rendering. This enables occlusion order, amodal bound-ing boxes, and amodal masks to be derived directly from the complete scene geometry, together with fine-grained de-scriptions for each instance. We further introduce OccluLayout-Bench for compre-hensive evaluation. Unlike existing protocols that mainly as-sess occlusion order and may overlook missing, misplaced, or incorrectly rendered instances, OccluLayout-Bench eval-uates five complementary aspects: instance presence with 
+
+Presence , spatial layout adherence with bounding-box mean Intersection over Union (Box mIoU) , attribute con-sistency with Color and Texture , occlusion-order adherence with Strict Pair and Strict Image , and overall image quality with Fréchet Inception Distance (FID) (Heusel et al. 2017). Multiple multimodal large language models (MLLMs) inde-pendently evaluate instance presence, localization, attributes, and occlusion relations to assess robustness across evaluator choices, while FID is computed using the standard protocol. Experiments with three MLLM evaluators show that Oc-cluRank more reliably preserves target instances, follows the specified layouts, and realizes the desired occlusion re-lationships under substantial occlusion, while maintaining comparable attribute consistency and overall image quality. Our main contributions are summarized as follows: 
+
+• We propose OccluRank , a simple occlusion-aware layout-to-image framework that enables controllable oc-clusion order by adding only one ordinal rank to each bounding box. Its OII module further models occlusion-dependent interactions among instance representations. Experiments show that OccluRank better preserves target instances, follows specified layouts, and realizes desired occlusion orders while maintaining comparable attribute consistency and image quality. 
+
+• We construct OccluLayout , a synthetic training dataset whose occlusion order and amodal annotations are de-rived directly from controllable scene geometry rather than estimated by auxiliary models. It also provides fine-grained descriptions for individual instances. 
+
+• We introduce OccluLayout-Bench , which goes beyond order-only evaluation by jointly assessing instance pres-ence, spatial layout, attributes, occlusion order, and image quality. Evaluations with multiple MLLMs further verify the robustness of the results across evaluator choices. 
+
+## 2 Related Work 
+
+Layout-to-Image Generation. Layout-to-image genera-tion introduces explicit spatial conditions into diffusion mod-els to control object placement and instance-level seman-tics. LayoutDiffusion (Zheng et al. 2023) and GLIGEN (Li et al. 2023) inject bounding-box layouts through dedicated conditioning or attention layers. MS-Diffusion (Wang et al. 2025), MUSE (Peng et al. 2025), and CreatiLayout (Zhang et al. 2025b) further incorporate instance-level features or regional descriptions for fine-grained multi-object con-trol, while InstanceAssemble (Xiang et al. 2025) improves layout-aware instance modeling through specialized atten-tion. Training-free approaches such as BoxDiff (Xie et al. 2023), LoCo (Zhao et al. 2023), and Bounded Attention (Da-hary et al. 2024) instead impose bounding-box constraints by manipulating attention during inference. IFAdapter (Wu et al. 2025), which provides the instance-conditioning pathway adopted in our framework, independently constructs spatially aligned maps for individual instances and aggregates overlap-ping maps using location-dependent scalar gates. While ef-fective for spatial grounding, this mechanism only reweights independently constructed features and does not incorporate a user-specified visibility order or model order-conditioned interactions among overlapping instances. 
+
+Occlusion-Aware Layout-to-Image Generation. Recent occlusion-aware methods can be grouped into four categories according to how they incorporate visibility order. First, order-dependent inference methods modify the denoising process. For instance, VODiff (Liang et al. 2025) combines sequential denoising with visibility-order-aware attention op-timization, LayerBind (Chen et al. 2026) constructs and fuses instance branches according to the desired layer order, and DepthArb (Niu et al. 2026) resolves overlapping attention competition through depth-aware arbitration. These methods provide training-free control but require sequential branches or iterative attention and latent manipulation beyond stan-dard sampling. Second, geometry-conditioned methods such as SeeThrough3D (Agrawal et al. 2026) render translucent 3D bounding boxes from a specified viewpoint, providing explicit cues about hidden regions and camera geometry at the cost of richer 3D inputs. Third, methods based on multi-ple control inputs, such as DC-ControlNet (Yang et al. 2025), combine point, box, or mask layouts with additional condi-tions and use spatial and layer reweighting to merge multiple objects according to a specified order. Fourth, rendering-based methods establish foreground priority by compositing decoupled instance representations. LaRender (Zhan and Liu 2025) uses transmittance-weighted latent rendering, while OcclusionFormer (Li and Ding 2026) learns density, opacity, and transmittance for Z-order-aware volumetric composition with additional amodal mask supervision. 
+
+Occlusion-Aware Dataset and Evaluation. Occlusion-aware generation requires reliable order and amodal supervi-sion. COCOA (Zhu et al. 2017) and InstaOrder (Lee and Park 2022) provide manually annotated amodal regions or pair-wise occlusion and depth relations, but inherit COCO’s low resolution and closed-set vocabulary and lack fine-grained instance descriptions. Recent high-resolution layout datasets provide open-vocabulary regional descriptions (Zhang et al. 2025a,b; Li et al. 2025), but do not jointly contain geometry-derived occlusion order and amodal annotations. SA-Z (Li and Ding 2026) obtains such annotations using auxiliary prediction models, whereas SeeThrough3D (Agrawal et al. 2026) derives visibility order from controllable 3D scenes but provides only category-level descriptions. In contrast, our OccluLayout derives order and amodal annotations di-rectly from complete scene geometry, while OccluLayout-Bench jointly evaluates instance presence, layout, attributes, occlusion order, and image quality. 
+
+## 3 Method 
+
+3.1 Overview and Problem Formulation 
+
+We build OccluRank upon a pretrained Stable Diffusion XL (SDXL) model (Podell et al. 2024), retaining its standard denoising pipeline while keeping the pretrained diffusion backbone frozen. OccluRank augments each instance con-dition with a single ordinal rank that specifies its intended position in a user-defined front-to-back occlusion order. Given a global prompt y, the ordered layout condition is defined as 
+
+C = {(bi, ℓ i, r i)}Oi=1 , {ri}Oi=1 = {1, . . . , O } , (1) where O denotes the number of instances, ℓi is the descrip-tion of instance i, and bi = ( x0 
+
+> i
+
+, y 0 
+
+> i
+
+, x 1 
+
+> i
+
+, y 1 
+
+> i
+
+) is its 2D amodal bounding box. The ordinal rank ri specifies the position of in-stance i in the front-to-back occlusion order, with a smaller value indicating a more foreground position. For any pair of overlapping instances, ri < r j indicates that instance i
+
+should appear in front of and occlude instance j. The ranks encode relative visibility order rather than metric depth. The objective is to generate an image that follows the global prompt, places each instance within its specified box, pre-serves its described attributes, and satisfies the rank-induced occlusion relations. As illustrated in Figure 2, OccluRank follows an 
+
+interaction-before-aggregation pipeline. The layout en-coder and masked instance cross-attention adopted from IFAdapter (Wu et al. 2025) first construct a spatially aligned feature map for each instance independently. Rather than di-rectly aggregating these maps, OccluRank keeps them sepa-rated and injects the corresponding rank embeddings. At each latent location, the rank-conditioned features of all covering instances are organized along the instance dimension and jointly updated by the Order-aware Instance Interaction 
+
+(OII ) module. The updated features are subsequently aggre-gated into an Instance Semantic Map (ISM) and residually injected into selected cross-attention layers of SDXL. 
+
+3.2 Per-Instance Feature Construction 
+
+Before modeling occlusion relationships, we first construct an instance-specific feature representation that preserves both the semantic content and spatial support of each condition. Following IFAdapter (Wu et al. 2025), this construction is performed independently for different instances, preventing their semantic information from being mixed before the sub-sequent order-aware interaction. These conditions are inte-grated into a compact sequence of layout tokens: 
+
+Ti = Φ layout (bi, ℓ i) ∈ RLT ×C , (2) where LT and C denote the number and feature dimension of the layout tokens, respectively. Having obtained the layout tokens, we next integrate each instance condition into the current image representa-tion through an instance-specific cross-attention pathway. Let H ∈ RN ×C denote the current image features, where Rank       
+
+> Emb.
+> 1
+> 2
+> 3
+> Feature Maps
+> Mask At Location P: μp
+> Front Back
+> Ordinal Rank
+> Conditioning
+> Location-wise Cross-instance Interaction
+> 110
+> Feature At Location p
+> (3) Aggregation
+> Instance Semantic Map
+> ∑
+> CA
+> CA
+> CA
+> Updated Features
+> Layout Enc.
+> Layout
+> Tokens Ti
+> Masked
+> Cross -Attn.
+> Latent
+> Features H
+
+1. Ordered Instance Conditions           
+
+> Front
+> Back
+> l1:A cream-colored
+> motorcycle ...
+> b1:[236, 357, 559, 797]
+> 1 motor-
+> cycle
+> 2 bookshelf
+> 3
+> bed
+> l2:A white metal bookshelf ...
+> b₂:[172, 125, 644, 646]
+> l3:A woven wicker bed ...
+> b3:[308, 403, 773, 581]
+> Global Prompt y
+> Example Layout
+> Ordered Instances
+> 𝒞 = 𝐛 𝑖 , ℓ 𝑖 , 𝑟 𝑖 𝑖=1
+> 𝑂
+> A motorcycle, a
+> bookshelf .... 𝐃 OII
+
+3. Training Objective                                
+
+> Ground Truth Image
+> (a) Global Denoising Loss
+> Clean Latent z₀
+> Add Noise (ϵ,t)OccluRank
+> Noisy Latent zt
+> Predicted Noise ϵθ
+> True Noise ϵ
+> ℒglobal = 𝔼 𝑧 𝑡 ,𝑡,𝜖∼𝒩 0,𝐼 𝜖 − 𝜖 𝜃 𝑧 𝑡 , 𝑡, 𝑦, 𝒞 22
+> (b) Local Denoising Loss
+> Foreground Union Mask Mfg
+> 𝜖 − 𝜖 𝜃 2Llocal
+> ℒlocal = 𝔼 𝑧 𝑡 ,𝑡,𝜖∼𝒩 0,𝐼
+> σ𝑝,𝑐 𝑀 fg 𝑝 Δ 𝜃 𝑝, 𝑐
+> 𝐶 σ 𝑝 𝑀 fg 𝑝 + 𝛿
+> Δ𝜃 𝑝, 𝑐 =𝜖 𝑝, 𝑐 − 𝜖 𝜃 𝑧 𝑡 , 𝑡, 𝑦, 𝒞 𝑝, 𝑐 2
+> SDXL Denoising U-Net
+> VAE Decoder
+> Generated Image
+> Transformer
+> Validity Mask
+> (1) Instance Feature Construction (2) Order-aware Instance Interaction
+> VAE Encoder
+> Noisy Latent
+> Q
+> K V
+> K V
+> K V
+
+2. Model Pipeline 
+
+ℒ = ℒ global + 𝜆ℒ local  
+
+> Foreground Union Mask Mfg
+
+Figure 2: Overview of OccluRank. OccluRank constructs spatially aligned instance features, incorporates ordinal rank embed-dings, and performs location-wise cross-instance interaction before aggregating into an Instance Semantic Map (ISM). The masked ISM is residually injected into selected cross-attention layers of SDXL. 
+
+N is the number of latent spatial locations. For each instance 
+
+i, the image features provide the queries, while its layout tokens Ti provide the keys and values. The corresponding spatially aligned feature map is computed by the Masked-Attention (Cheng et al. 2022), that is 
+
+Fi = MaskAttn ( HW Q, TiWK , TiWV ; Mi) . (3) Here, Mi is an additive spatial attention mask derived from the bounding box of instance i. Let Ω( bi) denote the set of latent locations covered by bi. Mi(p, q ∈ { 1, · · · , L T }) = 0 
+
+if p ∈ Ω( bi), and −∞ otherwise. 
+
+3.3 Order-aware Instance Interaction 
+
+The feature maps {Fi}Oi=1 preserve the semantics and spatial support of individual instances. However, they remain inde-pendent even when multiple bounding boxes cover the same latent location. Directly aggregating these features would collapse the instance dimension before their occlusion-dependent relationships are modeled, making it difficult to resolve semantic competition and visibility order afterward. OII addresses this aggregation bottleneck by first introduc-ing the prescribed ordinal ranks, then allowing overlapping instance features to interact while they remain separated, and finally aggregating the updated representations. 
+
+Ordinal rank conditioning. We maintain a learnable rank-embedding table Erank ∈ ROmax ×C , where Omax is the maximum supported number of instances. The ordinal rank 
+
+ri is encoded as eri = Erank [ri], and the rank-conditioned feature is defined as 
+
+Xi(p) = μi(p) ( Fi(p) + eri ) , (4) where μi(p) = 1 indicates that instance i covers latent lo-cation p. The rank embedding is broadcast over all valid lo-cations of the instance, providing a consistent front-to-back role while setting features outside its bounding box to zero. 
+
+Location-wise cross-instance interaction. The central operation of OII is performed along the instance dimension rather than the spatial dimension. At each latent location p,we organize all instance slots into a sequence: 
+
+Xp = [ X1(p); . . . ; XO (p)] . (5) The rows of Xp represent different instances at the same spatial location, rather than different spatial tokens. OII applies a Transformer block (Vaswani et al. 2017) along the instance dimension: 
+
+eXp = TransformerBlock  Xp; μp
+
+ . (6) Here, μp = [ μ1(p), . . . , μ O (p)] serves as the attention va-lidity mask, and locations not covered by any instance are skipped. Through self-attention, each valid instance token receives a vector-valued update conditioned on the semantic content and ordinal roles of the other valid instances at the same location. Consequently, an instance feature can adapt its representation according to which objects compete with it and which of them should appear in front. Unlike reweighting-based aggregation, OII directly up-dates instance representations before fusion. IFAdapter uses scalar gates to adjust independently constructed features, whereas DC-ControlNet (Yang et al. 2025) employs or-dered cross-element Transformers to predict spatial and layer weights for reweighting the original element features. OII in-stead retains eXp as the updated representation for subsequent aggregation, allowing each feature channel to adapt to the contents and ordinal roles of the other overlapping instances. Thus, the prescribed order affects the high-dimensional con-tent of each instance representation rather than only its con-tribution to the aggregated feature. 
+
+Interaction-aware aggregation and injection. After in-teraction, the updated tokens are restored to their instance and spatial positions and aggregated into an Instance Se-mantic Map (ISM): 
+
+DOII (p) = 
+
+> O
+
+X
+
+> i=1
+
+μi(p) eXi(p). (7) Although the ISM is formed by summation, each contributing feature has already incorporated the ranks and contents of the other covering instances. The aggregation therefore preserves order-aware interactions without predicting density, opacity, or rendering weights. To restrict the ISM to the layout-conditioned regions, we inject the resulting signal by a gated residual connection: 
+
+H′ = H + γMfg ⊙ DOII , γ = s tanh( α), (8) where Mfg (p) = I
+
+hPOi=1 μi(p) > 0
+
+i
+
+∈ { 0, 1}N ×1 denotes the union mask of all instance regions, ⊙ denotes element-wise multiplication, s is the adapter scale, and α is learnable. 
+
+3.4 Training Objective and Inference 
+
+We initialize OccluRank from a pretrained SDXL model. The trainable components include the layout-conditioning pathway, ordinal rank embeddings, OII blocks, and resid-ual injection parameters. Following the standard diffusion training objective (Ho, Jain, and Abbeel 2020), the global denoising loss is defined as 
+
+Lglobal = Ezt,t,ϵ ∼N (0 ,I )
+
+h
+
+∥ϵ − ϵθ (zt, t, y, C)∥22
+
+i
+
+, (9) where ϵθ denotes the noise-prediction network with trainable OccluRank parameters θ, zt is the noisy latent at diffusion timestep t, and ϵ is the Gaussian noise used to construct zt.The global objective distributes denoising supervision over the entire latent and may underemphasize the small regions occupied by the requested instances, including the overlap boundaries where their visibility order is expressed. We therefore introduce a region-focused denoising objective: 
+
+Llocal = Ezt,t,ϵ ∼N (0 ,I )
+
+" P  
+
+> p,c
+
+Mfg (p)∆ θ (p, c )
+
+C P 
+
+> p
+
+Mfg (p) + δ
+
+#
+
+, (10) where ∆θ (p, c ) = (ϵ(p, c ) − ϵθ (zt, t, y, C)( p, c )) 2 (c ∈{1, · · · , C }) is the element-wise denoising error and δ is a small constant for numerical stability. By normalizing the denoising error over the box-union region, this objective pro-vides stronger supervision for instance structures and occlu-sion boundaries. The complete objective is 
+
+L = Lglobal + λLlocal , (11) where λ balances global image generation and region-focused denoising. Automated 3D Scene Generation   
+
+> Front
+> Back
+> Amodal Masks & Order
+> Rendered Image
+> Amodal Boxes
+> FLUX.2 [klein] 4B
+> Edited Image
+> MLLM
+> Validation: Valid ✓
+> Global: A motorcycle, a bookshelf,
+> and a bed ...
+> Instances:
+> 1: A cream-colored motorcycle ...
+> 2: A white metal bookshelf ...
+> 3: A woven wicker bed ...
+> Global & Instance Descriptions
+
+Figure 3: Overview of the OccluLayout construction. At inference time, the user provides a global prompt to-gether with an ordered list of instance descriptions and 2D amodal bounding boxes. At each denoising step, Oc-cluRank constructs the per-instance feature maps, performs rank-conditioned interaction through OII, and injects the re-sulting ISM into the selected SDXL layers. The remaining generation process follows standard SDXL sampling. Thus, OccluRank enables explicit occlusion control using only one ordinal rank per instance, without externally supplied masks, depth maps, camera parameters, or 3D conditions. 
+
+## 4 Dataset and Benchmark Construction 
+
+4.1 OccluLayout Dataset 
+
+Reliable occlusion-aware generation requires training data that jointly provide instance-level descriptions, amodal spa-tial annotations, and explicit front-to-back order. Existing datasets do not fully satisfy these requirements. COCO-based resources such as COCOA (Zhu et al. 2017) and In-staOrder (Lee and Park 2022) are limited by low-resolution images, class-level labels, and manual annotations. Re-cent high-resolution datasets provide open-vocabulary re-gional descriptions but generally lack explicit occlusion or-der or amodal geometry. SA-Z (Li and Ding 2026) ob-tains these annotations through auxiliary prediction, whereas SeeThrough3D (Agrawal et al. 2026) derives order from geometry but provides only class-level descriptions and no instance-level amodal annotations. In contrast, OccluLayout combines high-resolution images and fine-grained instance descriptions with geometry-derived occlusion order, amodal boxes, and amodal masks. To construct OccluLayout , we generate controllable 3D scenes in Blender (Blender Online Community 2018) using public assets from 71 common object categories. As illus-trated in Fig. 3, each scene contains two to five objects whose positions, scales, orientations, and camera viewpoints are varied to create diverse occlusion patterns, while physically intersecting scenes are rejected. For each accepted scene, we render a 1024 × 1024 RGB image and obtain each instance’s amodal mask by rendering it separately with all other objects hidden. Its amodal bounding box is computed from the com-plete projected mask, and the front-to-back order is derived Evaluator (MLLM) Method Venue Presence ↑ Box mIoU ↑ Color ↑ Texture ↑ Strict Pair ↑ Strict Image ↑ FID ↓                                                                                                                                                                        
+
+> Qwen3-VL-235B-A22B CreatiLayout ICCV’2025 87.92 53.83 81.06 71.70 67.08 50.78 62.754 LaRender ICCV’2025 55.14 16.88 46.25 38.41 16.63 7.90 96.556 OcclusionFormer †ICML’2026 76.49 50.36 70.45 57.89 55.28 39.77 72.707 OcclusionFormer ICML’2026 78.88 49.29 74.28 66.11 51.82 35.49 57.124
+> VODiff CVPR’2025 56.29 1.93 25.45 15.69 25.10 12.84 85.396 IFAdapter ICCV’2025 90.17 60.80 83.46 74.84 66.06 51.55 62.923
+> Ours –91.58 63.20 85.23 76.02 76.45 62.44 62.746 Qwen3-VL-32B CreatiLayout ICCV’2025 88.07 54.93 78.59 71.51 68.22 52.46 62.754 LaRender ICCV’2025 55.29 17.32 45.30 42.82 18.50 9.59 96.556 OcclusionFormer †ICML’2026 77.05 50.43 70.48 61.34 54.60 37.18 72.707 OcclusionFormer ICML’2026 79.71 49.67 73.93 67.70 52.27 35.88 57.124
+> VODiff CVPR’2025 57.86 0.09 25.48 21.57 24.99 12.84 85.396 IFAdapter ICCV’2025 91.44 60.87 82.59 73.19 66.46 51.42 62.923
+> Ours –92.50 64.23 83.92 72.92 77.07 62.82 62.746 GLM-4.6V CreatiLayout ICCV’2025 89.60 54.21 82.95 71.36 62.66 47.41 62.754 LaRender ICCV’2025 57.53 17.64 45.81 38.17 17.03 9.33 96.556 OcclusionFormer †ICML’2026 79.21 51.77 73.65 60.05 50.11 34.72 72.707 OcclusionFormer ICML’2026 81.04 49.89 76.18 65.54 46.03 30.31 57.124
+> VODiff CVPR’2025 59.10 21.22 28.57 18.32 20.55 9.86 85.396 IFAdapter ICCV’2025 91.79 61.68 86.64 72.13 59.93 44.69 62.923
+> Ours –92.85 64.13 87.79 73.23 67.31 52.46 62.746
+
+Table 1: Quantitative comparison on OccluLayout-Bench using three MLLM evaluators. VODiff is evaluated at 512 ×512 and all other methods at 1024 ×1024 . † denotes the official checkpoint without further training on OccluLayout. from the relative object positions in camera coordinates. To improve visual and semantic diversity, we use FLUX.2 [klein] 4B to edit scene backgrounds and selected object appearances while preserving their geometry and spatial arrangement. Qwen3-VL-235B-A22B-Instruct (Bai et al. 2025) validates the edited images and generates global cap-tions and fine-grained instance descriptions. Inter-object and visibility relations are excluded from instance descriptions to prevent leakage of the target order. The resulting collec-tion contains 34,496 images and 117,433 instances. Of these, 33,496 images form the OccluLayout training set, with 78.8% containing overlapping boxes. Each sample provides an RGB image, a global caption, instance descriptions, 2D amodal boxes, a front-to-back ordered instance list, and auxiliary amodal masks. 
+
+4.2 OccluLayout-Bench 
+
+Existing evaluations of occlusion-aware generation primar-ily assess pairwise visibility order. However, correct order-ing alone does not ensure successful generation, as target in-stances may be missing, misplaced, or inconsistent with their specified attributes. We therefore introduce OccluLayout-Bench , comprising a randomly held-out set of 1,000 images with 3,386 instances and an evaluation protocol that jointly assesses instance presence, spatial adherence, attribute con-sistency, occlusion order, and overall image quality. Specifically, Presence measures whether each requested instance remains recognizable, while Box mIoU evaluates its alignment with the input box. Color and Texture assess instance-level attribute consistency, assigning zero credit to absent or unrecognizable instances. We further introduce two strict occlusion metrics. Strict Pair counts an overlapping pair as correct only when both instances are recognizable and their predicted front-to-back relation matches the spec-ified order. Strict Image requires all overlapping pairs in an image to satisfy this criterion. FID (Heusel et al. 2017) complements these structured metrics by measuring overall image quality. All semantic, spatial, attribute, and order met-rics are independently evaluated using multiple MLLMs to reduce dependence on a single evaluator. 
+
+## 5 Experiments 
+
+We train OccluRank on OccluLayout and evaluate it on OccluLayout-Bench. Experimental settings, implementation details and more results are provided in the Appendix. 
+
+5.1 Quantitative Comparison 
+
+The quantitative results on OccluLayout-Bench are reported using three different MLLM evaluators. Although their ab-solute scores differ, they produce consistent method-level comparisons, as shown in Table 1. Specifically, OccluRank achieves the best Presence, Box mIoU, Color, Strict Pair, and Strict Image scores under all three evaluators. Its ad-vantage is most pronounced on the strict occlusion metrics. Compared with IFAdapter, which shares the same SDXL backbone and per-instance feature construction, OccluRank improves Strict Pair by 7.38% -10 .61% and Strict Image by 
+
+7.77% -11 .40% , while also consistently improving Presence and Box mIoU. This controlled comparison indicates that independently grounded instance features already provide effective localization, whereas rank-conditioned interaction before aggregation better resolves competing conditions in overlapping regions. Figure 4: Qualitative comparison under overlapping layouts. † denotes the official checkpoint without OccluLayout training. In terms of attribute consistency, OccluRank achieves the best Color scores under all three evaluators and ranks first or second on Texture. For image quality, the reproduced OcclusionFormer achieves the best FID of 57 .124 , but per-forms substantially worse on the other metrics. In contrast, OccluRank maintains a competitive FID of 62 .746 while achieving the strongest results on most metrics, providing the best overall balance between image quality and control-lable occlusion-aware generation. 
+
+5.2 Qualitative Analysis 
+
+Figure 4 compares different methods under identical inputs. Existing methods frequently omit requested instances, merge neighboring objects, deviate from the specified layouts, or produce incorrect visibility relationships in overlapping re-gions. In particular, LaRender, VODiff and OcclusionFormer often fail to preserve all instances, while CreatiLayout and IFAdapter generate more plausible compositions but still ex-hibit instance confusion or ordering errors under dense over-lap. Our OccluRank consistently preserves the objects, aligns them with their designated regions, and realizes coherent visibility boundaries following the prescribed order across diverse animal and object scenes. These results demonstrate that rank-conditioned interaction before aggregation more effectively resolves competing instance conditions. 
+
+5.3 Ablation Study 
+
+We ablate the interaction strategy, the rank embedding, and the local objective. Figure 5 qualitatively shows the changes in the image generated. It can be found that although the base-line and ablated models generate most requested categories, 
+
+Figure 5: Qualitative comparison of the ablation variants under the same input layout and front-to-back order. they exhibit ambiguous or reversed layering in the overlap-ping zebra-refrigerator and ape-radiator pairs. Some variants also introduce spurious content or unclear visibility bound-aries. In particular, removing rank embeddings makes the interaction insensitive to the prescribed front and back roles, while removing the local objective weakens object structure within the conditioned regions. In contrast, the full model preserves all four instances and clearly places the zebra in front of the refrigerator and the ape in front of the radia-tor, demonstrating the complementary effects of order-aware interaction, rank conditioning, and local supervision. 6 Conclusion 
+
+We have presented OccluRank, a controllable occlusion-aware layout-to-image framework that adds an ordinal rank to each instance. Its OII module allows overlapping, rank-conditioned instance features to interact before aggregation, enabling explicit visibility control without additional geo-metric inputs or specialized inference. We also introduced OccluLayout, with geometry-derived occlusion and amodal annotations, and OccluLayout-Bench for synthetic controlled evaluation. Experiments with multiple MLLM evaluators show that OccluRank achieves the strongest results on most structured metrics while maintaining competitive attribute consistency and image quality. 
+
+## References 
+
+Agrawal, V.; Parihar, R.; Bhat, P. S.; Sarvadevabhatla, R. K.; and Radhakrishnan, V. B. 2026. SeeThrough3D: Occlusion Aware 3D Control in Text-to-Image Generation. In Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 25403–25414. Bai, S.; et al. 2025. Qwen3-VL Technical Report. arXiv preprint arXiv:2511.21631 .Blender Online Community. 2018. Blender: A 3D Modelling and Rendering Package . Blender Foundation, Amsterdam, The Netherlands. Carion, N.; Gustafson, L.; Hu, Y.-T.; Debnath, S.; Hu, R.; Suris, D.; Ryali, C.; Alwala, K. V.; Khedr, H.; et al. 2026. SAM 3: Segment Anything with Concepts. In International Conference on Learning Representations .Chen, R.; Bai, Y.; Zhang, X.; Zeng, J.; Wang, L.; Song, D.; Sun, L.; Chu, X.; and Liu, A. 2026. Layer-wise instance binding for regional and occlusion control in text-to-image diffusion transformers. arXiv preprint arXiv:2603.05769 .Cheng, B.; Misra, I.; Schwing, A. G.; Kirillov, A.; and Gird-har, R. 2022. Masked-attention mask transformer for univer-sal image segmentation. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,1290–1299. Dahary, O.; Patashnik, O.; Aberman, K.; and Cohen-Or, D. 2024. Be Yourself: Bounded Attention for Multi-Subject Text-to-Image Generation. In Computer Vision – ECCV 2024 , volume 15072 of Lecture Notes in Computer Science ,432–448. Springer. Esser, P.; Kulal, S.; Blattmann, A.; Entezari, R.; Müller, J.; Saini, H.; Levi, Y.; Lorenz, D.; Sauer, A.; Boesel, F.; Podell, D.; Dockhorn, T.; English, Z.; and Rombach, R. 2024. Scal-ing Rectified Flow Transformers for High-Resolution Image Synthesis. In Proceedings of the 41st International Confer-ence on Machine Learning , 12606–12633. Heusel, M.; Ramsauer, H.; Unterthiner, T.; Nessler, B.; and Hochreiter, S. 2017. GANs Trained by a Two Time-Scale Update Rule Converge to a Local Nash Equilibrium. In 
+
+Advances in Neural Information Processing Systems .Ho, J.; Jain, A.; and Abbeel, P. 2020. Denoising Diffusion Probabilistic Models. In Advances in Neural Information Processing Systems , volume 33, 6840–6851. Lee, H.; and Park, J. 2022. Instance-Wise Occlusion and Depth Orders in Natural Scenes. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 21210–21221. Li, D.; Zhang, H.; Wang, S.; Li, J.; and Wu, Z. 2025. Seg2Any: Open-Set Segmentation-Mask-to-Image Genera-tion with Precise Shape and Semantic Control. In Advances in Neural Information Processing Systems (NeurIPS) , vol-ume 38. Li, Y.; Liu, H.; Wu, Q.; Mu, F.; Yang, J.; Gao, J.; Li, C.; and Lee, Y. J. 2023. GLIGEN: Open-Set Grounded Text-to-Image Generation. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition (CVPR) ,22511–22521. Li, Z.; and Ding, H. 2026. OcclusionFormer: Arranging Z-Order for Layout-Grounded Image Generation. In Inter-national Conference on Machine Learning (ICML) .Liang, D.; Jia, J.; Liu, Y.; Ke, Z.; Fu, H.; and Lau, R. W. H. 2025. VODiff: Controlling Object Visibility Order in Text-to-Image Generation. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition (CVPR) ,18379–18389. Lin, T.-Y.; Maire, M.; Belongie, S.; Hays, J.; Perona, P.; Ra-manan, D.; Dollár, P.; and Zitnick, C. L. 2014. Microsoft COCO: Common Objects in Context. In European Confer-ence on Computer Vision (ECCV) , 740–755. Niu, H.; Wang, J.; Hu, X.; Zhang, W.; Ma, L.; and Gao, Y. 2026. DepthArb: Training-Free Depth-Arbitrated Genera-tion for Occlusion-Robust Image Synthesis. arXiv preprint arXiv:2603.23924 .Peng, F.; Wu, J.; Li, Y.; Gao, T.; Zhang, D.; and Fu, H. 2025. MUSE: Multi-Subject Unified Synthesis via Explicit Layout Semantic Expansion. In Proceedings of the IEEE/CVF In-ternational Conference on Computer Vision (ICCV) , 15885– 15895. Podell, D.; English, Z.; Lacey, K.; Blattmann, A.; Dockhorn, T.; Müller, J.; Penna, J.; and Rombach, R. 2024. SDXL: Improving Latent Diffusion Models for High-Resolution Im-age Synthesis. In The Twelfth International Conference on Learning Representations (ICLR) .Vaswani, A.; Shazeer, N.; Parmar, N.; Uszkoreit, J.; Jones, L.; Gomez, A. N.; Kaiser, L.; and Polosukhin, I. 2017. At-tention Is All You Need. In Advances in Neural Information Processing Systems .Wang, X.; Fu, S.; Huang, Q.; He, W.; and Jiang, H. 2025. MS-Diffusion: Multi-Subject Zero-Shot Image Personaliza-tion with Layout Guidance. In International Conference on Learning Representations (ICLR) .Wu, Y.; Zhou, X.; Ma, B.; Su, X.; Ma, K.; and Wang, X. 2025. IFAdapter: Instance Feature Control for Grounded Text-to-Image Generation. In Proceedings of the IEEE/CVF Inter-national Conference on Computer Vision (ICCV) , 15949– 15959. Xiang, Q.; Sun, S.; Li, B.; Song, D.; Li, H.; Chen, Y.; Tang, X.; Hu, Y.; and Zhang, J. 2025. InstanceAssemble: Layout-Aware Image Generation via Instance Assembling Attention. In Advances in Neural Information Processing Systems , vol-ume 38. Xie, J.; Li, Y.; Huang, Y.; Liu, H.; Zhang, W.; Zheng, Y.; and Shou, M. Z. 2023. BoxDiff: Text-to-Image Synthesis with Training-Free Box-Constrained Diffusion. In Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , 7452–7461. Yang, H.; Han, W.; Zhou, Y.; and Shen, J. 2025. DC-ControlNet: Decoupling Inter- and Intra-Element Conditions in Image Generation with Diffusion Models. In Proceedings of the IEEE/CVF International Conference on Computer Vi-sion , 19065–19074. Zhan, X.; and Liu, D. 2025. LaRender: Training-Free Oc-clusion Control in Image Generation via Latent Rendering. In Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV) , 19679–19688. Zhang, H.; Duan, Z.; Wang, X.; Chen, Y.; and Zhang, Y. 2025a. EliGen: Entity-Level Controlled Image Generation with Regional Attention. In Proceedings of the 7th ACM International Conference on Multimedia in Asia (MMAsia) ,67:1–67:7. Zhang, H.; Hong, D.; Wang, Y.; Shao, J.; Wu, X.; Wu, Z.; and Jiang, Y.-G. 2025b. CreatiLayout: Siamese Multimodal Diffusion Transformer for Creative Layout-to-Image Gener-ation. In Proceedings of the IEEE/CVF International Con-ference on Computer Vision (ICCV) , 18487–18497. Zhang, X.; Yang, L.; Li, G.; Cai, Y.; Xie, J.; Tang, Y.; Yang, Y.; Wang, M.; and Cui, B. 2025c. IterComp: Iterative Composition-Aware Feedback Learning from Model Gallery for Text-to-Image Generation. In International Conference on Learning Representations .Zhao, P.; Li, H.; Jin, R.; and Zhou, S. K. 2023. LoCo: Lo-cally Constrained Training-Free Layout-to-Image Synthesis. 
+
+CoRR , abs/2311.12342. Zheng, G.; Zhou, X.; Li, X.; Qi, Z.; Shan, Y.; and Li, X. 2023. LayoutDiffusion: Controllable Diffusion Model for Layout-to-Image Generation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , 22490–22499. Zhu, Y.; Tian, Y.; Metaxas, D.; and Dollár, P. 2017. Semantic Amodal Segmentation. In Proceedings of the IEEE Confer-ence on Computer Vision and Pattern Recognition (CVPR) ,1464–1472. A Additional Details on OccluLayout 
+
+A.1 Comparison with Existing Datasets 
+
+We comprehensively compare our OccluLayout dataset with representative layout and occlusion image generation datasets in Table 2. COCO-based datasets provide bound-ing boxes and masks but are limited to low-resolution im-ages and 80 class-level categories. COCO 2017 contains no occlusion annotations, while InstaOrder and COCOA rely on manual annotation for Z-order or amodal geom-etry. Recent layout datasets, including EliGen-Data, Lay-outSAM, and SACap-1M, offer high-resolution images and open-vocabulary phrase descriptions, but do not provide ex-plicit Z-order or amodal annotations. SA-Z includes both annotations, but obtains them through auxiliary model pre-diction from partially occluded images, which may intro-duce errors in the inferred order and hidden object regions. SeeThrough3D derives Z-order from controllable 3D geom-etry, but provides only 48 class-level categories and lacks object-level masks and amodal annotations. Although our OccluLayout is smaller than large-scale SA-1B-derived datasets, it is designed to provide complete and reliable supervision for occlusion-aware layout-to-image generation. Among the compared datasets, it is the only one that jointly provides high-resolution images, phrase-level instance descriptions, bounding boxes, object masks, and geometry-derived Z-order and amodal annotations. Deriv-ing the order, boxes, and masks from the same underlying 3D scene avoids dependence on manual labeling or auxil-iary prediction and maintains their geometric consistency. The 71-category vocabulary and fine-grained instance de-scriptions further support attribute-controllable generation beyond category-level supervision. 
+
+A.2 Detailed Dataset Construction 
+
+Controllable scene generation. We construct OccluLay-out in Blender (Blender Online Community 2018) using pub-lic 3D assets organized into 71 instance categories, covering furniture, appliances, vehicles, musical instruments, animals, and other everyday objects. For each scene, we randomly se-lect two to five objects and place them on a shared ground plane to avoid floating objects and implausible support re-lationships. Their positions, scales, orientations, and camera viewpoints are varied to create different spatial arrangements and image-plane overlaps. The camera is automatically ad-justed to keep all objects within the field of view. We addition-ally test intersections between the 3D axis-aligned bounding boxes of different objects and resample scenes containing physical interpenetration. 
+
+Amodal annotation and order extraction. For each ac-cepted scene, we render a 1024 × 1024 RGB image and an amodal mask for every instance. To obtain the amodal mask, we hide all other objects, assign the target object a white emissive material, and render it against a black back-ground. The tight rectangle enclosing the complete projected mask is used as its 2D amodal bounding box. Unlike a vis-ible bounding box, this annotation describes the complete intended extent of an instance, including its occluded region. The front-to-back order is derived from the relative ob-ject positions in the camera coordinate system. Instances are stored according to this order, with a smaller index indi-cating a more foreground position. Consequently, the RGB image, amodal masks, bounding boxes, and order annota-tions originate from the same scene geometry rather than being inferred retrospectively from the rendered image. The underlying depth, camera parameters, and 3D geometry are used only during dataset construction and are not provided to the generation model. 
+
+Automatic quality filtering. We apply two filters to retain recognizable instances under meaningful occlusion. First, a scene is discarded if the bounding-box area of any instance is below 1% of the image area. Second, we measure how much of each background instance is covered by instances placed in front of it. Let Ai denote the pixel set of the amodal mask of instance i. Its occlusion ratio is defined as 
+
+ρi =
+
+Ai ∩
+
+S  
+
+> j:rj<r i
+
+Aj
+
+
+
+|A i| . (12) We reject a scene when max i ρi > 0.70 . These filters exclude extremely small or almost entirely invisible instances while retaining explicit foreground-background interactions. 
+
+Background and appearance diversification. Raw 3D renders have limited background and appearance diversity. We therefore use FLUX.2 [Klein] 4B to edit scene back-grounds and selected object appearances. The background prompt pool contains 13,728 combinations constructed from 143 scene types, four seasons, four weather conditions, and six times of day. One combination is randomly selected for each rendered image. The editing instruction requires the positions, scales, and shapes of all foreground objects to remain unchanged. For eligible object categories, we addi-tionally perform randomized color or texture editing. Colors are sampled from 15 candidates and textures from 10 candi-dates, while some objects retain their original appearances. These edits are constrained to preserve the object geometry, spatial placement, and front-to-back relationship. 
+
+Image validation and text annotation. After editing, we use Qwen3-VL-235B-A22B-Instruct (Bai et al. 2025) to ver-ify that every instance remains aligned with its annotated bounding box. Images containing object drift, disappear-ance, or category changes are discarded. This validation re-duces inconsistencies introduced by image editing. Qwen3-VL-235B-A22B-Instruct also generates a global caption and fine-grained descriptions for individual instances. For each instance, the model receives the complete image, its category name, and its bounding box. It describes only intrinsic prop-erties, including color, material, texture, shape, pose, and ac-tion. Inter-object relations, such as contact, support, contain-ment, and occlusion, are excluded to prevent the description from implicitly revealing the target order. The global caption summarizes the principal instances, their two-dimensional arrangement, and the background environment. Finally, each retained sample contains one RGB image, one global caption, instance-level descriptions, 2D amodal bounding boxes, a front-to-back ordered instance list, and Dataset Source #Img. #Inst. Res. Vocab. Inst. Text BBox Mask Z-order Amodal COCO 2017 (Lin et al. 2014) COCO ≈ 0.1M ≈ 0.88M Low 80 Class ✓ ✓ – –InstaOrder (Lee and Park 2022) COCO ≈ 0.1M ≈ 0.50M Low 80 Class ✓ ✓ Human –COCOA (Zhu et al. 2017) COCO/BSDS ≈ 5.5K ≈ 69 .0K Low 80 Class ✓ ✓ Human Human EliGen-Data (Zhang et al. 2025a) EliGen ≈ 0.5M ≈ 1.26M High Open Phrase ✓ × – –LayoutSAM (Zhang et al. 2025b) SA-1B ≈ 2.0M ≈ 10 .7M High Open Phrase ✓ × – –SACap-1M (Li et al. 2025) SA-1B ≈ 1.0M ≈ 5.88M High Open Phrase ✓ ✓ – –SA-Z (Li and Ding 2026) SA-1B ≈ 1.0M ≈ 5.69M High Open Phrase ✓ ✓ Predicted Predicted SeeThrough3D (Agrawal et al. 2026) Blender ≈ 51 .8K † ≈ 0.17M High 48 Class ✓ × Geometry –            
+
+> OccluLayout (Ours) Blender ≈34 .5K ≈0.12M High 71 Phrase ✓✓Geometry Geometry
+
+Table 2: Statistical comparison of layout and occlusion-related datasets. Resolution is classified as High when the image’s long edge exceeds 1000 pixels. BBox and Mask indicate whether the released dataset provides bounding-box and object-level mask annotations, respectively. Z-order and Amodal report how the corresponding annotations are obtained: “Human” denotes manual annotation, “Predicted” denotes model prediction, “Geometry” denotes direct derivation from the underlying 3D scene geometry, and “–” indicates that the annotation is unavailable. Vocabulary denotes the number of distinct instance labels; duplicate asset-name suffixes are merged when counting OccluLayout. † The released SeeThrough3D data include raw Blender renders and depth-to-image variants, and multiple images may share the same underlying 3D layout. Statistic Train Test # Images 33,496 1,000 # Instances 114,047 3,386 Avg. Instances / Image 3.40 3.39 Images with Box Overlap 78.8% 77.2% Mean Max Pairwise Box IoU 0.2215 0.2190 Mean Relative BBox Area 0.0630 0.0631 Table 3: Statistics of the OccluLayout training and test splits. Box overlap denotes images containing at least one pair of overlapping bounding boxes. auxiliary amodal masks. The current model does not use the amodal masks as input conditions or training supervision. 
+
+A.3 Dataset Statistics 
+
+The complete OccluLayout collection contains 34,496 im-ages and 117,433 annotated instances. We randomly se-lect 1,000 images containing 3,386 instances to form OccluLayout-Bench and use the remaining 33,496 images with 114,047 instances for training. Both splits contain scenes with two to five objects. Detailed statistics are re-ported in Table 3. The training split contains 7,307, 11,066, 9,380, and 5,743 images with two, three, four, and five instances, respectively. The corresponding numbers in OccluLayout-Bench are 219, 339, 279, and 163. Their average numbers of instances per image are 3.40 and 3.39, indicating closely matched instance-count distributions. To characterize layout overlap, we com-pute the maximum pairwise bounding-box IoU in each im-age. Overlapping boxes occur in 78 .8% of the training im-ages and 77 .2% of the benchmark images, while their mean maximum pairwise IoUs are 0.2215 and 0.2190. Their mean relative bounding-box areas are also similar, at 0.0630 and 0.0631. These statistics indicate that the two splits have com-parable object-scale and overlap distributions. OccluLayout-Bench contains 772 images with at least one overlapping bounding-box pair, yielding 1,762 pairs for oc-clusion evaluation. Among them, 503 images contain at least two overlapping pairs, accounting for 50 .3% of the bench-mark. It therefore covers both isolated pairwise occlusion and multi-instance scenes containing several simultaneous visibility relationships. 
+
+## B Additional Details on OccluLayout-Bench 
+
+OccluLayout-Bench is designed to evaluate whether a model simultaneously preserves the requested instances, follows their layouts and attributes, and realizes the specified occlu-sion order. It therefore assesses five complementary dimen-sions: instance presence (Presence), spatial adherence (Box mIoU), attribute consistency (Color and Texture), occlusion-order adherence (Strict Pair and Strict Image), and overall image quality (FID). Presence, Box mIoU, Color and Tex-ture metrics are computed over the 3,386 target instances, while the order metrics Strict Pair & Strict Image cover 1,762 overlapping pairs from 772 images. FID is computed over all 1,000 benchmark images. We employ Qwen3-VL-235B-A22B-Instruct, Qwen3-VL-32B-Instruct, and GLM-4.6V as the three main MLLM eval-uators. The two Qwen3-VL models use their Instruct check-points, while GLM-4.6V is evaluated with reasoning mode set to none . We additionally report supplementary abla-tion results using Qwen3.7-Plus with reasoning mode set to 
+
+none . All evaluators receive identical image inputs, crop regions, task prompts, and structured output formats. Their results are reported separately rather than averaged, allowing us to examine whether the method-level conclusions remain consistent across evaluator choices. All MLLM-based met-rics are reported as percentages. Next, we introduce the definition of each metric. 
+
+• Presence: For each target instance, we crop its prescribed bounding-box region and ask the evaluator whether an ob-ject of the requested category is recognizable. A partially occluded object is counted as present if its category re-mains identifiable, whereas a missing or unrecognizable instance is counted as a failure. We compute 
+
+Presence = Npresent 
+
+Ninstance 
+
+× 100 , (13) where Npresent denotes the number of recognizable tar-get instances. This metric evaluates whether the requested instances are successfully generated within their condi-tioned regions, independently of precise box alignment. 
+
+• Box mIoU: To evaluate the realized object locations with-out revealing the target coordinates, the evaluator receives the full generated image and the requested category names and predicts candidate bounding boxes. Within each cat-egory, we perform one-to-one optimal matching between the predicted and ground-truth boxes, ensuring that a single prediction cannot be assigned to multiple target instances. Unmatched ground-truth instances receive an IoU of zero. We compute 
+
+Box mIoU = 1
+
+Ninstance 
+
+> Ninstance
+
+X
+
+> i=1
+
+IoU 
+
+
+
+Bgt  
+
+> i
+
+, B pred 
+
+> i
+
+
+
+×100 .
+
+(14) Because the input boxes represent amodal object extents, whereas the predicted boxes are estimated from visible image evidence, Box mIoU provides a conservative mea-sure of spatial adherence under occlusion. 
+
+• Color and Texture: For each target instance whose de-scription explicitly specifies the evaluated attribute (color or texture), the evaluator assigns a score of 2 for a clear match, 1 for a partial match, and 0 for a mismatch. A missing or unrecognizable instance also receives zero. For each attribute, instances without a corresponding an-notation are excluded from the evaluation. We compute 
+
+Attribute = 
+
+PNspecified  
+
+> i=1
+
+si
+
+2Nspecified 
+
+× 100 , (15) where si ∈ { 0, 1, 2} is the score for instance i, and 
+
+Nspecified is the number of instances for which the evalu-ated attribute is explicitly specified. We report Color and 
+
+Texture separately, with Texture covering both texture and material descriptions. By assigning zero to absent instances, this strict protocol jointly evaluates success-ful instance generation and preservation of the requested appearance. 
+
+• Strict Pair and Strict Image: For each pair of overlap-ping input boxes, we crop their union region and evaluate it in two stages. The evaluator first determines whether both requested instances are recognizable. Only when both are present does it predict their visible front-to-back relation, without access to the specified order. We report 
+
+Strict Pair , the percentage of all overlapping pairs for which both instances are recognizable and the predicted relation matches the specified order. Missing or unrecog-nizable instances and incorrect relations are all counted as failures. We further report Strict Image , the percentage of images with overlapping boxes for which every over-lapping pair satisfies the Strict Pair criterion. Strict Pair therefore jointly evaluates instance preservation and pair-wise ordering, while Strict Image measures whether all prescribed occlusion relations in a multi-instance scene are simultaneously realized. 
+
+Overall image quality. We compute Fr’echet Inception Distance (FID) (Heusel et al. 2017) between the 1,000 gen-erated images and their corresponding OccluLayout-Bench reference images. FID is independent of the MLLM evalu-ators and provides a complementary distribution-level mea-sure of overall image quality. Together, these metrics distinguish different failure sources in occlusion-aware generation. Presence and Box mIoU measure whether instances are generated and correctly placed, Color and Texture assess whether their specified at-tributes are preserved, and the strict order metrics jointly penalize instance omission and incorrect visibility relation-ships. This protocol prevents a model from receiving a fa-vorable occlusion score by generating only an easily ordered subset of the requested objects. 
+
+B.1 Complementary Occlusion and Depth Evaluation 
+
+To complement the MLLM-based evaluation, we imple-ment a specialized order-prediction protocol following the occlusion- and depth-order evaluation used in Occlusion-Former (Li and Ding 2026). This protocol assesses the real-ized pairwise relationships using dedicated order-prediction networks rather than an MLLM. For every pair of overlapping input bounding boxes, the prescribed relation is determined directly from the front-to-back annotation order. Since instances in OccluLayout are stored from foreground to background, for a pair of instances 
+
+i < j , instance i is expected to appear in front of instance 
+
+j. We first use SAM 3 (Carion et al. 2026), conditioned on the instance category and its input bounding box, to obtain a visible instance mask from the generated image. The RGB image and the two instance masks are subsequently passed to InstaOrderNet and InstaDepthNet (Lee and Park 2022) to predict the realized occlusion and depth relations, respec-tively. If either requested instance cannot be segmented, the corresponding pair is counted as incorrect. For occlusion order, we report the standard F1 score 
+
+Occ . = 2P R P + R , P = TP TP + FP , R = TP TP + FN ,
+
+(16) where the statistics are accumulated over the predicted and prescribed pairwise occlusion directions of all overlapping-box pairs. Higher values indicate better adherence to the requested occlusion order. For depth order, we report the weighted human disagree-ment rate (WHDR), 
+
+Dep . =
+
+P 
+
+> (i,j )∈P
+
+wij I
+
+h ˆdij ̸ = dij 
+
+iP 
+
+> (i,j )∈P
+
+wij 
+
+, (17) where ˆdij and dij denote the predicted and prescribed depth relations, respectively. Since OccluLayout-Bench does not contain human confidence weights, we assign a uniform weight wij = 1 to every evaluated pair. Lower values in-dicate better depth-order consistency. Method Venue Occ. ↑ Dep. ↓                     
+
+> CreatiLayout ICCV’2025 0.7552 0.2244 LaRender ICCV’2025 0.5908 0.4392 OcclusionFormer †ICML’2026 0.8184 0.2126 OcclusionFormer ICML’2026 0.7531 0.2423 VODiff CVPR’2025 0.7065 0.2548 IFAdapter ICCV’2025 0.7987 0.1993
+> Ours –0.8577 0.1844
+
+Table 4: Additional quantitative comparison on OccluLayout-Bench using occlusion-order F1 (Occ.) and depth-order WHDR (Dep.). VODiff is evaluated at 
+
+512 ×512 and all other methods at 1024 ×1024 . † denotes the official checkpoint without further training on OccluLayout. As shown in Table 4, OccluRank achieves the best per-formance on both complementary metrics. It obtains an occlusion-order F1 of 0.8577 and a depth-order WHDR of 
+
+0.1844 , consistently outperforming the compared layout-to-image and occlusion-aware generation methods. These re-sults complement the MLLM evaluation and provide ad-ditional evidence that OccluRank realizes the specified foreground-to-background relationships. 
+
+## C Baselines and Implementation Details 
+
+C.1 Baselines 
+
+We compare OccluRank with representative layout-to-image and occlusion-aware generation methods, including Creati-Layout (Zhang et al. 2025b), IFAdapter (Wu et al. 2025), LaRender (Zhan and Liu 2025), VODiff (Liang et al. 2025), and OcclusionFormer (Li and Ding 2026). CreatiLayout provides fine-grained instance-level layout control, while IFAdapter is our direct architectural baseline and aggregates independently constructed instance features through gated semantic fusion. LaRender performs rendering-inspired la-tent composition, VODiff controls visibility through order-dependent denoising, and OcclusionFormer learns Z-order-aware volumetric feature composition. We use the released backbone configuration of each method. CreatiLayout is built on Stable Diffusion 3 (Esser et al. 2024); IFAdapter and OccluRank use SDXL; LaRen-der uses the SDXL-based IterComp checkpoint (Zhang et al. 2025c); VODiff uses the official GLIGEN text-box check-point (Li et al. 2023) and generates images at 512 × 512 ;and OcclusionFormer uses FLUX.1-dev. OccluRank and IFAdapter share the same backbone and sampling config-uration, providing a controlled comparison of the proposed order-aware interaction. For the other methods, we follow their official or recommended inference settings, including denoising steps, guidance scales, schedulers, and input reso-lutions. All methods that require training or fine-tuning use the same OccluLayout training split. Because the official train-ing code for OcclusionFormer is unavailable, we implement a best-effort reproduction following its published specifica-tion. To account for a potential reproduction gap, we addition-ally evaluate the authors’ released checkpoint without further                     
+
+> Variant Venue Occ. ↑Dep. ↓
+> IFAdapter ICCV’2025 0.7987 0.1993 Scalar Reweight –0.8127 0.2073 w/o Local Loss –0.8400 0.1866 w/o Rank Emb. –0.8279 0.1859
+> Ours –0.8577 0.1844
+
+Table 5: Ablation study on OccluLayout-Bench using occlusion-order F1 (Occ.) and depth-order WHDR (Dep.). training on OccluLayout, denoted as OcclusionFormer †.
+
+C.2 Implementation Details 
+
+OccluRank is initialized from pretrained SDXL and IFAdapter checkpoints. The diffusion backbone remains frozen, while the per-instance feature construction, ordinal rank embeddings, OII block, and residual injection parame-ters are optimized. For each instance, we extract three hidden-state layers from the SDXL text encoders and obtain four Resampler query tokens from each layer. After flattening the layer and query dimensions and concatenating one EOT token, each instance is represented by LT = 13 layout to-kens. We cap each layout at Omax = 5 instances and use learned ordinal-rank embeddings. The OII module contains one Transformer layer operating along the instance dimen-sion. The OII-enhanced instance signal is injected into the cross-attention layers of Transformer sub-blocks 0–3 in the SDXL middle block and the lowest-resolution upsampling block ( up_blocks.0 ); all other attention layers remain unchanged. The adapter scale is fixed to s = 1 .0, while each learnable residual gate α is initialized to zero. Training is performed at 1024 × 1024 resolution on a single NVIDIA RTX PRO 6000 GPU. We use AdamW with a learning rate of 
+
+1 × 10 −4, an effective batch size of 160, and 1,500 optimiza-tion steps under bf16 mixed precision. We independently apply classifier-free condition dropout to the global prompt and the complete set of local instance conditions with prob-abilities of 0.30 and 0.15, respectively. Dropping the local conditions removes both the instance-text embeddings and their associated spatial attention masks. The balance weight is set to λ = 2 .0, and the numerical-stability constant is set to δ = 10 −8.During inference, OccluRank generates images at 1024 ×
+
+1024 resolution using 30 denoising steps, a classifier-free guidance scale of 7.5, and a fixed random seed of 42. We generate one image for each layout in OccluLayout-Bench. 
+
+## D Additional Ablation Analysis 
+
+We provide additional quantitative ablations to comple-ment the qualitative analysis in the main paper. All vari-ants share the same initialization, training configuration, and inference settings. Scalar Reweight replaces OII with order-conditioned scalar weights for instance aggregation, while 
+
+w/o Local Loss and w/o Rank Emb. remove the local denois-ing objective and ordinal rank embeddings, respectively. Evaluator (MLLM) Variant Venue Presence ↑ Box mIoU ↑ Color ↑ Texture ↑ Strict Pair ↑ Strict Image ↑ FID ↓                                                                                                                                                                
+
+> Qwen3-VL-235B-A22B IFAdapter ICCV’2025 90.17 60.80 83.46 74.84 66.06 51.55 62.923 Scalar Reweight –90.37 59.74 84.21 75.78 71.40 57.38 62.277
+> w/o Local Loss –90.96 63.10 84.09 75.39 72.81 56.61 62.322 w/o Rank Emb. –90.79 63.32 83.93 74.18 73.89 59.33 64.332
+> Ours –91.58 63.20 85.23 76.02 76.45 62.44 62.746 Qwen3-VL-32B IFAdapter ICCV’2025 91.44 60.87 82.59 73.19 66.46 51.42 62.923 Scalar Reweight –91.38 60.72 83.59 73.00 71.28 55.96 62.277
+> w/o Local Loss –91.88 64.36 83.28 71.98 71.51 54.79 62.322 w/o Rank Emb. –92.06 63.95 83.06 72.62 73.21 56.87 64.332
+> Ours –92.50 64.23 83.92 72.92 77.07 62.82 62.746 GLM-4.6V IFAdapter ICCV’2025 91.79 61.68 86.64 72.13 59.93 44.69 62.923 Scalar Reweight –91.58 60.93 86.65 73.67 64.70 51.68 62.277
+> w/o Local Loss –92.56 64.77 87.53 73.76 65.83 50.91 62.322 w/o Rank Emb. –92.32 64.10 87.08 73.59 64.98 50.26 64.332
+> Ours –92.85 64.13 87.79 73.23 67.31 52.46 62.746 Qwen3.7-Plus IFAdapter ICCV’2025 91.32 62.38 83.70 80.74 57.21 40.93 62.923 Scalar Reweight –91.08 61.19 84.31 80.72 61.46 44.56 62.277
+> w/o Local Loss –91.73 64.86 84.30 80.10 65.32 46.50 62.322 w/o Rank Emb. –92.17 64.36 84.53 79.66 65.15 47.41 64.332
+> Ours –92.65 64.60 85.15 80.42 68.84 51.17 62.746
+
+Table 6: Ablation study on OccluLayout-Bench using four MLLM evaluators. The complementary order metrics exhibit a consistent trend with the MLLM-based ablations. Scalar Reweight im-proves Occ. over IFAdapter, showing that incorporating the prescribed order during aggregation is beneficial, but it re-mains below the full interaction-based model. Removing ei-ther the local objective or the ordinal rank embedding also degrades occlusion-order accuracy. The full model achieves the highest Occ. score of 0.8577 and the lowest Dep. value of 0.1844 , supporting the joint contribution of explicit rank conditioning, order-aware instance interaction, and localized denoising supervision. Scalar Reweight improves Strict Pair and Strict Image over IFAdapter by 4.25 –5.34 and 3.63 –6.99 percentage points across the four evaluators, respectively, confirming the ben-efit of introducing order information during aggregation. Nevertheless, the full model further improves these metrics by 2.61 –7.38 and 0.78 –6.86 points. This gap supports our interaction-before-aggregation design: scalar weights only regulate the contributions of independently constructed fea-tures, whereas OII updates their high-dimensional content according to the competing instances and prescribed order. Removing the local objective (i.e., λ = 0 ) has only a minor effect on Box mIoU and produces marginal improve-ments under three evaluators. However, it reduces Strict Pair by 1.48 –5.56 points and Strict Image by 1.55 –8.03 points. The local objective therefore contributes primarily to recog-nizable instance structures and coherent boundaries within conditioned regions, rather than coarse object placement. It complements OII by encouraging the learned interaction to be expressed as visually distinguishable occlusion relation-ships. Removing the rank embedding leaves instance presence and spatial alignment largely unchanged, but decreases Strict Pair and Strict Image by 2.33 –3.86 and 2.20 –5.95 points, 
+
+Figure 6: Qualitative comparison under reversed instance or-der. The variant without rank embeddings fails to respond to the order change, while our full model successfully controls the front-to-back relationship. respectively. Although the instance-dimension Transformer can still exchange semantic information, it lacks an explicit asymmetric signal for distinguishing the prescribed front and back roles. 
+
+Responsiveness to Reversed Occlusion Orders. To verify that OccluRank genuinely follows the specified order rather than relying on learned semantic or layout priors, we con-struct paired conditions that differ only in their front-to-back order while preserving the global prompt, instance descrip-tions, and bounding boxes. As shown in Fig. 6, OccluRank reverses the realized covering relationship in accordance with the input order, whereas w/o Rank Emb. produces nearly unchanged occlusion patterns. This controlled comparison demonstrates that rank embeddings provide the asymmetric signal required for order-responsive generation, which can-not be reliably achieved through instance interaction alone. 
+
+## E Generalization to Unseen Categories 
+
+We further examine whether the occlusion-control capability of OccluRank generalizes beyond the 71 instance categories included in OccluLayout. We construct additional overlap-ping layouts using categories absent from the training set and assign explicit front-to-back orders to their instances. As shown in Fig. 7, OccluRank successfully preserves the requested instances and realizes the specified occlusion rela-tionships. These results demonstrate that the learned order-aware interaction is not restricted to the object categories observed during training, but generalizes to occlusion rela-tionships between unseen categories. Figure 7: Qualitative examples on categories unseen during training. Numeric prefixes denote the prescribed front-to-back order. OccluRank generalizes its occlusion control to unseen categories, preserving the requested instances while correctly realizing the specified occlusion relationships.

@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-28</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-29</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 51 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 21 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>38</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>8</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-28 04:51:14 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-29 03:50:48 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读聚焦单图3D场景生成与动态场景视觉语言推理，共完成38篇精读、13篇速读。最值得关注的是满分论文《SceneReGen》实现单图高质量3D重建，以及《CL4D》为动态场景多模态理解提供新范式。后续可优先体验这两个方向的代码与演示，并留意速读中跨模态定位和LiDAR配准的实用进展。</p>
+<p>今日精读聚焦两篇高分论文：多智能体协同感知的时空错位鲁棒性，以及视觉语言模型GUI空间推理诊断；速读覆盖视觉提示、海岸线几何定位与3D感知移动等方向。最值得关注的是对象级锚点（CoAnchor）与GUI空间推理（GUI-Primitives），均获9.0高分，前者解决协同感知错位难题，后者揭示VLM在GUI中的空间短板。建议优先精读这两篇，再结合视觉提示脚手架与3D空间建模速读，形成对空间推理问题的完整认知。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">38 篇</strong>
+    <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="SceneReGen: Generative Reconstruction of 3D Scenes from a Single Image">SceneReGen: Generative Reconstruction of 3D Scenes from a Single Image</span></li><li><span class="dpr-home-dashboard-paper-title" title="CL4D: Contrastive Language-4D Pretraining for Vision-Language Reasoning in Dynamic Scenes">CL4D: Contrastive Language-4D Pretraining for Vision-Language Reasoning in Dynamic Scenes</span></li><li><span class="dpr-home-dashboard-paper-title" title="USR-Drive: Unified Driving Scene Representation via Joint Denoising of 3D Gaussians and Boxes">USR-Drive: Unified Driving Scene Representation via Joint Denoising of 3D Gaussians and Boxes</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CoAnchor: Robust Collaborative Perception under Spatio-Temporal Misalignment via Object-Level Anchors">CoAnchor: Robust Collaborative Perception under Spatio-Temporal Misalignment via Object-Level Anchors</span></li><li><span class="dpr-home-dashboard-paper-title" title="GUI-Primitives: Diagnosing Spatial Reasoning Failures in Vision-Language GUI Grounding">GUI-Primitives: Diagnosing Spatial Reasoning Failures in Vision-Language GUI Grounding</span></li><li><span class="dpr-home-dashboard-paper-title" title="Reliability-Aware Scheduling for Digital Twin Maintenance">Reliability-Aware Scheduling for Digital Twin Maintenance</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>19</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>14</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>5</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>6</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>2</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -87,9 +87,9 @@
     <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="DynCur-Geo: Dynamic Curiosity Reward Shaping for Multimodal Active Geo-Localization">DynCur-Geo: Dynamic Curiosity Reward Shaping for Multimodal Active Geo-Localization</span></li><li><span class="dpr-home-dashboard-paper-title" title="LT-Mem: Volatility-Aware Spatio-Temporal Memory for Lifelong Scene Understanding">LT-Mem: Volatility-Aware Spatio-Temporal Memory for Lifelong Scene Understanding</span></li><li><span class="dpr-home-dashboard-paper-title" title="CVSD-Reg: Cross-Modal Visual Semantic Prior Distillation for Robust LiDAR Registration">CVSD-Reg: Cross-Modal Visual Semantic Prior Distillation for Robust LiDAR Registration</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Is Visual Prompting All You Need? Studying VLM Spatial Reasoning under Progressive Visual Scaffolds">Is Visual Prompting All You Need? Studying VLM Spatial Reasoning under Progressive Visual Scaffolds</span></li><li><span class="dpr-home-dashboard-paper-title" title="The Coastline as a Structural Constraint: Harnessing Scene Geometry for Autonomous Surface Vessel Localization">The Coastline as a Structural Constraint: Harnessing Scene Geometry for Autonomous Surface Vessel Localization</span></li><li><span class="dpr-home-dashboard-paper-title" title="SpatialDiff: 3D-Aware Object Movement via Implicit Spatial Modeling">SpatialDiff: 3D-Aware Object Movement via Implicit Spatial Modeling</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>10</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>2</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>8</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>4</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
 </section>
 </div>
 
