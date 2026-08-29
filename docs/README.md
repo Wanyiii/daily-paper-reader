@@ -44,14 +44,14 @@
       <span class="dpr-home-dashboard-kicker">2026-08-29</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 21 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 30 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>8</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>12</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>18</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-29 03:50:48 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-29 22:27:32 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日精读聚焦两篇高分论文：多智能体协同感知的时空错位鲁棒性，以及视觉语言模型GUI空间推理诊断；速读覆盖视觉提示、海岸线几何定位与3D感知移动等方向。最值得关注的是对象级锚点（CoAnchor）与GUI空间推理（GUI-Primitives），均获9.0高分，前者解决协同感知错位难题，后者揭示VLM在GUI中的空间短板。建议优先精读这两篇，再结合视觉提示脚手架与3D空间建模速读，形成对空间推理问题的完整认知。</p>
+<p>今日共处理30篇论文，精读12篇、速读18篇。最值得关注的是统一单目深度先验与多视图立体的M2Depth，以及解决时空错位下协作感知的CoAnchor。建议后续多留意多传感器融合与几何一致性方向的进展。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +71,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">8 篇</strong>
+    <strong class="dpr-home-dashboard-count">12 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CoAnchor: Robust Collaborative Perception under Spatio-Temporal Misalignment via Object-Level Anchors">CoAnchor: Robust Collaborative Perception under Spatio-Temporal Misalignment via Object-Level Anchors</span></li><li><span class="dpr-home-dashboard-paper-title" title="GUI-Primitives: Diagnosing Spatial Reasoning Failures in Vision-Language GUI Grounding">GUI-Primitives: Diagnosing Spatial Reasoning Failures in Vision-Language GUI Grounding</span></li><li><span class="dpr-home-dashboard-paper-title" title="Reliability-Aware Scheduling for Digital Twin Maintenance">Reliability-Aware Scheduling for Digital Twin Maintenance</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="M2Depth: Unifying Monocular Depth Foundation Priors with Multi-View Stereo">M2Depth: Unifying Monocular Depth Foundation Priors with Multi-View Stereo</span></li><li><span class="dpr-home-dashboard-paper-title" title="CoAnchor: Robust Collaborative Perception under Spatio-Temporal Misalignment via Object-Level Anchors">CoAnchor: Robust Collaborative Perception under Spatio-Temporal Misalignment via Object-Level Anchors</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Modular Agent for Reliable and Auditable Spatial Relation Verification in CT Scans">A Modular Agent for Reliable and Auditable Spatial Relation Verification in CT Scans</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>6</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>9</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -84,12 +84,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">13 篇</strong>
+    <strong class="dpr-home-dashboard-count">18 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Is Visual Prompting All You Need? Studying VLM Spatial Reasoning under Progressive Visual Scaffolds">Is Visual Prompting All You Need? Studying VLM Spatial Reasoning under Progressive Visual Scaffolds</span></li><li><span class="dpr-home-dashboard-paper-title" title="The Coastline as a Structural Constraint: Harnessing Scene Geometry for Autonomous Surface Vessel Localization">The Coastline as a Structural Constraint: Harnessing Scene Geometry for Autonomous Surface Vessel Localization</span></li><li><span class="dpr-home-dashboard-paper-title" title="SpatialDiff: 3D-Aware Object Movement via Implicit Spatial Modeling">SpatialDiff: 3D-Aware Object Movement via Implicit Spatial Modeling</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Is Visual Prompting All You Need? Studying VLM Spatial Reasoning under Progressive Visual Scaffolds">Is Visual Prompting All You Need? Studying VLM Spatial Reasoning under Progressive Visual Scaffolds</span></li><li><span class="dpr-home-dashboard-paper-title" title="The Coastline as a Structural Constraint: Harnessing Scene Geometry for Autonomous Surface Vessel Localization">The Coastline as a Structural Constraint: Harnessing Scene Geometry for Autonomous Surface Vessel Localization</span></li><li><span class="dpr-home-dashboard-paper-title" title="StereoDiffuer: Diffusion-based Progressive Geometry Modeling with Saliency Attention Perception for Stereo Matching">StereoDiffuer: Diffusion-based Progressive Geometry Modeling with Saliency Attention Perception for Stereo Matching</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>8</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>4</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>9</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>7</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>2</strong></span></div>
 </section>
 </div>
 
