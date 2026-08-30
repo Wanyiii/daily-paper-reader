@@ -41,17 +41,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-29</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-30</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 30 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 21 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
-    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>2 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>12</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>18</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>8</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-29 22:27:32 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-08-30 23:07:22 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,7 +62,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共处理30篇论文，精读12篇、速读18篇。最值得关注的是统一单目深度先验与多视图立体的M2Depth，以及解决时空错位下协作感知的CoAnchor。建议后续多留意多传感器融合与几何一致性方向的进展。</p>
+<p>今日共读21篇论文，精读8篇、速读13篇，重点聚焦3D重建与生成模型新突破。</p>
+<p>最值得关注：ExMesh++实现多视图到可重光照UV-PBR网格的拓扑自适应重建，Drift VAE用条件后验流统一生成与表征学习。</p>
+<p>下一步建议先精读两篇高分论文，再按需浏览多模态边缘推理及3D高斯泼溅压缩基准，快速拓展视野。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -71,12 +73,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">12 篇</strong>
+    <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="M2Depth: Unifying Monocular Depth Foundation Priors with Multi-View Stereo">M2Depth: Unifying Monocular Depth Foundation Priors with Multi-View Stereo</span></li><li><span class="dpr-home-dashboard-paper-title" title="CoAnchor: Robust Collaborative Perception under Spatio-Temporal Misalignment via Object-Level Anchors">CoAnchor: Robust Collaborative Perception under Spatio-Temporal Misalignment via Object-Level Anchors</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Modular Agent for Reliable and Auditable Spatial Relation Verification in CT Scans">A Modular Agent for Reliable and Auditable Spatial Relation Verification in CT Scans</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="ExMesh++: From Multi-View Images to Relightable UV-PBR Mesh Assets via Topology-Adaptive Reconstruction and Decomposition">ExMesh++: From Multi-View Images to Relightable UV-PBR Mesh Assets via Topology-Adaptive Reconstruction and Decomposition</span></li><li><span class="dpr-home-dashboard-paper-title" title="Drift Variation Autoencoder: Unifying Generation and Representation Learning through Conditional Posterior Flow Matching">Drift Variation Autoencoder: Unifying Generation and Representation Learning through Conditional Posterior Flow Matching</span></li><li><span class="dpr-home-dashboard-paper-title" title="V-Link: Recovering Lost Visual Representations in Action DiT for Vision-Language-Action Models">V-Link: Recovering Lost Visual Representations in Action DiT for Vision-Language-Action Models</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>9</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>5</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -84,12 +86,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">18 篇</strong>
+    <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Is Visual Prompting All You Need? Studying VLM Spatial Reasoning under Progressive Visual Scaffolds">Is Visual Prompting All You Need? Studying VLM Spatial Reasoning under Progressive Visual Scaffolds</span></li><li><span class="dpr-home-dashboard-paper-title" title="The Coastline as a Structural Constraint: Harnessing Scene Geometry for Autonomous Surface Vessel Localization">The Coastline as a Structural Constraint: Harnessing Scene Geometry for Autonomous Surface Vessel Localization</span></li><li><span class="dpr-home-dashboard-paper-title" title="StereoDiffuer: Diffusion-based Progressive Geometry Modeling with Saliency Attention Perception for Stereo Matching">StereoDiffuer: Diffusion-based Progressive Geometry Modeling with Saliency Attention Perception for Stereo Matching</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CST: Collaborative Selective Transmission for Communication-Efficient Multimodal Edge Inference">CST: Collaborative Selective Transmission for Communication-Efficient Multimodal Edge Inference</span></li><li><span class="dpr-home-dashboard-paper-title" title="M$^3$ISR: A Multi-Modal Multi-View Benchmark for 3D/4D Gaussian Splatting and Feedforward Compression">M$^3$ISR: A Multi-Modal Multi-View Benchmark for 3D/4D Gaussian Splatting and Feedforward Compression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Learning Sample-wise Rank-aware Interpolation Weights for Composed Visual Data Retrieval">Learning Sample-wise Rank-aware Interpolation Weights for Composed Visual Data Retrieval</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>9</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>7</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">multimodal <strong>7</strong></span><span class="dpr-home-dashboard-tag">d-vision <strong>6</strong></span></div>
 </section>
 </div>
 
