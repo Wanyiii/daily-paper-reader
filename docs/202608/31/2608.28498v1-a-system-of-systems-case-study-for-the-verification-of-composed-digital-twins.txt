@@ -1,0 +1,367 @@
+Title: A System-of-Systems Case Study for the Verification of Composed Digital Twins
+
+URL Source: https://arxiv.org/pdf/2608.28498v1
+
+Published Time: Mon, 31 Aug 2026 01:14:12 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# A System-of-Systems Case Study for the Verification of Composed Digital Twins 
+
+Mennatullah T. Khedr 1[0009 −0007 −0096 −3375] , Mengwei Xu 1[0000 −0003 −4978 −3061] ,John S. Fitzgerald 1[0000 −0001 −7041 −1807] , and Peter Gorm Larsen 2[0000 −0002 −4589 −1500]  
+
+> 1
+
+School of Computing, Newcastle University, UK 
+
+m.t.y.a.khedr2@newcastle.ac.uk, mengwei.xu@newcastle.ac.uk, john.fitzgerald@newcastle.ac.uk  
+
+> 2
+
+Dept. of Electrical and Computer Engineering, Aarhus University, DK 
+
+pgl@ece.au.dk 
+
+Abstract. Current approaches to engineering dependable Digital Twins (DTs) of Cyber-Physical Systems lack practical guidance on how qualities such as relevance, verifiability, substitutability and fidelity may be for-malised and verified. This need is amplified in Systems-of-Systems (SoS), where reliance is placed on the composition of DTs. The goal of this study is to identify foundational challenges that a framework for DT validation and verification should address in an SoS setting, and to investigate the formalisation of individual DT artefacts as a step towards compositional reasoning. We present a case study based on a DT-enabled greenhouse SoS modelled in VDM-RT (Vienna Development Method, Real-Time), including executable formal models, a property-based account of DT qualities, and an analysis of the obstacles arising when attempting to compose these artefacts at the SoS level. We consider how DT qualities may be operationalised as sets of verifiable properties. Formal modelling and analysis techniques and tools supporting their verification are iden-tified. The study reveals how interpretations of DT qualities must adapt to different architectural roles and how local quality guarantees form assumptions for compositional reasoning. Full formalisation and verifica-tion of SoS composition is identified as future work. 
+
+Keywords: Digital Twins · Cyber-Physical Systems · Systems of Sys-tems · VDM-RT · Formal Verification · Digital Twin Qualities. 
+
+## 1 Introduction 
+
+Digital Twins (DTs) are synchronised digital representations of cyber-physical systems offering monitoring, prediction, and decision support [11,14]. They can enable reasoning beyond direct sensing, supporting predictive maintenance, op-timisation, and what-if analysis [21,6,4]. Digital Shadows (DSs) differ from DTs in that they have a one-way, real-time data flow from their physical counterpart, without autonomously influencing the physical system. Where DSs and DTs in-fluence or even perform critical functions, particularly in cyber-physical systems (CPSs), dependability becomes paramount. There is therefore a need to ensure arXiv:2608.28498v1 [cs.SE] 28 Aug 2026 2 M T Khedr, M Xu, J S Fitzgerald and P G Larsen 
+
+the quality of DTs to manage the risk of unsafe or costly impacts on the physical world [24,18]. The risk of DT failure is amplified in System-of-Systems (SoS) settings. As DT-enabled systems scale, individual DTs interact with other DTs, shared digi-tal services, and coordination mechanisms, forming interconnected architectures with SoS characteristics [20,2]. Because DTs are developed under heterogeneous assumptions and different abstraction levels in SoS, faults in one DT can propa-gate to others that depend on it, making reasoning about the quality of composed DTs harder than for isolated DTs [10,15]. The engineering of dependable DTs demands methods and tools for rigor-ous verification and validation, so that evidence can be provided to substantiate claims about DT qualities. However, recent surveys suggest that this aspect re-mains under-explored [24,12,18,1]. Existing frameworks clarify terminology but are largely descriptive, and there remains a need for practical guidance on how DT qualities, such as relevance, verifiability, substitutability, and fidelity, should be formalised and verified [24,19]. Consequently, such qualities are often assessed informally or at a single abstraction level, with limited treatment of how verifi-cation obligations change under SoS composition [19,20]. Key representative approaches to reasoning about DTs include contract-based prediction error detection [17], TLA-based orchestration specification [9], and runtime monitoring for adaptive systems [7]. These demonstrate the feasibil-ity of formal or semi-formal reasoning about DTs, but target isolated concerns, e.g., a single quality in [17] or coordination correctness in [9]. Little work to date proposes how to formalise DT qualities, associates qualities with explicit verification obligations, or considers how those obligations change when DTs are composed in an SoS. At the same time, work on SoS-oriented DT development highlights interoperability and integration challenges [20,3], yet offers limited guidance on how DT qualities should be evidenced under SoS composition. In response to the gaps discussed above, we propose to operationalise DT qualities by interpreting them as sets of formally stated properties that can be verified or refuted with machine support. We investigate the approach through a case study of a greenhouse-inspired System of DT-enabled Plant Pots, compris-ing multiple plant-pot constituent systems, each enabled with a predictive DT, and supported by a shared Environment Digital Shadow, modelled in VDM-RT (Vienna Development Method, Real-Time). VDM-RT brings opportunities for both well-founded proof and extensive simulation and co-simulation. Our contributions are: (1) a formally executable DT-enabled greenhouse case study in VDM-RT supporting co-simulation; (2) an initial property-based ap-proach to DT qualities with explicit verification evidence; (3) an investigation of how qualities manifest differently as verifiable properties across elements of DTs; (4) identification of verification challenges arising from DT composition in SoS settings. 
+
+Scope and limitations of this paper. The contributions listed above focus on the formalisation of individual DT artefacts (the Pot Model, Decision Service SoS Case Study for Verification of Composed DTs 3
+
+Model, and Environment Digital Shadow) and on the qualities they instantiate. We do not present a full formalisation of the SoS-level coordination layer shown in Figure 1, nor do we verify any composed properties across multiple DTs. Instead, Section 5 analyses the verification challenges that arise when moving from verified constituents to an SoS-level composition - challenges such as fidelity error amplification, scope-shifting relevance, and the evolution of substitutability into relational compatibility. These analyses are intended to motivate and inform future work on compositional verification, not to demonstrate compositional verification itself. Thus, this paper should be read as a foundational study of DT quality operationalisation and a scoping of the compositional verification problem, rather than as a complete solution for SoS-level DT verification. The remainder of the paper is structured as follows. Section 2 introduces the case study. Section 3 describes VDM-RT modelling and co-simulation support. Section 4 considers how DT qualities may be operationalised as verifiable proper-ties. Section 5 examines compositional verification challenges. Section 6 discusses our key findings. Section 7 discusses threats to validity. Section 8 concludes and proposes future directions. 
+
+## 2 Greenhouse System as a DT-enabled SoS 
+
+This section introduces the DT-enabled SoS for a greenhouse system that serves as a case study. The focus here is on the system structure and DT artefacts. Figure 1 presents the overall architecture of the DT-enabled greenhouse SoS. This case study is a minimal example of an SoS setting, which, despite its sim-plicity, is sufficient to allow the implementation and investigation of different SoS configurations and serves to demonstrate the difficulty of using DTs in such settings. Moreover, the architecture is explicitly structured to support hierar-chical reasoning, the interdependence of individual plant pot systems and their DTs to SoS-level coordination. 
+
+2.1 Physical Systems Plant Pot System Each plant pot system comprises a soil moisture sensor, a pump actuator, and a local controller that enforces safety-threshold logic. The controller accepts watering recommendations from its corresponding Pot DT only when the moisture is within a safe zone. Without DT support, this baseline strategy is purely reactive and unaware of future evaporation, shared resource constraints, or interactions with neighbouring pots. 
+
+Environment System The environment system consists of a controller con-nected to a temperature, humidity, and light sensor. Environmental data is con-tinuously forwarded to an Environment Digital Shadow (DS), ensuring clear separation between shared context sensing and local control in the plant pots. 
+
+2.2 Digital Artefacts (DTs, DS, SoS coordination) Environment Digital Shadow The Environment DS (EDS), synchronised with the environment system, provides contextual information to the Pot DTs. 4 M T Khedr, M Xu, J S Fitzgerald and P G Larsen 
+
+It supports two modes of operation: a live mode that reads current sensor mea-surements and computes an evaporation factor, and a simulation mode that predicts environmental trends based on simplified models or external forecasts. This aligns with established notions of DSs as context-providing artefacts rather than decision-making entities [6]. evapFactor 
+
+Temperature, 
+
+Humidity, 
+
+Light 
+
+Moisture, 
+
+Pump state 
+
+Recommended action 
+
+Predicted 
+
+Temperature, 
+
+Humidity, 
+
+Light 
+
+Moisture, 
+
+Pump state, 
+
+water request 
+
+Priority-based command 
+
+Current & 
+
+Predicted 
+
+future states 
+
+DT-enabled Plant Pot system DS-monitored Environment 
+
+Physical Realm 
+
+Digital Realm 
+
+Environment DS (EDS) 
+
+(purpose: to provide environment awareness for the pots) 
+
+Pot n DT 
+
+(purpose: to optimise pot controller watering decision) 
+
+Environment Model 
+
+(-read live data 
+
+-calculate evapFactor) 
+
+Pot Model 
+
+(-read live data from pot n PT 
+
+-read evapFactor from EDS 
+
+-update internal state to represent pot 
+
+-calculate next pumpCMD) 
+
+Prediction Service Model 
+
+(-simulate predicted temperature, humidity, light 
+
+OR 
+
+read weather forecast 
+
+-simulate evapFactor trend) 
+
+Decision Service Model (DSM) 
+
+(-simulate predicted moisture 
+
+-recommend watering action in safe zone based on moisture and evapFactor) 
+
+Environment System 
+
+Temperature sensor 
+
+Humidity sensor 
+
+Light sensor 
+
+Pot n System 
+
+Moisture sensor 
+
+Pump actuator 
+
+Controller 
+
+(Safety Threshold Watering Logic) 
+
+Optimised command 
+
+SoS Coordinator/Sustainability Maintainer 
+
+(collects watering requests/approves based on priorities) 
+
+(purpose: to maintain plants’ health using minimum water consumption) 
+
+Policy enforcer  Priority-based coordination Water usage monitoring 
+
+Moisture, 
+
+Pump CMD 
+
+Fig. 1: Architecture of the DT-enabled greenhouse SoS, illustrating physical sys-tems, individual DTs, a shared Environment DS, and SoS-level coordination. 
+
+Pot Digital Twin Each Pot DT provides environment-aware decision sup-port to its corresponding plant pot system. It contains a Pot model that up-dates its state synchronously with real-world data and computes the expected threshold-based watering action, and a Decision Service model (DSM) that en-ables predictive reasoning about future moisture evolution, supported by envi-ronmental data, to generate refined watering recommendations for the physical pot controller. Importantly, the Pot DT does not directly actuate the system; SoS Case Study for Verification of Composed DTs 5
+
+safety enforcement remains the responsibility of the physical pot controller. This enables proactive and predictive optimisation while preserving safety guarantees. 
+
+SoS-level Coordination DT At the SoS level, a composed coordination DT implements efficient priority-based watering strategies by aggregating water usage and enforcing global resource constraints across all pots through their Pot DTs. This layer enables reasoning about collective behaviour, such as peak water demand and fairness, that cannot be addressed by individual DTs alone. To summarise, in this architecture, each physical plant pot controller enforces threshold-based safety locally. We then introduce DT functionality in two steps: (i) each pot is paired with a Pot DT, contextualised by a shared EDS; and (ii) a composed DT is created for SoS-level coordination. In this paper, we formalise and verify only step (i). We then discuss verification challenges for step (ii) in Section 5, but leave its full formalisation for future work. Thus, the SoS-level coordination layer serves as a target architecture and a source of research ques-tions, not as a verified artefact in the present study. 
+
+## 3 Formal Modelling with VDM-RT and FMI 
+
+3.1 Why VDM-RT for DT-enabled CPS? 
+
+VDM-RT was selected as the primary formal modelling language due to its suitability for modelling DT-enabled CPSs that combine discrete control logic and data-centric state representations, and its large executable subset. VDM-RT supports explicit modelling of state variables, operations, invariants, and pre- and post-conditions, which are essential for expressing DT qualities as ver-ifiable properties. The executable subset of VDM-RT enables early empirical validation via simulation and execution traces, while maintaining a rigorous for-mal foundation for subsequent verification [23]. In addition, VDM-RT integrates naturally with FMI-based workflows, supporting the deployment of DT models as Functional Mock-up Units (FMUs) and their integration into co-simulation environments [22] for multi-artefact DTs and for composed DTs of SoS. 
+
+3.2 VDM-RT Models Developed 
+
+The current modelling effort focuses on the DT-enabled plant pot as the smallest unit of formalisation. VDM-RT models have been developed for three aspects. First, the Pot model, which is the behavioural abstraction of the physical pot (controller, sensor, and actuator), represents its moisture dynamics and safety-threshold control. Second, the DSM is a DT service that reasons about pot be-haviour and produces an optimised, environment-informed recommended action to the physical pot controller. Third, the EDS models environmental dynamics and provides contextual information for relevant DTs. The Pot class of the VDMRT Pot model consists of 183 lines of code (LOC) apart from the supplementary FMI-supporting files, such as the HardwareInter-face, System, and World files, with a total of 244 LOC. The PotDSM.vdmrt class consists of 133 LOC, and the Environment.vdmrt class consists of 92 LOC. Af-ter running Proof Obligations Generation and checking them using QuickCheck, 6 M T Khedr, M Xu, J S Fitzgerald and P G Larsen 
+
+we found that the main functions and operations, considering the functionality of the models, were provable, while the operations that included reading from FMI ports were unchecked. This is because runtime-determined port values are unknown to the verifier, leading to uninterpreted terms and unchecked POs. For example, 56 POs were generated for the Pot model files, out of which 49 POs were for the Pot.vdmrt class and nearly half of them were unchecked due to FMI ports.getValue() calls. 
+
+3.3 From VDM-RT to FMUs and Co-simulation 
+
+The VDM-RT models are exported as FMUs in compliance with the FMI 2.0 standard. The export requirements impose constraints on the model structure, including explicit time handling, total operations, and the specified declaration of shared states via input and output ports 3.
+
+                              
+
+> class Pot instance variables
+> --input ports
+> public moistureSensor :RealPort ; public pumpState :BoolPort ; public evapFactor :RealPort ; public optimizedCommand :IntPort ; --from PotDSM --output ports
+> public moisture_out :RealPort ; --to PotDSM
+> public pumpCMD :BoolPort ;
+
+ 
+
+Initial co-simulation experiments demonstrate the executability and archi-tectural soundness of the approach. Integration with RabbitMQ-based FMUs 4
+
+is ongoing, enabling future coupling with live data streams [5]. At this stage, co-simulation is primarily used to validate model behaviour and interaction pat-terns rather than for full operational deployment. 
+
+## 4 DT Qualities as Structured Sets of Verifiable Properties 
+
+DT qualities, such as fidelity or relevance, are often described at a conceptual level without guidance on how they can be rigorously verified in practice. In our work, we consider how DT qualities can be operationalised as structured sets of rigorously defined and verifiable properties, starting from the interpretation of Oakes et al. [19]. In this approach, we distinguish: 1. Conceptual qualities: high-level attributes of interest; 2. Formal properties: precise logical statements that define those qualities; 3. Verification evidence: the means by which a property may be justified; 4. Artefact instantiation: embedding of properties within concrete DT com-ponents.    
+
+> 3https://into-cps-association.github.io/constituent-model-development/overture/ fmi-support.html
+> 4https://github.com/INTO-CPS-Association/fmu-rabbitmq?tab=readme-ov-file SoS Case Study for Verification of Composed DTs 7
+
+The idea behind these distinctions is that the verification evidence contributes to a proof that the properties, and subsequently the qualities, are satisfied. We may regard properties as basic elements of a structured argument (as in a safety case) supporting the higher-level quality claim. Further, we aim to provide actionable guidance on how to embed these necessary properties using modelling constructs in the various DT components. 
+
+4.1 From Abstract Qualities to Formal Properties 
+
+For each high-level DT quality, we propose a set of formal properties to char-acterise the quality for the DT-enabled System (DTeS) of interest. We focus on four core qualities identified in [19], where they are initially described on models and their “lifting” to DTs is outlined: 
+
+• Relevance: a model is indeed based on the system it purports to describe. 
+
+• Verifiability: the ability to determine whether properties of interest are satisfied in a given model. 
+
+• Substitutability: safe replacement capability under defined assumptions. 
+
+• Fidelity: quantitative behavioural closeness to the referent. 
+
+4.2 Formalisation and Evidence: From Properties to Justification 
+
+The formally expressed properties of a DT are the basis for building an argu-ment that claims its high-level qualities are satisfied. In our case study, such properties will typically be expressed using VDM-RT constructs. For example, state invariants have a role to play in a Relevance argument; operation contracts (pre/post- conditions) are used to establish Verifiability by constraining inputs, preserving invariants, and supporting termination guarantees; relational trace predicates support behavioural comparison for Substitutability; and quantita-tive error bounds provide value in capturing closeness for a case evidencing that a certain level of Fidelity holds. The evidential basis for such formal statements will come from a range of sources, such as static proof, contract verification, trace comparison, or empirical calibration. 
+
+4.3 Artefact-Specific Instantiation 
+
+Our case study comprises three DT-related artefacts: the Pot Model (physical abstraction) and the DSM (optimisation logic), forming the Pot DT, and the EDS (context abstraction). All three artefacts may be evaluated against our qualities of interest. However, the interpretation of each quality depends on the architectural role of each artefact. For example, Tables 1, 2, and 3 summarise properties relating to each of these artefacts. The property number (column 1) indicates a quality to which each property may be relevant (R for Relevance, V for Verifiability, etc.). We give an informal description of each property and the forms of evidence that may be relevant to establishing it. 8 M T Khedr, M Xu, J S Fitzgerald and P G Larsen 
+
+> Table 1: Pot model – Property Classification
+> No.  Property  Formal Expression  Description  Evidence
+> P-R1 Moisture Bounds  0 ≤ moisture  ≤ 100  Moisture within physical limits Static proof (state invariant) P-R2 Valid Parameter Domains
+> 0 < soilType_coeff  ≤ 1 ∧ surfaceArea_m2  > 0 ∧
+> soilCapacity  > 0 ∧ 0 ≤ infRate  ≤ 1 ∧
+> 0 ≤ minT  ≤ 100  ∧ 0 < maxT  ≤ 100  ∧
+> minT  < maxT  ∧ pumpFlow_L_min  ≥ 0
+> Meaningful physical parameters Configuration validation P-V1 Invariant Preservation  moisture (t) ∈ [0 , 100]  Update respects physical constraints  Static proof P-V2 Moisture Update Totality  SimulateMoisture() always terminates  Update always produces next state  Structural analysis P-V3 Control Logic Termination  ControlLogic() always terminates  Pot control loop is total  Structural analysis P-S1  Behavioural Agreement  sign (∆moisture P hysicalP ot ) =  sign (∆moisture P otM odel ) Pot model prediction agrees with physical Pot Relational trace comparison P-S2  Threshold Consistency  (moisture < minT  )P hysicalP ot  ⇔ (moisture < minT  )P otM odel
+> Pot model aligns with physical pot on watering necessity Relational trace comparison P-S3  Command Agreement  pumpState P hysicalP ot  = pumpCM D P otM odel
+> Pot model produces same command as physical pot Relational trace comparison P-F1  Moisture Prediction Error  |moisture P otM odel  − moisture P hysicalP ot | ≤  ε Quantifies closeness to physical pot Empirical calibration + trace comparison P-F2 Environmental Sensitivity & Drying Consistency
+> evapF actor (t) ≥ evapF actor (t − 1)  ∧
+> pumpCM D  = f alse  ⇒ moisture (t) ≤ moisture (t − 1)
+> Pot model responds to environment changes and dries correctly when not watered Empirical calibration + trace comparison P-F3  Watering Effect Monotonicity  pumpCM D  = true  ⇒ moisture (t) ≥ moisture (t − 1)  Watering increases moisture Simulation-based validation
+
+SoS Case Study for Verification of Composed DTs 9
+
+> Table 2: Decision Service Model (DSM) – Property Classification
+> No.  Property  Formal Expression  Description  Evidence
+> DSM-R1 Moisture Bounds  0 ≤ moisture  ≤ 100  DT is defined only for realistic moisture values Static proof (state invariant) DSM-R2 Parameter Domain Validity
+> 0 < soilType_coeff  ≤ 1 ∧ surfaceArea_m2  > 0 ∧
+> soilCapacity  > 0 ∧ 0 ≤ infRate  ≤ 1 ∧
+> 0 ≤ minT  ≤ 100  ∧ 0 < maxT  ≤ 100  ∧
+> minT  < maxT  ∧ pumpFlow_L_min  ≥ 0
+> DT only valid for meaningful physical parameters Configuration validation DSM-R3 Environmental Stress Validity  evapF actor  ≥ 0 DT operates only under valid environmental stress  Input validation DSM-V1 Invariant Preservation  moisture (t) ∈ [0 , 100]  DT never generates invalid moisture  Static proof DSM-V2 Command Output Domain  optimizedCM D  ∈ {− 1, 0, 1} DT output is always well-formed Postcondition verification (static) DSM-V3 Control Logic Termination  OptimizeLogic() always terminates  DT control loop is total  Structural analysis DSM-S1  Decision-impact preservation  Inv P ot (s) ∧ Execute (optimizedCM D ) ⇒ Inv P ot (s′)
+> DSM can replace pot controller without violating safety envelopes Static invariant reasoning under substitution DSM-S2  Feasibility Preservation  F easible (state, optimizedCM D )
+> DSM never issues impossible commands or violates system constraints State-dependent constraint analysis DSM-F1  Moisture Prediction Error  |moisture DT  − moisture P hysicalP ot | ≤  ε Quantifies closeness to physical pot Empirical calibration + trace comparison DSM-F2 Evaporation Sensitivity Fidelity
+> |∂moisture DT
+> ∂evapF actor  − ∂moisture P ot
+> ∂evapF actor  | ≤  γ
+> DT reacts similarly to environment within tolerance  γ
+> Empirical trace comparison DSM-F3  Decision Stability  |∆moisture | < δ  ⇒
+> optimizedCM D (t) =  optimizedCM D (t − 1)
+> DT avoids oscillatory decisions for small  δ
+> Empirical trace comparison
+
+10 M T Khedr, M Xu, J S Fitzgerald and P G Larsen  
+
+> Table 3: Environment Digital Shadow (EDS) – Property Classification
+> No.  Property  Formal Expression  Description  Evidence
+> EDS-R1 Sensor Domain Coverage
+> temp  ∈ [−10 , 50]  ∧
+> hum  ∈ [0 , 100]  ∧
+> light  ∈ [0 , 100]
+> Environment model valid only for realistic inputs Input validation & Static proof (state invariants) EDS-V1 Invariant Preservation
+> − 10  ≤ temp  ≤ 50  ∧
+> 0 ≤ hum  ≤ 100  ∧
+> 0 ≤ light  ≤ 100
+> State variables remain in bounds Runtime assertion & Static proof EDS-V2 Evaporation Factor Non-negativity  evapF actor  ≥ 0 Evaporation stress is physically meaningful Postcondition verification (static) EDS-V3 Step Termination  Step() always terminates  Environment always progresses  Structural analysis EDS-V4 Environmental Consistency  same inputs  ⇒ same evapF actor  Deterministic behaviour  Static determinism reasoning EDS-F1 Sensor fidelity bounds
+> |temperature physical  − temperature EDS  | ≤  ε1 ∧|humidity physical  − humidity EDS  | ≤  ε2 ∧|light physical  − light EDS  | ≤  ε3
+> Quantifies closeness to real environment sensor readings Empirical trace comparison EDS-F2 VPD Physical Fidelity  evapF actor  ≈ V P D  × light
+> EDS approximates physical evapotranspiration Empirical calibration SoS Case Study for Verification of Composed DTs 11
+
+Pot Model Instantiation 
+
+Relevance is expressed through physical domain constraints. For example, in Ta-ble 1, Property P-R1 (Moisture Bounds) is encoded directly as a state invariant which defines the admissible state space and may be expected to contribute to a domain-relevance argument. 
+
+           
+
+> instance variables moisture : real := 50.0; inv moisture >= 0.0 and moisture <= 100.0;
+
+ 
+
+Invariant preservation and termination of operations contribute to verifia-bility. This can be achieved using formal proof obligations (POs), which ensure that any reachable state satisfies the invariant and guarantee the totality of operations by satisfaction of pre- and post-conditions. 
+
+                      
+
+> private UpdateMoistureFromSensor : () == > () UpdateMoistureFromSensor () == (
+> --update logic
+> )pre moistureSensor . getValue () >= 0.0 and moistureSensor . getValue () <= 100.0 post moisture >= 0.0 and moisture <= 100.0;
+
+ 
+
+In this case study, there are no loops or recursion, hence termination verifi-cation is trivial. Nevertheless, we include these properties for completeness and to illustrate that even simple DTs can be subjected to systematic verification obligations. Substitutability is interpreted as behavioural agreement with the physical pot under identical environmental inputs, including agreement in moisture trends (P-S1), consistency in threshold evaluation (P-S2), and agreement in decisions under identical inputs (P-S3). These may be validated via relational trace com-parison. Fidelity properties concern the bounded deviation between simulated and measured moisture trajectories. 
+
+Decision Service Model Instantiation 
+
+Properties relevant to the DSM are outlined in Table 2. Admissible domain con-straints (e.g., valid moisture range and parameter domains) relate to Relevance. Verifiability includes well-formedness of output. 
+
+                                   
+
+> private ComputeOptimisedCommand : () == > () ComputeOptimisedCommand () == (
+> --Computation of Optimised Command --(-1 =nil , 0=turn off , 1=turn on )
+> )pre moisture >= 0.0 and moisture <= 100.0 post optimizedCommand . getValue () in set { -1 ,0 ,1};
+
+ 
+
+The DSM differs architecturally from the Pot model; it is not intended to replicate controller behaviour but to optimise within safe bounds. Thus, Substi-tutability for the DSM may be defined in terms of decision-impact preservation 12 M T Khedr, M Xu, J S Fitzgerald and P G Larsen 
+
+(DSM-S1) rather than behavioural equivalence. In other words, if the DSM re-places the threshold controller, system safety invariants remain satisfied. Feasi-bility preservation (DSM-S2) additionally ensures that issued commands respect actuator and physical constraints. Fidelity properties (DSM-F1-F3) compare the predicted moisture evolution with the physical pot and ensure decision stability. 
+
+Environment DS Instantiation 
+
+Properties relevant to the EDS are outlined in Table 3. The EDS abstracts envi-ronmental context. Relevance is defined through sensor-domain constraints (tem-perature, humidity, light ranges). Verifiability includes deterministic behaviour and non-negativity of derived evapotranspiration factors. Substitutability is not considered for the EDS because, by definition, a DS does not influence the phys-ical system - it only provides context. Therefore, the question of substituting the DS for the real environment does not arise. Fidelity, however, remains necessary: the Pot DTs’ recommendations depend on accurate environmental data. Hence, Fidelity properties (EDS-F1, EDS-F2) quantify the deviation between simulated and measured environmental indicators. 
+
+## 5 Implications for Compositional Verification 
+
+In the case study to date, we have enumerated significant properties related to individual DT artefacts and indicated how they may play a role in verifying high-level qualities. We have not so far examined composition in an SoS setting. In this section, we share some insights from the case study so far on challenges that arise under composition. Local satisfaction of DT qualities does not guarantee their preservation at the SoS level. First, fidelity becomes an aggregate property. Even if individual DTs satisfy local error bounds, their interactions under shared resource constraints (e.g., water allocation across multiple pots) may amplify deviations, leading to emer-gent inaccuracies at the SoS level. Second, relevance shifts in scope. At the constituent system level, relevance is defined in terms of physically meaningful state bounds. At the SoS level, relevance must additionally capture contribution to global objectives such as sustainability, efficiency, or resilience. Third, substi-tutability becomes relational and architectural rather than local. A DSM that is locally safe may still produce decisions incompatible with other DTs when com-posed. Thus, substitutability evolves from physical equivalence to behavioural compatibility across interacting services. Performance and scalability concerns also arise with composing multiple DTs with real-time synchronisation (e.g., each Pot DT reading the shared EDS, the SoS coordinator reading from all Pot DTs and the EDS then responding with priority-based commands). Communication latency, state-synchronisation over-head, and potential co-simulation bottlenecks are also introduced. While our FMU-based export enables co-simulation, the overhead of verifying properties across, say, 100 Pots instead of 3 would be nontrivial. Each DT’s verification obli-gations (invariant checks, trace comparisons) would multiply, and global prop-erty monitoring may require time-consuming techniques. Thus, scalability is not SoS Case Study for Verification of Composed DTs 13 
+
+merely a runtime concern but a verification challenge too: compositional proof strategies must consider how verification cost grows with the number of DTs. These observations indicate that compositional verification must address both semantic (fidelity amplification, scope shift) and practical (performance, scalability) dimensions. Local DT guarantees must serve as formal assumptions for higher-level reasoning, and additional verification obligations emerge at each layer of composition. This motivates future research into compositional proof strategies and contract-based reasoning across DT-enabled SoS architectures. 
+
+## 6 Discussion 
+
+This section interprets the results of our first examination of the potential for op-erationalising DT qualities, considering what the formal approach reveals about DT verification practices. The operationalisation of DT qualities as structured sets of verifiable proper-ties suggests patterns in how verification obligations depend on artefact roles in the SoS setting. Across all three artefacts, relevance properties consistently relate to state invariants verifiable through static proof, suggesting that domain appro-priateness might be established early in the development lifecycle through type systems and invariant checking. This uniformity contrasts with substitutability and fidelity, where interpretation varies dramatically by architectural role. For the Pot Model, substitutability manifests as behavioural agreement un-der identical inputs—the model must predict the same qualitative effects as the physical pot. For the DSM, substitutability instead means decision-impact preservation: the DSM need not replicate the physical controller’s exact thresh-old logic behaviour, but must ensure that safety invariants remain satisfied when its recommendations are executed. This distinction is architecturally significant: it enables the DSM to provide optimised control strategies while the physical controller retains ultimate safety authority. This separation of concerns proves essential for modular verification in safety-critical DT applications. The aggregation of properties across quality dimensions reveals dependencies that compositional verification must address. The Pot Model’s fidelity-related properties (P-F1 to P-F4), see Table 1, depend on the EDS’s accuracy via the evapFactor input. This dependency is currently implicit in our verification ap-proach; we assume the EDS provides bounded-error environmental data, but do not formally capture this assumption as a contract. Future compositional ver-ification must make such dependencies explicit, enabling modular reasoning in which component verification relies on stated assumptions about its context. The challenges identified in Section 5 suggest that verification of DT qualities at the SoS level requires more than simply aggregating local guarantees and errors. Instead, compositional fidelity reasoning must account for interaction patterns, shared resource allocation strategies, and timing dependencies. Our integration of VDM-RT with FMI co-simulation bridges a gap between formal verification and industrial practice. Recent FMI-based work [16] has fo-cused on technical co-simulation improvements (clocked simulation, algebraic 14 M T Khedr, M Xu, J S Fitzgerald and P G Larsen 
+
+loop handling) but not on preserving formally verified quality properties through the FMU export process. Our demonstration that VDM-RT’s formal constructs (invariants, contracts, termination guarantees) can be exported as FMUs while maintaining verification evidence provides a practical pathway for deploying for-mally verified DTs in industrial co-simulation workflows. 
+
+## 7 Threats to Validity 
+
+As with any case study, several threats to validity must be acknowledged. 
+
+Internal validity. The VDM-RT models are validated through simulation and controlled execution traces rather than deployment on physical hardware. This enables observation and analysis but abstracts away sensor noise, actua-tor delays, and hardware imperfections that may affect real-world behaviour. The architectural separation between safety enforcement (physical controller) and DT-based optimisation (DSM recommendations) mitigates this threat by ensuring that DT-induced errors are bounded by physical safety constraints. 
+
+Construct validity. The four DT qualities of relevance, verifiability, substi-tutability and fidelity are drawn from Oakes et al. [19] based on recurring themes in DT literature. However, other quality dimensions (e.g., maintainability, ex-plainability, security) may be equally important in specific application contexts. The property decompositions presented reflect our interpretation of these quali-ties for the greenhouse domain. Alternative decompositions may be appropriate for domains with different characteristics or stakeholder priorities. 
+
+External validity. The greenhouse case study exhibits specific characteris-tics (shared environment, hierarchical control). Other domains (e.g., manufactur-ing, energy) may introduce additional complexities (e.g., safety-critical real-time constraints, legacy system integration) not captured here. Therefore, the gen-eralisability of our quality-instantiation patterns requires empirical validation through further case studies. 
+
+## 8 Conclusion 
+
+This paper has addressed the challenge of formally verifying DT qualities in SoS settings by considering the operationalising of abstract quality concepts – relevance, verifiability, substitutability, and fidelity – as sets of formally verifiable properties instantiated in VDM-RT models. Our first primary observation is that meaningful quality decomposition is artefact-dependent: the same quality (e.g., substitutability) manifests as be-havioural agreement for physical abstractions, decision-impact preservation for optimisation services, and safe context replacement for environmental models. This role-dependency has direct implications for modular verification strategies in multi-artefact DT systems. Our second observation is that VDM-RT’s con-structs potentially relate to verification evidence types (static proof, contract verification, trace comparison, empirical calibration). Third, in the case study, we have observed the practical integration of formal verification with industry-standard co-simulation through FMI-compliant FMU export, bridging the gap between rigorous formal analysis and industrial simulation workflows. SoS Case Study for Verification of Composed DTs 15 
+
+Through the greenhouse case study, we have identified three specific chal-lenges affecting DT composition: fidelity error amplification under resource con-straints, the need for scope-shifting relevance definitions at the SoS level, and the evolution of substitutability from physical equivalence to architectural compati-bility. These observations indicate that compositional verification of DT qualities requires explicit formalisation of dependencies between artefacts and the devel-opment of proof rules for deriving SoS-level quality guarantees from guarantees at the level of the constituent systems. Our experience suggests that future work should address three key directions. 
+
+SoS-level formalisation : The full formalisation of the SoS-level DT, including multi-objective optimisation under global resource constraints, requires extend-ing our quality framework to collective behaviours and emergent phenomena. 
+
+Tool support and automation : Increasing proof automation for invariant preser-vation, termination analysis, and trace comparison would significantly enhance scalability. Integration with existing VDM-RT toolchains such as Overture [13] and VDM2C [8] should be prioritised. Additional case studies : Empirical valida-tion in domains such as smart manufacturing, energy systems, or transportation would strengthen generalisability claims and identify domain-specific patterns. In conclusion, this work proposes a foundation for rigorous quality verification of individual DT artefacts as a step towards compositional verification in SoS settings. By transforming informal quality notions into structured property sets with explicit verification evidence, we enable systematic reasoning about DT trustworthiness. The challenges identified suggest a research agenda for scaling formal DT verification from individual components to SoS architectures, where verified local guarantees must be preserved under hierarchical composition. 
+
+Acknowledgments. We are grateful to Prasad Talasila for support in the case study and Kenneth Lausdahl for support with VDM-RT and its FMU connec-tion. Note: AI-powered tools, specifically ChatGPT and Grammarly, were used for clarity and text flow refinement in the production of this paper. The authors conducted a thorough review and necessary revisions and take full accountability for the final published material. 
+
+Disclosure of Interests. The authors have no competing interests to declare. 
+
+## References  
+
+> 1. Bitencourt, J., Wooley, A., Harris, G.: Verification and validation of digital twins: a systematic literature review for manufacturing applications. International Jour-nal of Production Research 63 , 342–370 (2024). https://doi.org/10.1080/00207543. 2024.2357741 2. Borth, M., Verriet, J., Muller, G.: Digital Twin Strategies for SoS 4 Challenges and 4 Architecture Setups for Digital Twins of SoS. In: 2019 14th Annual Conference System of Systems Engineering (SoSE). pp. 164–169 (2019). https://doi.org/10. 1109/SYSOSE.2019.8753860 3. David, I., Shao, G., Gomes, C., Tillbury, D., Zarkout, B.: Interoperability of dig-ital twins: Challenges, success factors, and future research directions. In: Lever-aging Applications of Formal Methods, Verification and Validation: Application
+
+16 M T Khedr, M Xu, J S Fitzgerald and P G Larsen Areas. LNCS, vol. 15223, pp. 27–46. Springer (2024). https://doi.org/10.1007/ 978-3-031-75390-9_3 4. Fitzgerald, J., Gomes, C., Larsen, P.G. (eds.): The Engineering of Digital Twins. Springer, Cham (2024). https://doi.org/10.1007/978-3-031-66719-0 5. Frasheri, M., Ejersbo, H., Thule, C., Esterle, L.: RMQFMU: Bridging the Real World with Co-simulation For Practitioners. In: Macedo, H.D., Thule, C., Pierce, K. (eds.) Proceedings of the 19th International Overture Workshop (2021). https: //doi.org/10.48550/arXiv.2107.01010 6. Fuller, A., Fan, Z., Day, C., Barlow, C.: Digital twin: Enabling technologies, chal-lenges and open research. IEEE Access 8, 108952–108971 (2020). https://doi.org/ 10.1109/ACCESS.2020.2998358 7. Hansen, S.T., Kamburjan, E., Kazemi, Z.: Monitoring reconfigurable simulation scenarios in co-simulated digital twins. In: Margaria, T., Steffen, B. (eds.) Lever-aging Applications of Formal Methods, Verification and Validation. Application Areas. pp. 47–61. Springer Nature Switzerland, Cham (2025). https://doi.org/10. 1007/978-3-031-75390-9_4 8. Hasanagić, M., Fabbri, T., Larsen, P.G., et al.: Code generation for distributed em-bedded systems with VDM-RT. Design Automation for Embedded Systems (Nov 2019), https://doi.org/10.1007/s10617-019-09227-0 9. Huang, L., Varshney, L.R., Willcox, K.E.: Formal verification of digital twins with tla and information leakage control (2024), https://arxiv.org/abs/2411.18798 10. INCOSE: INCOSE Systems Engineering Handbook: A Guide for System Life Cycle Processes and Activities. Wiley, 5th edn. (2023) 11. ISO/IEC: Digital twin - Concepts and terminology. Standard ISO/IEC 30173:2023, International Organization for Standardization, Geneva, CH (2023), https://www. iso.org/standard/78020.html 12. Khedr, M.T., Fitzgerald, J.S.: The composition of digital twins for systems-of-systems: a systematic literature review (2025), https://arxiv.org/abs/2506.20435 13. Larsen, P.G., Battle, N., Ferreira, M., Fitzgerald, J., Lausdahl, K., Verhoef, M.: The Overture Initiative – Integrating Tools for VDM. SIGSOFT Softw. Eng. Notes 
+
+35 (1), 1–6 (January 2010). https://doi.org/10.1145/1668862.1668864 14. Lv, Z., Fersman, E. (eds.): Digital Twins: Basics and Applications. Springer, Cham (2022). https://doi.org/10.1007/978-3-031-11401-4 15. Michael, J., Pfeiffer, J., Rumpe, B., Wortmann, A.: Integration challenges for digi-tal twin systems-of-systems. In: Proceedings of the 10th IEEE/ACM International Workshop on Software Engineering for Systems-of-Systems and Software Ecosys-tems. p. 9–12. SESoS ’22, Association for Computing Machinery, New York, NY, USA (2022). https://doi.org/10.1145/3528229.3529384 16. Modelisar Consortium: Functional Mock-up Interface 3.0. Tech. rep., Modelisar (November 2022), https://fmi-standard.org 17. Naeem, M., Seceleanu, C.: Contract-based verification of digital twins. In: Zhou, Y., Teo, S.G., Xie, X., Ding, Z., Liu, Y. (eds.) Engineering of Complex Computer Systems. pp. 338–357. Springer Nature Switzerland, Cham (2026) 18. National Academies of Sciences, Engineering, and Medicine: Foundational Research Gaps and Future Directions for Digital Twins. The National Academies Press, Washington, DC (2024). https://doi.org/10.17226/26894 19. Oakes, B.J., Gomes, C., Larsen, P.G., et al.: Examining model qualities and their impact on digital twins. In: 2023 Annual Modeling and Simulation Conference (ANNSIM). pp. 220–232 (2023) SoS Case Study for Verification of Composed DTs 17 20. Olsson, T., Axelsson, J.: Systems-of-systems and digital twins: A survey and analy-sis of the current knowledge. In: 2023 18th Annual System of Systems Engineering Conference (SoSe) (2023). https://doi.org/10.1109/SoSE59841.2023.10178527 21. Tao, F., Cheng, J., Qi, Q., et al.: Digital twin-driven product design, manufacturing and service with big data. Int J Adv Manuf Technol 94 , 3563–3576 (2018). https: //doi.org/10.1007/s00170-017-0233-1 22. Thule, C., Lausdahl, K., Larsen, P.G.: Overture FMU: Export VDM-RT Models as Tool-Wrapper FMUs. In: Pierce, K., Verhoef, M. (eds.) The 16th Overture Workshop. pp. 23–38. Newcastle University, School of Computing, Oxford (July 2018), TR-1524 23. Verhoef, M., Larsen, P.G., Hooman, J.: Modeling and Validating Distributed Em-bedded Real-Time Systems with VDM++. In: Misra, J., Nipkow, T., Sekerinski, E. (eds.) FM 2006: Formal Methods. pp. 147–162. Lecture Notes in Computer Science 4085, Springer-Verlag (2006). https://doi.org/10.1007/11813040_11 24. Waters, G.: Testing, Evaluation, Verification and Validation (TEVV) of Digital Twins: A Comprehensive Framework (2025), https://arxiv.org/abs/2507.04555

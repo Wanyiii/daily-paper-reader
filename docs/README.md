@@ -41,7 +41,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-08-30</span>
+      <span class="dpr-home-dashboard-kicker">2026-08-31</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 21 篇</strong>
@@ -51,7 +51,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>8</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-08-30 23:07:22 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-01 00:55:24 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -62,9 +62,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共读21篇论文，精读8篇、速读13篇，重点聚焦3D重建与生成模型新突破。</p>
-<p>最值得关注：ExMesh++实现多视图到可重光照UV-PBR网格的拓扑自适应重建，Drift VAE用条件后验流统一生成与表征学习。</p>
-<p>下一步建议先精读两篇高分论文，再按需浏览多模态边缘推理及3D高斯泼溅压缩基准，快速拓展视野。</p>
+<p>今日精读21篇论文，聚焦3D空间推理与医疗多模态大模型两大高价值方向。</p>
+<p>最值得关注：OmniCAD为机器人装配提供大规模3D推理基准，医疗多模态模型实现图文问答与分割的像素级落地。</p>
+<p>建议先看这两篇精读，再速读室内设计、导航与遥感分割的8分工作，拓展跨场景应用视野。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -76,7 +76,7 @@
     <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="ExMesh++: From Multi-View Images to Relightable UV-PBR Mesh Assets via Topology-Adaptive Reconstruction and Decomposition">ExMesh++: From Multi-View Images to Relightable UV-PBR Mesh Assets via Topology-Adaptive Reconstruction and Decomposition</span></li><li><span class="dpr-home-dashboard-paper-title" title="Drift Variation Autoencoder: Unifying Generation and Representation Learning through Conditional Posterior Flow Matching">Drift Variation Autoencoder: Unifying Generation and Representation Learning through Conditional Posterior Flow Matching</span></li><li><span class="dpr-home-dashboard-paper-title" title="V-Link: Recovering Lost Visual Representations in Action DiT for Vision-Language-Action Models">V-Link: Recovering Lost Visual Representations in Action DiT for Vision-Language-Action Models</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="OmniCAD: A Large-Scale Benchmark for 3D Spatial Reasoning in Robotics Assemblies">OmniCAD: A Large-Scale Benchmark for 3D Spatial Reasoning in Robotics Assemblies</span></li><li><span class="dpr-home-dashboard-paper-title" title="From Reasoning to Pixels: Grounded Medical Multimodal LLMs for VQA and Segmentation">From Reasoning to Pixels: Grounded Medical Multimodal LLMs for VQA and Segmentation</span></li><li><span class="dpr-home-dashboard-paper-title" title="GAAT: Geometry-Aware Alignment Transformer for Multimodal UAV Perception">GAAT: Geometry-Aware Alignment Transformer for Multimodal UAV Perception</span></li></ul>
   </div>
   <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>5</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span></div>
 </section>
@@ -89,9 +89,9 @@
     <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CST: Collaborative Selective Transmission for Communication-Efficient Multimodal Edge Inference">CST: Collaborative Selective Transmission for Communication-Efficient Multimodal Edge Inference</span></li><li><span class="dpr-home-dashboard-paper-title" title="M$^3$ISR: A Multi-Modal Multi-View Benchmark for 3D/4D Gaussian Splatting and Feedforward Compression">M$^3$ISR: A Multi-Modal Multi-View Benchmark for 3D/4D Gaussian Splatting and Feedforward Compression</span></li><li><span class="dpr-home-dashboard-paper-title" title="Learning Sample-wise Rank-aware Interpolation Weights for Composed Visual Data Retrieval">Learning Sample-wise Rank-aware Interpolation Weights for Composed Visual Data Retrieval</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Mind the Couch! Eliciting MLLM Reasoning in Interior Design via Weak-to-Strong Task Vector Injection">Mind the Couch! Eliciting MLLM Reasoning in Interior Design via Weak-to-Strong Task Vector Injection</span></li><li><span class="dpr-home-dashboard-paper-title" title="OptiSight: Bridging Semantic Reasoning and Geometric Control for Embodied Navigation">OptiSight: Bridging Semantic Reasoning and Geometric Control for Embodied Navigation</span></li><li><span class="dpr-home-dashboard-paper-title" title="CRISP: Calibration-Aware Visual State Space Duality for Remote Sensing Semantic Segmentation">CRISP: Calibration-Aware Visual State Space Duality for Remote Sensing Semantic Segmentation</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">multimodal <strong>7</strong></span><span class="dpr-home-dashboard-tag">d-vision <strong>6</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>7</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>5</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
 </section>
 </div>
 
