@@ -1,0 +1,281 @@
+Title: WALDO: One-Shot Exemplar-Conditioned Object Detection in Cluttered Scenes
+
+URL Source: https://arxiv.org/pdf/2608.28216v1
+
+Published Time: Mon, 31 Aug 2026 01:04:17 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# WALDO: O NE -S HOT EXEMPLAR -C ONDITIONED OBJECT 
+
+# DETECTION IN CLUTTERED SCENES 
+
+A P REPRINT 
+
+Kishor Datta Gupta 1, Ahmed Rafi Hasan 2, Md. Mahfuzur Rahman 1, Md. Sadman Haque 2 and Mohd Ariful Haque 11Department of Cyber Physical Systems, Clark Atlanta University, Atlanta, GA, USA 
+
+> 2
+
+Department of Computer Science and Engineering, United International University, Dhaka, Bangladesh August 31, 2026 
+
+# ABSTRACT 
+
+Locating a specific object instance in a cluttered scene using a single reference image and a short description, and reporting when that instance is absent, large vision-language models usually ad-dress this task. We ask whether the same capability is available far more cheaply, from repre-sentations already learned by a world-model pretraining objective. We present WALDO , a one-shot exemplar- and language-conditioned detection head with 3.4M trainable parameters that reads frozen V-JEPA 2.1 features to jointly predict object localization and target presence, with no gradient on the backbone. Because exemplar-conditioned supervision is scarce, we synthesize training episodes from instance annotations, mining exemplars from ground-truth boxes and constructing absence cases that exclude the referenced instance while leaving same-category distractors in view. This is easy to get wrong: in the obvious implementation, crop size alone predicts the label, and a head trained on it reaches 0.9998 absence AUROC without ever consulting the exemplar, and we report the negative controls that close the shortcut. On 35 held-out cluttered scenes, WALDO achieves a 0.461 catalogue AP@50, compared to 0.306 for a prompted Grounding DINO baseline under an identical scorer. Substituting DINOv3 for V-JEPA under a matched 576-token grid drops within-category absence AUROC from 0.880 to 0.726 and instance AP@50 from 0.201 to 0.141, isolating the pretraining objective rather than input resolution as the source of the gain. Instance-level Suc-cess@1, however, reaches only 0.190 against a 0.190 category-chance floor: world-model features transfer to localization precision and absence detection but not to instance identity. 
+
+# 1 Introduction 
+
+Consider handing a robot, a retail inventory system, or a photo search tool a single photograph of one specific car, not any car of that model but this one, parked among near-identical vehicles, with a short description, and asking it to point to the object or state plainly that it is absent. This task, localizing one instance from a reference image and description amid clutter, underlies robotic fetch-and-place, cross-camera re-identification and retail auditing, extending open-vocabulary retrieval from category to identity. Open-vocabulary detectors such as GLIP [10], OWL-ViT [12], OWLv2 [13] and Grounding DINO [11], built on con-trastive vision-language models [6, 17, 24], localize objects from free-form text but answer a category-level question: a prompt returns any matching instance, with no notion of which one was meant. Referring expression comprehen-sion [9, 23] disambiguates one object through language alone, but every benchmark guarantees the referent is present, so these methods are never trained to abstain. One-shot detectors such as CoAE [5] and OS2D [15] replace the cate-gory label with an exemplar image and instance-level correspondence, but drop language conditioning and treat every query as answerable. We first tested whether this gap could be closed without training, by comparing each exemplar embedding via cosine similarity against the target crop and eight same-size, non-overlapping distractors from the same scene, using a frozen V-JEPA 2 checkpoint [1] and, separately, DINOv3 [19] features. The target beat every distractor in only 15 .9% of arXiv:2608.28216v1 [cs.CV] 28 Aug 2026 WALDO: One-Shot Exemplar-Conditioned Object Detection in Cluttered Scenes A P REPRINT 
+
+Figure 1: WALDO is named after the search-and-find character from the game Where’s Waldo? [22], who is likewise found by matching one distinctive figure against a densely cluttered scene. scenes with V-JEPA 2 and 14 .3% with DINOv3, barely above the 11 .1% expected from chance. Generic frozen similarity carries almost no instance-discriminating signal: correspondence must be learned, and presence must be an explicit supervised decision, not inferred post hoc from a similarity threshold. This is the gap WALDO 1 closes: from a scene, an exemplar and a description, it localizes the referenced instance and determines whether it is present. WALDO is a one-shot detection head with 3.4M trainable parameters over frozen spatial tokens from V-JEPA 2.1 [14], compared under an identical recipe to DINOv3 [19] and SigLIP2 [20]. It fuses a patch-wise correlation score against the exemplar, the strongest known inductive bias for one-shot correspondence [5, 15], with FiLM conditioning [16] from the joint exemplar-text embedding, and jointly predicts per-patch localization and scene-level presence, so absence is a trained output rather than a byproduct of low confidence. 
+
+Contributions. (i) We formulate exemplar-conditioned detection with explicit presence determination, distinct from category-level open-vocabulary detection. (ii) We propose WALDO, a lightweight, backbone-agnostic head fusing ex-emplar correlation with FiLM conditioning to predict localization and presence jointly. (iii) We introduce an episode-mining strategy generating instance-level and hard/easy absence supervision from sparse annotations, with region geometry decoupled from the label to prevent shortcut learning. (iv) We show WALDO substantially outperforms the strongest open-vocabulary baseline on catalogue detection, while instance identity remains unresolved. 
+
+# 2 Related Work 
+
+Few-shot object detection supplies several support images per class and asks whether a query region belongs to that class [8, 21]; despite needing less supervision per class this remains a category-level question, not the single-instance question CoAE [5] and OS2D [15] pose. More recent methods build single-instance correspondence on frozen self-supervised backbones rather than learning it from scratch: DE-ViT projects DINOv3 features into a prototype subspace [26] and PerSAM derives an attention prior from SAM’s image encoder [25], both computed once from a single exemplar. Their backbones are uniformly image-only: none accepts a text description alongside the exemplar, so none can disambiguate two visually similar reference objects, and none supervises presence separately rather than reading it off a similarity score. Open-set recognition originates in classification, where Scheirer et al. formalized rejecting classes never seen at training time [18]. Open-set detection brings this to localization: Dhamija et al. formalized the first protocol [2], ORE incrementally learns categories flagged as unknown [7], and Han et al. push unknown instances into low-density regions of the feature space [4]. All treat absence as category novelty , with no metric for instance-level absence: whether one specific, previously seen object rather than a same-category look-alike is present in a new image. That distinction is easy to lose, since shortcut learning lets cues such as region size predict a label without the exemplar ever being consulted [3]. WALDO conditions jointly on an exemplar and free text, like referring expression methods, but without assuming the referent is present; it resolves instance rather than category identity, like one-shot detectors, but adds a presence deci-2WALDO: One-Shot Exemplar-Conditioned Object Detection in Cluttered Scenes A P REPRINT 
+
+sion supervised separately and split into same-category and different-category negatives. It also holds a detection head fixed while substituting a video-predictive backbone for image-contrastive and image-self-distilled alternatives, test-ing whether a world-model pretraining objective transfers to a spatial, instance-level task rather than the classification, retrieval and planning tasks on which it has been validated. 
+
+# 3 Method 
+
+3.1 Problem setting 
+
+Given a scene I, an exemplar e and a short description t, we return a ranked set of boxes {(bk, s k)} localizing that 
+
+object and a scalar p ∈ [0 , 1] for whether it is present in I at all; queries may be issued over any sub-region r ⊆ I,the whole image being r = I. We distinguish two settings that are routinely conflated. In the catalogue setting any instance of the exemplar’s category is correct, the question an open-vocabulary detector answers. In the instance 
+
+setting only the exemplar’s own box is correct and every other same-category object is a false positive by construction, since no text prompt can express which of ten similar vehicles is meant. We report both, and their difference. 
+
+3.2 Synthesizing exemplar-conditioned episodes 
+
+Exemplar-conditioned supervision does not exist at scale. Our corpus provides 763 instance-level boxes over 220 
+
+dense scenes but only two distinct catalogue reference photographs, and training on those directly would supervise 
+
+category detection, since a model could satisfy the objective while ignoring the exemplar. We therefore mine exemplars from the ground-truth boxes; one episode is one training example, of one of three kinds. Positive : the exemplar is an augmented crop of box i in scene S, the query region is S or a sub-crop containing box i, and the target is box 
+
+i, so every other annotated object lies in the same token grid and must score low. Within-category absent : the same exemplar with a region that excludes box i but may still contain other instances of its category. Cross-category absent : an exemplar of one category against a scene of the other. Both absent kinds carry presence label 0. We draw one episode per annotated instance per epoch, so crowded scenes are not under-sampled; the realized mixture is 66% 
+
+positive, 19% within-category absent, 15% cross-category absent. 
+
+Region scale must be drawn before the label. This construction can fail silently, and we report it because it gener-alizes to any work synthesizing absence supervision. A natural first implementation makes positives whole-scene and absences sub-crops, since a whole-scene region always contains the target and cannot express a within-category ab-sence. Region area then predicts the label almost perfectly: a head trained this way reached 0.9998 absence AUROC by epoch six without consulting the exemplar, having learned to measure the crop rather than look for the object. We break the correlation by drawing the region scale from one distribution shared by all three episode kinds before the label is chosen, routing whole-scene absences to the cross-category kind, the only kind that can express one. Negative controls verify the fix: the AUROC of region area, width, origin x and aspect ratio against the presence label is 0.529 ,
+
+0.529 , 0.442 and 0.491 , against 0.5 for chance and ≈ 1.0 on area for the leaking sampler. Unit tests pin each within 
+
+0.12 of chance and keep all four cells of (present, absent) × (whole-scene, cropped) populated. The scale range [0 .40 , 0.55] of the scene side is measured, not chosen: a crop must be placeable so that it excludes 
+
+the target as well as contains one, and the first constraint collapses as crops grow, from 95 .6% of instances at 0.45 to 
+
+80 .9% at 0.55 and 18 .2% at 0.75 . Redrawing the scale on each rejection concentrates absent regions at the small end and reintroduces the leak, so we place positive crops by interval arithmetic. 
+
+Exemplar augmentation. A mined exemplar is a crop of the very image in which it must be found, so a model could in principle match exact pixels; augmentation is the only defence. We apply rotation ( ±12 ◦), random-scale re-crop to 
+
+78 to 100% , photometric jitter, Gaussian blur and sensor noise, and a JPEG round-trip at quality 40 to 88 , the last two attacking exact-pixel matching directly, re-rolled every epoch, since exemplars are not cached. Catalogue photographs are mixed in at 25% to keep the studio-to-scene domain gap in the training distribution; a catalogue exemplar marks every visible instance of its category while a mined one marks exactly one object , and conflating them would teach the head that the exemplar does not matter. 
+
+3.3 Conditioned detection head Frozen features. The query region is encoded by a frozen V-JEPA 2.1 ViT-L/16 into a grid of N = 24 × 24 = 576 
+
+patch tokens Z ∈ RN ×1024 at 384 px; because the backbone is a video model, a still image is duplicated into a single tubelet first. The exemplar is encoded by the same frozen instance and mean-pooled over patch tokens into z ∈ R1024 :a JEPA has no class token, and pooling over patches keeps the exemplar vector in the same space as the tokens it will 3WALDO: One-Shot Exemplar-Conditioned Object Detection in Cluttered Scenes A P REPRINT 
+
+Figure 2: WALDO architecture. (1) Episodes: category- and instance-level positives, within- and cross-category absences. (2) A shared frozen V-JEPA 2.1 encodes exemplar and query region into Ze and Zq , whose per-patch cosine similarity c is appended to the tokens; a frozen SigLIP2 text tower encodes the description into u. (3) Tokens are FiLM-conditioned on (Ze, u ), self-attended, and read out by box, objectness and presence heads. be compared against. The description is encoded by the frozen SigLIP2 text tower into u ∈ R1152 ; V-JEPA has no text encoder, so this is structural rather than a design compromise. No gradient reaches any encoder, which is read only through its embedding width and token-grid interface. 
+
+Correlation channel. For each patch we compute the cosine similarity between that patch and the exemplar vector, in the backbone’s own space before any learned projection can distort it, and append it as an input feature: 
+
+cn = ⟨Zn, z ⟩∥Zn∥ ∥ z∥ , X =  Z ∥ c  Wtok + π, (1) with Wtok ∈ R1025 ×d, d = 256 , and π a learned positional embedding. Concatenating before projection rather than adding it as a late bias makes the signal available to every downstream layer, and lets the head generalize to unseen exemplars. 
+
+Conditioning and prediction. The exemplar and description are projected to d dimensions, concatenated, and used to predict a feature-wise affine modulation applied identically to all N tokens: 
+
+[γ; β] = g [ zW e ∥ uW t ], X ← X ⊙ (1 + γ) + β. (2) This global rescale lets a term such as “maroon” reweight whichever learned dimensions carry that property across every patch at once, and is the only path by which the description reaches the prediction. The final layer of g is zero-initialized, so the module begins as the identity and conditioning is learned rather than injected as noise at step 
+
+0. The modulated grid then passes through three pre-norm transformer blocks ( d=256 , 8 heads, MLP ratio 3.0,dropout 0.1) and a layer norm, after which three linear heads read out per-patch objectness on, per-patch boxes, and a single presence logit. Boxes are decoded as an offset from the predicting patch’s own centre μn, as (cx, c y )n =
+
+μn + ( σ(ρ1:2  
+
+> n
+
+) − 12 ) ⊙ ( 2 
+
+> gw
+
+, 2 
+
+> gh
+
+) and (w, h )n = σ(ρ3:4  
+
+> n
+
+), in cxcywh form normalized to the region; bounding the offset to ±1 patch width keeps the objectness map and the boxes referring to the same location, which is what makes per-patch supervision meaningful, while width and height remain free in [0 , 1] . Presence is read from an attention-pooled summary ¯x = P 
+
+> n
+
+softmax( W x )n xn rather than a mean: absence is the claim that no patch matches, and a mean over 576 patches lets background outvote the one patch that found the target. The head totals 3.39 M parameters. 4WALDO: One-Shot Exemplar-Conditioned Object Detection in Cluttered Scenes A P REPRINT 
+
+3.4 Training and inference 
+
+A patch is positive for a ground-truth box if its centre falls inside that box and within 1.5 patch widths of the box centre; the radius matters because the median target spans only 3 × 4 patches, so assigning every interior patch would leave a positive set dominated by boundary patches seeing mostly background. Every box keeps at least its nearest patch, and when two boxes claim one patch the smaller box wins, so a small object cannot lose its only positive. With 
+
+P the positives and npos = |P| ,
+
+L = 1
+
+npos 
+
+X
+
+> n
+
+FL( on, y n) + 1
+
+npos 
+
+X
+
+> n∈P
+
+h
+
+λ1∥bn − ˆbn∥1
+
++λg
+
+ 1 − GIoU( bn, ˆbn)i
+
++ λp BCE( p, ˆp)
+
+(3) with focal loss FL at α=0 .25 , γ=2 .0, and λ1 = 5 .0, λg = 2 .0, λp = 1 .0. Focal loss and an objectness bias initialized to − log(99) keep the 99% of background patches from dominating early gradients, and GIoU retains gradient for disjoint boxes. We train the head alone with AdamW (one-cycle, peak learning rate 3 × 10 −4, 5% warmup, weight decay 0.05 , batch size 8, gradient clipping 1.0), caching frozen scene tokens and text embeddings but never exemplars, so their augmentation re-rolls each epoch. Checkpoints are selected on validation instance Success@1 with absence AUROC as a tie-break, on episodes drawn at a fixed sampling epoch so the curve reflects model improvement, not episode luck. At inference the model ranks all 576 boxes by objectness and emits the top K with the presence probability, applying no threshold and no NMS internally; NMS is applied by the evaluation harness, identically to our model and to every baseline. Being region-callable by construction, the model can also answer a query with a sequence of looks, and we implement a coarse-to-fine variant that fuses detections over a fixed budget of regions, the first always the whole scene, under a hand-designed rather than learned selection rule. All results below are single-pass unless stated. 
+
+# 4 Experimental Setup 
+
+We report two comparisons that control different variables. The backbone ablation substitutes DINOv3 or the SigLIP2 vision tower for V-JEPA 2.1, leaving head, sampler, assignment, loss, optimizer, split and seed identical, so the pretrained representation is the only free variable. The baseline comparison is coarser by necessity: Ground-ing DINO and OWLv2 are complete detectors with their own proposals, conditioning interface and supervision, and nothing about them can be held fixed. It answers only whether the assembled system beats what a practitioner would reach for off the shelf, in the one setting a prompt-conditioned detector can express. 
+
+4.1 Dataset and splits 
+
+Telling this vehicle from a vehicle of the same model needs per-object ground truth in scenes full of near-identical category members, precisely what category-level annotation discards, so no public benchmark scores it. We therefore annotated dense parking lots and aircraft bays: 763 instance boxes over 220 scenes at 512 ×512 (103 car, 117 aircraft), targeting one dark-red Toyota Highlander and one white Boeing airliner. Scenes hold a median of 3.5 instances and up to 10 , giving 2,638 within-scene same-category pairs: the hard negatives the instance setting depends on. We split by scene at seed 0 (Table 1); splitting by annotation would leak evaluation pixels into training. Two properties bound every conclusion in Sec. 5. Two categories and two descriptions leave the language channel one bit, a category switch, so instance discrimination rests on the exemplar alone; and with catalogue photographs for only two objects, the exemplars supervising instance behaviour are mined from the scenes themselves (Sec. 3.2). At test time that exemplar is an unaugmented crop of the target from the image in which it must be found, so the instance setting is easier than cross-view re-identification: the model matches an object against its own pixels. 
+
+4.2 Backbone arms and baselines 
+
+The main model pairs a frozen V-JEPA 2.1 ViT-L/16 [14] with the SigLIP2 ViT-SO400M/16-384 text tower [20], the latter structural since V-JEPA has no language pathway. DINOv3 ViT-B/14 [19] is the clean control: self-supervised and image-only, with no language supervision and no predictive video objective, it isolates the pretraining objective against a strong general-purpose representation, running interpolate pos encoding at 336 px with its class token discarded. The SigLIP2 vision tower is the deliberately confounded arm: its image and text encoders are contrastively pre-aligned, so its patch features already live in a space shaped by language. That confound is informative, since pre-alignment should then help category retrieval but not instance identity or absence, a prediction Table 2 tests. 5WALDO: One-Shot Exemplar-Conditioned Object Detection in Cluttered Scenes A P REPRINT 
+
+Table 1: Experimental setup. Top : splits, by scene, stratified by category at seed 0. Bottom : backbone arms. Patch size differs across encoders, so we fix the grid at 24 × 24 = 576 and derive the input as 24 × patch; at an input matched to V-JEPA’s 384 px, DINOv3’s patch-14 grid would be 28 × 28 = 784 tokens against V-JEPA’s 576 , and the difference could be read as extra resolution rather than better features. This matches the token budget, not the pixel budget: DINOv3 receives 23% fewer input pixels and is the only arm run away from its pretraining resolution, both of which cut against it.                         
+
+> Train Val Test Scenes 150 35 35
+> Instances 523 124 116
+> Backbone Patch Input DHead V-JEPA 2.1 ViT-L/16 16 384 1024 3.39M DINOv3 ViT-B/14 14 336 768 3.26M SigLIP2 ViT-SO400M/16 16 384 1152 3.45M
+
+Table 2: Frozen-backbone ablation, single-pass inference. One row per training run; head, episodes, assignment, split and seed are identical across rows and every backbone emits a matched 24 × 24 grid (Table 1), so the pretrained representation is the only free variable. The two blocks are one forward pass scored under two acceptance rules and must not be compared to one another : in the instance block exactly one box per query is correct and every same-category object is a false positive by construction. IoU top-1 counts misses as zero; IoU matched averages over true positives only and is n/a when a backbone yields none at the fixed 0.5 threshold, where P/R is tabulated for the catalogue block alone.                                                                                                        
+
+> Success@ KAP Best F1 P / R @ 0.5 Mean IoU Setting Backbone @1 @5 @25 @50 @75 [.5:.95] F1 PRthr PRtop-1 matched Catalogue
+> n=35
+> V-JEPA 2.1 .629 .771 .530 .461 .168 .208 .453 .476 .431 .34 1.000 .181 .502 .777
+> DINOv3 .600 .886 .492 .428 .021 .139 .471 .452 .491 .34 .857 .103 .425 .719 SigLIP2 .743 .829 .522 .481 .063 .189 .516 .686 .414 .37 1.000 .121 .530 .750 Instance
+> n=116
+> V-JEPA 2.1 .190 .517 .237 .201 .108 .108 .335 .427 .276 .33 ––.174 .845
+> DINOv3 .190 .474 .179 .141 .020 .049 .282 .259 .310 .28 ––.145 n/a SigLIP2 .224 .466 .214 .196 .007 .073 .285 .235 .362 .31 ––.171 n/a
+
+Table 3: Comparison with frozen open-vocabulary detectors. All rows share test scenes, scorer, NMS (IoU = 0 .5)and detection cap. Scores are restricted to catalogue retrieval, the only setting a prompt-conditioned detector can express; Can express records that interface limitation, not accuracy, and is why Table 4 and the instance block of Table 2 carry no baseline row. Generic prompts use a class-agnostic vocabulary ( object. part. vehicle. ... )naming neither target.                                                                            
+
+> Best F1 Mean IoU Can express Method Conditioning S@1 AP@50 F1 Rtop-1 matched Cat. Inst. Abs. WALDO (SigLIP2) exemplar + text .743 .481 .516 .414 .530 .750 ✓✓✓
+> WALDO (V-JEPA) exemplar + text .629 .461 .453 .431 .502 .777 ✓✓✓
+> Grounding DINO category prompt .429 .306 .357 .543 .335 .770 ✓××
+> Grounding DINO generic prompt .114 .101 .162 .543 .093 n/a ✓××
+> OWLv2 category prompt .029 .109 .211 .707 .032 .754 ✓×†×
+> OWLv2 generic prompt .000 .057 .126 .707 .081 .722 ✓×†×
+> †Image-conditioned OWLv2 scores category similarity to the exemplar and is fused with the text branch; it selects among categories, not among instances of one.
+
+Embedding width remains uncontrolled ( 1024 , 768 , 1152 ), so the head varies from 3.26 M to 3.45 M parameters, a 
+
+6% spread confined to the two input projections (Table 1); too small to explain our differences, but we name it rather than claim an exact match. Encoder capacity also differs, which is why DINOv3, the smallest, is a control on the pretraining objective rather than a capacity-matched competitor. 6WALDO: One-Shot Exemplar-Conditioned Object Detection in Cluttered Scenes A P REPRINT 
+
+The baselines are Grounding DINO [11] and OWLv2 [13], frozen and neither fine-tuned nor re-ranked. We evaluate each under a category prompt naming the two target classes and a generic one that does not: the generic protocol matches what WALDO’s text channel receives, while the category protocol grants the baselines strictly more informa-tion than our method is given. Reporting both denies a favourable prompt the chance to pass unnoticed. For OWLv2’s image query we take the union of its text- and exemplar-conditioned detections, exemplar-guided boxes winning on overlap. Both use a confidence threshold of 0.08 , favouring recall so the comparison is not won by over-filtering them; WALDO applies none. Both stay frozen while WALDO’s head is trained, so the comparison establishes that the trained head does useful work against off-the-shelf alternatives, not that the architectures are matched in supervision. 
+
+4.3 Settings, metrics and statistics 
+
+All results use single-pass inference: one whole-image forward call per query. Catalogue and instance (Sec. 3.1) are scored once per scene and once per instance; since they apply different acceptance rules to the same predictions, their difference is reported only as the transfer gap, never as a performance gap. A third absence setting asks whether the model withholds a detection when the exemplar’s object is not in view, reporting hard negatives (a region excluding that object) and easy ones (an exemplar against a scene of the other category) separately: 36 of the 46 hard negatives (78 .3% ) still contain another same-category instance, so a category detector would answer present on most, and pooling would let the saturated easy condition dominate. Absence episodes are a separate sampler draw ( 116 instances 
+
+× 2, splitting 151 /46 /35 ), not the 35 catalogue and 116 instance queries. Success@ K counts a query correct when a prediction with IoU ≥ 0.5 against an acceptable box appears in the top 
+
+K; absence is scored by AUROC of the presence probability against the positive episodes. Localization is reported as AP at IoU 0.25 , 0.50 and 0.75 , COCO-style AP@[.5:.95], per-category AP@50, P/R/F1 at a fixed threshold with the maximum F1 over all thresholds, and two mean-IoU statistics: IoU top-1 averages the top box over all queries with misses as zero, while IoU matched averages over true positives only, rising when a system reports fewer but cleaner boxes. Best-F1 points are maxima over thresholds on the evaluation set, optimistically biased equally for every method. All predictions pass NMS at IoU 0.5, capped at 100 detections. Between models we use binomial intervals: at n = 116 the 95% interval on Success@1 near 0.20 is ±0.073 , at 
+
+n = 35 roughly ±0.15 ; smaller differences we report as ties. Where two conditions score the same queries that interval does not apply and we use McNemar’s exact test on the discordant pairs. Frozen encoders run under bf16 autocasting, the head in fp32. Evaluation is exactly reproducible on a fixed checkpoint; training is not, because cuDNN is nondeterministic, so we independently retrained the main V-JEPA configuration and treat differences below roughly 
+
+0.10 to 0.15 in catalogue and 0.07 to 0.09 in instance Success@1 as within-run variation. A 147 -case suite covering episode geometry, assignment, metric arithmetic and the leakage controls of Sec. 3.2 runs before any training. 
+
+# 5 Results 
+
+All results are on the held-out test split of Table 1: 35 scenes, 116 instances, 151 queries. Every configuration shares one scorer, one NMS setting (IoU = 0 .5) and one detection cap, so every number is on a single scale. 
+
+5.1 Category retrieval succeeds, instance retrieval fails 
+
+At the catalogue level all three backbones retrieve the target category reliably (Table 2): SigLIP2 attains the highest Success@1 at 0.743 , V-JEPA 2.1 0.629 and DINOv3 0.600 , while DINOv3 has the highest Success@5 at 0.886 . The best-to-worst spread, 0.143 at n = 35 , sits inside the ±0.15 interval of Sec. 4.3, so catalogue retrieval does not separate the representations. Instance retrieval tells a sharply different story and is the central negative result of this work. Success@1 falls to 
+
+0.190 (V-JEPA 2.1), 0.190 (DINOv3) and 0.224 (SigLIP2), and must be read against the floor column of Table 4, the score of a model that solves catalogue retrieval and then guesses uniformly among that scene’s instances, for ratios of 
+
+1.00 ×, 1.05 × and 1.00 ×. Since Success@1 and its floor are computed on the same queries, a two-sample interval is the wrong test: conditioning each instance query on whether its scene’s catalogue query succeeded makes the floor a Poisson-binomial variable whose expectation is exactly the catalogue hit count. The exact one-sided test gives 
+
+p = 0 .55 , 0.44 and 0.55 on expected counts of 22 .0, 21 .0 and 26 .0 against observed 22 , 22 and 26 . Instance selection is statistically indistinguishable from a fair draw among the scene’s instances : the model locates a Highlander, then guesses which one was meant. The per-query evidence is blunter. In the V-JEPA arm 79 of 116 instance queries ( 68 .1% ) have a top-1 box whose IoU with the correct object is exactly zero, against 65 .5% for DINOv3 and 63 .8% for SigLIP2, and the transfer gap, 7WALDO: One-Shot Exemplar-Conditioned Object Detection in Cluttered Scenes A P REPRINT       
+
+> (a) WALDO (V-JEPA 2.1), multi-look inference: step 0 (whole scene) misses, step 1 relocates the correct car, and the box holds through step 4 (IoU 0.063 →0.821 ).
+> (b) DINOv3 (c) SigLIP2 (d) Grounding DINO (e) OWLv2
+
+Figure 3: One query, five methods, same scene and same target instance. A four-car parking lot; the exemplar is cropped from one specific car. Panels (a) to (c) score under the instance rule: green is that car, red the other three (same-category distractors). Panels (d) and (e) are frozen baselines with no channel to receive which car is meant, so they score under the easier catalogue rule where green marks all four; the two groups do not resolve the same query. Orange is each method’s top-1 box, yellow its next four, cyan in (a) the region examined. Both baselines rank a different car first (IoU 0.000 and 0.061 ). catalogue minus instance Success@1, is 0.439 , 0.410 and 0.519 . A model using the exemplar to discriminate among same-category candidates would close this gap; none does. Sec. 4.1’s bound applies: discrimination must come from the exemplar crop alone, and that crop is small, a median 87 × 108 px needing 3.4× upsampling, so the result holds for this pipeline on this data, not for exemplar conditioning in general. Figure 3 shows one query: with a DINOv3 or SigLIP2 backbone (panels b, c) WALDO ranks a distractor first, at IoU 
+
+0.000 and 0.024 . Panel (a) is the same query under the multi-look variant of Sec. 3.4, where step 0 misses (IoU 0.063 )and the first refinement relocates the correct car (final IoU 0.821 ). It is one query, not a representative outcome: over twelve paired McNemar tests the multi-look variant never differs significantly from single-pass inference, so we report single-pass throughout and read panel (a) as an illustration of the region-callable interface, not evidence of a gain. 
+
+5.2 Target absence 
+
+Where instance discrimination fails, absence detection succeeds (Table 4). Easy negatives are saturated, at AUROC 
+
+1.000 and mean p(present ) = .000 for every backbone, and we read nothing further into them. On hard absence, where the model cannot abstain on category evidence alone, V-JEPA 2.1 reaches 0.880 against 0.831 for SigLIP2 and 
+
+0.726 for DINOv3, the one setting in which the three representations separate by more than the noise floor. The mean probabilities show the mechanism: V-JEPA separates positives from hard negatives as 0.862 versus 0.456 , a margin of 
+
+0.406 , while DINOv3 manages 0.667 versus 0.536 , a margin of 0.131 : its weakness is not over-reporting absence but a presence estimate compressed toward the middle. Pooling the two negative types would report an AUROC near 0.95 
+
+for every backbone and conceal this separation. The estimate rests on 46 episodes, so the third decimal should not be interpreted. 
+
+5.3 Open-vocabulary baselines 
+
+Table 3 compares both WALDO configurations against frozen Grounding DINO and OWLv2 on catalogue retrieval, the only setting all methods express. The strongest baseline is category-prompted Grounding DINO at AP@50 =
+
+8WALDO: One-Shot Exemplar-Conditioned Object Detection in Cluttered Scenes A P REPRINT 
+
+Table 4: Per-backbone diagnostics. Top : absence and the instance floor. Hard negatives exclude the exemplar’s object while often retaining a same-category instance ( n=46 ), easy negatives pair it with a scene of the other category (n=35 ), positives n=151 ; floor is S@1 cat × E[1 /n inst ], recomputed per row, so a ratio near 1.00 × means the exemplar is not being used. Bottom : the catalogue AP@50 of Table 2 split by object scale and by IoU strictness.                                                         
+
+> AUROC Mean p(pres. )Instance S@1 Backbone hard easy pres. hard abs. floor ratio V-JEPA 2.1 .880 1.000 .862 .456 .190 1.00 ×
+> DINOv3 .726 1.000 .667 .536 .181 1.05 ×
+> SigLIP2 .831 1.000 .756 .382 .224 1.00 ×
+> AP@50 by category Catalogue AP at IoU Backbone Air. Car mAP .50 .60 .70 .75 .80 V-JEPA 2.1 .879 .166 .522 .461 .367 .258 .168 .083
+> DINOv3 .877 .150 .513 .428 .285 .097 .021 .011 SigLIP2 .874 .210 .542 .481 .382 .189 .063 .013
+
+0.306 and Success@1 = 0 .429 ; WALDO with a SigLIP2 backbone reaches 0.481 (1.57 ×) and 0.743 , with V-JEPA 
+
+0.461 (1.51 ×) and 0.629 . The prompt protocol moves the baselines more than the choice of detector does: a class-agnostic prompt costs Grounding DINO 0.315 Success@1 and 0.205 AP@50, a larger swing than the entire gap between Grounding DINO and OWLv2 under either protocol. One baseline result should not be read as a general claim about these detectors. OWLv2 attains Success@1 of only 
+
+0.029 under both protocols, yet at its best-F1 point under the category prompt it recalls 0.707 of the objects at a matched IoU of 0.754 while its top-ranked box averages IoU 0.032 : many objects found, almost none ranked first. That is a ranking failure on overhead-view, densely packed scenes rather than an inability to detect the objects, and the generic-prompt Grounding DINO row repeats it ( 0.543 recall at Success@1 = 0 .114 ). We therefore report recall at the best-F1 point alongside Success@1, and claim only that WALDO outperforms these detectors under this protocol on this data. 
+
+5.4 Scale and box tightness 
+
+The lower half of Table 4 decomposes the catalogue AP@50 of Table 2 along two independent axes. By object scale, aircraft reach AP@50 of 0.879 , 0.877 and 0.874 while cars reach 0.166 , 0.150 and 0.210 : a gap of roughly 5×, stable to within 0.06 across representations that otherwise differ substantially, so it is unlikely to be a property of any one of them. The median car box measures 67 × 83 px, only 3 to 4 patches at 384 px input, so a one-patch error consumes a large fraction of it, and cars appear at up to ten instances per scene, with a median of 3.5. We attribute the gap to input resolution and object density, not to the representation. Splitting the same number by IoU strictness is where the backbones separate. From AP@50 to AP@75, V-JEPA falls from 0.461 to 0.168 , SigLIP2 from 0.481 to 0.063 and DINOv3 from 0.428 to 0.021 , reversing the AP@50 ordering. Averaged over the sweep, AP@[.5:.95] is 0.208 for V-JEPA against 0.189 and 0.139 , with the same ordering in the instance setting ( 0.108 , 0.073 , 0.049 ), where V-JEPA alone yields a true positive at the fixed 0.5 threshold, at a matched IoU of 0.845 over 8 (Table 2). This supports a narrower claim than V-JEPA is the better backbone : SigLIP2 finds objects slightly more often, while V-JEPA places boxes more precisely and abstains more reliably. Since the catalogue Success@1 difference is inside the noise floor while the AP@75 and hard-absence differences are not, world-model pretraining transfers here to 
+
+localization precision and presence estimation , not to retrieval accuracy. The shared box-tightness limit is plausibly architectural: constraining each patch’s predicted center to within ±1 patch width caps precision for objects a few patches across. At a score threshold of 0.5, precision is 1.000 for V-JEPA and SigLIP2, over 21 and 14 predictions, respectively, while recall is 0.181 and 0.121 : accurate, but under-confident. 
+
+# 6 Conclusion 
+
+WALDO localizes a referenced instance from one exemplar and a description over frozen representations, treating absence as a trained output rather than a confidence threshold. Catalogue AP@50 reaches 0.461 against 0.306 for the strongest open-vocabulary baseline under one scorer, and within-category absence AUROC reaches 0.880 against 9WALDO: One-Shot Exemplar-Conditioned Object Detection in Cluttered Scenes A P REPRINT 
+
+0.831 and 0.726 for the image-pretrained controls, the one measurement on which the three representations sep-arate. Instance identity does not follow: Success@1 of 0.190 sits at its category-chance floor, and 68 .1% of in-stance queries return a box overlapping nothing that counts. The model finds the category, then picks wrongly inside it. 
+
+# References 
+
+[1] Mido Assran, Adrien Bardes, David Fan, Quentin Garrido, Russell Howes, Matthew Muckley, Ammar Rizvi, Claire Roberts, Koustuv Sinha, Artem Zholus, et al. V-jepa 2: Self-supervised video models enable understanding, prediction and planning. 
+
+arXiv preprint arXiv:2506.09985 , 2025. 1 [2] Akshay Dhamija, Manuel Gunther, Jonathan Ventura, and Terrance Boult. The overlooked elephant of object detection: Open set. In Proceedings of the IEEE/CVF winter conference on applications of computer vision , pages 1021–1030, 2020. 2 [3] Robert Geirhos, J¨ orn-Henrik Jacobsen, Claudio Michaelis, Richard Zemel, Wieland Brendel, Matthias Bethge, and Felix A Wichmann. Shortcut learning in deep neural networks. Nature Machine Intelligence , 2(11):665–673, 2020. 2 [4] Jiaming Han, Yuqiang Ren, Jian Ding, Xingjia Pan, Ke Yan, and Gui-Song Xia. Expanding low-density latent regions for open-set object detection. In 2022 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 9581– 9590. IEEE, 2022. 2 [5] Ting-I Hsieh, Yi-Chen Lo, Hwann-Tzong Chen, and Tyng-Luh Liu. One-shot object detection with co-attention and co-excitation. Advances in neural information processing systems , 32, 2019. 1, 2 [6] Chao Jia, Yinfei Yang, Ye Xia, Yi-Ting Chen, Zarana Parekh, Hieu Pham, Quoc Le, Yun-Hsuan Sung, Zhen Li, and Tom Duerig. Scaling up visual and vision-language representation learning with noisy text supervision. In International conference on machine learning , pages 4904–4916. PMLR, 2021. 1 [7] KJ Joseph, Salman Khan, Fahad Shahbaz Khan, and Vineeth N Balasubramanian. Towards open world object detection. In 
+
+2021 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 5826–5836. IEEE, 2021. 2 [8] Bingyi Kang, Zhuang Liu, Xin Wang, Fisher Yu, Jiashi Feng, and Trevor Darrell. Few-shot object detection via feature reweighting. In 2019 IEEE/CVF International Conference on Computer Vision (ICCV) , pages 8419–8428. IEEE, 2019. 2 [9] Sahar Kazemzadeh, Vicente Ordonez, Mark Matten, and Tamara Berg. Referitgame: Referring to objects in photographs of natural scenes. In Proceedings of the 2014 conference on empirical methods in natural language processing (EMNLP) , pages 787–798, 2014. 1 [10] Liunian Harold Li, Pengchuan Zhang, Haotian Zhang, Jianwei Yang, Chunyuan Li, Yiwu Zhong, Lijuan Wang, Lu Yuan, Lei Zhang, Jenq-Neng Hwang, et al. Grounded language-image pre-training. In 2022 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 10955–10965. IEEE, 2022. 1 [11] Shilong Liu, Zhaoyang Zeng, Tianhe Ren, Feng Li, Hao Zhang, Jie Yang, Qing Jiang, Chunyuan Li, Jianwei Yang, Hang Su, et al. Grounding dino: Marrying dino with grounded pre-training for open-set object detection. In European conference on computer vision , pages 38–55. Springer, 2024. 1, 7 [12] Matthias Minderer, Alexey Gritsenko, Austin Stone, Maxim Neumann, Dirk Weissenborn, Alexey Dosovitskiy, Aravindh Mahendran, Anurag Arnab, Mostafa Dehghani, Zhuoran Shen, et al. Simple open-vocabulary object detection. In European conference on computer vision , pages 728–755. Springer, 2022. 1 [13] Matthias Minderer, Alexey Gritsenko, and Neil Houlsby. Scaling open-vocabulary object detection. Advances in Neural Information Processing Systems , 36:72983–73007, 2023. 1, 7 [14] Lorenzo Mur-Labadia, Matthew Muckley, Amir Bar, Mido Assran, Koustuv Sinha, Mike Rabbat, Yann LeCun, Nicolas Ballas, and Adrien Bardes. V-jepa 2.1: Unlocking dense features in video self-supervised learning. arXiv preprint arXiv:2603.14482 ,2026. 2, 5 [15] Anton Osokin, Denis Sumin, and Vasily Lomakin. Os2d: One-stage one-shot object detection by matching anchor features. In European Conference on Computer Vision , pages 635–652. Springer, 2020. 1, 2 [16] Ethan Perez, Florian Strub, Harm De Vries, Vincent Dumoulin, and Aaron Courville. Film: Visual reasoning with a general conditioning layer. In Proceedings of the AAAI conference on artificial intelligence , 2018. 2 [17] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervision. In Inter-national conference on machine learning , pages 8748–8763. PmLR, 2021. 1 [18] Walter J Scheirer, Anderson de Rezende Rocha, Archana Sapkota, and Terrance E Boult. Toward open set recognition. IEEE transactions on pattern analysis and machine intelligence , 35(7):1757–1772, 2012. 2 [19] Oriane Sim´ eoni, Huy V Vo, Maximilian Seitzer, Federico Baldassarre, Maxime Oquab, Cijo Jose, Vasil Khalidov, Marc Szafraniec, Seungeun Yi, Micha¨ el Ramamonjisoa, et al. Dinov3. arXiv preprint arXiv:2508.10104 , 2025. 1, 2, 5 [20] Michael Tschannen, Alexey Gritsenko, Xiao Wang, Muhammad Ferjad Naeem, Ibrahim Alabdulmohsin, Nikhil Parthasarathy, Talfan Evans, Lucas Beyer, Ye Xia, Basil Mustafa, et al. Siglip 2: Multilingual vision-language encoders with improved semantic understanding, localization, and dense features. arXiv preprint arXiv:2502.14786 , 2025. 2, 5 
+
+10 WALDO: One-Shot Exemplar-Conditioned Object Detection in Cluttered Scenes A P REPRINT 
+
+[21] Xin Wang, Thomas E Huang, Trevor Darrell, Joseph E Gonzalez, and Fisher Yu. Frustratingly simple few-shot object detec-tion. arXiv preprint arXiv:2003.06957 , 2020. 2 [22] Wikipedia contributors. Where’s waldo? (video game) — Wikipedia, the free encyclopedia, 2026. [Online; accessed 28-August-2026]. 2 [23] Licheng Yu, Zhe Lin, Xiaohui Shen, Jimei Yang, Xin Lu, Mohit Bansal, and Tamara L Berg. Mattnet: Modular attention network for referring expression comprehension. In 2018 IEEE/CVF Conference on Computer Vision and Pattern Recognition ,pages 1307–1315. IEEE, 2018. 1 [24] Xiaohua Zhai, Basil Mustafa, Alexander Kolesnikov, and Lucas Beyer. Sigmoid loss for language image pre-training. In 2023 IEEE/CVF International Conference on Computer Vision (ICCV) , pages 11941–11952. IEEE, 2023. 1 [25] Renrui Zhang, Zhengkai Jiang, Ziyu Guo, Shilin Yan, Junting Pan, Hao Dong, Yu Qiao, Gao Peng, and Hongsheng Li. Personalize segment anything model with one shot. In International Conference on Learning Representations , pages 18250– 18279, 2024. 2 [26] Xinyu Zhang, Yuhan Liu, Yuting Wang, and Abdeslam Boularias. Detect everything with few examples. arXiv preprint arXiv:2309.12969 , 2023. 2 
+
+11

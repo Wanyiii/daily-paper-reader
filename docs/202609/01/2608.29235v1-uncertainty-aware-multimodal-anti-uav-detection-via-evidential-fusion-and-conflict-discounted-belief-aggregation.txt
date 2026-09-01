@@ -1,0 +1,496 @@
+Title: Uncertainty-Aware Multimodal Anti-UAV Detection via Evidential Fusion and Conflict-Discounted Belief Aggregation
+
+URL Source: https://arxiv.org/pdf/2608.29235v1
+
+Published Time: Tue, 01 Sep 2026 00:53:31 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# Uncertainty-Aware Multimodal Anti-UAV Detection via Evidential Fusion and Conflict-Discounted Belief Aggregation 
+
+# Sharanda Suttorp 
+
+University of Amsterdam Amsterdam, The Netherlands sharanda.suttorp@student.uva.nl 
+
+# Seyed Sahand Mohammadi Ziabari ∗
+
+University of Amsterdam Amsterdam, The Netherlands Department of Computer Science and Technology, SUNY Empire State University Saratoga Springs, NY, USA s.s.mohammadiziabari@uva.nl 
+
+# Ali Mohammed Mansoor Alsahag 
+
+University of Amsterdam Amsterdam, The Netherlands a.m.m.alsahag@uva.nl 
+
+## Abstract 
+
+Anti-UAV perception systems must remain reliable when sensor streams degrade under occlusion, fast motion, or modality-specific failure. Existing multimodal anti-UAV systems fuse RGB and ther-mal streams deterministically, without modeling predictive uncer-tainty, and cannot express doubt when streams disagree. Evidential Deep Learning (EDL) produces calibrated per-class uncertainty in a single forward pass. EDTC already exploits this for thermal-only perception, yet cross-modal evidential fusion remains unaddressed. This paper extends EDTC to multimodal RGB-Thermal perception via Discounted Belief Fusion (DBF), which converts inter-modal conflict into uncertainty mass before aggregating stream opinions. Bounding boxes are resolved by selecting the lower-uncertainty modality. On the Anti-UAV benchmark, multimodal fusion consis-tently outperforms either single stream (test Acc 0.670 vs. 0.604 IR, 0.598 RGB) at real-time speed ( ≥38 FPS). However, DBF is empir-ically indistinguishable from undiscounted averaging: near-zero inter-modal conflict on this presence-dominated benchmark leaves the discounting step inert. The fused uncertainty is well-calibrated (ECE 0.057) yet expectedly a weaker localization failure detector than spatial variance (AUROC 0.626 vs. 0.739). The null result is structural: the benchmark’s near-universal presence and vacuous miss-encoding jointly suppress inter-modal conflict, a diagnosis that delimits where conflict-aware fusion provides measurable ben-efit. 
+
+## Keywords 
+
+Anti-UAV Perception, Evidential Deep Learning, Multimodal Fusion, Discounted Belief Fusion 
+
+## 1 Introduction 
+
+As Unmanned Aerial Vehicles (UAVs) are becoming more prevalent, the need for reliable airspace security has become increasingly ur-gent. While drones have many beneficial applications, unauthorized UAV activity poses risks to public safety and privacy. Therefore, UAV detection and tracking systems are essential to guarantee airspace safety, placing this work in the intersection of computer vision and safety-critical perception. In real world anti-UAV settings, sensor data is inherently noisy and degrades under adverse environmental conditions. Challenges 
+
+> ∗Corresponding author.
+
+such as fast motion, occlusion, scale variation and temporary tar-get disappearance significantly complicate reliable detection and tracking [18]. To reflect these practical difficulties, recent bench-marks such as Anti-UAV [15] and AntiUAV600 [31] have introduced large-scale datasets featuring diverse and challenging scenarios. Notably, AntiUAV600 formulates anti-UAV perception as a continu-ous detection and tracking problem without assuming prior target initialization. This reflects real-world settings more closely. Despite these advances, most existing approaches rely on single-modality frameworks [15, 30, 31] or deterministic fusion strategies [1, 20, 21]. Multimodal fusion offers a way to improve robustness by leveraging complementary sensor streams. Yet, current mul-timodal fusion strategies for anti-UAV perceptions, such as the cross-attention transformer of Larrat et al. [20] and the cross-modal alignment of Zongzhen et al. [21], fuse modality-specific features without producing any estimate of predictive uncertainty. Criti-cally, this means that when streams disagree (RGB degrading at night, thermal failing under thermal crossover) the system has no principled way to express doubt or defer. As a result, these systems may commit confidently to incorrect predictions precisely under the conditions where caution is the most needed. Evidential Deep Learning (EDL) [8, 25] offers a promising direc-tion: it produces calibrated, per-class uncertainty in a single forward pass via Dirichlet distributions over class probabilities, making it suitable for real-time deployment. The Evidential Detection and Tracking Collaboration (EDTC) framework [31] already exploits EDL in this way, using an evidential head on its tracking branch to gate switching between global detection and local tracking. How-ever, EDTC operates on thermal infrared alone and does not address the fusion of conflicting evidence across modalities. When eviden-tial opinions from independent RGB and thermal streams must be combined, the choice of fusion rule matters: Average Belief Fusion (ABF) [17] correctly handles dependent sources, but recent work by Bezirganyan et al. [4] shows it underestimates global uncertainty when streams are both highly confident but contradictory. Whether and how conflict-aware evidential fusion can address this limitation in the anti-UAV setting remains an open question. This paper investigates that question by extending EDTC from single-modality thermal to multimodal RGB-Thermal perception via Discounted Belief Fusion (DBF) [4] which discounts conflicting beliefs into uncertainty before averaging. Per-modality spatial un-certainty is captured via Gaussian bounding box heads [12] with arXiv:2608.29235v1 [cs.CV] 29 Aug 2026 bounding boxes resolved at each frame by selecting the lower-uncertainty modality (Dynamic Modality Selection). Whether gen-uine inter-modal conflict arises under the properties of the Anti-UAV benchmark, and whether DBF’s discounting mechanism can therefore differentiate itself from undiscounted averaging, is itself an empirical question that this research sets out to answer. This study investigates the impact of uncertainty-aware multi-modal fusion on the predictive performance, uncertainty calibration, robustness, and computational efficiency of real-time anti-UAV de-tection. The evaluation focuses on the impact of conflict-aware belief fusion on detection performance relative to undiscounted, non-uncertainty-aware, and single-stream baselines, as measured by AP@0.5, mAP, mIoU, and Acc. The calibration of the uncertainty estimates produced by the proposed fusion framework is assessed using ECE, while AUROC is used to evaluate whether the fused uncertainty can reliably discriminate between correct and incor-rect predictions. The robustness of uncertainty-aware multimodal fusion is further examined under challenging anti-UAV conditions, including occlusion, fast motion, and thermal crossover, with com-parisons against single-modality baselines for each attribute subset. Finally, the computational efficiency of the dual-stream uncertainty-aware architecture is evaluated against single-modality baselines to determine whether it meets real-time constraints and how the choice of fusion operator affects throughput. By systematically evaluating these aspects on the Anti-UAV benchmark, this research aims to deliver both a working multimodal extension of EDTC and an empirical account of when conflict-aware evidential fusion provides measurable benefit over simpler fusion strategies. 
+
+## 2 Anti-UAV Detection, Tracking, and Benchmarks 
+
+Vision-based anti-UAV perception is challenging because drones are typically small, fast, and easily confused with clutter such as birds, buildings, and clouds. Small-object detection and tracking are particularly challenging under occlusion and degraded visual conditions, where limited target information can reduce localization and tracking reliability [2, 6]. For the tracking task it was usually assumed that the UAV appears in the initial frame and then followed over time. However, in real deployments, anti-UAV systems require to do both tasks of detection and tracking. A system must discover a drone when it enters the scene, track it while it is visible, and then re-detect it when it has gone out of view for a certain time period [6, 31]. Recent key benchmarks include DUT Anti-UAV [30] which offers an RGB dataset of a detection set (10k images) and a tracking set (20 videos), explicitly encouraging detector-tracker combinations. Anti-UAV [15] is a large RGB-Thermal benchmark with 318 paired RGB-Thermal sequences and 580k annotated boxes. AntiUAV600 + EDTC [31] targets realistic surveillance without prior target ini-tialization: 600 thermal sequences, 723k frames, and the EDTC baseline that uses evidential uncertainty to gate detection-tracking switching. MMAUD [29] expands beyond vision with synchro-nized cameras, LiDAR, mmWave radar and audio. MMAUD reflects the field’s move toward multi-sensor anti-drone perception. Sim-ilarly, TRIDENT [1] proposes a tri-modal (audio, video and radio frequency) real-time drone detection framework and dataset. To-gether, these benchmarks establish the evaluation protocol and challenge-attribute subsets used in this study to systematically as-sess fusion performance and robustness under varying anti-UAV operating conditions. 
+
+## 2.1 Multimodal Fusion 
+
+Multimodal learning combines complementary sensors to improve robustness when any single stream degrades. Baltrušaitis et al. [3] provide a foundational taxonomy organizing fusion around repre-sentation, alignment and integration. Jiao et al. [16] categorize it by pipeline stage: early fusion (data-level), deep fusion (feature-level), late fusion (decision-level) and hybrid setups that combine multiple stages. With the core trade-off between cross-modal information sharing and robustness to missing or noisy streams. For anti-UAV perception specifically, Larrat et al. [20] fuse radar, audio and video via a cross-attention transformer for UAV detection. Zongzhen et al. [21] propose cross-modal offset-guided dynamic alignment for weakly-aligned RGB-Thermal UAV detection. TRI-DENT [1] evaluates late and gated fusion under diverse conditions. A shared limitation across these works is that when streams dis-agree none has a principled mechanism to express doubt or defer. All fuse without modeling predictive uncertainty. This motivates the evaluation of whether uncertainty-aware fusion produces well-calibrated uncertainty estimates that reliably discriminate between correct and incorrect predictions. Bezirganyan et al. [4] address this directly: they show that Aver-aging Belief Fusion (ABF) [17], which handles dependent sources correctly under Subjective Logic, underestimates global uncertainty when streams are confident but contradictory, and propose Dis-counted Belief Fusion (DBF) as a remedy. DBF introduces a conflict-based discounting step before averaging, converting cross-modal conflict into additional uncertainty mass. The Dempster-Shafer framework [26, 28] underlying both operators is inappropriate in its original form under source dependence, making ABF the cor-rect undiscounted baseline rather than Dempster’s rule. This pa-per adopts DBF for classification fusion. We hypothesize that DBF will outperform ABF on frames where the streams are confidently contradictory. Whether such conflicts arise within the Anti-UAV benchmark is evaluated empirically through the comparative fusion analysis. 
+
+## 2.2 Evidential Deep Learning 
+
+Quantifying predictive uncertainty in deep networks is commonly approached through Bayesian methods such as MC Dropout [7] or deep ensembles [19], which estimate uncertainty by aggregating multiple stochastic forward passes. While effective, these methods incur a linear computational overhead in the number of passes, making them poorly suited to real-time applications with strict latency constraints. Evidential Deep Learning (EDL) addresses this by producing both class predictions and calibrated uncertainty in a single deterministic forward pass [8]. This property makes EDL par-ticularly attractive for real-time anti-UAV perception. Yet whether this efficiency advantage is retained when extending the model to a dual-stream architecture with an additional fusion operator remains an open empirical question and is therefore evaluated in this study. Instead of outputting softmax probabilities, an EDL model out-puts non-negative evidence 𝑒 𝑘 ≥ 0 for each class 𝑘 via a ReLU activation. These are mapped to Dirichlet concentration parame-ters 𝛼 𝑘 = 𝑒 𝑘 + 1, parameterizing a Dirichlet distribution over class probabilities. The total Dirichlet strength 𝑆 = Í𝐾 𝑘 =1 𝛼 𝑘 controls the concentration of this distribution: large 𝑆 indicates confident predictions, small 𝑆 indicates high uncertainty [25]. EDL is motivated by Subjective Logic in which predictions are represented as opinions consisting of per-class belief masses 𝑏 𝑘 and an explicit uncertainty mass 𝑢 [25, 28]: 
+
+𝑏 𝑘 = 𝑒 𝑘 
+
+𝑆 , 𝑢 = 𝐾 𝑆 ,
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =1
+
+𝑏 𝑘 + 𝑢 = 1.
+
+Sensoy et al. [25] propose several loss variants for training the evidential head. This work adopts the expected cross-entropy form, which is the most widely used variant and the one employed by EDTC. This loss combines an expected cross-entropy term that encourages evidence for the correct class with a KL regularization term that penalizes spurious evidence on incorrect classes: 
+
+L𝐸𝐷𝐿 =
+
+> 𝐾
+
+∑︁ 
+
+> 𝑘 =1
+
+𝑦 𝑘 (log 𝑆 − log 𝛼 𝑘 )
+
+| {z }
+
+> expected cross-entropy
+
++ 𝜆 𝐾𝐿 · KL [Dir (p | ˜𝜶 ) ∥ Dir (p | 1)] 
+
+| {z }
+
+> regularization toward uniform prior
+
+where ˜ 𝛼 𝑘 = 𝑦 𝑘 + ( 1 − 𝑦 𝑘 ) · 𝛼 𝑘 removes the evidence for the ground-truth class before computing the KL divergence, ensuring the regu-larizer only penalizes evidence on incorrect classes. The weight 𝜆 𝐾𝐿 
+
+is typically annealed from 0 to 1 during early training to allow the network to first learn discriminative evidence before the regularizer prevents overconfidence [25]. EDTC applies EDL to the tracking branch only and provides no mechanism for fusing conflicting evidential opinions across modal-ities. This paper addresses this gap by evaluating conflict-aware multimodal fusion and the calibration of the resulting uncertainty estimates. 
+
+## 3 Methodology 3.1 Description of the Data 
+
+Experiments use the Anti-UAV dataset [15]: 318 paired RGB-Thermal sequences with over 580k annotated bounding boxes, split into training (160), validation (67), and test (91). Each frame includes bounding boxes, a visibility flag, and seven challenge-attribute la-bels: thermal crossover (TC), fast motion (FM), scale variation (SV), low illumination (LI), low resolution (LR), out-of-view (OV) and occlusion (OC). Official splits are followed throughout. Exploratory analysis reveals properties that directly inform mod-eling choices. UAVs appear as small targets with median normalized scales of 0 .060 (visible) and 0 .065 (infrared). Absolute box sizes dif-fer markedly: median visible box 116 × 61 px (frame 1920 × 1080) vs. median infrared box 48 ×28 px (frame 640 ×512). This asymme-try makes direct cross-modal bounding box fusion ill-posed and motivates the independent spatial tracking design (Section 3.2.3). Figure 1 illustrates this asymmetry on a representative frame pair. The modalities are complementary but infrared-dominant: visibility labels agree in 95.1% of frames, but when they diverge, infrared detects the drone while visible does not in 4.6% of cases, whereas the reverse occurs in only 0.26%. The dataset is strongly presence-dominated, with the UAV present in ∼94% of visible and ∼99% of infrared frames across all splits. Temporally, the median continuous presence segment spans 899 frames while absence segments last a median of only 28 frames, making the task predominantly one of continuous tracking with brief interruptions. Among sequence-level challenge attributes, thermal crossover is the most prevalent (60% of sequences), followed by fast motion (38%) and low illumi-nation (37%). 
+
+Figure 1: Representative paired frames from the Anti-UAV dataset with ground-truth bounding boxes (green). The in-frared (left) and RGB (right) streams differ in resolution (640 × 512 vs. 1920 × 1080 ) and are spatially unaligned, mak-ing direct cross-modal bounding box fusion ill-posed. 
+
+## 3.2 Framework Design 
+
+This research extends the EDTC framework [31] from single-modality (thermal) to multimodal RGB-Thermal anti-UAV perception. The core contribution is an uncertainty-aware fusion mechanism oper-ating on per-stream evidential outputs. The framework was designed and implemented as a full detect-track hybrid following EDTC, with a SiamCAR-based [11] local tracking branch carrying the same evidential and Gaussian heads (see Appendix C for the full architecture and preliminary results). However, preliminary validation showed the detection-only con-figuration matching or exceeding the detect-track variant within each modality on EDTC Acc. All main results therefore use the detection-only configuration, which retains the uncertainty-gated commit decision of EDTC’s switching logic but applies it as an output gate rather than a state transition. The remainder of this sec-tion describes the detection-only configuration. Figure 2 provides a high-level overview of the architecture. 
+
+3.2.1 Dual-stream architecture with uncertainty heads. The frame-work processes RGB and thermal inputs through parallel, inde-pendent streams. No parameters are shared between modalities, preventing a degraded stream from corrupting the other’s represen-tations. The global detection branch uses YOLOv5s [23], matching EDTC. Each stream is equipped with an evidential head (linear layer + ReLU) outputting 𝐾 =2 non-negative evidence values interpreted as Dirichlet parameters. In the detection branch, this extends YOLOv5s with evidential classification (EDTC’s original detector had no un-certainty estimation). Additionally, each stream is augmented with a Gaussian head [12] predicting mean 𝜇 and log-variance log (𝜎 2)
+
+per bounding box coordinate, replacing YOLO’s deterministic box regression. Both heads operate per detection anchor, while fusion requires a single opinion per stream per frame. This frame-level opinion 
+
+(𝑏 𝑈 𝐴𝑉 , 𝑏 𝑏𝑔 , 𝑢 ) and the spatial uncertainty are both read at the se-lected detection: the maximum-confidence NMS survivor, where confidence is the product of YOLO’s objectness score and the UAV belief mass 𝑏 𝑈 𝐴𝑉 . Rather than averaged over all anchors, since the overwhelming majority of anchors cover background and averaging would dilute the signal of the actual detection. The selected detec-tion’s per-coordinate variances are normalized by its predicted box dimensions for scale invariance and averaged into a single scalar ˆ 𝜎 2
+
+> 𝑚
+
+per modality 𝑚 . When a stream yields no detection, it contributes the vacuous opinion 𝑏 = (0, 0), 𝑢 = 1, corresponding to the zero-evidence Dirichlet ( 𝛼 = 1): a miss is treated as complete ignorance rather than as evidence for either class, so under belief fusion a missing stream cannot veto the other stream’s prediction, it only increases the fused uncertainty. 
+
+3.2.2 Uncertainty-aware classification fusion. Because both sen-sors observe the same scene, the streams constitute dependent sources, making independence-assuming operators such as Demp-ster’s rule [26] inappropriate. While the Averaging Belief Fusion (ABF) rule [17] handles dependent sources, it underestimates un-certainty when streams are confident but contradictory [4]. This is a dangerous failure mode for safety-critical anti-UAV perception. This framework adopts Discounted Belief Fusion (DBF) [4], which introduces a conflict-based discounting step before ABF. 
+
+Stage 1 — Discounting. The inter-stream conflict 𝐶 = Í𝑗 ≠𝑘 𝑏 𝑟𝑔𝑏 𝑗 ·
+
+𝑏 𝑡ℎ 𝑘 yields a discounting factor 𝜂 = (1 − 𝐶 𝜆 )1/𝜆 , where 𝜆 controls penalty sharpness. Each stream’s beliefs are rescaled: ˜𝑏 𝑚 (𝑐 ) =
+
+𝜂 · 𝑏 𝑚 (𝑐 ), with residual mass absorbed into uncertainty: ˜ 𝑢 𝑚 =
+
+1 − Í𝑐 ˜𝑏 𝑚 (𝑐 ).
+
+Stage 2 — Fusion. The discounted opinions are aggregated via ABF, assuming a uniform base rate 𝑎 𝑘 = 1/𝐾 :
+
+𝑏 𝑓 𝑢𝑠𝑒𝑑 (𝑐 ) =
+
+˜𝑏 𝑟𝑔𝑏 (𝑐 ) · ˜𝑢 𝑡ℎ + ˜𝑏 𝑡ℎ (𝑐 ) · ˜𝑢 𝑟𝑔𝑏 
+
+˜𝑢 𝑟𝑔𝑏 + ˜𝑢 𝑡ℎ 
+
+, 𝑢 𝑓 𝑢𝑠𝑒𝑑 = 2 · ˜𝑢 𝑟𝑔𝑏 · ˜𝑢 𝑡ℎ 
+
+˜𝑢 𝑟𝑔𝑏 + ˜𝑢 𝑡ℎ 
+
+The final class is ˆ 𝑦 = arg max 𝑐 𝑏 𝑓 𝑢𝑠𝑒𝑑 (𝑐 ). When streams strongly conflict, 𝜂 → 0 drives both ˜ 𝑢 𝑚 → 1, so 𝑢 𝑓 𝑢𝑠𝑒𝑑 → 1: the system defaults to maximal uncertainty rather than a confidently wrong prediction. The fused uncertainty 𝑢 𝑓 𝑢𝑠𝑒𝑑 serves as the uncertainty-gated output decision (Section 3.2.3). 
+
+3.2.3 Spatial fusion and uncertainty-gated output. Due to misalign-ment between RGB and thermal frames in the Anti-UAV dataset, direct spatial fusion of bounding box coordinates is ill-posed: the modalities differ in resolution (1920 ×1080 vs. 640 ×512) and lack spatial registration, so coordinates cannot be meaningfully com-bined across modalities. The framework therefore employs dynamic modality selection: at each frame, the bounding box from the modal-ity with lower ˆ 𝜎 2 
+
+> 𝑚
+
+is selected as the system output [12]. The uncertainty-gated commit decision of EDTC’s switching mechanism is retained as an output gate: at each frame, the system emits the DMS-selected bounding box if and only if 
+
+𝑏 𝑓 𝑢𝑠𝑒𝑑 (UAV ) > 𝑏 𝑓 𝑢𝑠𝑒𝑑 (bg ) AND 𝑢 𝑓 𝑢𝑠𝑒𝑑 < 𝜃 𝑐𝑙𝑠 ,
+
+and otherwise reports the target as absent. The class condition ensures the system only commits when the fused prediction favors the UAV class, since low semantic uncertainty alone could reflect a confident background prediction. The uncertainty condition guards against committing to near-vacuous predictions: the class condition alone is an argmax over beliefs and is satisfied even when both beliefs are negligible and almost all mass sits in 𝑢 𝑓 𝑢𝑠𝑒𝑑 . Requiring 
+
+𝑢 𝑓 𝑢𝑠𝑒𝑑 < 𝜃 𝑐𝑙𝑠 ensures the system only emits a box when the fused opinion carries sufficient evidence. 
+
+Figure 2: Multimodal uncertainty-aware detection frame-work. The detection branch (YOLOv5s) processes RGB and in-frared streams independently, each producing per-modality semantic uncertainty via an evidential head and spatial un-certainty via a Gaussian head. Semantic opinions are aggre-gated across modalities via Discounted Belief Fusion (DBF), and the bounding box is resolved by selecting the lower-spatial-uncertainty modality (Dynamic Modality Selection). The fused opinion is passed through an uncertainty-gated output decision: a box is emitted only when the fused belief favors the UAV class ( 𝑏 fused (UAV ) > 𝑏 fused (bg )) and the fused uncertainty falls below the gate threshold ( 𝑢 fused < 𝜃 cls ); oth-erwise the target is reported absent. 
+
+## 3.3 Experimental Setup 
+
+Preprocessing. RGB frames are resized to 640 ×640 and thermal frames are processed at native 640 ×512 resolution. Both modalities are normalized with ImageNet statistics (mean [0.485 , 0.456 , 0.406 ],std [0.229 , 0.224 , 0.225 ]). Detection augmentation follows standard YOLOv5s defaults (HSV jitter, translation, scaling). 
+
+Detection training. Both modality-specific YOLOv5s detectors are first pre-trained on their respective Anti-UAV training splits (IR and RGB) using standard YOLOv5s training for 20 epochs, produc-ing the baseline checkpoints used for all baselines. The evidential framework is then added in two stages. In Stage 1 (Gaussian local-ization heads), Gaussian variance heads are appended to the frozen baseline and trained using the Gaussian negative log-likelihood loss: 
+
+L𝑏𝑏𝑜𝑥 =∑︁  
+
+> 𝑖 ∈ { 𝑥,𝑦,𝑤,ℎ }
+
+ (𝑡 𝑖 − 𝜇 𝑖 )2
+
+2𝜎 2
+
+> 𝑖
+
++ 12 log 𝜎 2
+
+> 𝑖
+
+
+
+where 𝑡 𝑖 is the regression target and 𝜇 𝑖 , 𝜎 2 
+
+> 𝑖
+
+are the predicted mean and variance for coordinate 𝑖 . The first term penalizes prediction error scaled by predicted variance; the second prevents trivially pre-dicting infinite variance. The Gaussian heads are warmed up for 5 epochs before full fine-tuning for 25 epochs (batch size 64, AdamW, weight decay 10 −4, lr 10 −3 then 10 −4, cosine-annealed to 1%, Gauss-ian NLL weight 𝜆 var =0.1). In Stage 2 (evidential classification heads), the Stage 1 network is frozen and only the Dirichlet evidence head is trained for 20 epochs (batch size 64, lr 10 −3, cosine-annealed, 
+
+𝜆 evi =1.0), with KL regularization annealed linearly from 0 to 1 over the first 10 epochs. Standard YOLO detection loss weights are used throughout: 𝜆 box =0.05, 𝜆 obj =1.0, 𝜆 cls =0.5. All stages are run with three random seeds {0, 1, 2}. Results are reported as mean ± std throughout. 
+
+Detection inference. At inference, detections are formed with standard YOLOv5s post-processing: confidence threshold 0 .25, NMS IoU threshold 0 .45, and at most 300 detections per frame, with NMS restricted to the UAV class. The maximum-confidence survivor constitutes the selected detection from which the frame-level opin-ion and spatial uncertainty are read (Section 3.2.1). If no detection survives, the stream contributes the vacuous opinion. 
+
+Baselines. Five baselines are evaluated. Thermal-only detector 
+
+and RGB-only detector run the single-stream architecture on each modality independently. Naive Late Fusion averages the per-stream belief masses, 𝑏 𝑓 𝑢𝑠𝑒𝑑 = 12 (𝑏 𝑟𝑔𝑏 +𝑏 𝑖𝑟 ), without any uncertainty-aware reweighting. Gated Fusion replaces the fixed average with a learned scalar gate 𝑔 ∈ ( 0, 1), produced by a small MLP applied to the concatenated belief vectors of both streams: 𝑏 𝑓 𝑢𝑠𝑒𝑑 = 𝑔 · 𝑏 𝑟𝑔𝑏 + ( 1 −
+
+𝑔 ) · 𝑏 𝑖𝑟 . This allows the model to learn which modality to trust from data, but without explicit conflict modeling [4]. The gate MLP ( ≈100 parameters) is trained for 20 epochs with all backbone weights frozen, minimizing binary cross-entropy against frame-level UAV presence labels. Evidential Fusion (ABF) applies the dual-stream evidential pipeline with 𝜂 =1 (no conflict discounting), isolating the contribution of the DBF discounting mechanism. All fusion variants thus consume identical per-stream evidential outputs and differ only in the fusion operator. 
+
+Threshold calibration. 𝜃 𝑐𝑙𝑠 is selected by an offline sweep over {0.05 , 0.10 , . . . , 0.95 } on the validation set. The threshold max-imizing Acc is applied unchanged on the test set. Thresholds are calibrated independently per method. For the naive and gated base-lines, which produce no explicit uncertainty mass, the gating signal is defined as 1 − 𝑏 𝑓 𝑢𝑠𝑒𝑑 (UAV ). Additionally, the DBF discount expo-nent 𝜆 is swept over 0.25, 0.5, 1, 2, 4 on the validation set. 𝜆 = 1 is retained as the default. 
+
+## 3.4 Evaluation Approach 
+
+Detection performance. We report five metrics. Intersection over Union (IoU): the ratio of overlapping to the union area of pre-dicted and ground-truth boxes. This underlies all localization scores. AP@0.5 (Average Precision at IoU threshold 0.5) and mAP@[0.5:0.95] (AP averaged over thresholds 0.5–0.95 in steps of 0.05) are the pri-mary detection metrics. Mean IoU over present frames (mIoU) iso-lates box-level quality independently of presence decisions. The EDTC Acc metric [31] ( 𝛼 =0.2, 𝛽 =0.3) combines per-frame IoU with a missed-detection penalty, included for comparability with EDTC/EDTC ∗ baselines. The sparsification error AUSE 𝜎 ranks frames by spatial uncertainty ˆ 𝜎 2 
+
+> 𝑏𝑒𝑠𝑡
+
+and measures the area under the gap to an IoU-ordered oracle [9, 12, 14]. Full sparsification curves are reported alongside the scalar. Baselines: thermal-only, RGB-only, Evidential Fusion (ABF), Naive Late Fusion and Gated Fusion. 
+
+Uncertainty quality. We assess two distinct properties of the fused uncertainty. Calibration : whether confidence values match empirical accuracy, via ECE (10 bins) and reliability diagrams [10]. 
+
+Discrimination : whether uncertainty separates correct from incor-rect predictions, via AUROC for failure detection [13] on 𝑢 𝑓 𝑢𝑠𝑒𝑑 .Furthermore, for an uncertainty separability analysis, we evaluate both 𝑢 𝑓 𝑢𝑠𝑒𝑑 and ˆ 𝜎 2 
+
+> 𝑏𝑒𝑠𝑡
+
+as failure predictors via AUROC. 
+
+Presence discrimination. As the dataset is presence-dominated (imbalance ≈ 44:1 val, 73:1 test), we assess how the fused belief sep-arates present from absent frames using precision, recall, specificity, and balanced accuracy, computed from the belief alone (IoU-free). Specificity and balanced accuracy are emphasized as they expose the minority-class behavior that raw accuracy hides. 
+
+Attribute-based robustness Each sequence carries one or more of the seven attributes defined in Section 3.1, plus TC difficulty tiers; subsets therefore overlap. For each attribute we pool the frames of all sequences carrying it and report detection performance (Acc), calibration (ECE) and uncertainty quality (Spearman rank correlation between per-frame 𝑢 𝑓 𝑢𝑠𝑒𝑑 and IoU [12], mean 𝑢 𝑓 𝑢𝑠𝑒𝑑 ). 
+
+Computational efficiency is measured via FPS, parameter count, and FLOPs, targeting ≥25 FPS on an NVIDIA A100 GPU (Snellius) [22]. 
+
+## 4 Results 4.1 Detection Performance 
+
+The analysis evaluates whether conflict-aware DBF improves detec-tion performance compared with single-modality and undiscounted fusion baselines. Table 1 addresses this via AP@0.5, mAP, mIoU, Acc and 𝐴𝑈 𝑆𝐸 𝜎 . All fused variants exceed both single-modality streams on AP@0.5, mIoU, and Acc on both splits, and surpass the published thermal-only EDTC baselines on Acc (0.617/0.634) on the same Anti-UAV benchmark. On test, the fused operators reach Acc 0 .670 and mIoU 0 .717, against 0 .604/0 .664 (IR) and 0 .598/0 .660 (RGB). Within the fused group, ABF and DBF are identical on every metric; Naive matches them on all metrics except mAP, where it is lower by 0 .001; Gated coincides on mIoU and Acc; and all four belief-fusion variants tie on AUSE 𝜎 (0 .0497 test). Table 2 shows that inter-modality conflict 𝐶 never exceeds 1 .2 ×
+
+10 −7 on any frame, leaving DBF’s discounting step inert. A sepa-rate effect makes ABF indistinguishable from Naive averaging: on both-detect frames the maximum |𝑏 ABF − 𝑏 Naive | is 3 × 10 −3 (mean 1.6 × 10 −4), with zero class-label disagreements across 60k frames, because both streams are near-saturated (mean 𝑏 𝑈 𝐴𝑉 ≈ 0.99). DMS posts the highest mAP (0 .480 test) but ranks detections by − ˆ𝜎 2 
+
+> 𝑏𝑒𝑠𝑡
+
+rather than Dirichlet expected probability, making its AP and mAP values not rank-comparable to the belief-based rows (see footnote). On mIoU and Acc it matches the fused variants; on AUSE 𝜎 it is marginally worse (0 .0517 vs. 0 .0497). Figure 3 shows the full sparsification curves on the test set: IR performs substantially worse than all other methods across the retention range, while DBF, ABF, Naive and Gated overlap exactly throughout. Additionally, a sweep of the DBF discount exponent over 𝜆 ∈{0.25 , 0.5, 1, 2, 4} (validation, seeds 0–2) leaves every metric un-changed across all values. 
+
+Figure 3: Sparsification curves on the test set (signal: − ˆ𝜎 2,mean ± std over seeds 0-2). Each curve shows the gap be-tween an IoU-ordered oracle and the model when frames are removed in order of decreasing spatial uncertainty. Area under this gap is AUSE 𝜎 (lower is better). IR’s Gaussian head is a substantially weaker localization failure predictor across the retention range (AUSE 0.0615), reflecting its weaker spa-tial uncertainty signal (Table 5). All four fusion operators are indistinguishable (AUSE = 0.0497), confirming the near-zero inter-modal conflict reported in Table 2. DMS is marginally worse (0.0517). 
+
+## 4.2 Uncertainty Quality 
+
+The analysis further assesses how well-calibrated the fused uncer-tainty estimates are and whether they reliably discriminate between correct and incorrect predictions. The three subsections below ad-dress calibration, the operating range of 𝑢 𝑓 𝑢𝑠𝑒𝑑 , and its discrimina-tive power in turn. 
+
+4.2.1 Presence Discrimination & Calibration. Table 3 evaluates the fused semantic belief independently of the box output. DMS pro-duces no fused belief and is not assessed here. Precision is uniformly high ( ≥0.99) across all models. The uni-modal streams achieve higher specificity: IR reaches 0 .950 on val-idation and RGB 0 .944 on test, whereas all four fusion operators cluster near 0 .782 val and 0 .693 test. Consequently, on balanced accuracy the unimodal streams lead each split (IR 0 .961 val, RGB 0.897 test), with the fusion group trailing at ≈0.887 val and 0 .821 test. ABF, DBF, and Naive share identical presence-discrimination columns, differing only in the confidence score attached to each decision. On calibration (ECE), fusion operators are competitive on test: Naive 0 .055, ABF/DBF 0 .057, Gated 0 .058; IR is the worst-calibrated model (0 .082). On classification failure discrimination (AUROC, whether the fused belief separates correctly and incorrectly classi-fied presence/absence frames), unimodal streams lead on test (IR 0.908, RGB 0 .912), with fusion operators close behind (ABF/DBF/-Naive 0 .892, Gated 0 .858). ABF and DBF are indistinguishable on every metric. Figure 4 shows the reliability diagrams on the vali-dation set, all of the methods show two populated confidence bins near 0.55 and 1.0, with DBF and ABF producing identical diagrams. Naive exhibits an additional bin near 0.75. 
+
+Figure 4: Reliability diagrams on the validation set (mean ±
+
+std over seeds 0-2). The gap between each bar and the diago-nal equals the per-bin calibration error; ECE is the weighted mean gap. All methods concentrate mass in two bins: a mid-confidence cluster (≈ 0.55 ) from harder frames where the detector confidence is lower, and a high-confidence cluster 
+
+(≈ 0.95 − 1.0) from the dominant presence frames. At the mid-confidence bin, IR is overconfident (bar below diago-nal), while fusion operators are underconfident (bar above diagonal); RGB is best calibrated there. Naive exhibits an additional bin near 0.75 from missing-detection frames en-coded with 𝑢 ≈ 0.5 (Table 4). DBF and ABF are identical. 
+
+4.2.2 Calibration of Threshold 𝜃 cls . Table 4 reports the 𝜃 cls sweep results. In no configuration does applying 𝜃 cls improve over the thresholdless arg max 𝑐 𝑏 fused (𝑐 ) decision rule. The resulting Acc values are those reported in Table 1. For DBF and ABF, 𝑢 fused on gate-eligible frames peaks at 0 .046; for Gated it peaks at 0 .023. Both are below the lowest grid value 0 .05. the gate therefore never fires and reduces exactly to arg max 𝑐 𝑏 fused (𝑐 )
+
+across all three variants and all three seeds. Naive is the sole exception: missing-detection frames enter fusion with 𝑢 fused ≈ 0.5, making up 4.8–13.5% of gate-eligible frames. The gate fires, but yields no gain: accuracy plateaus at the arg max value for 𝜃 cls ≥ 0.55 and degrades below it. 
+
+4.2.3 Semantic vs. Spatial Uncertainty Comparison. Whereas the AUROC in Table 3 measures classification failure (presence/ab-sence), here the question shifts to localization failure: among present Table 1: Localization performance and benchmark comparability (mean ± std over seeds 0–2). AP@0.5 and mAP@[0.5:0.95] are the primary detection metrics; mIoU is mean IoU over present frames; Acc is the EDTC accuracy metric included for comparability with the original thermal-only baselines (det+track); AUSE 𝜎 is the sparsification error using − ˆ𝜎 2 
+
+> 𝑏𝑒𝑠𝑡
+
+(lower is better). Bold = best within each group per split. 
+
+Split Type Model AP@0.5 ↑ mAP ↑ mIoU ↑ EDCT’s Acc ↑ AUSE 𝜎 ↓
+
+> Val.
+
+Proposed (Det-only) IR 0.944 ± 0.022 0.531 ± 0.014 0.765 ± 0.017 0.732 ± 0.027 0.0593 ± 0.0005 RGB 0.907 ± 0.043 0.596 ± 0.034 0.782 ± 0.033 0.730 ± 0.057 0.0443 ± 0.0011 ABF 0.960 ± 0.011 0.598 ± 0.015 0.806 ± 0.009 0.779 ± 0.020 0.0434 ± 0.0028 
+
+DBF 0.960 ± 0.011 0.598 ± 0.015 0.806 ± 0.009 0.779 ± 0.020 0.0434 ± 0.0028 
+
+Naive 0.960 ± 0.011 0.597 ± 0.016 0.806 ± 0.009 0.779 ± 0.020 0.0434 ± 0.0028 
+
+Gated 0.958 ± 0.008 0.594 ± 0.010 0.806 ± 0.009 0.779 ± 0.020 0.0434 ± 0.0029 
+
+DMS 0.959 ± 0.013 † 0.604 ± 0.015 † 0.804 ± 0.012 0.777 ± 0.019 0.0456 ± 0.0030 
+
+> Test
+
+Ref. (Det+Track) EDTC [31] — — — 0.617 —EDTC ∗ [31] — — — 0.634 —Proposed (Det-only) IR 0.832 ± 0.009 0.409 ± 0.003 0.664 ± 0.005 0.604 ± 0.008 0.0615 ± 0.0043 RGB 0.811 ± 0.044 0.442 ± 0.029 0.660 ± 0.033 0.598 ± 0.044 0.0503 ± 0.0049 ABF 0.888 ± 0.007 0.470 ± 0.010 0.717 ± 0.006 0.670 ± 0.010 0.0497 ± 0.0039 
+
+DBF 0.888 ± 0.007 0.470 ± 0.010 0.717 ± 0.006 0.670 ± 0.010 0.0497 ± 0.0039 
+
+Naive 0.888 ± 0.007 0.469 ± 0.010 0.717 ± 0.006 0.670 ± 0.010 0.0497 ± 0.0039 
+
+Gated 0.884 ± 0.006 0.466 ± 0.008 0.717 ± 0.006 0.670 ± 0.010 0.0497 ± 0.0038 
+
+DMS 0.885 ± 0.007 † 0.480 ± 0.008 † 0.717 ± 0.007 0.669 ± 0.010 0.0517 ± 0.0034   
+
+> †DMS produces no fused belief; its detections are ranked by localization variance ( −ˆ𝜎 2
+> 𝑏𝑒𝑠𝑡 ) rather than the Dirichlet expected probability used for all other rows. AP values are therefore not rank-comparable to the belief-based variants and are reported for reference only.
+
+Table 2: Frame taxonomy and inter-modality conflict 𝐶 =
+
+Í𝑗 ≠𝑘 𝑏 rgb  
+
+> 𝑗
+
+𝑏 ir  
+
+> 𝑘
+
+, computed from the per-stream beliefs entering fusion (test split; values are the maximum over frames in each row, with ranges spanning seeds 0–2).             
+
+> Situation Share of frames Conflict 𝐶
+> Both streams detect 71.5–79.1% ≤1.2×10 −7
+> One stream detects 16.2–21.5% 0Neither detects 4.7–7.2% —
+
+frames where the fused prediction already favors UAV, does 𝑢 fused or ˆ𝜎 2best better predict whether localization succeeded? Table 5 reports failure-detection AUROC for 𝑢 fused and ˆ 𝜎 2best on present frames of the validation set. In RGB and every multimodal configuration, ˆ 𝜎 2best 
+
+is the stronger failure indicator (0.748 RGB, 0 .739 for fusion vari-ants), while 𝑢 fused ranges from 0 .626 (DBF/ABF) to 0 .676 (Gated). The IR-only stream is the sole exception: there ˆ 𝜎 2best (0 .560) is near-chance and 𝑢 fused (0 .757) is the stronger signal, reversing the order-ing seen in every other configuration. 
+
+## 4.3 Attribute-based Robustness 
+
+The analysis further examines whether uncertainty-aware fusion degrades more gracefully than single-modality baselines under challenging conditions. Table 6 reports Acc, ECE, and uncertainty– failure coupling for each attribute subset. Fusion achieves the highest Acc on every attribute subset. The thermal-crossover tiers show a monotone decline (0 .773 → 0.667 →
+
+0.463 for fusion), with TC-Hard as the hardest condition across all methods. Fusion attains the lowest ECE on 8 of 10 subsets. TC-Hard is the worst-calibrated condition for all methods (ECE ≥ 0.141). The OC subset rests on 𝑛 =2 sequences and should be read as indicative only. RGB yields the most negative 𝜌 (𝑢, IoU ) on 9 of 10 subsets. Fu-sion is consistently weaker, with 𝜌 between −0.036 and −0.579. The diagnostic ¯ 𝑢 shows fusion operates at a markedly lower uncer-tainty scale (0 .017–0 .206) than either unimodal stream. IR’s 𝜌 turns positive under low illumination ( +0.283). 
+
+## 4.4 Computational Efficiency 
+
+The analysis further evaluates whether the dual-stream architec-ture meets real-time constraints and whether the choice of fusion operator affects throughput. Table 7 reports the parameter count, GFLOPs, and inference speed (FPS). All variants exceed the 25 FPS real-time threshold, with unimodal detectors achieving approxi-mately 80 FPS and multimodal variants operating at approximately 38–41 FPS. The multimodal architectures approximately double the parameter count and GFLOPs relative to the unimodal streams, while inference speed remains comparable across the different fu-sion strategies. 
+
+## 5 Discussion 5.1 Detection Performance 
+
+The analysis examines whether conflict-aware DBF improves perfor-mance relative to single-stream and undiscounted fusion baselines. The results show that fusion consistently improves localization Table 3: Fused-belief quality, evaluated independently of the box output. Presence-discrimination metrics use the fused semantic belief only (IoU-free) under heavy class imbalance (val ≈44:1, test ≈73:1 present:absent). ECE measures calibration of the belief values; AUROC measures failure (misclassification) discrimination. DMS produces no fused belief and is not assessed here. Results are mean ± std over seeds 0-2. Bold = best per column within each split. 
+
+Presence discrimination Uncertainty quality Split Model Prec ↑ Recall ↑ Spec ↑ BalAcc ↑ ECE ↓ AUROC ↑
+
+> Validation
+
+IR 0.9988 ± 0.0004 0.9719 ± 0.0163 0.9497 ± 0.0195 0.9608 ± 0.0059 0.0213 ± 0.0078 0.8770 ± 0.0562 
+
+RGB 0.9900 ± 0.0005 0.9451 ± 0.0423 0.8494 ± 0.0084 0.8973 ± 0.0197 0.0333 ± 0.0022 0.7777 ± 0.1320 ABF 0.9950 ± 0.0005 0.9929 ± 0.0041 0.7820 ± 0.0192 0.8874 ± 0.0085 0.0218 ± 0.0019 0.7557 ± 0.0439 DBF 0.9950 ± 0.0004 0.9929 ± 0.0041 0.7820 ± 0.0192 0.8874 ± 0.0085 0.0218 ± 0.0019 0.7558 ± 0.0439 Naive 0.9950 ± 0.0004 0.9929 ± 0.0041 0.7820 ± 0.0192 0.8874 ± 0.0085 0.0305 ± 0.0097 0.7621 ± 0.0468 Gated 0.9950 ± 0.0004 0.9921 ± 0.0042 0.7817 ± 0.0160 0.8873 ± 0.0070 0.0225 ± 0.0018 0.7156 ± 0.0767 
+
+> Test
+
+IR 0.9983 ± 0.0001 0.8945 ± 0.0081 0.8907 ± 0.0092 0.8926 ± 0.0054 0.0815 ± 0.0055 0.9084 ± 0.0028 RGB 0.9954 ± 0.0009 0.8509 ± 0.0550 0.9439 ± 0.0141 0.8974 ± 0.0205 0.0574 ± 0.0202 0.9115 ± 0.0081 
+
+ABF 0.9956 ± 0.0003 0.9481 ± 0.0126 0.6930 ± 0.0221 0.8206 ± 0.0085 0.0572 ± 0.0006 0.8916 ± 0.0069 DBF 0.9956 ± 0.0003 0.9481 ± 0.0126 0.6930 ± 0.0221 0.8206 ± 0.0085 0.0572 ± 0.0006 0.8916 ± 0.0069 Naive 0.9956 ± 0.0003 0.9481 ± 0.0126 0.6930 ± 0.0221 0.8206 ± 0.0085 0.0547 ± 0.0150 0.8919 ± 0.0060 Gated 0.9956 ± 0.0003 0.9481 ± 0.0101 0.6930 ± 0.0018 0.8206 ± 0.0070 0.0584 ± 0.0007 0.8577 ± 0.0113 
+
+Table 4: 𝜃 cls sweep (validation). 𝑢 fused statistics on gate-eligible frames ( 𝑛 ≈ 60 k); ranges span seeds 0–2. For DBF, ABF and Gated the threshold is inert (gate ≡ arg max 𝑏 fused ) and Acc is constant over the entire grid. For Naive the threshold is active but yields no gain: Acc plateaus at the arg max value for 𝜃 cls ≥ 0.55 and degrades below it.                     
+
+> Model median 𝑢 fused max 𝑢 fused 𝜃 cls effect DBF 0.009–0.011 0.046 inert ABF 0.009–0.011 0.046 inert Gated 0.009–0.010 0.023 inert Naive 0.009–0.011 0.51 active ( 𝜃 ★≥0.55)
+
+Table 5: Failure-detection AUROC on the validation set, eval-uated per signal across all six models. Evaluation is restricted to present frames conditioned on arg max = UAV; a failure is defined as IoU < 0.5. AUROC > 0.5 indicates the signal ranks failure frames above success frames; AUROC = 0.5 is random; AUROC < 0.5 indicates the signal ranks failures below suc-cesses. Bold denotes the higher AUROC per configuration. 
+
+Failure-detection AUROC ↑
+
+Model 𝑢 fused ˆ𝜎 2best 
+
+IR 0.757 ± 0.083 0.560 ± 0.015 RGB 0.657 ± 0.066 0.748 ± 0.060 
+
+DBF 0.626 ± 0.062 0.739 ± 0.045 
+
+ABF 0.626 ± 0.062 0.739 ± 0.045 
+
+Naive 0.635 ± 0.070 0.739 ± 0.045 
+
+Gated 0.676 ± 0.086 0.739 ± 0.045 
+
+performance over either modality alone across the evaluated splits (Table 1). All fused variants also outperform the published EDTC (0 .617) and EDTC ∗ (0 .634) results. However, the central finding is that no fusion operator outper-forms the others. DBF is identical to ABF on every metric, and both match naive fusion on all decision metrics. This is structural: the near-zero conflict ( 𝐶 ≤ 1.2 × 10 −7, Table 2) means the dis-counting factor collapses to 𝜂 ≈ 1 and DBF reduces exactly to ABF. A second, independent collapse explains why ABF in turn matches naive fusion. ABF equals the naive mean exactly when 
+
+(𝑏 𝑅𝐺𝐵 − 𝑏 𝑡ℎ )( 𝑢 𝑅𝐺𝐵 − 𝑢 𝑡ℎ ) = 0, thus when the streams carry equal belief or equal uncertainty. On the both-detect frames the streams are near-saturated (mean 𝑏 𝑈 𝐴𝑉 ≈ 0.99 for both modalities), so 
+
+𝑏 𝑅𝐺𝐵 − 𝑏 𝑡ℎ ≈ 0 and ABF’s uncertainty weighting reweighs near-identical beliefs onto the same value. The maximum fused-belief gap to naive is 3 ×10 −3 and the two rules never disagree on the predicted class. Additionally, the sparsification curves (Figure 3) confirm this visually: all four fusion operators overlap exactly across the full retention range. IR remains substantially worse throughout, this is consistent with its outcome-insensitive Gaussian head discussed in Section 5.2. The near-zero conflict is not accidental, it follows from two independent properties of this benchmark and its modeling choices. The first is a dataset property: the Anti-UAV benchmark is presence-dominated, with the UAV visible in approximately 94 −99% of frames and absence segments lasting a median of 28 frames. On such a benchmark, when both streams detect, they tend to agree: both sur-face high 𝑏 𝑈 𝐴𝑉 anchors on the same target. This leaves negligible 
+
+𝑏 𝑏𝑔 mass for conflict to accumulate against. The second is a modeling choice: non-detecting streams are en-coded as the vacuous opinion ( 𝑏 =(0, 0), 𝑢 =1). This is the correct Subjective Logic treatment of ignorance: a stream that fails to detect should not be interpreted as evidence for background. This prevents a temporarily blind modality from vetoing a true positive seen by Table 6: Attribute-based robustness on the Anti-UAV test set. Means over seeds 0-2. 𝜌 is Spearman correlation between per-frame 
+
+𝑢 fused and IoU (more negative = uncertainty better tracks localization failure). ¯𝑢 is mean 𝑢 fused over all frames (including non-detections), reported as a diagnostic of each method’s uncertainty scale (not a quality metric; not scored). Best per row within each scored metric group in bold. 
+
+EDTC’s Acc ↑ ECE ↓ 𝜌 (𝑢, IoU ) ↓ ¯𝑢 (diag.) Attr IR RGB ABF/DBF IR RGB ABF/DBF IR RGB ABF/DBF IR RGB ABF/DBF ALL 0.605 0.598 0.670 0.081 0.057 0.057 −0.339 −0.442 −0.288 0.126 0.211 0.073 TC 0.560 0.553 0.632 0.110 0.083 0.077 −0.425 −0.524 −0.347 0.156 0.247 0.092 FM 0.618 0.576 0.660 0.078 0.070 0.066 −0.135 −0.460 −0.242 0.101 0.200 0.066 SV 0.533 0.508 0.584 0.108 0.086 0.094 −0.371 −0.593 −0.381 0.181 0.325 0.129 LI 0.681 0.603 0.705 0.045 0.062 0.045 +0.283 −0.400 −0.036 0.035 0.129 0.017 LR 0.598 0.517 0.622 0.078 0.077 0.080 −0.019 −0.528 −0.190 0.088 0.274 0.062 OV 0.673 0.550 0.678 0.028 0.048 0.045 −0.162 −0.456 −0.215 0.120 0.313 0.096 OC* 0.631 0.572 0.702 0.086 0.049 0.093 −0.412 −0.458 −0.162 0.196 0.384 0.138 
+
+Thermal crossover by difficulty 
+
+TC-Easy 0.657 0.688 0.773 0.059 0.033 0.003 −0.351 −0.277 −0.077 0.106 0.082 0.017 TC-Mid 0.612 0.576 0.667 0.070 0.075 0.053 −0.288 −0.471 −0.255 0.102 0.215 0.060 TC-Hard 0.395 0.408 0.463 0.218 0.141 0.178 −0.630 −0.748 −0.579 0.288 0.428 0.206  
+
+> *OC (occlusion) contains only 𝑛 =2 test sequences; values are high-variance and should be read as indicative, not conclusive.
+
+Table 7: Computational efficiency. Parameters and GFLOPs are deterministic; FPS is reported as mean ± std over seeds 0-2 on an NVIDIA A100 GPU (Snellius). 
+
+Model Params (M) GFLOPs FPS (val) FPS (test) IR 7.95 28.40 82 .56 ± 0.91 81 .05 ± 4.07 RGB 7.95 28.40 77 .16 ± 1.79 77 .75 ± 1.44 Naive 15.89 56.80 38 .39 ± 0.98 40 .69 ± 0.94 ABF 15.89 56.80 38 .98 ± 0.70 39 .30 ± 0.58 DBF 15.89 56.80 39 .67 ± 0.07 40 .01 ± 0.95 DMS 15.89 56.80 39 .13 ± 0.57 39 .99 ± 1.21 Gated 15.89 56.80 38 .83 ± 1.40 38 .49 ± 0.82 the other stream, the more dangerous error in safety-critical per-ception. The consequence however, is that a non-detecting stream contributes 𝐶 = 0 by construction, regardless of what the detect-ing stream believes. As Table 2 shows, 16-21% of frames fall into the one-stream-detects category, and every such frame is excluded from generating conflict by the encoding itself. This mechanism is falsifiable on the existing dataset: routing low detector object-ness into evidence for background would allow these frames to generate genuine conflict and activate the discounting step. Cru-cially, this does not reintroduce the veto behavior the vacuous encoding was designed to prevent (Section 3.2.1). The two cases are distinct: a stream that produces no detection at all remains vacuous 
+
+(𝑏 = (0, 0), 𝑢 = 1) and still cannot veto the other stream, preserv-ing the safety property under genuine blindness. Only a stream that does detect, but with low objectness, would contribute back-ground belief. Conflict would then arise from weak-but-present disagreement rather than from absence. Objectness currently only multiplies 𝑏 𝑈 𝐴𝑉 , so it can shrink UAV belief but never constitute evidence against a UAV. Aligning the encoding with this distinction is left for future work. The threshold sweep (Section 4.2.2) shows the same pattern from a different angle. If conflict were meaningful, 𝑢 fused would vary enough to engage the gate. Instead, 𝑢 fused on gate-eligible frames peaks at 0.046: below the lowest sweep value. So the gate never fires for DBF, ABF and Gated. For Naive, the gate does fire, but only on missing-detection frames already encoded as vacuous, so it cannot improve over the arg max decision. The gate therefore adds nothing on this benchmark. The 𝜆 sweep (Section 4.1) confirms this directly. Tuning the dis-count exponent over a wide range leaves every metric unchanged, because with 𝐶 ≈ 0 the discount factor (1 − 𝐶 )𝜆 ≈ 1 for every 𝜆 ,making the fused opinion independent of the exponent. We there-fore retain the standard linear setting 𝜆 = 1.0 as the principled default. 
+
+## 5.2 Uncertainty Quality 
+
+The analysis further assesses the calibration of the fused uncertainty estimates and their ability to reliably discriminate between correct and incorrect predictions. The fused semantic uncertainty is well-calibrated but is not the system’s strongest failure detector. On calibration (ECE, Table 3), fusion operators are competitive on test (ECE 0.057 for ABF/DBF, 0.055 for Naive), outperforming IR (0.082) and matching RGB (0.057). DBF and ABF remain indistinguishable, consistent with the inert discounting step established in Section 5.1. On classification failure discrimination (AUROC, Table 3), unimodal streams marginally lead on test (IR 0.908, RGB 0.912), with fusion operators close behind (ABF/DBF/Naive 0.892, Gated 0.858). The reliability diagrams (Figure 4) make the calibration structure visible: at the mid-confidence bin (≈ 0.55 ), IR is overconfident while fusion operators are underconfident, but all methods are well calibrated at the high-confidence bin (≈ 0.95 − 1.0).The failure mode this benchmark stresses is itself diagnostic. The failure-detection evaluation on the comparison between semantic vs. spatial uncertainty (Table 5) is restricted to present frames on which the fused prediction already favors UAV, with failure defined as IoU < 0.5. That is, the dominant error is a detected target that is poorly localized, not a target misclassified as background. Because the errors are localization errors rather than classification errors, a spatial signal should naturally outperform a semantic one, which is what we observe: ˆ 𝜎 2best is the stronger failure signal for RGB and all multimodal configurations (AUROC 0.739-0.748 vs. 0.626-0.676 for 𝑢 fused ). Calibration alone therefore overstates the usefulness of 
+
+𝑢 fused : 𝑢 fused is additionally compressed into [0.009 , 0.046 ] on gate-eligible frames (Table 4) for fusion configurations, further limiting its discriminative range [24]. However, the IR-only configuration reverses this ordering ( 𝑢 fused 
+
+0.757, ˆ 𝜎 2best 0.560, Table 5) despite competitive detection perfor-mance (Table 1). Following a similar diagnostic approach of He et al. [12], we examine the ˆ 𝜎 2best distributions conditioned on lo-calization outcome (Appendix B): IR success and failure frames have similar ˆ 𝜎 2best distributions (mean 0.022 vs. 0.030), while RGB distributions are more clearly separated (mean 0.025 vs. 0.050). IR’s Gaussian head assigns similar variance regardless of whether the localization succeeded or failed. A possible explanation is the lower spatial resolution of the thermal sensor (640 × 512 vs. 1920 × 1080 ):smaller targets occupy fewer pixels, potentially leaving the head with less signal to work with. However, a supplementary analysis stratified by target size (Appendix B) rules this out: the gap between IR and RGB remains constant across small, medium and large tar-get groups. A more likely cause is the well-documented texture asymmetry between modalities: RGB provides rich texture and color detail, whereas thermal images primarily convey structural contours [5, 27]. Since a Gaussian head learns to associate varia-tion with localization error, the weaker texture signal in thermal images leaves it outcome-insensitive. Which specific thermal prop-erty drives this (contrast, edge sharpness or other factors) requires controlled ablation and is left for future work. The weaker specificity of fusion operators reflects the same low-conflict structure identified in Section 5.1: under the vacuous miss-encoding, a non-detecting stream pulls the fused belief toward UAV on presence-dominated data, making the system less willing to predict absence. This is the correct safety-critical behavior under ignorance, but reduces specificity as a side effect. One caveat specific to calibration: on a presence-dominated benchmark, a model that is confidently correct most of the time will appear well-calibrated by construction. ECE scores should therefore be interpreted alongside the specificity results, which expose the minority-class behavior (absent frames) that overall ECE hides. 
+
+## 5.3 Robustness 
+
+The analysis further examines whether uncertainty-aware fusion degrades more gracefully than single-modality baselines across the evaluated attribute subsets. It does, leading Acc on all attribute subsets and holding its ECE calibration advantage on 8 of 10 sub-sets (Table 6). The monotone decline in fused Acc across thermal-crossover tiers confirms TC severity drives the hardest residual failures. The attribute results reveal two directions of cross-modal com-plementarity. IR dominates under LI (Acc 0.681 vs. RGB 0.603), as expected from a thermal sensor’s independence from visible light. Yet IR’s uncertainty signal degrades in this condition: its 𝜌 (𝑢, 𝐼𝑜𝑈 )
+
+turns positive (+0.283), meaning IR assigns lower uncertainty where localization is worse. RGB’s 𝜌 remains correctly negative (-0.400) and fusion corrects this toward zero (-0.036) while retaining IR’s localization advantage. IR rescues RGB on detection, RGB rescues IR on uncertainty quality. This complementarity is an averaging effect: as established in Section 5.1, the three belief-fusion operators are numerically indistinguishable on this data. The complementarity reverses under TC-Easy, the one attribute where RGB leads IR on Acc (0.688 vs 0.657). When the drone’s thermal signature blends with its background but its visual appear-ance remains distinct, RGB carries localization. Across TC tiers the picture is not monotone for the unimodal streams: at TC-Mid IR recovers above RGB (0.612 vs. 0.576), suggesting the relationship between crossover severity and modality advantage is non-linear. At TC-Hard both streams collapse similarly (0.395 vs. 0.408) and fusion provides only marginal improvement (0.463). This is con-sistent with the near-zero conflict structure: when both streams fail together, fusion has no corrective signal. IR leads RGB on most other attributes, with the largest gap under OV (0.673 vs 0.550) and LR (0.598 vs. 0.517). The two conditions discussed above (LI and TC) are the clearest cases where the direction of complementarity is theoretically interpretable. For the remaining attributes (OV, LR, SV), IR leads without a mechanism that the data here isolates. Es-tablishing the direction of complementarity for the other attributes would require controlled degradation rather than observational attribute subsets. Beyond these two conditions, the one counter-trend is uncertainty-failure coupling: RGB yields the sharpest 𝜌 on 9 of 10 subsets, with fusion consistently weaker. We believe this is a scale effect: fusion operates at a compressed ¯ 𝑢 relative to either unimodal stream, and since streams agree on nearly every frame ( 𝐶 ≈ 0, Section 4.1), the fused uncertainty collapses into a narrow band whose range restriction weakens the observed 𝜌 [24]. That fusion is simultane-ously best-calibrated on most subsets confirms 𝑢 fused is reliable but compressed. 
+
+## 5.4 Computational Efficiency 
+
+The analysis further evaluates whether the dual-stream architecture satisfies real-time constraints and whether the choice of fusion op-erator influences throughput. The cost of multimodal perception is essentially the cost of running a second stream: throughput roughly halves as parameters and GFLOPs double, yet every variant stays above the 25 FPS target. The choice of fusion rule adds negligible cost, meaning DBF can be adopted without overhead penalty even on data where its discounting step has no effect. 
+
+## 5.5 Detection-Only vs. Detect-Track 
+
+A secondary outcome of the architecture decision in Section 3.2, where the detection-only configuration is adopted as the main setup, is that it matches or exceeds the detect-track variant described in Appendix C. Although this comparison is not a primary focus of the study, it is relevant because detect-track collaboration constitutes the central mechanism of the EDTC system extended in this work. Two explanations are consistent with this outcome. First, in EDTC the evidential head functions as a post-hoc verifi-cation module: after the corner head produces a bounding box, the head crops the predicted box’s contents and attends against a tem-plate, directly observing whether the tracked region still resembles the target. In our proposed detect+track framework with SiamCAR [11], the evidential head was instead integrated into SiamCAR’s classification branch, producing per-position target/background scores aggregated by peak-picking. When the tracker drifts, the peak score remains high at the drifted location, whereas EDTC’s verification head would see the drifted content directly and return low confidence. The near-zero collapse of 𝑏 𝑓 𝑢𝑠𝑒𝑑 (𝑈 𝐴𝑉 ) across all TRACK configurations (Appendix C.2.2, Figures 7-9, Subfigure (d)), is consistent with this account, though a direct comparison between the two head designs is required to establish it conclusively. Second, the detect-track paradigm derives its value from recov-ering targets after genuine absence-reappearance events. This is evidenced by the EDTC paper’s own ablation, where YOLO alone (0.392 Acc) outperforms YOLO + tracker without the evidential head (0.352 Acc) on AntiUAV600. The tracker propagates false posi-tives until the evidential head suppresses them [31]. Anti-UAV is presence-dominated (UAV present in ≈ 94 − 99% of frames, median absence of 28 frames), leaving few absence-reappearance events for a tracker to benefit from. The argument does not require any defi-ciency in SiamCAR specifically: even an optimal tracker would have limited room to improve over detection-only when absence seg-ments are rare and brief. Disentangling these two factors would re-quire either an implementation mirroring EDTC’s verification-head design, or evaluation on a dataset with longer and more frequent absence segments. 
+
+## 5.6 Limitations 
+
+Generalizability. The null result for DBF is conditional on two compounding properties: the benchmark’s near-universal UAV pres-ence leaves both streams agreeing on nearly every frame, and the vacuous encoding of non-detecting streams forces conflict to zero on any frame where one stream fails to detect (Section 5.1). Whether DBF differentiates itself under stronger modality asymmetry or with objectness-informed background belief on weak detections remains untested. Validity. The comparison against EDTC and EDTC* is indicative only, as those are thermal-only detect-track systems. ECE should be interpreted alongside specificity results (Table 3): on a presence-dominated benchmark, a confidently correct model appears well-calibrated by construction. Attribute-level comple-mentarity claims cannot be isolated without controlled modality degradation. Reliability. The OC subset contains only 𝑛 =2 test sequences. Detect-track results (Appendix C) are single-seed under a preliminary protocol not directly comparable to Table 1. Scala-bility. Efficiency measurements are A100-specific. The dual-stream overhead may bottleneck on edge hardware. 
+
+## 6 Conclusion 
+
+Existing multimodal anti-UAV systems fuse RGB and thermal streams deterministically, leaving them unable to express doubt when streams disagree. This paper extended EDTC to RGB-Thermal perception via Discounted Belief Fusion and asked what impact uncertainty-aware fusion has on predictive performance, calibration, robustness, and efficiency. Fusion consistently outperforms either single stream in detec-tion performance, achieving a test Acc of 0.670 compared with 0.604 for IR and 0.598 for RGB, and across all evaluated attribute subsets, with IR performing better under low illumination and RGB under thermal crossover. The fused uncertainty is well-calibrated, with an ECE of 0.057, although spatial variance provides stronger discrimination of localization failures (AUROC 0.739 vs. 0.626). The dual-stream architecture satisfies real-time constraints at 38–41 FPS, with no measurable throughput penalty associated with the choice of fusion operator. However, DBF, ABF, and naive averaging are indistinguishable across all evaluated metrics. This represents a structural finding rather than a deficiency of the operator: near-zero conflict follows jointly from the benchmark’s presence-dominance and the vacuous encoding of non-detecting streams, both of which suppress disagreement by construction. Overall, uncertainty-aware multimodal fusion reliably improves localization and robustness over single-stream baselines, while distinguishing the benefits of conflict-aware operators requires benchmarks exhibiting genuine cross-modal disagreement. 
+
+Future Work. The most promising path forward is routing low detector objectness into background belief on detected frames, while leaving true non-detections vacuous. This would activate DBF’s discounting on weak detections without reintroducing the veto behavior the vacuous encoding was designed to prevent. A List of Abbreviations                                  
+
+> Abbreviation Definition
+> Task & Dataset
+> UAV Unmanned Aerial Vehicle IR Infrared RGB Red-Green-Blue TC Thermal Crossover FM Fast Motion SV Scale Variation LI Low Illumination LR Low Resolution OV Out-of-View OC Occlusion
+> Framework & Methods
+> EDTC Evidential Detection and Tracking Collaboration EDL Evidential Deep Learning DBF Discounted Belief Fusion ABF Averaging Belief Fusion DMS Dynamic Modality Selection DST Dempster-Shafer Theory NMS Non-Maximum Suppression
+> Evaluation Metrics
+> IoU Intersection over Union mIoU Mean Intersection over Union AP Average Precision mAP Mean Average Precision Acc EDTC Accuracy metric ECE Expected Calibration Error AUROC Area Under the Receiver Operating Characteristic curve AUSE Area Under the Sparsification Error curve FPS Frames Per Second GFLOPs Giga Floating-Point Operations per Second
+> Technical Terms
+> ReLU Rectified Linear Unit KL Kullback-Leibler (divergence) NLL Negative Log-Likelihood MLP Multi-Layer Perceptron SOTA State of the Art
+
+Table 8: List of abbreviations used throughout this paper. 
+
+## B Spatial Uncertainty Discriminability Analysis 
+
+This appendix investigates why IR’s spatial variance ˆ 𝜎 2best is a near-chance failure detector (AUROC 0.560) while RGB’s is strong (AUROC 0.748), despite IR being competitive on localization metrics (Table 1). The analysis uses detected present frames from the validation set, pooled across seeds 0–2. A frame counts as a success if 𝐼𝑜𝑈 ≥ 0.5 and as a failure if 0 < 𝐼𝑜𝑈 < 0.5. Frames where no detection was made are excluded. 
+
+Distribution analysis Figure 5 shows the distribution of log ˆ 𝜎 2best separately for success and failure frames, for IR (left) and RGB (right). For RGB, failure frames have clearly higher variance than success frames (mean 0.050 vs. 0.025). The head assigns more uncertainty when it localizes poorly. For IR, the two distributions are nearly on top of each other (mean 0.030 vs. 0.022). The head assigns similar variance regardless of whether the localization was good or bad. The overlap coefficient (OVL) in the figure title quantifies this: it measures the fraction of shared area between the two distributions, where 1.0 means completely indistinguishable and 0.0 means perfectly separated. IR’s OVL of 0.800 confirms the distributions are nearly identical. RGB’s OVL of 0.552 confirms they are meaningfully separated. 
+
+Size stratification analysis A natural concern is that IR’s outcome-insensitive variance is simply because IR frames have lower spatial resolution (640 × 512 𝑣𝑠. 1920 × 1080), leaving fewer pixels per target for the Gaussian head to work with. To test this, Table 9 stratifies frames into three equal-sized groups by target size (small, medium, large) and reports the overlap coefficient (OVL) and AUROC per group, separately for IR and RGB. If resolution were the cause, the gap between IR and RGB would shrink for larger targets where IR has more pixels. Instead, the gap stays constant across all three size groups (OVL difference approximately +0.29 for each group). IR’s outcome-insensitive variance is therefore not explained by target size or sensor resolution. What specific property of thermal imagery is responsible remains an open question. 
+
+Figure 5: Distribution of log ˆ𝜎 2 
+
+> best
+
+conditioned on localization outcome (success: 𝐼𝑜𝑈 ≥ 0.5, failure: 0 < 𝐼𝑜𝑈 < 0.5) for IR-only (left) and RGB-only (right) configurations, pooled across seeds 0–2 on the validation set. IR shows heavily overlapping distributions (overlap coefficient 0.800, AUROC 0.598), while RGB shows clearly separated distributions (overlap 0.552, AUROC 0.760). The contrast confirms that IR’s Gaussian head produces outcome-insensitive variance, explaining the reversal of the spatial vs. semantic uncertainty ordering observed in Table 5. Table 9: Target-size-stratified discriminability of the spatial uncertainty ˆ𝜎 2 
+
+> best
+
+for the IR-only and RGB-only detectors, on detected present frames (IoU > 0; success: IoU ≥ 0.5, failure: 0 < IoU < 0.5), validation set, seeds 0–2 pooled. Frames are divided into three equal-sized groups by normalized predicted target size (𝑤 ·ℎ)/ 𝐴 frame , with group boundaries computed per modality. OVL is the histogram overlap coefficient of log ˆ 𝜎 2 
+
+> best
+
+between the success and failure distributions (1 = indistinguishable, 0 = disjoint); AUROC scores ˆ𝜎 2 
+
+> best
+
+as a failure predictor. The IR −RGB gap is constant across sizes, isolating the thermal modality rather than target size as the cause.                                                   
+
+> Modality Bin Size range 𝑛 succ 𝑛 fail ¯𝜎 2succ ¯𝜎 2fail OVL AUROC (×10 −3)IR small 0.73–3 .81 57476 1076 0.023 0.033 0.836 0.606 medium 3.81–5 .40 58111 526 0.023 0.029 0.821 0.580 large 5.40–30 .457855 516 0.022 0.028 0.729 0.619 RGB small 0.23–2 .52 53663 1272 0.031 0.059 0.543 0.752 medium 2.52–4 .74 54488 452 0.022 0.026 0.527 0.647 large 4.74–26 .154579 233 0.020 0.041 0.465 0.824
+
+## C Full Detect-Track Architecture C.1 Methodology 
+
+The detect-track configuration follows the same dual-stream evidential pipeline as the main framework (Section 3), with three differences. Figure 6 provides a high-level overview of the architecture. 
+
+Architecture. A local tracking branch is added alongside the global detection branch. EDTC’s transformer-based tracker is replaced by SiamCAR [11], an anchor-free Siamese tracker with a ResNet-50 backbone, equipped with the same evidential and Gaussian heads as the detection branch. The evidential head is integrated into SiamCAR’s classification branch; the frame-level opinion is read at the peak position of the resulting score map. 
+
+Tracking training. Each modality’s SiamCAR tracker is initialised from a checkpoint pretrained on VID, YOUTUBEBB, DET, COCO, GOT-10k, and LaSOT, then fine-tuned on the Anti-UAV training split using standard SiamCAR training ( 𝜆 1=1, 𝜆 2=3) for 20 epochs. The evidential framework is added in the same two-stage protocol as detection: Stage 1 trains Gaussian heads for 30 epochs (SGD, lr 10 −4, weight decay 10 −4, 𝜆 var =0.1); Stage 2 trains the evidential head for 40 epochs (lr 10 −4, cosine-annealed, 𝜆 evi =1.0), with KL regularisation annealed from 0 to 1 over the first 10 epochs. Switching and threshold calibration. The uncertainty-gated output decision is replaced by a full state-transition mechanism: the system initializes tracking on a confident detection and reverts to detection when tracking confidence falls. This requires four thresholds rather than one: 𝜃 cls_det and 𝜃 loc_det govern the detection-to-tracking transition; 𝜃 cls_trk and 𝜃 loc_trk govern tracking maintenance. All four require 
+
+𝑏 𝑓 𝑢𝑠𝑒𝑑 (UAV ) > 𝑏 𝑓 𝑢𝑠𝑒𝑑 (bg ) as an additional class condition. Because joint grid search over four thresholds is computationally intractable, thresholds are calibrated from a single inference pass: the 95th percentile of 𝑢 fused and ˆ 𝜎 2best on frames where tracking was successfully initiated or maintained yields one threshold per signal per branch state, confirmed by a ±0.1 sensitivity analysis around each derived value. 
+
+Figure 6: Multimodal uncertainty-aware detection-tracking framework. Both the global detection branch (YOLOv5s) and local tracking branch (SiamCAR) process RGB and infrared streams independently, each producing per-modality semantic uncertainty via an evidential head and spatial uncertainty via a Gaussian head. Semantic predictions are aggregated across modalities via Discounted Belief Fusion (DBF). Spatial predictions are resolved by selecting the bounding box from the lower-uncertainty modality (Dynamic Modality Selection). State-dependent switching between detection and tracking requires both semantic ( 𝑢 fused ) and spatial ( ˆ𝜎 2
+
+> best
+
+) confidence to satisfy their respective thresholds simultaneously. 
+
+## C.2 Results & Discussion 
+
+C.2.1 Localization Performance. The results in this appendix were obtained under a preliminary protocol that differs from the main setup in two respects. First, the frame-level YOLO opinion was computed by mean aggregation over all anchors rather than at the maximum-confidence NMS survivor. Second, non-detecting frames were encoded as ( 𝑏 𝑏𝑔 =1, 𝑢 =1), which violates the Subjective Logic constraint Í𝑘 𝑏 𝑘 + 𝑢 = 1and produces undefined behavior in the fusion equations; the final framework uses the vacuous opinion ( 𝑏 𝑈 𝐴𝑉 =𝑏 𝑏𝑔 =0, 𝑢 =1) instead. Both deviations disproportionately affect the detect-track branch, so the qualitative finding that detection-only matches or exceeds detect-track, is unlikely to reverse under the corrected protocol. Under this preliminary protocol, the DBF detect-track variant (Acc 0.797) nominally exceeds IR detector-only (Acc 0.771). This reflects the cross-modality comparison rather than a genuine detect-track advantage, since within the same modality DBF detector-only (Acc 0.802) still exceeds DBF detect-track. The absolute numbers are not directly comparable to Table 1 and should be read as indicative only. 
+
+C.2.2 Switching Signal Separability. This appendix complements Section 5.5 by providing per-frame histograms of the three candidate switching signals ( 𝑏 fused (UAV ), ˆ 𝜎 2best , 𝑢 fused ) on the validation set. Figures are organised by modality: Figure 7 (IR-only), Figure 8 (RGB-only), and Figure 9 (DBF). Each figure separates successes (IoU ≥ 10 −5, green) from failures (IoU = 0, red) and shows both switching states (DETECT, TRACK). Dashed lines indicate the operational thresholds used at evaluation. The key pattern visible across all three modalities is the near-zero collapse of 𝑏 fused (UAV ) in the TRACK rows, consistent with the drift argument discussed in Section 5.5. ˆ 𝜎 2best remains the more reliable failure signal across both states and all modalities. (a) DETECT – 𝑏 uav (AUROC = 0.660) (b) DETECT – 𝜎 2 
+
+> best
+
+(AUROC = 0.665) (c) DETECT – 𝑢 fused (AUROC = 0.341) 
+
+(d) TRACK – 𝑏 uav (AUROC = 0.512) (e) TRACK – 𝜎 2 
+
+> best
+
+(AUROC = 0.703) (f) TRACK – 𝑢 fused (AUROC = 0.492) 
+
+Figure 7: IR-only configuration. Histograms of the three candidate switching signals across DETECT (top row) and TRACK (bottom row) modes on the validation set. Each subcaption reports the AUROC of the signal as a failure predictor. 
+
+(a) DETECT – 𝑏 uav (AUROC = 0.846) (b) DETECT – 𝜎 2 
+
+> best
+
+(AUROC = 0.930) (c) DETECT – 𝑢 fused (AUROC = 0.151) 
+
+(d) TRACK – 𝑏 uav (AUROC = 0.539) (e) TRACK – 𝜎 2 
+
+> best
+
+(AUROC = 0.867) (f) TRACK – 𝑢 fused (AUROC = 0.234) 
+
+Figure 8: RGB-only configuration. Histograms of the three candidate switching signals across DETECT (top row) and TRACK (bottom row) modes on the validation set. Each subcaption reports the AUROC of the signal as a failure predictor. Table 10: Best-run Acc per method under the preliminary detect-track protocol (validation set, seed 0). Each row is the best threshold configuration from a sequential calibration sweep; intermediate runs are not shown. The detector-only rows use the same protocol for direct comparability. Neither group is comparable to Table 1, which uses the corrected protocol. 
+
+Configuration Method Acc Detect-track IR only 0.756 RGB only 0.714 DBF 0.797 Detector-only IR only 0.771 RGB only 0.811 DBF 0.802                 
+
+> (a) DETECT – 𝑏 uav (AUROC = 0.777) (b) DETECT – 𝜎 2
+> best (AUROC = 0.867) (c) DETECT – 𝑢 fused (AUROC = 0.234)
+> (d) TRACK – 𝑏 uav (AUROC = 0.469) (e) TRACK – 𝜎 2
+> best (AUROC = 0.581) (f) TRACK – 𝑢 fused (AUROC = 0.589)
+
+Figure 9: DBF configuration. Histograms of the three candidate switching signals across DETECT (top row) and TRACK (bottom row) modes on the validation set. Each subcaption reports the AUROC of the signal as a failure predictor. References 
+
+[1] Ildi Alla, Selma Yahia, and Valeria Loscri. 2025. TRIDENT: Tri-modal Real-time Intrusion Detection Engine for New Targets. Computers & Security 159 (2025), 104676. doi:10.1016/j.cose.2025.104676 [2] Karim Anwar and Seyed Sahand Mohammadi Ziabari. 2025. Attention to the Branches: A Comparative Analysis of FairMOT with Transformers on Fish Dataset. In Multi-disciplinary Trends in Artificial Intelligence: 17th International Conference, MIWAI 2024, Pattaya, Thailand, November 11–15, 2024, Proceedings, Part I (Lecture Notes in Computer Science, Vol. 15431) . Springer, 64–76. doi:10.1007/978-981-96-0692-4_6 [3] Tadas Baltrušaitis, Chaitanya Ahuja, and Louis-Philippe Morency. 2019. Multimodal Machine Learning: A Survey and Taxonomy. IEEE Transactions on Pattern Analysis and Machine Intelligence 41, 2 (2019), 423–443. doi:10.1109/TPAMI.2018.2798607 [4] Grigor Bezirganyan, Sana Sellami, Laure Berti-Équille, and Sébastien Fournier. 2025. Multimodal Learning with Uncertainty Quantification Based on Discounted Belief Fusion. In Proceedings of the 28th International Conference on Artificial Intelligence and Statistics (AISTATS) (Proceedings of Machine Learning Research, Vol. 258) . PMLR, 3142–3150. https://proceedings.mlr.press/v258/bezirganyan25a.html [5] Fuqin Deng, Hua Feng, Mingjian Liang, Hongmin Wang, Yong Yang, Yuan Gao, Junfeng Chen, Junjie Hu, Xiyue Guo, and Tin Lun Lam. 2021. FEANet: Feature-Enhanced Attention Network for RGB-Thermal Real-Time Semantic Segmentation. In 2021 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS) . 4467–4473. doi:10.1109/IROS51168.2021.9636084 [6] Yifei Dong, Fengyi Wu, Sanjian Zhang, Guangyu Chen, Yuzhi Hu, Masumi Yano, Jingdong Sun, Siyu Huang, Feng Liu, Qi Dai, and Zhi-Qi Cheng. 2025. Securing the Skies: A Comprehensive Survey on Anti-UAV Methods, Benchmarking, and Future Directions. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW) . 6725–6739. doi:10.1109/CVPRW67362.2025.00663 [7] Yarin Gal and Zoubin Ghahramani. 2016. Dropout as a Bayesian Approximation: Representing Model Uncertainty in Deep Learning. In Proceedings of the 33rd International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 48) . PMLR, 1050–1059. https://proceedings.mlr.press/v48/gal16.html [8] Junyu Gao, Mengyuan Chen, Liangyu Xiang, and Changsheng Xu. 2026. A Comprehensive Survey on Evidential Deep Learning and Its Applications. IEEE Transactions on Pattern Analysis and Machine Intelligence 48, 3 (2026), 2118–2138. doi:10.1109/TPAMI.2025.3625258 [9] Yonatan Geifman and Ran El-Yaniv. 2017. Selective Classification for Deep Neural Networks. In Advances in Neural Information Processing Systems , Vol. 30. [10] Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q. Weinberger. 2017. On Calibration of Modern Neural Networks. In Proceedings of the 34th International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 70) . PMLR, 1321–1330. https://proceedings.mlr.press/v70/guo17a.html [11] Dongyan Guo, Jun Wang, Ying Cui, Zhenhua Wang, and Shengyong Chen. 2020. SiamCAR: Siamese Fully Convolutional Classification and Regression for Visual Tracking. In 
+
+Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) . 6269–6277. [12] Yihui He, Chenchen Zhu, Jianren Wang, Marios Savvides, and Xiangyu Zhang. 2019. Bounding Box Regression with Uncertainty for Accurate Object Detection. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) . 2888–2897. [13] Dan Hendrycks and Kevin Gimpel. 2017. A Baseline for Detecting Misclassified and Out-of-Distribution Examples in Neural Networks. In International Conference on Learning Representations (ICLR) . https://openreview.net/forum?id=Hkg4TI9xl [14] Eddy Ilg, Özgün Çiçek, Silvio Galesso, Aaron Klein, Osama Makansi, Frank Hutter, and Thomas Brox. 2018. Uncertainty Estimates and Multi-Hypotheses Networks for Optical Flow. In Proceedings of the European Conference on Computer Vision (ECCV) . 652–667. [15] Nan Jiang, Kuiran Wang, Xiaoke Peng, Xuehui Yu, Qiang Wang, Junliang Xing, Guorong Li, Guodong Guo, Qixiang Ye, Jianbin Jiao, Jian Zhao, and Zhenjun Han. 2023. Anti-UAV: A Large-Scale Benchmark for Vision-Based UAV Tracking. IEEE Transactions on Multimedia 25 (2023), 486–500. doi:10.1109/TMM.2021.3128047 [16] Tianzhe Jiao, Chaopeng Guo, Xiaoyue Feng, Yuming Chen, and Jie Song. 2024. A Comprehensive Survey on Deep Learning Multi-Modal Fusion: Methods, Technologies and Applications. Computers, Materials & Continua 80, 1 (2024), 1–35. doi:10.32604/cmc.2024.053204 [17] Audun Jøsang, Dongxia Wang, and Jie Zhang. 2017. Multi-source fusion in subjective logic. In 2017 20th International Conference on Information Fusion (Fusion) . 1–8. doi:10.23919/ICIF.2017.8009820 [18] Zsófia Katona, Seyed Sahand Mohammadi Ziabari, and Fatemeh Karimi Nejadasl. 2025. MARINE: A Computer Vision Model for Detecting Rare Predator-Prey Interactions in Animal Videos. In Big Data and Artificial Intelligence: 12th International Conference, BDA 2024, Hyderabad, India, December 17–20, 2024, Proceedings (Lecture Notes in Computer Science, Vol. 15526) . Springer, 183–199. doi:10.1007/978-3-031-81821-9_11 [19] Balaji Lakshminarayanan, Alexander Pritzel, and Charles Blundell. 2017. Simple and Scalable Predictive Uncertainty Estimation Using Deep Ensembles. In Advances in Neural Information Processing Systems , Vol. 30. 6402–6413. [20] Mauro Larrat and Claudomiro Sales. 2025. A Multimodal Transformer Approach for UAV Detection and Aerial Object Recognition Using Radar, Audio, and Video Data. arXiv:2511.15312 [cs.CV] https://arxiv.org/abs/2511.15312 [21] Zongzhen Liu, Hui Luo, Zhixing Wang, Yuxing Wei, Haorui Zuo, and Jianlin Zhang. 2025. Cross-modal Offset-guided Dynamic Alignment and Fusion for Weakly Aligned UAV Object Detection. arXiv:2506.16737 [cs.CV] https://arxiv.org/abs/2506.16737 [22] Vijay Janapa Reddi, Christine Cheng, David Kanter, Peter Mattson, Guenther Schmuelling, Carole-Jean Wu, Brian Anderson, Maximilien Breughe, Mark Charlebois, William Chou, Ramesh Chukka, Cody Coleman, Sam Davis, Pan Deng, Greg Diamos, Jared Duke, Dave Fick, J. Scott Gardner, Itay Hubara, Sachin Idgunji, Thomas B. Jablin, Jeff Jiao, Tom St. John, Pankaj Kanwar, David Lee, Jeffery Liao, Anton Lokhmotov, Francisco Massa, Peng Meng, Paulius Micikevicius, Colin Osborne, Gennady Pekhimenko, Arun Tejusve Raghunath Rajan, Dilip Sequeira, Ashish Sirasao, Fei Sun, Hanlin Tang, Michael Thomson, Frank Wei, Ephrem Wu, Lingjie Xu, Koichi Yamada, Bing Yu, George Yuan, Aaron Zhong, Peizhao Zhang, and Yuchen Zhou. 2020. MLPerf Inference Benchmark. In 2020 ACM/IEEE 47th Annual International Symposium on Computer Architecture (ISCA) .446–459. doi:10.1109/ISCA45697.2020.00045 [23] Joseph Redmon, Santosh Divvala, Ross Girshick, and Ali Farhadi. 2016. You Only Look Once: Unified, Real-Time Object Detection. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR) . 779–788. doi:10.1109/CVPR.2016.91 [24] Paul Sackett and Hyuckseung Yang. 2000. Correction for Range Restriction: An Expanded Typology. Journal of Applied Psychology 85 (02 2000), 112–118. doi:10.1037/0021-9010.85.1.112 [25] Murat Sensoy, Lance Kaplan, and Melih Kandemir. 2018. Evidential Deep Learning to Quantify Classification Uncertainty. In Advances in Neural Information Processing Systems ,Vol. 31. [26] Rajendra Srivastava. 2022. Dempster-Shafer Theory of Belief Functions: A Language for Managing Uncertainties in the Real-World Problems. International Journal of Finance, Entrepreneurship & Sustainability (08 2022). doi:10.56763/ijfes.v1i.30 [27] Yuxiang Sun, Weixun Zuo, and Ming Liu. 2019. RTFNet: RGB-Thermal Fusion Network for Semantic Segmentation of Urban Scenes. IEEE Robotics and Automation Letters 4, 3 (July 2019), 2576–2583. doi:10.1109/LRA.2019.2904733 [28] Rens W. van der Heijden, Henning Kopp, and Frank Kargl. 2018. Multi-Source Fusion Operations in Subjective Logic. arXiv:1805.01388 [cs.AI] https://arxiv.org/abs/1805.01388 [29] Shenghai Yuan, Yizhuo Yang, Thien Hoang Nguyen, Thien-Minh Nguyen, Jianfei Yang, Fen Liu, Jianping Li, Han Wang, and Lihua Xie. 2024. MMAUD: A Comprehensive Multi-Modal Anti-UAV Dataset for Modern Miniature Drone Threats. In 2024 IEEE International Conference on Robotics and Automation (ICRA) . 2745–2751. doi:10.1109/ ICRA57147.2024.10610957 [30] Jie Zhao, Jingshu Zhang, Dongdong Li, and Dong Wang. 2022. Vision-Based Anti-UAV Detection and Tracking. IEEE Transactions on Intelligent Transportation Systems 23, 12 (2022), 25323–25334. doi:10.1109/TITS.2022.3177627 [31] Xue-Feng Zhu, Tianyang Xu, Jian Zhao, Jia-Wei Liu, Kai Wang, Gang Wang, Jianan Li, Qiang Wang, Lei Jin, Zhu Zheng, Junliang Xing, and Xiao-Jun Wu. 2023. Evidential Detection and Tracking Collaboration: New Problem, Benchmark and Algorithm for Robust Anti-UAV System. arXiv:2306.15767 [cs.CV] doi:10.48550/arXiv.2306.15767

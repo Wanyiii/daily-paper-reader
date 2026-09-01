@@ -1,0 +1,473 @@
+Title: 3D-MRL: Nested Multimodal 3D Representations via Matryoshka Representation Learning
+
+URL Source: https://arxiv.org/pdf/2608.29285v1
+
+Published Time: Tue, 01 Sep 2026 00:57:52 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+> arXiv:2608.29285v1 [cs.CV] 29 Aug 2026
+
+LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 1
+
+# 3D-MRL : Nested Multimodal 3D Representations via Matryoshka Representation Learning 
+
+Márcus Lobo 1
+
+marcusvlc@usp.br 
+
+Vitor Matias 1
+
+vitorpmatias@usp.br 
+
+Jeová Farias 2
+
+j.farias@bowdoin.edu 
+
+Moacir Ponti 1
+
+moacir@icmc.usp.br  
+
+> 1
+
+Instituto de Ciências Matemáticas e de Computação Universidade de São Paulo São Carlos, São Paulo, BR  
+
+> 2
+
+Bowdoin College Brunswick, Maine, USA 
+
+Abstract 
+
+Vision-Language Models align point clouds with image and text embeddings, en-abling zero-shot recognition, retrieval, and open-vocabulary understanding of 3D shapes. Existing multimodal 3D pre-training methods produce fixed-dimensional embeddings, requiring separate models for different computational budgets. We propose 3D Ma-tryoshka Representation Learning ( 3D-MRL ), a multimodal 3D pre-training framework based on Matryoshka Representation Learning. 3D-MRL learns nested 3D representa-tions by aligning point clouds with frozen CLIP image and text embeddings while ap-plying contrastive supervision across multiple embedding dimensions. The Matryoshka objective is applied only to the 3D encoder, allowing a single model to produce represen-tations at different dimensionalities without retraining. Experiments on the Objaverse-LVIS, ModelNet40, and ScanNet datasets show that 3D-MRL achieves competitive per-formance on zero-shot and few-shot 3D recognition tasks. In addition, the learned repre-sentations support retrieval across different embedding dimensions within a single model. On Objaverse-LVIS, 3D-MRL improves Top-1 accuracy from 46.8% to 50.9%. Retrieval experiments further show that different embedding dimensions yield varying levels of semantic and geometric specificity. Project page: https://usmarcv.github.io/ 3DMRL_page/ .
+
+# 1 Introduction 
+
+Vision-Language Models (VLMs) for 3D perception align point clouds with images and text in a shared embedding space, enabling zero-shot classification, open-vocabulary retrieval, and cross-modal understanding of 3D shapes. Recent 3D multimodal learning methods such as ULIP [37] and OpenShape [22] achieve strong results by mapping 3D point clouds into CLIP’s pre-aligned space. Despite their success, these methods learn and produce single fixed high-dimensional embeddings – typically 512 to 1280 dimensions – that must be stored 
+
+© 2026. The copyright of this document resides with its authors. It may be distributed unchanged freely in print or electronic forms. 2 LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 
+
+and compared in full. For real-world deployment on edge devices, in large-scale retrieval pipelines, or under strict latency budgets, this one-size-fits-all approach is a critical bottle-neck. Matryoshka Representation Learning (MRL) [16] addresses this limitation by learning nested embeddings whose lower-dimensional prefixes remain useful for downstream tasks, while higher-dimensional prefixes progressively increase representational capacity. A single MRL-trained model can be truncated to any prefix length, trading accuracy for efficiency without retraining. Thanks to the recent advances in building embeddings, MRL has proven effective in 2D vision [2], language [21], and, recently, 3D reconstruction with Gaussian primitives [12]. While MRL has demonstrated success in vision, language, retrieval, and graphics, its potential for multimodal 3D representation learning remains unexplored. Ex-tending MRL to multimodal 3D is nontrivial because point cloud embeddings must preserve geometric structure [25, 26] while remaining aligned with frozen image and text representa-tions. Unlike prior MRL settings in 2D or language, truncation in 3D can disproportionately remove local geometric cues critical for retrieval and recognition. Moreover, multi-scale contrastive supervision introduces competing alignment constraints across dimensions. Our formulation addresses these challenges via a logarithmic nesting schedule and parameter-free geometric truncation. We introduce 3D Matryoshka Representation Learning ( 3D-MRL ), a framework that jointly aligns nested 3D embeddings with frozen CLIP image and text features at multiple dimensionalities. Figure 1 shows an overview of the proposed framework. In contrast, while conventional 3D multimodal approaches that optimize a single embedding space apply a contrastive objective across multiple prefix lengths, 3D-MRL applies it across multiple prefix lengths. This encourages the 3D encoder to concentrate task-relevant information in the earliest dimensions while progressively refining the representation at larger dimensionalities. At inference, the embedding is simply truncated to the available budget, tracing a good accuracy-efficiency frontier from a single model, without retraining or maintaining separate encoders for each operating point. Our contributions are listed in threefold: 1. We introduce 3D-MRL , the first framework to bring Matryoshka Representation Learn-ing to 3D multimodal pre-training, learning a single encoder that produces high-quality embeddings at any prefix length. 2. We achieve competitive performance on zero-shot and few-shot 3D recognition bench-marks, including Objaverse-LVIS, ModelNet, and ScanNet. 3. We provide an analysis of the accuracy-efficiency trade-off enabled by nested 3D rep-resentations, showing that 3D-MRL degrades gracefully across a wide range of dimen-sionality budgets. Our results suggest that nested embedding structures provide an effective mechanism for organizing 3D multimodal representations across multiple levels of capacity, enabling scalable and budget-aware 3D understanding from a single model. 
+
+# 2 Related Work 
+
+3D Multimodal Learning. Learning representations from 3D point clouds has been tackled through two complementary paradigms: projecting point clouds onto regular grids (voxels or LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 3
+
+multi-view images) for processing with 2D/3D convolutions [5, 29], and directly modeling unstructured point sets with point-centric architectures such as PointNet [25, 26], Point-Transformer [34], or masked autoencoders [38, 42]. Independently, VLMs led by CLIP [28] established contrastive learning as a powerful mechanism for cross-modal alignment, map-ping images and text into a shared embedding space. This paradigm was extended to 3D: ULIP [37] and OpenShape [22] align point-cloud features with pretrained image and text embeddings, while Uni3D [45] scales this formulation with a vision transformer-based 3D encoder initialized from 2D models. Succeeding methods improve different aspects of this alignment. TAMM [44] and MixCon3D [11] strengthen multimodal 3D representation learn-ing, OpenDlign [23] improves visual supervision through depth-aligned synthesized images, and MRD [32] distills intra- and cross-modal relational structure to preserve the semantic or-ganization of the pretrained vision-language space. More recent approaches further special-ize this paradigm: TriCLIP-3D [18] develops tri-modal alignment for 3D visual grounding, while DuoduoCLIP [17] and Adaptive CLIP [30] explore efficient multi-view modeling and retrieval-oriented 3D–CLIP alignment, respectively. Cross-modal methods combining point clouds and multi-view imagery have also continued to improve 3D representation learn-ing [46]. Despite advances in model scale, supervision, and cross-modal alignment, these methods commonly optimize a single fixed-dimensional embedding. As a result, deploy-ment under different memory or latency budgets requires either training separate models or applying post-hoc dimensionality reduction, which may degrade the learned semantic struc-ture. Our work instead learns a nested hierarchy of 3D representations during multimodal contrastive pre-training, enabling a single encoder to operate across multiple embedding budgets without retraining. 
+
+Matryoshka Representation Learning. Matryoshka Representation Learning (MRL) [16] introduced a simple but consequential idea: a single representation vector can be trained such that every prefix, the first dimensions d for d ∈ { d1, . . . , D} is independently useful for downstream tasks. This nested structure provides a built-in accuracy-efficiency knob with-out retraining or model switching. The principle has since been extended along several axes. 2D-MRL [21] nests representations across both embedding dimensions and transformer lay-ers, showing the idea generalizes beyond a single feature vector. MetaEmbed [36] adapts the Matryoshka principle to multi-vector retrieval, learning nested groups of meta tokens that enable test-time scaling of retrieval quality against index size. In the same spirit, Ma-tryoshka Multimodal Models (M 3) [2] learn nested sets of visual tokens for vision-language generation, allowing the token budget per image to be adjusted at inference time. Also, Matryoshka Gaussian Splatting [12] demonstrates that the nesting principle extends beyond embeddings to geometric primitives, learning an ordered set of 3D Gaussians whose pre-fixes yield coherent scene reconstructions at any rendering budget. Recent work has also revisited the compression mechanism itself. CSR [33] replaces prefix truncation with sparse representations, retaining only the most informative embedding dimensions while preserving semantic structure through reconstruction and contrastive objectives. SMEC [40] improves Matryoshka compression through sequential dimensional reduction and adaptive dimension selection, reducing interference across embedding sizes and preserving similarity structure. Despite this growing body of work across vision, language, retrieval, and graphics, the Matryoshka principle remains entirely unexplored in 3D multimodal representation learning – none of the recent 3D-CLIP methods [17, 18, 22, 37] incorporate or evaluate nested or multi-granularity representations. Our work fills this gap. 3D-MRL trains the encoder to produce a nested hierarchy of representations. This is conceptually distinct from applying 4 LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 
+
+MRL post-hoc: by coupling the nested structure with cross-modal contrastive pre-training from the start, we ensure that dimensionality reduction becomes a property of the learned space. 
+
+# 3 3D Matryoshka Representation Learning 
+
+3D-MRL learns nested 3D representations by aligning point clouds with frozen image and text embeddings. Unlike prior multimodal 3D methods that optimize a single embedding space, 3D-MRL applies contrastive supervision across multiple embedding prefixes gener-ated by the 3D encoder. This allows a single model to produce representations that remain effective across a range of dimensionality budgets. Figure 1 provides an overview of the proposed framework. The Matryoshka learning strategy is applied only to the 3D encoder, whereas the image and text encoders remain frozen and provide fixed multimodal targets throughout training. Our central hypothesis is that semantic abstraction emerges progressively along the di-mensions of the learned 3D representation. Lower-dimensional prefixes are encouraged to retain broad category-level semantics under severe compression, while additional dimen-sions progressively refine geometric and structural information. To encourage this behavior, 
+
+3D-MRL extends multimodal contrastive learning with a Matryoshka design objective that jointly aligns nested 3D embeddings with frozen image and text representations across mul-tiple embedding scales. 
+
+Problem Formulation. Let S = {(Pi, Ii, Ti)}ni=1 be a dataset of n triplets, where Pi is a 3D point cloud, Ii is its corresponding 2D rendered image from a 3D object, and Ti is an associated textual description generated by a vision-language model such as BLIP [20]. Text 
+
+> Encoder
+> an electric
+> brown guitar.
+> 3D
+> Encoder
+> Image
+> Encoder
+> ...
+> 3D Matryoshka
+> Representation Learning
+
+Figure 1: Overview of 3D-MRL .
+
+3D-MRL is a framework that aligns nested 3D embeddings with multiple dimensionalities with multimodal image and text for 3D representation learning. 
+
+3D-MRL shows competitive performance on a wide range of benchmarks. We define a new 3D encoder EP : P → RD
+
+that maps point clouds to D-dimensional embed-dings, and use frozen CLIP encoders EI : I(I) →
+
+RD and ET : T (T ) → RD for images and text, respectively. For a given triplet from a dataset 
+
+(Pi, Ii, Ti), w.l.o.g. we obtain three embeddings, 
+
+fP = EP(P), fI = EI (I), fT = ET (T ),
+
+where all embeddings are ℓ2-normalized to lie on the unit hypersphere SD−1, EI and ET are frozen CLIP encoders [4, 28], and EP is a train-able 3D encoder. 
+
+Nested Representation Structure. The core principle of 3D-MRL is that the 3D encoder EP
+
+should produce representations whose prefixes form a hierarchy of valid embeddings, ranging from broad semantic abstractions to increasingly fine-grained geometric and structural represen-tations. Formally, let 
+
+D = {d1, d2, . . . , dK }, 1 ≤ d1 < · · · < dK = D
+
+be an ordered set of embedding dimensionali-ties. To align with the frozen CLIP encoders, we set the maximum dimension to D = 1280 LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 5
+
+and the base dimension to d1 = 10. Following the Matryoshka Representation Learning design [16], we construct D as a logarithmic schedule that scales geometrically from this base, resulting in D = {10 , 20 , 40 , . . . , 1280 }. This allocates denser supervision to low-dimensional embeddings while progressively increasing representational capacity. Intu-itively, low-dimensional prefixes are encouraged to retain only the most informative semantic features, whereas additional dimensions progressively encode finer geometric details. Opti-mizing over these K = 8 nested dimensions provides dense coverage across multiple levels of granularity, from compact semantic embeddings to high-capacity representations, while introducing only minimal optimization overhead. For any target dimension dk ∈ D , the nested sub-embedding is obtained by isolating the vector prefix containing the first dk continuous coordinates of fP, denoted by the slicing operator [1 : dk]: f dk 
+
+> P
+
+= fP[1 : dk] ∈ Rdk . This slice is subsequently re-normalized to unit norm to preserve directional consistency. The nesting constraint guarantees that coarser representations are strict prefixes of finer ones ( f da 
+
+> P
+
+⊂ f db 
+
+> P
+
+for da < db). 
+
+Multi-Scale Contrastive Alignment. To learn representations that are discriminative at every scale, we apply a contrastive objective independently at each dimensionality dk. In practice, because the image and text representations are derived from frozen CLIP encoders with a fixed maximum dimension D (i.e., 1280), they cannot dynamically adapt their internal structure. Therefore, to evaluate the cross-modal similarity at a reduced capacity dk, we apply the identical prefix slicing operation directly to the target modalities, yielding f dk 
+
+> I
+
+and f dk 
+
+> T
+
+,followed by unit ℓ2-renormalization. To enforce a structured, discriminative hierarchy, 3D-MRL optimizes this multimodal alignment using a dedicated linear classifier (or projection head) parameterized by W(dk) ∈
+
+Rdk×D for each discrete scale. Given two modalities M1 (3D to 2D images) and M2 (3D to texts) with batch embeddings truncated to scale dk, the InfoNCE loss [24] with temperature 
+
+τ > 0 is formulated as: 
+
+LNCE ( f dk 
+
+> M1
+
+, f dk 
+
+> M2
+
+) = − 1
+
+n
+
+> n
+
+# ∑
+
+> i=1
+
+log exp 
+
+
+
+⟨ f dk 
+
+> M1
+
+, f dk 
+
+> M2
+
+⟩/τ
+
+
+
+∑ j exp 
+
+
+
+⟨ f dk 
+
+> M1
+
+, f dk 
+
+> M2,j
+
+⟩/τ
+
+ , (1) where ⟨· , ·⟩ denotes cosine similarity, f dk 
+
+> M2
+
+represents the positive augmented sample originat-ing from the same source sample as the anchor, and the index j iterates over all augmented samples in the batch (both the positive sample and all negative samples). We jointly optimize the parameters θP of the 3D encoder EP and the set of scale-specific linear classifiers {W(dk)}Kk=1 by minimizing the aggregated multi-scale loss: min  
+
+> {W(dk)}Kk=1,θP
+> K
+
+# ∑
+
+> k=1
+
+λk ·
+
+h
+
+LNCE 
+
+
+
+W(dk) · f dk 
+
+> P
+
+, f dk
+
+> I
+
+
+
++ LNCE 
+
+
+
+W(dk) · f dk 
+
+> P
+
+, f dk
+
+> T
+
+i 
+
+, (2) where λk ≥ 0 is a per-scale weighting coefficient (set to λk = 1 by default). Crucially, despite explicitly optimizing only for the K = 8 chosen log-spaced granularities ( O(log (D)) dimen-sions), the nesting structure naturally induces accurate representation spaces that smoothly interpolate for intermediate dimensions falling between the designated scales. 
+
+Efficient vs. Non-Efficient multimodal MRL. The scale-specific linear transformations 
+
+W(dk) ∈ Rdk×dk are used only during pre-training to facilitate alignment across embedding scales. Unlike conventional multi-scale approaches that require independent projection heads 6 LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 
+
+from the full-dimensional representation space ( RD → Rdk ), our formulation relies primarily on parameter-free prefix truncation and applies lightweight transformations only within each nested subspace. This design substantially reduces parameter overhead while preserving a shared hierarchical representation across all dimensions. For more details, see Section 4.7 in our ablation study .
+
+Properties of the Learned Representation. The objective in Eq. (2) explicitly supervises every prefix f dk 
+
+> P
+
+of the representation. As a result, the learned embedding exhibits two im-portant properties. 
+
+(i) Nested semantic consistency. For every scale pair di < d j, the smaller representation is contained within the larger one, f di 
+
+> P
+
+=
+
+
+
+f d j
+
+> P
+
+
+
+> 1: di
+
+, ensuring that semantic information learned at lower dimensions is preserved across all larger embedding scales. 
+
+(ii) Progressive representational refinement. As dimensionality increases, the representa-tion gains additional degrees of freedom while preserving lower-dimensional semantics. 10 20 40 80 160 320 640 1280 010 20 30 40 50        
+
+> (a) Objaverse-LVIS
+> 10 20 40 80 160 320 640 1280 10 20 30 40 50 60 70 80
+> (b) ModelNet40
+> Representation Size Top-1 Accuracy (%)
+> OpenShape ULIP PointCLIP PointCLIPv2 CLIP2Point ReCon
+> 3D-MRL (Ours)
+
+Figure 2: Zero-shot 3D shape classification on the Objaverse-LVIS [8] (1,156 categories) and ModelNet40 [35]. Formally, dim ( f di 
+
+> P
+
+) < dim ( f d j 
+
+> P
+
+), di < d j, allowing larger prefixes to encode information unavailable to smaller em-beddings. Consequently, the representation can progres-sively capture finer semantic and geometric distinctions without discarding information learned at lower dimen-sions. 
+
+Application in Downstream Tasks. For zero-shot 3D classification, we aggregate similarity scores across all 
+
+K scales between the nested 3D embedding and category text embeddings: 
+
+s(c | Pi) = 
+
+> K
+
+# ∑
+
+> k=1
+
+αk ⟨ f dk 
+
+> P
+
+, f dk,cT ⟩,
+
+where f cT is the frozen CLIP text embedding for cat-egory c, and αk are aggregation weights (we use uni-form weighting by default). The predicted class is ˆ c =
+
+arg max c s(c | P). For few-shot classification, we follow the standard K-way N-shot protocol. For each trial, a lin-ear classifier is trained on top of the frozen nested embed-dings f dk 
+
+> P
+
+at each scale dk, while the 3D encoder EP re-mains fixed. By sweeping dk ∈ D and reporting accuracy at each dimensionality, we characterize the full accuracy-compactness trade-off from a single pre-trained model, with no retraining or architecture changes required. Fig-ure 2 summarizes the performance of 3D-MRL .
+
+# 4 Experiments 
+
+In this section, we first introduce our experimental setup in Section 4.1. Then, we show the performance of 3D-MRL on downstream tasks such as zero-shot 3D shape classification (Section 4.2) and the matched-budget compression and efficiency (Section 4.3), few-shot linear probing 3D classification (Section 4.4), and real-world recognition (Section 4.5). Ad-LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 7
+
+ditionally, our 3D-MRL supports cross-modal applications such as point cloud and text-to-3D shape retrieval (Section 4.6). Finally, we provide some ablations in Section 4.7. 
+
+## 4.1 Experimental Setup 
+
+Pre-training Datasets. To keep the experimental settings consistent with other methods, we follow OpenShape [22] for a fair comparison. Our 3D-MRL is pre-trained on the triplets gen-erated from four datasets (denoted as “Ensembled”): ShapeNetCore [3], 3D-FUTURE [10], ABO [6], and Objaverse [8]. “ShapeNet” is a triplet set derived from the ShapeNetCore dataset, containing 52,470 3D shapes, corresponding images, and text; Ensembled (no LVIS) is a set of 829,460 triplets from the above datasets except Objaverse-LVIS [13]; “Ensembled” denotes the triplet set comprising data from all four datasets (mentioned above), containing 875,665 3D shapes and their associated images and text. The point cloud is obtained by sampling 10k points from the mesh surface, and the colors are interpolated from the mesh textures. The images are rendered from 12 preset camera poses that uniformly cover the entire object. The paired texts are generated by BLIP [19, 20] and Azure services with GPT-4 [1] to filter out noisy text. 
+
+Downstream Datasets. Our 3D-MRL is evaluated on the following datasets: ModelNet40 [35] is a synthetic dataset with 3D CAD models, including 9,843 samples and 2,468 testing samples, distributed across 40 3D categories; ScanObjectNN [31] is a dataset composed of 3D objects acquired throught real-world scanning techniques, encompassing a total of 2,902 objects that are categorized into 15 distinct categories; Objaverse-LVIS [13], is an annotated subset from Objaverse [8], incorporates a corpus of 46,832 shapes originating from 1,156 categories in LVIS dataset [13]. 
+
+Downstream Tasks. We conduct experiments on three tasks, including zero-shot 3D shape classification, few-shot linear probing 3D classification, and real-world recognition, to de-monstrate the advantages of our 3D-MRL . Other implementation details regarding pre-train-ing and evaluation are introduced in the supplementary material .
+
+## 4.2 Zero-Shot 3D Shape Classification 
+
+We first evaluate 3D-MRL on the zero-shot shape classification task, a key metric for as-sessing the quality of the learned 3D representation, which requires the representations to be directly applicable to datasets where the model has never been explicitly supervised. With-out any further tuning, the 3D representations are compared with text and image embeddings of categories to predict the classes of 3D shapes. To make a fair comparison and keep con-sistency with prior work, we adopt the same setting as OpenShape [22] (i.e., D = 1280) on three benchmarks: Objaverse-LVIS [13], ModelNet40 [35], and ScanObjectNN(OBJ-ONLY) [31]. We compare 3D-MRL with existing zero-shot approaches, including Point-CLIP [43], PointCLIPv2 [47], CLIP2Point [14], ReCon [27], ULIP [37] and OpenShape [22]. Among them, PointCLIP [43] and PointCLIPv2 [47] project point clouds into 2D images and directly use 2D CLIP for inference, whereas the other methods leverage CLIP embedding spaces for alignment without matryoshka embeddings and require 3D shapes for training. The quantitative comparisons are summarized in Table 1. We observe that 3D-MRL 
+
+leverages matryoshka multimodal pre-training to consistently outperform PointCLIP [43] and PointCLIPv2 [47] by a large margin. In this scenario, 3D-MRL consistently outperforms prior approaches when trained only on ShapeNet. For example, PointBERT [38] pre-trained 8 LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS                                                                                                                                                                                      
+
+> Method Pre-Training Dataset Objaverse-LVIS [8] ModelNet40 [35] ScanObjectNN [31] Top1 Top3 Top5 Top1 Top3 Top5 Top1 Top3 Top5 PointCLIP [43] -1.9 4.1 5.8 19.3 28.6 34.8 10.5 20.8 30.6 PointCLIPv2 [47] -4.7 9.5 12.9 63.6 77.9 85.0 42.2 63.3 74.5 CLIP2Point [14] ShapeNet 2.7 5.8 7.9 49.5 71.3 81.2 25.5 44.6 59.4 ReCon [27] 1.1 2.7 3.7 61.2 73.9 78.1 42.3 62.5 75.6 ULIP-PointBERT [37] 6.2 13.6 17.9 60.4 79.0 84.4 51.5 71.1 80.2 OpenShape-SparseConv [22] 11.6 21.8 27.1 72.9 87.2 93.0 52.7 72.7 83.6
+> OpenShape-PointBERT [22] 10.8 20.2 25.0 70.3 86.9 91.3 51.3 69.4 78.4
+> 3D-MRL -SparseConv (Ours) [22] 12.9 23.7 29.4 73.1 88.4 91.8 49.6 73.0 82.1
+> 3D-MRL -PointBERT (Ours) [22] 12.4 22.1 27.2 71.8 86.8 91.3 51.2 70.9 80.3 ULIP-PointBERT [37] Ensembled (no LVIS) 21.4 38.1 46.0 71.4 84.4 89.2 46.0 66.1 76.4 OpenShape-SparseConv [22] 37.0 58.4 66.9 82.6 95.0 97.5 54.9 76.8 87.0
+> OpenShape-PointBERT [22] 39.1 60.8 68.9 85.3 96.2 97.4 47.2 72.4 84.7
+> 3D-MRL -SparseConv (Ours) 39.2 60.4 68.8 83.4 95.6 97.6 53.9 76.8 85.7
+> 3D-MRL -PointBERT (Ours) 40.3 61.1 69.2 85.5 95.7 97.2 50.4 75.9 84.8 ULIP-PointBERT [37] Ensembled 26.8 44.8 52.6 75.1 88.1 93.2 51.6 72.5 82.3 OpenShape-SparseConv [22] 43.4 64.8 72.4 83.4 95.6 97.8 56.7 78.9 88.6 OpenShape-PointBERT [22] 46.8 69.1 77.0 84.4 96.5 98.0 52.2 79.7 88.7
+> 3D-MRL -SparseConv (Ours) 42.7 64.4 72.5 84.7 95.9 98.1 54.2 77.9 87.0
+> 3D-MRL -PointBERT (Ours) 50.9 72.6 79.6 85.8 96.3 97.8 49.6 73.3 84.3
+
+Table 1: Zero-shot classification on Objaverse-LVIS [8], ModelNet40 [35], and ScanOb-jectNN [31]. The performance gains from 3D-MRL are more significant on the most chal-lenging long-tailed Objaverse-LVIS dataset. In bold, we mark the best results per pre-training method. by our 3D-MRL on the Ensembled dataset surpasses ULIP [37] and OpenShape [22] by margins of +24 .1% and +4.1% in Top-1 accuracy on the long-tailed Objaverse-LVIS bench-mark, which demonstrates the effectiveness of the multimodal MRL pre-training scheme. As we can see, 3D-MRL achieves its largest performance gains on Objaverse-LVIS, which con-tains diversity and long-tailed object categories. We hypothesize that the nested embedding structure gains from open-vocabulary recognition scenarios, where coarse semantic infor-mation and fine-grained geometric cues must coexist within the same representation space. The lower-dimensional embeddings appear to capture broad semantic concepts across large-scale objects, while higher-dimensional subspaces progressively specialize toward specific category details. Additional results across embedding dimensions are provided in the sup-plementary material .As for ModelNet40, 3D-MRL achieves an 85 .8% top-1 accuracy, surpassing OpenShape by +1.4% for the PointBERT model. On ScanObjectNN, which contains challenging real-world scans with noise and occlusions, the performance of 3D-MRL remains comparatively fair. This highlights the difficulty of sim-to-real transfer in zero-shot 3D scenarios, particu-larly when representations are primarily learned from synthetic or rendered data. However, 
+
+3D-MRL with the SparseConv achieves competitive performance with OpenShape under the same experimental setting. 
+
+## 4.3 Matched-Budget Compression and Efficiency 
+
+To quantify the accuracy–efficiency trade-off, we compare 3D-MRL and OpenShape under matched embedding budgets on Objaverse-LVIS, as shown in Table 2. Direct 3D-MRL 
+
+prefixes remain competitive across dimensions and outperform OpenShape at larger budgets (42.5% vs. 40.2% at 640D and 50.9% vs. 46.6% at 1280D). Moreover, 3D-MRL is substan-tially more robust to post-hoc PCA compression, reaching 27.3/43.3/50.0% Top-1 accuracy LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 9
+
+at 40/80/160D, compared with 14.7/29.5/40.8% for OpenShape. In Table 3, these compact representations also provide direct retrieval benefits: using 320D instead of 1280D reduces storage by 4 × (225.61 to 56.40 MB) and CPU retrieval latency (Lat.) by 4.1 × (5.11 to 1.26 ms), demonstrating that a single 3D-MRL encoder can adapt to different accuracy–storage– latency budgets without retraining. More details in the supplementary material.                                          
+
+> Method \ D 10 20 40 80 160 320 640 1280
+> 3D-MRL 0.4 0.6 1.3 3.3 12.9 30.8 42.5 50.9
+> 3D-MRL +PCA 2.4 9.6 27.3 43.3 50.0 51.0 50.6 50.5 OpenShape truncated. 0.4 0.6 1.9 4.9 15.1 31.2 40.2 46.6 OpenShape +PCA 2.3 6.0 14.7 29.5 40.8 44.8 45.1 45.1
+
+Table 2: Matched-budget zero-shot classification on a pretrained Ensembled dataset.                
+
+> DStorage (MB) Lat. (ms) QPS 160 28.20 0.477 23,122.9 320 56.40 1.259 14,827.4 640 112.81 2.458 9,559.7 1280 225.61 5.107 5,336.6
+
+Table 3: FAISS retrieval efficiency. QPS means queries per second. 
+
+## 4.4 Few-Shot Linear Probing 3D Classification 
+
+Following the previous evaluation, we perform few-shot learning classification experiments over ModelNet [35] to assess 3D-MRL under low-data regimes across nested embedding di-mensions. Here, we extend our model with an additional linear classification layer with a matryoshka regime and train only this layer, rather than fine-tuning the entire model. Fol-lowing previous work [38, 41, 44] we adopt the “ K−way N−shot” setup, wherein we select 
+
+K classes at random and sample (N + 20 ) instances per class. We train on a support set of 
+
+K × X samples, while evaluation uses a query set of the remaining 20 instances per class. We assess our model under four distinct scenarios: “5-way 10-shot”, “5-way 20-shot”, “10-way 10-shot” and “10-way 20-shot”. For each scenario, we run 10 separate trials and report the mean performance and standard deviation across these trials, using only the highest-dimensional embedding ( d8=1280). For more details across the granularity dimensions for this task, see the supplementary materials. 
+
+Pre-Training Dataset Method 5-way 10-way 10-shot 20-shot 10-shot 20-shot ShapeNet ULIP [37] 94.4 ±3.7 93.2 ±4.2 86.6 ±5.3 90.6 ±5.2 OpenShape [22] 95.3 ±2.6 97.9 ±3.9 89.2 ±5.1 92.9 ±3.9 
+
+3D-MRL ∗ (Ours) 95.2 ±2.7 96.1 ±2.4 88.2 ±6.5 91.1 ±4.6 Ensembled OpenShape [22] 96.1 ±2.7 95.7 ±2.5 89.1 ±4.6 91.8 ±3.7 
+
+3D-MRL ∗ (Ours) 94.8 ±2.8 97.9 ±0.9 89.7 ±6.0 93.2 ±3.1 
+
+> ∗Results using PointBERT [9] as 3D encoder, pre-trained on the Ensembled dataset.
+
+Table 4: Few-shot linear probing classification results on ModelNet40. We report the aver-age accuracy and standard deviation of 10 independent experiments. Our 3D-MRL remains competitive across few-shot settings and improves over OpenShape in three of four Ensem-bled configurations. As illustrated in Table 4, 3D-MRL achieves competitive performance across multiple few-shot evaluation settings, particularly when pre-trained on the Ensembled dataset using PointBERT. In particular, 3D-MRL surpasses OpenShape [22] by margins of 2 .2%, 0 .6%, and 1 .4% on the “5-way 20-shot”, “10-way 10-shot”, and “10-way 20-shot” settings, respec-tively. Notably, the improvements become more evident in the more challenging “10-way” evaluation settings, suggesting that the hierarchical embedding structure becomes increas-ingly beneficial as the semantic complexity of the classification task grows. 10 LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 
+
+The few-shot performance suggests that the nested representation already organizes se-mantic concepts in a linearly separable manner prior to downstream adaptation. Lower-dimensional subspaces appear to preserve robust category-level semantic information, while higher-dimensional embeddings progressively refine fine-grained geometric details. As a result, lightweight linear classifiers can effectively adapt under limited supervision with-out requiring full model fine-tuning. These observations indicate that the proposed multi-granularity representation promotes transferable semantic structures rather than dataset-spe-cific memorization, enabling 3D-MRL to generalize effectively under low-data regimes. 
+
+## 4.5 Real-World Recognition 
+
+To evaluate the capability of 3D-MRL to understand real-world 3D shapes and scenes, we follow CLIP 2 [39] and conduct experiments on the ScanNet [7] dataset under the zero-shot recognition setting. In this task, the model aims to classify object instances extracted from complex indoor scenes. We adopt the same data split protocol as CLIP 2 [39], which con-tains 17 semantic categories. As shown in Table 5, 3D-MRL with 640 dimensions ( d = 640) achieves the highest overall performance with a mean Top-1 accuracy of 47.0%, outper-forming OpenShape [22] under the evaluated protocol by +1.4% and CLIP 2 [39] by +8.5%. Notably, these improvements are achieved with a substantially more compact embedding than OpenShape ( d = 640 vs. D = 1280), highlighting the effectiveness of the proposed multi-granularity representation.                                                                                                                                                                                                                                                                                             
+
+> Method DAvg. Bed Cab Chair Sofa Tabl Door Wind Bksf Pic Cntr Desk Curt Fridg Bath Showr Toil Sink CLIP2Point [14] –24.9 20.8 0.0 85.1 43.3 26.5 69.9 0.0 20.9 1.7 31.7 27.0 0.0 1.6 46.5 0.0 22.4 25.6 PointCLIP w/ TP. [43] –26.1 0.0 55.7 72.8 5.0 5.1 1.7 0.0 77.2 0.0 0.0 51.7 0.3 0.0 0.0 40.3 85.3 49.2 CLIP2Point w/ TP. [14] –35.2 11.8 3.0 45.1 27.6 10.5 61.5 2.6 71.9 0.3 33.6 29.9 4.7 11.5 72.2 92.4 86.1 34.0 CLIP 2[39] –38.5 32.6 67.2 69.3 42.3 18.3 19.1 4.0 62.6 1.4 12.7 52.8 40.1 9.1 59.7 41.0 71.0 45.5 OpenShape †[22] 1280 45.6 66.7 3.2 75.8 83.5 37.7 49.2 47.5 64.9 48.2 1.9 66.1 70.2 1.8 50.0 57.1 45.2 7.1
+> 3D-MRL †(Ours) 10 5.7 10.4 16.7 3.9 0.0 0.3 0.2 0.0 31.6 0.0 0.0 0.8 0.0 0.8 0.0 29.6 0.0 2.0
+> 3D-MRL †(Ours) 20 10.0 36.4 14.0 28.7 3.1 0.9 1.5 0.4 57.9 11.9 1.9 6.3 0.0 2.7 0.0 3.7 0.0 1.0
+> 3D-MRL †(Ours) 40 11.8 36.4 0.5 28.7 3.1 3.1 16.3 8.5 77.2 3.0 5.8 1.6 0.0 4.6 0.0 11.1 0.0 0.0
+> 3D-MRL †(Ours) 80 19.5 33.8 4.5 26.0 10.3 8.6 4.9 34.0 47.4 3.0 15.4 0.8 0.0 0.0 0.0 85.2 10.2 48.0
+> 3D-MRL †(Ours) 160 27.4 35.1 2.3 15.9 77.3 38.9 3.9 17.0 73.7 22.4 11.5 1.6 22.6 0.0 17.3 70.4 16.9 38.8
+> 3D-MRL †(Ours) 320 38.4 55.8 68.5 80.1 50.5 42.0 40.7 14.2 56.1 25.4 19.2 48.8 3.2 0.0 40.7 11.1 37.3 59.2
+> 3D-MRL †(Ours) 640 47.0 66.2 71.2 70.8 84.5 39.7 32.5 34.4 38.6 22.4 57.7 71.2 67.7 0.3 53.1 29.6 47.5 40.8
+> 3D-MRL †(Ours) 1280 40.6 64.9 64.9 66.8 79.4 48.8 33.8 24.1 15.8 34.3 61.3 48.8 13.5 38.6 49.4 18.5 44.1 41.8
+
+w/ TP. denotes training with the real-world data provided by CLIP 2. † results using PointBERT [9] as 3D encoder, pre-trained on the Ensembled dataset. Avg.: Mean average Top-1 accuracy across all categories. 
+
+Table 5: Zero-shot recognition on the real-world ScanNet [7] dataset. Bold values indicate the best performance for each category. 3D-MRL achieves the best results across the granu-larity dimensions. Bold values indicate the best results per category. We also observe progressive improvement in recognition performance as embedding di-mensionality increases from 10 to 640 dimensions, as reflected in the mean top-1 accuracy, indicating that higher-dimensional subspaces progressively recover more geometric details and semantic information. In this case, the best performance is achieved at 640 dimensions rather than at 1280. This suggests that intermediate-dimensional embeddings provide a better balance between semantic abstraction and geometric specialization in real-world scenarios with noise, occlusions, and partial observations. Furthermore, different object categories achieve their best performance at different granularity levels, further suggesting that distinct semantic concepts may benefit from different levels of representational specificity. Despite using only 320 dimensions, 3D-MRL achieves a competitive mean average top-1 accuracy of 38.4%, demonstrating that a substantial slice of the semantic knowledge learned during the multimodal pre-training is preserved even within compact embeddings. LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 11 
+
+## 4.6 Cross-Modal Granularity Applications 
+
+The nested structure learned by 3D-MRL naturally supports coarse-to-fine retrieval across modalities. Given a point cloud, image, or text query, we retrieve 3D shapes from Objaverse-LVIS [8] using cosine similarity and FAISS [15]-based nearest-neighbor search. As the em-bedding dimensionality varies, the retrieved results shift from broad semantic categories at low dimensions to increasingly fine-grained geometric and semantic matches at higher di-mensions. This behavior emerges from a single trained model and highlights the hierarchical organization of information within the learned representation space. 
+
+Point cloud-input 3D shape retrieval. Figure 3 shows the qualitative behavior of the proposed 3D-MRL framework in a cross-modal 3D retrieval setting. Given a point cloud query (leftmost column), we retrieve the nearest 3D shapes from the Objaverse-LVIS [8] dataset using nested embeddings of increasing dimensionality, ranging from log-based di-mensions. The results demonstrate a clear coarse-to-fine semantic hierarchy across the em-bedding space. Point Cloud Dim 10 Dim 20 Dim 40 Dim 80 Dim 160 Dim 320 Dim 1280 Dim 640 
+
+Figure 3: Point cloud-to-3D shape retrieval results using the proposed 3D-MRL embed-ding space across increasing embedding dimensions. Starting from coarse semantic retrieval at low dimensions, the representations progressively refine toward fine-grained geometric similarity at higher dimensions, demonstrating the hierarchical Matryoshka property of the learned embedding space. 
+
+Figure 4: Semantic-vs-instance re-trieval across embedding dimensions on Objaverse-LVIS. In the first row, the query corresponds to a vehicle object. At very low dimensions (Dim 10 and Dim 20), the retrieved objects preserve only broad semantic information, yielding generic transportation-related shapes such as motorcy-cles and cars. As the embedding dimension-ality increases, the retrieved objects progres-sively become more geometrically aligned with the query, converging to vehicles with similar proportions and structure at higher dimensions. The remaining rows show similar behavior. The motorcycle object (fourth row) shows that low-12 LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 
+
+dimensional embeddings retrieve broad vehicle categories, while higher-dimensional em-beddings increasingly specialize toward motorcycles with similar frame geometry, wheel configuration, and color. 
+
+Semantic-vs-instance retrieval. To quantitatively assess how retrieval specificity changes across embedding dimensions, we additionally evaluate retrieval at semantic super-category and instance/category levels on Objaverse-LVIS in Figure 4. Lower-dimensional prefixes already recover broad semantic relationships, whereas increasing embedding dimensionality progressively improves retrieval at more specific levels. This trend complements the qual-itative results below and provides quantitative evidence for the coarse-to-fine organization of the nested representation. Complete Recall@K, mAP@100, and nDCG@10 results are reported in the supplementary material .
+
+Text-input 3D shape retrieval. In Figure 5, we show that 3D-MRL supports retrieving 3D shapes from detailed text descriptions, which include coarse-to-fine subcategories, at-tributes, and their combinations, in comparison with OpenShape [22]. We can observe this under progressively more specific text prompts. This behavior shows that 3D-MRL yields more semantically aligned coarse-to-fine retrieval than OpenShape at the same dimensional-ity (e.g., 1280). The most challenging query, “ergonomic office chair”, further highlights the proposed representation’s fine-grained retrieval capability. 3D-MRL successfully retrieves highly relevant office chairs with ergonomic designs, including curved backrests, cushioned seating, and adjustable structures. Meanwhile, OpenShape retrieves objects that partially match the semantic concept but fail to capture the full ergonomic, structural, and geomet-ric characteristics described in the text prompt. Note that these input texts are typically not present in the raw text of retrieved shapes, indicating that 3D-MRL can effectively learn generalizable concepts across the last refined dimension. Please refer to the supplementary material for more results and details ."chair" Input Text "office chair" "ergonomic office chair" 
+
+> 3D-MRL OpenShape
+
+Figure 5: Text-to-3D shape retrieval comparisons. Qualitative text-to-3D retrieval compar-isons on Objaverse-LVIS. Given progressively more specific text prompts, 3D-MRL pro-duces more fine-grained and semantically accurate 3D retrievals compared to OpenShape. We list the input text and the first three retrieved 3D objects. 
+
+## 4.7 Ablation Study 
+
+In this section, we conduct ablation experiments to validate our architectural and hyperpa-rameter choices for 3D-MRL . Specifically, we investigate: (i) the effect of weight-tying in multi-scale contrastive optimization (i.e., Efficient vs. Non-Efficient mode), and (ii) the con-figuration of the nesting dimension schedule. Due to limited computation, we pre-train Point-BERT [38] on the small-scale ShapeNet [3] dataset and use two more challenging zero-shot LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 13 
+
+classification benchmarks, Objaverse-LVIS [8] and ModelNet-40 [35] for evaluation. We provide additional ablations on the number of nesting scales and modality alignment in the supplementary material .
+
+Impact of Efficient MRL Formulations. We first evaluate the impact of utilizing a para-meter-free slicing layout versus employing independent classification heads during pre-train-ing. In the supervised setting, Efficient MRL (MRL-E) reduces memory costs by tying classifier weights: W(m) = W:,1: m, where W:,1: m denotes the first m columns of a shared clas-sifier matrix. In our multimodal contrastive adaptation, the non-efficient variant (Efficient 
+
+= False) maintains distinct scale-specific projection matrices 
+
+n
+
+W(dk)
+
+oKk=1 , W(dk) ∈ Rdk×dk ,
+
+where each projection operates on the truncated representation of dimension dk. By contrast, the efficient variant (Efficient = True) removes scale-specific projection heads and instead performs parameter-free geometric truncation, thereby sharing projection parameters across scales. As shown in Table 6, the non-efficient configuration yields a minor, near-negligible performance edge on Objaverse-LVIS (22.1% vs. 21.6% Top-3 accuracy) and ModelNet-40 (71.8% vs. 71.5% Top-1 accuracy). However, this marginal gain comes at the cost of maintaining K distinct parameter matrices during joint contrastive alignment. By enforcing parameter-free geometric truncation, the efficient configuration substantially reduces param-eter overhead and avoids optimization bottlenecks, while maintaining highly competitive representational capacity across all benchmarks. Efficient Objaverse-LVIS ModelNet-40 Top-1 Top-3 Top-5 Top-1 Top-3 Top-5 True 12.4 21.6 26.5 71.5 87.1 91.1 False 12.4 22.1 27.2 71.8 86.8 91.3 
+
+Table 6: Effect of weight-tying: Efficient vs. Non-Efficient mode. We compare the parameter-free geometric truncation (True) against the use of independent scale-specific lin-ear projection heads (False). In bold, we display the best performance per column. 
+
+Evaluation of Nesting Dimension Schedules. The choice of the dimension schedule D
+
+determines how representational capacity is distributed across the coarse-to-fine spectrum. We ablate three distinct schedules targeting a maximum capacity of D = 1280: • Full: A standard baseline optimizing solely for the maximum fixed-dimensional em-bedding space ( D = 1280). • Linear: A uniform distribution spanning nine dimensions from base to ceiling ( D =
+
+{8, 16 , 32 , . . . , 1280 }). • Log-based: Our proposed geometric progression starting at a base dimension of 10 and doubling at each step ( D = {10 , 20 , 40 , . . . , 1280 }). The empirical comparisons compiled in Table 7 reveal that the log-based schedule con-sistently outperforms both the linear and full-dimensional baselines. Specifically, on Mod-elNet40, the log-based distribution achieves 71 .8% Top-1 accuracy, outperforming the full baseline by +1.2% and the linear schedule by +2.0%. On Objaverse-LVIS, the log-based approach matches or exceeds alternative schedules across all metrics (e.g., 12 .4% Top-1 and 27 .2% Top-5 accuracy). 14 LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 
+
+These results indicate that allocating representational granularities exponentially (i.e., 
+
+O(log (D)) scales) provides a superior optimization regularizer compared to standard uni-form schedules. By densely supervising the lower-dimensional spaces (where representa-tional capacity scales most critically) while smoothly interpolating toward higher dimen-sions, the log-based schedule prevents over-parameterization and induces a significantly more robust multimodal alignment. Embedding Schedule Nesting dimensions Objaverse-LVIS ModelNet-40 Top-1 Top-3 Top-5 Top-1 Top-3 Top-5 full 1280 12.1 22.1 27.0 70.6 86.0 90.3 linear 8, 16, 32, 64, 128, 256, 512, 1024, 1280 12.4 22.1 27.2 69.8 86.1 91.3 log-based 10, 20, 40, 80, 160, 320, 640, 1280 12.4 22.1 27.2 71.8 86.8 91.3 
+
+Table 7: Embedding dimension schedules. Comparison of zero-shot classification perfor-mance across different distribution granularities for a maximum capacity of D = 1280. Our proposed geometric log-based schedule consistently outperforms both the fixed-dimensional baseline ( full ) and the uniform sequence ( linear ), serving as an effective multi-scale opti-mization regularizer. In bold, we display the best performance per column. 
+
+# 5 Conclusion 
+
+This paper introduced 3D-MRL , the first framework to bring Matryoshka Representation Learning to multimodal 3D pre-training. By learning nested 3D representations aligned with frozen image and text embeddings, 3D-MRL enables a single model to operate across multiple dimensionality budgets without retraining. Experiments on Objaverse-LVIS, Mod-elNet40, ScanObjectNN, and ScanNet show that the proposed framework achieves compet-itive performance while consistently improving the accuracy-efficiency trade-off of multi-modal 3D representations. Our experiments further suggest that the nested structure learned by 3D-MRL organizes information hierarchically across embedding dimensions, enabling retrieval behavior that progressively transitions from broad semantic similarity to finer ge-ometric and semantic specificity. These results highlight the potential of nested represen-tations as a practical foundation for scalable multimodal 3D understanding, retrieval, and deployment under diverse computational constraints. 
+
+# 6 Acknowledgments 
+
+This work was supported in part by the São Paulo Research Foundation (FAPESP), under grants #2024/09462-1 and #2026/01721-3, and by the Conselho Nacional de Desenvolvi-mento Científico e Tecnológico (CNPq) under fellowship grant #315158/2023-9. The au-thors gratefully acknowledge the Center for Mathematical Sciences Applied to Industry (Ce-MEAI) for providing computational resources, funded by FAPESP under grant #2013/07375-0. 
+
+# References 
+
+[1] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Floren-cia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anad-kat, et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 , 2023. LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 15 
+
+[2] Mu Cai, Jianwei Yang, Jianfeng Gao, and Yong Jae Lee. Matryoshka multimodal models. In International Conference on Learning Representations , volume 2025, pages 46254–46272, 2025. [3] Angel X Chang, Thomas Funkhouser, Leonidas Guibas, Pat Hanrahan, Qixing Huang, Zimo Li, Silvio Savarese, Manolis Savva, Shuran Song, Hao Su, et al. Shapenet: An information-rich 3d model repository. arXiv preprint arXiv:1512.03012 , 2015. [4] Mehdi Cherti, Romain Beaumont, Ross Wightman, Mitchell Wortsman, Gabriel Il-harco, Cade Gordon, Christoph Schuhmann, Ludwig Schmidt, and Jenia Jitsev. Re-producible scaling laws for contrastive language-image learning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 2818–2829, 2023. [5] Christopher Choy, JunYoung Gwak, and Silvio Savarese. 4d spatio-temporal convnets: Minkowski convolutional neural networks. In Proceedings of the IEEE/CVF confer-ence on computer vision and pattern recognition , pages 3075–3084, 2019. [6] Jasmine Collins, Shubham Goel, Kenan Deng, Achleshwar Luthra, Leon Xu, Erhan Gundogdu, Xi Zhang, Tomas F Yago Vicente, Thomas Dideriksen, Himanshu Arora, et al. Abo: Dataset and benchmarks for real-world 3d object understanding. In Proceed-ings of the IEEE/CVF conference on computer vision and pattern recognition , pages 21126–21136, 2022. [7] Angela Dai, Angel X. Chang, Manolis Savva, Maciej Halber, Thomas Funkhouser, and Matthias Nießner. Scannet: Richly-annotated 3d reconstructions of indoor scenes. In 
+
+Proc. Computer Vision and Pattern Recognition (CVPR), IEEE , 2017. [8] Matt Deitke, Dustin Schwenk, Jordi Salvador, Luca Weihs, Oscar Michel, Eli Vander-Bilt, Ludwig Schmidt, Kiana Ehsani, Aniruddha Kembhavi, and Ali Farhadi. Obja-verse: A universe of annotated 3d objects. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 13142–13153, 2023. [9] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. Bert: Pre-training of deep bidirectional transformers for language understanding. In Proceedings of the 2019 conference of the North American chapter of the association for compu-tational linguistics: human language technologies, volume 1 (long and short papers) ,pages 4171–4186, 2019. [10] Huan Fu, Rongfei Jia, Lin Gao, Mingming Gong, Binqiang Zhao, Steve Maybank, and Dacheng Tao. 3d-future: 3d furniture shape with texture. International Journal of Computer Vision , 129(12):3313–3337, 2021. [11] Yipeng Gao, Zeyu Wang, Wei-Shi Zheng, Cihang Xie, and Yuyin Zhou. Sculpting holistic 3d representation in contrastive language-image-3d pre-training. In Proceed-ings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 22998–23008, 2024. [12] Zhilin Guo, Boqiao Zhang, Hakan Aktas, Kyle Fogarty, Jeffrey Hu, Nursena Koprucu Aslan, Wenzhao Li, Canberk Baykal, Albert Miao, Josef Bengtson, Chenliang Zhou, Weihao Xia, Cristina Nader Vasconcelos, and Cengiz Oztireli. Matryoshka gaussian splatting. arXiv preprint arXiv:2603.19234 , 2026. 16 LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 
+
+[13] Agrim Gupta, Piotr Dollar, and Ross Girshick. Lvis: A dataset for large vocabulary instance segmentation. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 5356–5364, 2019. [14] Tianyu Huang, Bowen Dong, Yunhan Yang, Xiaoshui Huang, Rynson WH Lau, Wanli Ouyang, and Wangmeng Zuo. Clip2point: Transfer clip to point cloud classification with image-depth pre-training. In Proceedings of the IEEE/CVF international confer-ence on computer vision , pages 22157–22167, 2023. [15] Jeff Johnson, Matthijs Douze, and Hervé Jégou. Billion-scale similarity search with gpus. IEEE transactions on big data , 7(3):535–547, 2019. [16] Aditya Kusupati, Gantavya Bhatt, Aniket Rege, Matthew Wallingford, Aditya Sinha, Vivek Ramanujan, William Howard-Snyder, Kaifeng Chen, Sham Kakade, Prateek Jain, et al. Matryoshka representation learning. Advances in Neural Information Pro-cessing Systems , 35:30233–30249, 2022. [17] Han-Hung Lee, Yiming Zhang, and Angel Chang. Duoduo clip: Efficient 3d under-standing with multi-view images. In International Conference on Learning Represen-tations , volume 2025, pages 48070–48091, 2025. [18] Fan Li, Zanyi Wang, Zeyi Huang, Guang Dai, Jingdong Wang, and Mengmeng Wang. Triclip-3d: A unified parameter-efficient framework for tri-modal 3d visual grounding based on clip. In Proceedings of the 33rd ACM International Conference on Multime-dia , pages 5257–5266, 2025. [19] Junnan Li, Dongxu Li, Caiming Xiong, and Steven Hoi. Blip: Bootstrapping language-image pre-training for unified vision-language understanding and generation. In Inter-national conference on machine learning , pages 12888–12900. PMLR, 2022. [20] Junnan Li, Dongxu Li, Silvio Savarese, and Steven Hoi. Blip-2: Bootstrapping language-image pre-training with frozen image encoders and large language models. In International conference on machine learning , pages 19730–19742. PMLR, 2023. [21] Xianming Li, Zongxi Li, Jing Li, Haoran Xie, and Qing Li. 2d matryoshka sentence embeddings. arXiv preprint arXiv:2402.14776 , 2024. [22] Minghua Liu, Ruoxi Shi, Kaiming Kuang, Yinhao Zhu, Xuanlin Li, Shizhong Han, Hong Cai, Fatih Porikli, and Hao Su. Openshape: Scaling up 3d shape representa-tion towards open-world understanding. Advances in neural information processing systems , 36:44860–44879, 2023. [23] Ye Mao, Junpeng Jing, and Krystian Mikolajczyk. Opendlign: Open-world point cloud understanding with depth-aligned images. Advances in Neural Information Processing Systems , 37:101144–101167, 2024. [24] Aaron van den Oord, Yazhe Li, and Oriol Vinyals. Representation learning with con-trastive predictive coding. arXiv preprint arXiv:1807.03748 , 2018. [25] Charles R Qi, Hao Su, Kaichun Mo, and Leonidas J Guibas. Pointnet: Deep learn-ing on point sets for 3d classification and segmentation. In Proceedings of the IEEE conference on computer vision and pattern recognition , pages 652–660, 2017. LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 17 
+
+[26] Charles Ruizhongtai Qi, Li Yi, Hao Su, and Leonidas J Guibas. Pointnet++: Deep hier-archical feature learning on point sets in a metric space. Advances in neural information processing systems , 30, 2017. [27] Zekun Qi, Runpei Dong, Guofan Fan, Zheng Ge, Xiangyu Zhang, Kaisheng Ma, and Li Yi. Contrast with reconstruct: Contrastive 3d representation learning guided by gen-erative pretraining. In International Conference on Machine Learning , pages 28223– 28243. PMLR, 2023. [28] Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark, et al. Learning transferable visual models from natural language supervision. In International confer-ence on machine learning , pages 8748–8763. PmLR, 2021. [29] Shaoshuai Shi, Chaoxu Guo, Li Jiang, Zhe Wang, Jianping Shi, Xiaogang Wang, and Hongsheng Li. Pv-rcnn: Point-voxel feature set abstraction for 3d object detection. In 
+
+Proceedings of the IEEE/CVF conference on computer vision and pattern recognition ,pages 10529–10538, 2020. [30] Dan Song, Zekai Qiang, Chumeng Zhang, Lanjun Wang, Qiong Liu, You Yang, and An-An Liu. Adaptive clip for open-domain 3d model retrieval. Information Processing & Management , 62(2):103989, 2025. [31] Mikaela Angelina Uy, Quang-Hieu Pham, Binh-Son Hua, Thanh Nguyen, and Sai-Kit Yeung. Revisiting point cloud classification: A new benchmark dataset and classifica-tion model on real-world data. In Proceedings of the IEEE/CVF international confer-ence on computer vision , pages 1588–1597, 2019. [32] Huiqun Wang, Yiping Bao, Panwang Pan, Zeming Li, Xiao Liu, Ruijie Yang, and Di Huang. Multi-modal relation distillation for unified 3d representation learning. In 
+
+European Conference on Computer Vision , pages 364–381. Springer, 2024. [33] Tiansheng Wen, Yifei Wang, Zequn Zeng, Zhong Peng, Yudi Su, Xinyang Liu, Bo Chen, Hongwei Liu, Stefanie Jegelka, and Chenyu You. Beyond matryoshka: Re-visiting sparse coding for adaptive representation. arXiv preprint arXiv:2503.01776 ,2025. [34] Xiaoyang Wu, Yixing Lao, Li Jiang, Xihui Liu, and Hengshuang Zhao. Point trans-former v2: Grouped vector attention and partition-based pooling. Advances in Neural Information Processing Systems , 35:33330–33342, 2022. [35] Zhirong Wu, Shuran Song, Aditya Khosla, Fisher Yu, Linguang Zhang, Xiaoou Tang, and Jianxiong Xiao. 3d shapenets: A deep representation for volumetric shapes. In 
+
+Proceedings of the IEEE conference on computer vision and pattern recognition , pages 1912–1920, 2015. [36] Zilin Xiao, Qi Ma, Mengting Gu, Chun-cheng Jason Chen, Xintao Chen, Vicente Or-donez, and Vijai Mohan. Metaembed: Scaling multimodal retrieval at test-time with flexible late interaction. arXiv preprint arXiv:2509.18095 , 2025. 18 LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 
+
+[37] Le Xue, Mingfei Gao, Chen Xing, Roberto Martín-Martín, Jiajun Wu, Caiming Xiong, Ran Xu, Juan Carlos Niebles, and Silvio Savarese. Ulip: Learning a unified representa-tion of language, images, and point clouds for 3d understanding. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 1179–1189, 2023. [38] Xumin Yu, Lulu Tang, Yongming Rao, Tiejun Huang, Jie Zhou, and Jiwen Lu. Point-bert: Pre-training 3d point cloud transformers with masked point modeling. In Proceed-ings of the IEEE/CVF conference on computer vision and pattern recognition , pages 19313–19322, 2022. [39] Yihan Zeng, Chenhan Jiang, Jiageng Mao, Jianhua Han, Chaoqiang Ye, Qingqiu Huang, Dit-Yan Yeung, Zhen Yang, Xiaodan Liang, and Hang Xu. Clip2: Contrastive language-image-point pretraining from real-world point cloud data. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 15244– 15253, 2023. [40] Biao Zhang, Lixin Chen, Tong Liu, and Bo Zheng. Smec: rethinking matryoshka rep-resentation learning for retrieval embedding compression. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , pages 26220– 26233, 2025. [41] Renrui Zhang, Ziyu Guo, Peng Gao, Rongyao Fang, Bin Zhao, Dong Wang, Yu Qiao, and Hongsheng Li. Point-m2ae: multi-scale masked autoencoders for hierarchical point cloud pre-training. Advances in neural information processing systems , 35: 27061–27074, 2022. [42] Renrui Zhang, Ziyu Guo, Peng Gao, Rongyao Fang, Bin Zhao, Dong Wang, Yu Qiao, and Hongsheng Li. Point-m2ae: multi-scale masked autoencoders for hierarchical point cloud pre-training. Advances in neural information processing systems , 35: 27061–27074, 2022. [43] Renrui Zhang, Ziyu Guo, Wei Zhang, Kunchang Li, Xupeng Miao, Bin Cui, Yu Qiao, Peng Gao, and Hongsheng Li. Pointclip: Point cloud understanding by clip. In Pro-ceedings of the IEEE/CVF conference on computer vision and pattern recognition ,pages 8552–8562, 2022. [44] Zhihao Zhang, Shengcao Cao, and Yu-Xiong Wang. Tamm: Triadapter multi-modal learning for 3d shape understanding. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 21413–21423, 2024. [45] Junsheng Zhou, Jinsheng Wang, Baorui Ma, Yu-Shen Liu, Tiejun Huang, and Xinlong Wang. Uni3d: Exploring unified 3d representation at scale. In International Conference on Learning Representations , volume 2024, pages 46766–46782, 2024. [46] Ziyang Zhou, Pinghui Wang, Zi Liang, Haitao Bai, and Ruofei Zhang. Cross-modal 3d representation with multi-view images and point clouds. In Proceedings of the Computer Vision and Pattern Recognition Conference , pages 3728–3739, 2025. [47] Xiangyang Zhu, Renrui Zhang, Bowei He, Ziyu Guo, Ziyao Zeng, Zipeng Qin, Shang-hang Zhang, and Peng Gao. Pointclip v2: Prompting clip and gpt for powerful 3d LOBO ET AL .: NESTED MULTIMODAL 3D REPRESENTATIONS 19 
+
+open-world learning. In Proceedings of the IEEE/CVF international conference on computer vision , pages 2639–2650, 2023.

@@ -1,0 +1,920 @@
+Title: Perceive to Hypothesize, Verify to Ground: An Agentic Reasoning Framework for Open-World Geo-Localization
+
+URL Source: https://arxiv.org/pdf/2608.29880v1
+
+Published Time: Tue, 01 Sep 2026 01:56:25 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+## Perceive to Hypothesize, Verify to Ground: An Agentic Reasoning Framework for Open-World Geo-Localization 
+
+Yutian Jiang 1∗, Ruijie Li 1∗, Sisuo Lyu 2∗, Xixuan Hao 1,Qingxiang Liu 1, Yongzi Yu 1, Yuxuan Liang 1†
+
+1The Hong Kong University of Science and Technology (Guangzhou) 
+
+2The Hong Kong University of Science and Technology 
+
+{yjiang194, rli541, xhao390, yyu110}@connect.hkust-gz.edu.cn {sisuolyu, yuxliang}@outlook.com , qingxiangliu737@gmail.com 
+
+Abstract 
+
+Open-world geo-localization requires models to reason over ambiguous visual cues through multi-step reasoning and external knowledge grounding. While recent large vision-language models exhibit strong multimodal reasoning capabilities, existing approaches still suffer from perceptual hallucination and context drift due to the lack of explicit evidence-grounded verification. In this work, we reformulate geo-localization as a human-like perceive-then-verify reasoning problem and propose 
+
+GeoPAVE (Geo-localization Perception-and-Verification-Engine), a bi-level agentic frame-work that contains perception-based hypoth-esis generation via single-pass rollouts and verification-based evidence grounding for de-cision actions: support , refute , and refine . To support rigorous evaluation, we further intro-duce PAVED , a novel dataset derived from real-world user check-in data, equipped with comprehensive reasoning trajectories featur-ing multi-hop queries, multi-round tool invo-cations, and structured perception-verification traces. The dataset and code are available at https://github.com/Arandinglv/GeoPAVE. 
+
+1 Introduction 
+
+Open-world geo-localization aims to infer the geo-graphic coordinates of a street-view image around the world, without relying on a retrieval gallery. Therefore, this task requires models to integrate fine-grained visual evidence (Hao et al., 2025a,b; Zhong et al., 2024) with broad geographic, cultural, and semantic knowledge (Yang et al., 2026; Jia et al., 2025; Hao et al., 2025c; Zou et al., 2025). This moves past simple single-shot perception, re-quiring iterative reasoning, multi-hop retrieval, and fact verification with open-world exploration over external knowledge sources (Cai et al., 2026; Lym-peraiou et al., 2026). Geo-localization supports 
+
+> *
+
+Equal contribution. 
+
+> †
+
+Corresponding author. 1. Perceptual Shortcut             
+
+> 2. Verification Inconsistency LLM Agent Ambiguous cues →Knowledge prior
+> Oifig Post office
+> Pred: 52.71,-7.58 Distance: 164km
+> Human Expert
+> Evidence Pool
+> GT: 54.07,-6.608
+> Hypothesis 𝑯 𝟏
+> - County Kilkenny - Confidence: 0.75 - Clues: Post
+> Hypothesis 𝑯 𝟐
+> - County Armagh - Confidence: 0.6 - Clues: Flag
+> Verify Perceive
+> Hypothesis 𝐻 #
+> Hypothesis 𝑯 𝟐
+> Pred: 54.35,-6.65 Distance: 31.25km
+> (a) Challenges of open-world geo-localization (b) Percept-then-verify: Human-like reasoning.
+> Parametric knowledge
+> Unverified facts →False truth
+> Flag Kilkenny How to localize?
+
+Figure 1: Challenges of geo-localization. 
+
+a wide range of real-world applications, such as autonomous driving, criminal investigation (Cam-pos et al., 2025), and an important testbed for open-world multimodal reasoning and knowledge-grounded intelligence (Geng et al., 2026). Traditional geo-localization research has fo-cused on visual perception through classification approaches (Weyand et al., 2016; Pramanick et al., 2022) and feature retrieval (Vivanco Cepeda et al., 2023; Haas et al., 2024). However, their effec-tiveness largely depends on large-scale, predefined, and closed-world reference datasets. With the ad-vancement of deep learning, recent work has begun to leverage large language models equipped with world knowledge to reason over visual cues. By enhancing visual reasoning abilities through su-pervised fine-tuning (Li et al., 2024; Wang et al., 2025a) or reinforcement learning (Wang et al., 2025b; Jia et al., 2026; Liu et al., 2026), geo-localization is gradually shifting from pure pattern recognition toward perception-driven reasoning. Though promising, recent LVLM post-training paradigms (Wang et al., 2025b; Li et al., 2025) focus on extending reasoning depth, yet they still struggle to maintain reliable reasoning when per-arXiv:2608.29880v1 [cs.AI] 30 Aug 2026 ceptual evidence is ambiguous and intermediate reasoning steps lack reliable auditing. These lim-itations reveal two core challenges (see Figure 1) inherent to perception-driven reasoning: 
+
+1) Perceptual Shortcut: When visual evidence is partial or ambiguous, LVLMs tend to map salient local cues to high-frequency geographic regions based on blurred text or architectural styles. Al-though test-time scaling techniques, such as par-allel rollouts (Ji et al., 2026), expand the search space, they increase inference costs without fun-damentally resolving the inherent unreliability of perception-driven reasoning in single pass (Tran and Kiela, 2026). 
+
+2) Verification Inconsistency: Existing geo-localization research largely overlooks the impor-tance of evidence-grounded verification. While agentic RL (Hao et al., 2026) has demonstrated the utility of external tools, unconstrained tool invoca-tion in open environments may introduce lengthy contexts that mix useful evidence with irrelevant retrieval results, undermining the consistency be-tween initial visual cues and final conclusions. For example, when a blurred storefront retrieves similar POIs from multiple cities, the model may follow an unverified search result and converge to a plausible but visually inconsistent location. To tackle these issues, we revisit the intrinsic nature of ambiguous reasoning in open-world geo-localization. We argue that the key lies in simulat-ing human-like cognitive behavior . In geographic discovery games such as GeoGuessr (Talreja et al., 2026; Cheng et al., 2025), expert players rarely rely on a single-shot intuition, but instead operate in a continuous perceive-then-verify loop. They first perceive multi-granularity visual cues to form and mentally rank a set of plausible hypotheses, con-tinuously cross-checking these hypotheses against external geographic and map-based context to con-firm, reject, or refine their beliefs. Inspired by the human-like reasoning pro-cess, we first reformulate geo-localization as a perception-verification paradigm, and then propose 
+
+GeoPAVE , a bi-level agentic framework that de-composes geo-localization into human-like percep-tion and verification stages. Our GeoPAVE con-sists of 1) an Agentic Perception Module that gen-erates uncertainty-aware hypotheses within a sin-gle reasoning pass, while leveraging uncertainty quantification to determine verification actions; and 2) a Verification Module that grounds can-didate hypotheses through strategic tool invoca-tion, enabling evidence-based hypothesis refine-ment. By adaptively adjusting hypotheses with ver-ifiable external evidence, GeoPAVE effectively sup-presses hallucinations while preserving contextual consistency. To facilitate rigorous evaluation, we construct PAVED , a high-quality dataset sourced from human check-ins, containing rich tool-use evidence-based hypothesis verification reasoning trajectories generated from GeoPAVE. Our contri-butions can be summarized as follows: • We revisit open-world geo-localization based on human cognitive reasoning, reformulating it as a 
+
+perceive-then-verify paradigm and proposing a perception–verification agentic reasoning frame-work GeoPAVE . This framework naturally pro-duces high-quality reasoning trajectories with rich evidence-based verification. • We introduce an agentic perception module that condenses candidate-space exploration into a single reasoning pass with uncertainty estima-tion, together with a structured verification mod-ule that maps uncertainty signals to specialized tool-based verification skills, performing tool-augmented evidence retrieval and iterative hy-pothesis refinement. • Extensive experiments across multiple bench-marks demonstrate that GeoPAVE achieves strong and competitive performance against rep-resentative retrieval-based, agentic, and closed-source LVLM baselines. In addition, we present PAVED (Perception-and-Verification-Engine-Dataset), comprising streetview images collected from human check-ins, paired with ver-ification procedures and tool-call trajectories. 
+
+2 Preliminaries 
+
+2.1 Problem Statement 
+
+Given an image I, geo-localization aims to pre-dict its coordinate ˆp = ( lat , lon ). We formulate it as a perception-verification problem : a vision-language model first produces candidate hypothe-ses H = {hi}ki=1 with confidence scores and uncer-tainty tags, while external tools retrieve evidence 
+
+E = {ej }mj=1 to refine them. The final coordinate is selected by evidence-conditioned scoring over the refined hypotheses. 
+
+2.2 Related Works Open-World Geo-Localization. Open-World geo-localization aims to predict the precise ge-ographic location of an image across the globe. CONFLICTING CUES GENERIC SCENES UNCLEAR TEXTS 
+
+> 𝑒 !(ℎ !, 𝜏 !, 𝜌 !)𝑒 !(ℎ !, 𝜏 !, 𝜌 !)𝑒 !(ℎ !, 𝜏 !, 𝜌 !)
+> Evidence DB
+
+Meta Agent                      
+
+> Candidate 1 Candidate 2 Candidate 3
+> Uncertainty Tags
+> •Coordinate 𝑝
+> •Confidence 𝑐 (()
+> •Rationale 𝑅
+> •Uncertainty 𝑈
+> •Actions 𝐴
+> You are ageo-localization expert. Based on the provided image, carefully analyze the visual cues, following this procedure: 1. Provide the first three possible candidates. 2. Use multiple tools: OCR, Google Map, Web search for verification. 3. Provide the final prediction of the location.
+
+ℎ!
+
+ℎ"
+
+ℎ#          
+
+> •Coordinate 𝑝
+> •Confidence 𝑐 (()
+> •Rationale 𝑅
+> •Uncertainty 𝑈
+> •Actions 𝐴
+> Candidate Set
+> Input Image
+> World Knowledge
+> Prediction
+
+ℎ!$ 𝒉 𝟐 $ ℎ#$
+
+GeoPAVE : Perception – Verification 
+
+Perception-and-Verification-Engine Query Perception 
+
+> Uncertainty Quantification
+
+Perception 
+
+> Single-Pass
+> hypothesis generation.
+> Support Refute Compare Refined
+
+Verification                                
+
+> Skill Invocation
+> Scene Verification
+> Linguistic Grounding
+> Contextual Validation
+> SKILLS
+> Based on uncertainty tags 𝑈 !,recommended actions 𝐴 !, candidates, and context from perception, a budget-constrained policy maps these signals to verification skills, triggering Map Context Tools, Web Search, and OCR for spatial validation.
+> Hypothesis: ℎ!
+> Invoked skill: 𝑠 "
+> Tool: 𝜏 "∈ 𝑇
+> Evidence: 𝑐 "
+> Reason: 𝜌 "
+> Search PoI
+> Text Evidence Pool
+> Scene
+> Zoom Street view
+> Hypothesis Refinement takes the initial hypothesis state 𝑍 #$,structured context, evidence pool Εas input, yielding evidence-conditioned state 𝑍 #%= 𝑀 #𝐼, 𝑍 #$, Ε ,adjusting the weights of hypotheses.
+
+Hypotheses H Verification Output 
+
+> Refinement
+
+Figure 2: Overview of GeoPAVE. 
+
+Traditional computer vision methods tackle this through classification by discretizing the Earth into predefined cells (Seo et al., 2018; Praman-ick et al., 2022; Ghasemi et al., 2025) or re-trieval by matching queries against large-scale vi-sual databases (Shatwell et al., 2025; Haas et al., 2024; Jia et al., 2024). However, these closed-world approaches heavily rely on massive datasets and struggle to generalize to open-world condi-tions (Jiang et al., 2026). Recently, large vision-language models (LVLMs) have addressed this lim-itation by leveraging multimodal reasoning and extensive world knowledge to directly infer loca-tions (Li et al., 2024; Yu et al., 2026; Li et al., 2025, 2026a). While their explicit reasoning improves in-terpretability, the resulting reasoning chains are often long and complex, which can easily lead to hallucinations and thus undermine reliability. Moreover, the absence of verification mechanisms further limits the trustworthiness and precision of their final predictions. 
+
+Agentic Reasoning System. Recent progress in large language models (LLMs) has been driven by integrating external tools, enabling agentic multi-modal systems to ground perception through envi-ronment interactions and extend beyond parametric knowledge (Schick et al., 2023; Khaki et al., 2026; Qin et al., 2024). To optimize tool use and long-horizon decision-making, further studies explore agentic reinforcement learning (Li et al., 2026b; Qin et al., 2025) and test-time scaling via paral-lel or multi-agent exploration (Zhu et al., 2025; Qiao et al., 2025; Guo et al., 2026). In the geo-localization domain, researchers employ multi-agent debate (Han et al., 2025; Zheng et al., 2025) and agentic RL (Ji et al., 2026; Jia et al., 2026) to improve reasoning depth. However, these meth-ods demand expensive computational resources, as their performance gains heavily rely on increased reasoning trajectories. In contrast, our proposed 
+
+GeoPAVE achieves higher reliability via a struc-tured bi-level perception-verification stage. 
+
+3 Methodology 
+
+3.1 Overview 
+
+GeoPAVE constructs a bi-level verification architec-ture to address the challenges of ambiguous visual reasoning in geo-localization, which decouples hy-pothesis generation from evidence-based validation. GeoPAVE grounds predictions in verifiable exter-nal evidence through structured tool invocation, providing a hypothesis-verification process: a per-ception module that performs single-pass percep-tion to explore the hypothesis space, and a verifica-tion module that implements non-parametric refine-ment through cross-modal evidence aggregation from heterogeneous knowledge sources (Zhong et al., 2025). The pipeline is shown in Figure 2. 3.2 Perception Module Single-Pass Candidate Generation. For input image I, the perception agent generates a first-pass hypothesis state Z(0) 
+
+θ = H(0) = {h(0) 1 , . . . , h (0) 
+
+K },where K ∈ {1, 2, 3}. This process produces multiple potential outcomes in a single infer-ence pass. Each structured hypothesis h(0) 
+
+i =(pi, c (0) 
+
+i , Ri, Ui, Ai) consists of a predicted coor-dinate pi = ( lat i, lon i), an initial confidence score 
+
+c(0) 
+
+i ∈ [0 , 1] , a natural language rationale Ri, uncer-tainty tags Ui ⊆ U from a predefined vocabulary, and verification actions and tools Ai.To enable reliable test-time scaling, we model uncertainty as structured tags that guide hypothe-sis verification. Given an initial hypothesis confi-dence c(0) 
+
+i , uncertainty signals Ui derived from con-flicting cues trigger confidence calibration c(0) 
+
+i ←
+
+f (c(0) 
+
+i , Ui) suppressing overconfident predictions before verification. 
+
+Uncertainty Quantification. GeoPAVE repre-sents uncertainty as explicit routing signals for tool-call process. If visual cues, OCR-like text snip-pets, or candidate semantics conflict, the perception module lowers the adjusted confidence and records the unresolved ambiguity through fields such as 
+
+CONFLICTING_CUES and uncertainty tags U. This structured context describes image-internal obser-vations and verification needs, which indicates that visual features and textual semantics diverge) to mitigate overconfident predictions on ambiguous data (detailed information in Appendix D.2). The tag set activates verification skills through a map-ping ϕ : U → S in the verification stage, without skill-based learning policies. 
+
+3.3 Verification Module Conditional Skill Invocation. GeoPAVE formu-lates verification as conditional skill invocation, mapping epistemic signals to verification opera-tions. Specifically, a verification skill s ∈ S
+
+is defined as a tuple s = ( Us, t s, ψ s), where Us
+
+denotes uncertainty tags that activate the skill, 
+
+ts ∈ T denotes the external knowledge source, and ψs : E × H → R quantifies the mutual infor-mation I(p; e | I , Et) between the evidence item e
+
+and the true location p conditioned on the image and prior evidence, where H denotes the hypothe-sis set and E denotes the evidence pool. GeoPAVE instantiates three core skills: Chicago, Illinois: 41.91, -87.63               
+
+> PAVED (Perception-and-Verification-Engine-Dataset)
+> <think>
+> Observation: The image shows N Wells St the number 1540, red brick buildings, and a Chicago-like streetscape.
+> Hypothesis :
+> 1. Old Town, Chicago, USA (confidence: 0.95) 2. Lincoln Park, Chicago, USA (confidence: 0.03) 3. Gold Coast, Chicago, USA (confidence: 0.02)
+> Action Plan: Search for "1540 N Wells St, Chicago".
+> </think> <tool_call> {“name”: “ google map search ", "arguments": {"query": "1540 N Wells St, Chicago, IL 60610, USA"}} </tool_call>
+> <tool_response> {"ok": true, "hits_count": 1, "lat": 41.9103, "lon": -87.6349} </tool_response>
+> <think>
+> Reflection: The address exists. Nearby POIs verification.
+> </think>
+> <tool_call> {“name”: “ google maps search ", "arguments": {"lat": 41.9103, "lon": -87.6349, "radius_m": 500}} </tool_call> <tool_response> {"top_pois": [{"name": "Zanies Comedy Night Club", "vicinity": "1548 North Wells Street"}]} </tool_response>
+> <think>
+> Verification: OCR text "1540" and "N Wells St" exactly matches 1540 N Wells St, Chicago. Nearby POIs such as Zanies Comedy Night Club confirm the specific block. Convergence: Old Town is strongly supported, while Lincoln Park and Gold Coast remain weaker alternatives due to less direct visual alignment.
+> </think> <answer> country: USA, city: Chicago, refined_address: 1540 N Wells St, Latitude: 41.9103, Longitude: -87.6346 </answer>
+> Visual Reasoning
+> Tool-use
+> Hypotheses & Actions
+> Skill Invocation
+> Evidence Pool
+> Refinement
+> Prediction
+> GeoPAVE
+> Reviewer Model
+> Perception Verification
+> Trajectory Sampling Trace Refinement
+
+Figure 3: PAVED trace construction pipeline. 
+
+1) Linguistic Grounding extracts script and lan-guage features from street signs to produce geo-graphic constraints. 2) Scene Verification queries search engines with visual scenes to retrieve metadata. 3) Contextual Validation checks candidate locations against elevation, waterbody, topographic, and nearby-POI evidence from geographic databases to assess spatial consistency. The skill selection policy π : st → S is rule-based, mapping uncertainty tags to verifica-tion skills and thereby enabling adaptive verifi-cation without policy learning. Each invoked skill produces a structured evidence record ej =(ij , τ j , o j , y j , ρ j , ∆j , v j ), where ij indexes the tar-get hypothesis in H, τj ∈ T denotes the ev-idence source, oj is the tool observation or re-trieved content, ρj provides a compact reason code, 
+
+yj ∈ { SUPPORT , REFUTE , REFINE } denotes the verification decision, ∆j is the rule-based score update induced by this evidence, and vj ∈ { 0, 1}
+
+indicates whether the evidence triggers a hard veto. The outputs of all invoked skills form the evidence pool E = {ej }mj=1 , which serves as the grounded interface between tool execution and hypothesis refinement. Specifically, S UPPORT increases the confidence of a hypothesis when the retrieved evidence is con-sistent with the candidate location, R EFUTE de-creases the confidence or rejects a hypothesis when severe geographic contradictions are observed, and REFINE updates the candidate location or its sup-porting context when newly discovered textual or spatial evidence can be successfully grounded. 
+
+Hypothesis Refinement. After evidence col-lection, GeoPAVE performs a second reasoning Dataset GC RL HR DV NE CoT Tool                                              
+
+> Im2GPS3k ✓✗✗✗✓✗✗
+> MAPBench ✓◦◦◦✓◦✓
+> EarthWhere ✓◦◦◦✓◦◦
+> GeoRC ◦✓◦✗◦✓✗
+> GeoBench ✓✓✓✓✓◦✓
+> PAVED ✓✓✓✓✓✓✓
+> GC: global coverage; RL: reasonable localizability; HR: high-resolution imagery; DV: data variety; NE: nuanced evaluation; CoT: paired reasoning trajectory; Tool: explicit tool-call trajectory. ✓: yes, ◦: partial, ✗: no.
+
+Table 1: Comparison of geolocalization benchmarks. PAVED combines globally distributed human check-in imagery, localizability filtering, high-resolution visual evidence, distance- and address-level evaluation, and auditable tool-grounded reasoning trajectories. 
+
+pass to reassess the initial hypotheses under the grounded evidence pool E. Specifically, it takes the initial hypothesis state Z(0)  
+
+> θ
+
+= {(h(0)  
+
+> i
+
+, c (0)  
+
+> i
+
+)}Ki=1 ,together with the image I and the evidence pool 
+
+E, as input to the refinement agent Mθ, as defined in Eq. 1. The agent re-evaluates each candidate hypothesis according to supportive, refuting, and refinement evidence, producing an updated hypoth-esis state Z(1)  
+
+> θ
+
+. In this process, supportive evidence increases the candidate confidence, refuting evi-dence decreases it, and severe contradictions trig-ger a veto that excludes the candidate from final selection. 
+
+Z(1)  
+
+> θ
+
+= Mθ(I, Z (0)  
+
+> θ
+
+, E) = {(h(1)  
+
+> i
+
+, c (1)  
+
+> i
+
+)}Ki=1 . (1) The final hypothesis is then deterministically selected as the highest-scoring valid candidate: 
+
+ˆh = arg max hi∈Z(1) 
+
+> θ
+
+c(1)  
+
+> i
+
+. By anchoring this sec-ond reasoning pass explicitly to auditable evidence, the model effectively reduces context drift and pre-serves reasoning consistency in ambiguous, long-horizon visual scenarios. 
+
+4 Datasets 
+
+4.1 Data Collection. 
+
+We construct PAVED (Perception-and-Verification-Engine-Dataset) from the Foursquare check-in cor-pus (Noulas et al., 2011), containing 2,524 man-ually filtered street-view images collected from worldwide human check-ins. PAVED focuses on accessible places with clear semantic cues, such as commercial areas, public streets, and res-idential districts, better reflecting realistic open-world geo-localization scenarios. As summarized in Table 1, PAVED complements existing bench-marks by jointly supporting global coverage, geo-localizability, high-resolution imagery, nuanced evaluation, and paired tool-grounded reasoning tra-jectories. Additional details on geographic distri-bution, coverage, and sampling are provided in the Appendix B.1. 
+
+4.2 Chain-of-Thought Structured CoT. We combine PAVED with agentic perception-verification reasoning. Un-like conventional datasets that merely provide final coordinates and perception-driven reason-ing traces, PAVED features structured Chain-of-Thought (CoT) trajectories that explicitly decou-ple reasoning into hypothesis generation, evidence verification, and candidates refinement. Given an image I and its ground-truth coordinate p∗, we formulate an answer-conditioned expert trajectory as Eq. 2: 
+
+Γ∗ = {Z(0) , E, Z (1) , p∗}, (2) where the initial hypothesis state Z(0) = {h(0)  
+
+> i
+
+}Ki=1 
+
+comprises candidates formalized as h(0)  
+
+> i
+
+=(pi, c (0)  
+
+> i
+
+, Ri, Ui, Ai), capturing the coordinate, ini-tial confidence, perception rationale, uncertainty, and recommended verification actions, respectively. The trajectory progresses through E, representing the sequence of tool actions and observations, ulti-mately yielding the refined hypothesis state Z(1) .
+
+Trajectory Curation. The generation follows a rigorous two-stage curation workflow: 1) The base GeoPAVE framework generates a prelimi-nary structured trace that logs candidate genera-tion, tool interactions, evidence evaluations, and the final convergence state; 2) a stronger reviewer model is introduced to audit the initial trace utiliz-ing rejection sampling to enforce tool-call valid-ity, evidence consistency, and prediction precision (d(ˆ p, p∗) < 5km), as shown in Figure 3. By for-matting the retained trajectories with structured tags (e.g., <think> ) to separate internal reason-ing from external observations, we provide a high-quality dataset with transparent reasoning traces, offering a valuable resource for analyzing verifiable agentic geo-localization. Model PAVED MAPBench-V2 IM2GPS3K                                                                                                                                     
+
+> 500m 2km 25km 200km 750km 500m 2km 25km 200km 750km 500m 2km 25km 200km 750km GeoCLIP 2.58 7.49 24.52 37.08 59.31 0.88 1.59 6.01 12.39 32.29 8.94 18.35 32.17 49.45 66.53 GeoReasoner 0.99 5.23 31.42 36.57 50.71 0.00 1.46 11.76 21.44 37.09 2.04 10.98 25.19 36.24 52.82 GAEA 1.86 7.25 34.39 41.64 61.69 0.42 5.26 25.45 34.84 56.24 ––32.61 51.42 –GeoVista 1.55 6.74 39.22 44.97 63.31 0.25 4.17 22.86 27.36 33.54 3.47 13.55 28.06 35.90 44.61 GLOBE 0.67 2.85 14.86 20.80 38.99 1.20 3.91 13.25 42.84 62.53 2.10 8.91 35.12 50.24 64.61 Thinking with Map 1 rollout 3.69 9.65 40.53 47.38 70.55 13.73 23.20 49.52 57.95 76.60 7.39 19.81 41.09 56.45 74.62 Thinking with Map 4 rollouts 9.09 17.89 51.03 58.07 78.30 22.15 27.08 40.26 53.43 62.48 7.94 16.52 29.70 38.44 48.18 Qwen3-VL-235B 2.42 8.80 26.90 45.64 65.41 2.88 10.81 34.00 44.85 62.54 6.94 18.08 36.54 52.42 70.24 Gemini-3.1-Pro 11.10 17.00 57.50 63.40 77.20 12.37 22.51 53.48 76.22 82.72 –––––SmileGeo ––––––––––––47.77 ––GPT-5.5 5.31 13.16 39.42 47.28 67.51 7.68 18.48 34.63 43.68 58.70 19.19 35.37 56.52 69.44 81.38
+> Gemini-3.0-Flash 14.92 23.34 54.74 64.45 78.80 11.14 20.57 45.14 53.61 65.96 15.42 29.70 51.16 64.17 80.08 GeoPAVE (Ours) 16.87 26.89 59.96 69.35 85.86 13.81 24.83 63.19 70.42 86.87 15.92 30.51 52.30 66.18 81.24
+> Gain (%) +1.95 +3.55 +5.22 +4.90 +7.06 +2.67 +4.26 +18.05 +16.81 +20.91 +0.50 +0.81 +1.14 +2.01 +1.16
+
+Table 2: Comparison of geolocation accuracy on PAVED, MAPBench-V2, and IM2GPS3K under different error thresholds (values in %). Bold and underlined values denote the best and second-best reported results, respectively. GeoPAVE uses Gemini-3.0-Flash as base model. The Gain row reports the absolute improvement of GeoPAVE over Gemini-3.0-Flash in percentage points (pp). 
+
+5 Experiments 
+
+To examine the effectiveness of GeoPAVE and bi-level architecture, we organize our experiments around three research questions: • RQ1: Can GeoPAVE achieve fine-grained geo-localization in ambiguous visual geo-localization under lower cost? • RQ2: How do the individual components of GeoPAVE’s bi-level architecture contribute to the overall prediction accuracy? • RQ3: Does hypothesis-verification effectively mitigate perceptual shortcuts and prevent contex-tual inconsistency during long-horizon ambigu-ous visual reasoning of geo-localization? 
+
+5.1 Experiment Setup Benchmark. We evaluate GeoPAVE on three complementary benchmarks. PAVED is our 2,524-image benchmark constructed from human check-ins, covering worldwide street-view images with visual cues suitable for evidence-based geographic reasoning. IM2GPS3K (Vo et al., 2017) is a stan-dard public global geo-localization benchmark con-taining 2,997 Flickr-sourced geotagged images. 
+
+MAPBench-V2 (Ji et al., 2026) is a China-centered benchmark covering urban POI and street-view scenes across multiple cities, and we use its 2.4K-image test split for evaluation. Detailed descrip-tions of these public datasets are provided in the appendix B.2. Together, these datasets test global open-world geo-localization, legacy Internet-photo geo-localization, and China-specific fine-grained urban geo-localization. 
+
+Baselines. We compare GeoPAVE with repre-sentative retrieval-based, fine-tuned, reasoning-based, and tool-augmented geo-localization sys-tems. The retrieval baseline is GeoCLIP (Vi-vanco Cepeda et al., 2023). Fine-tuned or geolocation-specialized LVLM baselines include GAEA (Campos et al., 2025), GeoReasoner (Li et al., 2024), and GLOBE (Li et al., 2025). Agentic and web-augmented baselines include GeoVista (Wang et al., 2025b) and Thinking with Map (Ji et al., 2026). We also consider strong closed-source LVLMs such as GPT-5.5 and Gemini-3.1-Pro. To ensure a fair comparison with Thinking with Map (Ji et al., 2026), we consider both its original single-rollout setting and test-time scaling approaches as baselines. Specifically, we evaluate the 4-rollout setting by incorporating Gemini-3.0-Flash to provide a comprehensive as-sessment. More details are in Appendix B.3. Metrics. We evaluate geo-localization quality from final-coordinate accuracy and verification-trace quality. For coordinate accuracy, we report distance-threshold accuracy Acc@ r, where a pre-diction is correct if its haversine distance to the ground-truth coordinate is within r. r is set as 
+
+500m , 2km , 25km , 200km , and 750km respec-tively, covering street-level to regional localization. Beyond final accuracy, we introduce three trace-based metrics to examine candidate diversity and evidence-grounded correction. Let p∗ 
+
+> i
+
+denote the ground-truth coordinate of the i-th image, H(0)  
+
+> i
+
+=
+
+{pij }Ki 
+
+> j=1
+
+denote the initial candidate coordinates, 
+
+˜pi denote the initial prediction, and ˆpi denote the final prediction. 
+
+Candidate Oracle Recall (COR@ r). COR@ r
+
+measures whether the initial hypothesis set covers the correct geographic region: 
+
+COR@ r = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+
+
+min  
+
+> j
+
+d(pij , p ∗ 
+
+> i
+
+) ≤ r
+
+
+
+. (3) 
+
+Correction Recall (CR@ r). CR@ r evaluates whether verification recovers initially failed sam-ples. Given Sτ = {i | e(0)  
+
+> i
+
+> τ }, where e(0)  
+
+> i
+
+=
+
+d(˜ pi, p ∗ 
+
+> i
+
+), we compute: 
+
+CR@ r | τ = 1
+
+|S τ |
+
+X
+
+> i∈S τ
+
+1 [d(ˆ pi, p ∗ 
+
+> i
+
+) ≤ r] . (4) 
+
+Log Correction Gain (LCG). LCG measures the logarithmic error reduction from the initial predic-tion to the final prediction: 
+
+LCG = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+log 10 
+
+d(˜ pi, p ∗ 
+
+> i
+
+) + 1 
+
+d(ˆ pi, p ∗ 
+
+> i
+
+) + 1 . (5) 
+
+Settings. For closed-source models, we perform inference using their official APIs, while open-source models are evaluated on NVIDIA A6000 GPUs. All models use the same Nominatim map-service interface to ensure a fair comparison under a shared geocoding backend. GeoPAVE is primar-ily instantiated with Gemini-3.0-Flash, while GPT-4o-mini is additionally used as a weaker backbone in the robustness study. Further implementation details are provided in Appendix C. 
+
+5.2 Overall Performance (RQ1) 
+
+We compare GeoPAVE with representative retrieval-based, fine-tuned, agentic, and closed-source LVLM baselines on PAVED, MAPBench-V2, and IM2GPS3K, as summarized in Table 2.                                           
+
+> Model Accuracy (%) 500 m 2 km 25 km 200 km 750 km
+> P-Only 12.72 24.29 56.63 66.25 85.38 V-Only 14.22 22.28 55.84 65.43 84.61 V w/o OCR 15.16 24.31 58.91 68.54 85.32 V w/o Web 11.87 22.86 56.43 69.00 85.06 V w/o Map 13.58 25.36 57.52 67.82 84.31 GeoPAVE ( K=4 )16.87 26.89 59.96 69.35 85.86
+> GeoPAVE ( K=3 )15.04 25.06 61.84 70.25 85.53
+> Table 3: Ablation study of different GeoPAVE configu-rations and maximum hypothesis budgets on PAVED. P and V denote the Perception and Verification modules, respectively. The default setting uses Kmax = 3 .
+
+On PAVED, GeoPAVE achieves the best perfor-mance across all thresholds. Compared with Gemini-3.1-Pro, a strong closed-source LVLM baseline, GeoPAVE improves Acc@500 m from 11.10% to 16.87% and Acc@2 km from 17.00% to 26.89%. The consistent gains from fine-grained to coarse-grained thresholds indicate that the perceive-then-verify design improves fine-grained geo-localization, which is especially important for PAVED, where many samples require text cues, POI, and contextual cues rather than relying on a single visual prior. The remaining results highlight where GeoPAVE is most effective. The stronger performance of Thinking with Map 4 rollouts on MapBenchV2 can be attributed to the large-scale agentic RL train-ing on such data, along with test-time rollouts en-larging the search space for reasoning. However, GeoPAVE outperforms it from Acc@25km onward, suggesting that while our method is slightly weaker in exact fine-grained geo-localization, it remains ef-fective at coarse-grained scenarios. For the Flickr-based benchmark, GeoPAVE slightly trails GPT-5.5, which is expected since many images are in-door scenarios, which favor larger closed-source LVLMs with stronger general visual understanding and broader world knowledge. These results sug-gest that GeoPAVE is most effective when visual observations can be connected to verifiable local evidence, while remaining competitive under less constrained image distributions. 
+
+5.3 Robustness Study (RQ1) 
+
+To examine whether GeoPAVE’s gains depend on a specific strong backbone, we replace Gemini-3.0-Flash with the weaker GPT-4o-mini for both base reasoning and verification. As shown in Ta-ble 4, GeoPAVE consistently improves the corre-Dataset Radius GPT-4o-mini GeoPAVE Gain (%)                                     
+
+> PAVED 500m 2.77 2.87 +0.10
+> 2km 10.62 11.36 +0.74
+> 25km 34.90 36.84 +1.94
+> 100km 38.11 42.30 +4.19
+> 200km 40.77 45.05 +4.28
+> 750km 52.93 62.28 +9.35
+> MAP Bench V2 500m 0.375 0.872 +0.497
+> 2km 3.13 4.31 +1.18
+> 25km 11.64 14.72 +3.08
+> 100km 12.93 16.87 +3.94
+> 200km 15.06 20.94 +5.88
+> 750km 29.16 35.84 +6.68
+> Table 4: Reliability of GeoPAVE on PAVED and MAPBench-V2 with a weaker backbone. GPT-4o-mini is evaluated stan-dalone and within GeoPAVE, with gains reported in percent-age points.
+
+sponding API baseline across all thresholds on both PAVED and MAPBench-V2, with gains increasing to 9.35% on PAVED and 6.68% on MAPBench-V2 at 750 km. These results suggest that the perception-verification architecture remains effec-tive under a weaker backbone, instead of relying on specific models. The widening gains at larger radii further indicate that evidence-grounded verification is effective at preventing catastrophic geographic errors when backbone capacity is limited. 
+
+5.4 Ablation Study (RQ2) Effect of perception and verification. We first evaluate the contribution of GeoPAVE’s two-stage design. As shown in Table 3, both P-only and 
+
+V-only underperform the full model. Removing verification reduces Acc@500m from 16.87% to 12.72%, showing that initial hypotheses still require evidence-based refinement. Verification-only also degrades performance, indicating that verification is less effective without uncertainty-aware candi-date generation. The distinct degradation patterns further suggest that perception preserves broad can-didate coverage, whereas verification is crucial for converting plausible regional hypotheses into accu-rate fine-grained predictions, confirming that per-ception and verification are complementary. 
+
+Effect of verification skills. We further ablate three verification skills: Linguistic Grounding (LG; OCR-based script/language cues), Scene Verifica-tion (SV; search-engine evidence), and Contextual Validation (CV; Map/POI evidence). As shown in Table 3, removing SV causes the largest drop, re-0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 
+
+> Candidate Oracle Recall
+> 10 25 100 200 750 2500
+> Distance Threshold (km, log scale)  Model
+> GeoPAVE Thinking-4rollouts Thinking-1rollout GeoVista GPT-5.5
+
+Figure 4: Diagnostic Analysis of Candidate Coverage and Evidence-Grounded Correction. 
+
+ducing Acc@500m from 16.87% to 11.87%, which indicates the importance of search-based scene grounding. Removing CV decreases Acc@500m to 13.58% and Acc@750km to 84.31%, showing that map-side context helps filter spatially inconsistent hypotheses. Removing LG leads to a milder but consistent decline, suggesting that OCR-derived script and language cues provide useful textual an-chors. These results show that the three skills con-tribute complementary evidence for verification. 
+
+Effect of hypothesis budget. We additionally evaluate Kmax = 4 on PAVED to examine the diversity–cost trade-off. Compared with the default 
+
+Kmax = 3 setting reported in Table 5, Kmax =4 achieves 15.04%, 25.06%, 61.84%, 70.25%, and 85.53% at 500 m, 2 km, 25 km, 200 km, and 750 km, respectively. It improves performance at 25 km and 200 km but performs worse at the other thresholds, suggesting that additional hypotheses can improve regional candidate coverage while in-troducing distractors for fine-grained verification. We therefore retain Kmax = 3 as the default setting in main experiments. 
+
+5.5 Quantitative Analysis (RQ3) Candidate Coverage and Correction. To ex-amine candidate refinement and contextual con-sistency, we visualize tool-augmented models in Figure 4 with three diagnostic metrics: Candidate Oracle Recall (COR) for initial hypothesis cov-erage, Correction Recall (CR) for recovery from failed reasoning, and Log Correction Gain (LCG) for relative error reduction. Unlike Acc@ r, these metrics expose the correction process behind final predictions. Figure 4 shows that baselines mainly improve at coarse thresholds, while GeoPAVE achieves higher COR and stronger fine-grained can-Method Rollouts Tools Acc. (%) GeoVista 1 Web search 1.55 / 39.22 Thinking w/ Map 4 Geocode, POI, Map 9.09 / 51.03 GeoPAVE 1∗ OCR, Web, Map, POI 16.87 / 59.96 
+
+Table 5: Comparison of inference structure, tool access, and geo-localization accuracy on PAVED. Accuracy is reported at 500m/25km. ∗GeoPAVE uses perception-verification process with Kmax = 3 and Lmax = 3 .
+
+didate coverage, especially within 10 km. These re-sults suggest that GeoPAVE mitigates context drift by grounding hypothesis refinement in evidence-supported candidate regions. 
+
+Tool-Use Efficiency. Table 5 summarizes the in-ference structure and external tools available to each method. GeoVista primarily relies on web search, while Thinking-with-Map uses four paral-lel rollouts augmented with geocoding, POI, and static-map tools. In contrast, GeoPAVE integrates OCR, web retrieval, and Map/POI evidence within a single perception-verification process, achieving 16.87% and 59.96% accuracy at 500m and 25km, respectively. These results suggest that structured multi-source verification helps mitigate perceptual shortcuts and prevent contextual inconsistency dur-ing long-horizon reasoning under visual ambiguity. 
+
+5.6 Case Studies 
+
+Figure 5 shows two representative cases of the perception-verification process. In the first case, the perception stage recognizes the scene as a wholesale market with logistics trucks, and keeps both Mexico City and Guadalajara as plausible “Central de Abasto” candidates. Although the top prior points to Mexico City, the correct Guadala-jara region remains in the candidate set, showing that the initial hypotheses provide useful coverage under visual ambiguity. The verification stage then checks nearby POI evidence. The Mexico City candidate is rejected because its local context is inconsistent with the observed market scene, while the Guadalajara candidate is supported by nearby market-related POIs, leading to the final correction. The Paris case shows a complementary situation. The perception stage already proposes Boulevard de Magenta as the strongest hypothesis, and verifi-cation confirms it with nearby hotel and street-level evidence, while the Lyon alternative is ruled out due to inconsistent contextual cues. Together, these cases show that perception preserves plausible can-Prediction : 20.65, -103.38                           
+
+> Perception
+> Scene Clues: wholesale produce market, heavy logistics trucks.
+> •Central de Abasto, Mexico City (Conf: 0.65) - Top Prior
+> •Central de Abasto, Guadalajara (Conf: 0.40)
+> •Action: poi_check, web_search
+> Jalisco, Mexico: 20.65, -103.38
+> Verification
+> Evaluating Candidate 1(Top Prior) - PoI Check: Toxicological Medical Unit & public phones. - Judgment: Inconsistent. - Status: ❌REFUTE Evaluating Candidate 2(Second): - PoI Check: ‘Mamá Coneja Mercado Abasto & spice shops nearby. - Judgment: Consistent. - Status: ✅SUPPORT
+> Verification Prediction : 48.87, 2.36
+> Perception
+> Scene Clues: three-lined urban boulevard, mid-rise facades.
+> •Boulevard de Magenta, Paris, France (Conf: 0.90) - Top Prior
+> •Lyon, France (Conf: 0.05)
+> •Action: geo_zoom_crop, poi_check, web_search
+> Verification
+> Evaluating Candidate 1(Top Prior) - PoI Check: Hôtel Little Regina
+> and Hotel Alane .- Judgment: Consistent. - Status: ✅SUPPORT Evaluating Candidate 2(Second): - PoI Check: Green parking meter (horodateur ) is consistent with Paris. - Judgment: Inconsistent. - Status: ❌REFUTE
+> Verification
+> Paris, France: 48.85, 2.36
+
+Figure 5: Case studies of evidence-grounded hypothesis verification. 
+
+didates and verification uses external evidence to correct or confirm them, reducing reliance on a single perceptual prior. Other detailed analysis in-formation are provided in Appendix D.3 and D.4. 
+
+6 Conclusion and Future Works 
+
+We reformulate open-world geo-localization as a 
+
+perceive-then-verify reasoning problem and pro-pose GeoPAVE , a bi-level agentic framework that combines perception-based hypothesis generation with evidence-grounded verification, reducing AI shortcuts and context inconsistency under ambigu-ous visual cues and demonstrating the effectiveness of GeoPAVE in both fine-grained geo-localization. Future work will extend GeoPAVE and PAVED into a scalable data generation and training pipeline, using verified reasoning traces to train stronger geo-localization agents. We will further explore agentic reinforcement learning in interactive environments, where models can actively gather evidence and improve geographic reasoning through feedback. 
+
+7 Acknowledgements 
+
+This work is supported by the Guangdong Ba-sic and Applied Basic Research Foundation (No. 2025A1515011994), the National Natural Science Foundation of China (No. 62402414), Guangdong Provincial Project 2025D03J0014, Guangzhou Municipal Science and Technology Project (No. 2023A03J0011), the Guangzhou Industrial Infor-mation and Intelligent Key Laboratory Project (No. 2024A03J0628), and Guangdong Provincial Key Lab of Integrated Communication, Sensing and Computation for Ubiquitous Internet of Things (No. 2023B1212010007). Limitations 
+
+While GeoPAVE demonstrates strong performance across multiple benchmarks, several limitations re-main. First, the current verification module re-lies on a rule-based uncertainty-to-skill routing policy, which may not generalize optimally to edge cases where uncertainty signals are ambigu-ous or underspecified. Second, GeoPAVE’s in-ference pipeline involves multiple sequential tool invocations, which introduces additional latency compared to single-pass reasoning approaches; fu-ture work could explore more efficient verification scheduling strategies. Third, although PAVED pro-vides globally distributed coverage, its images are sourced from Foursquare check-ins and may over-represent commercially active urban areas, poten-tially limiting evaluation diversity in rural or less-documented regions. Finally, the trajectory cura-tion process relies on a stronger reviewer model to filter low-quality traces, and the quality of PAVED annotations is thus partially dependent on the capa-bilities of this external model. 
+
+Ethical Consideration 
+
+PAVED is derived from real-world check-in loca-tions and street-view imagery, which raises privacy, licensing, and misuse concerns. We remove user identifiers, timestamps, and other check-in meta-data that could reveal individual mobility patterns. When raw imagery cannot be redistributed under third-party licenses, we release only derived anno-tations, metadata, or retrieval scripts. Image geo-localization systems may be misused for surveil-lance, doxxing, or sensitive-location identification; therefore, GeoPAVE and PAVED are intended for benchmark research and should not be used to iden-tify private individuals or infer sensitive personal locations. AI-assisted technologies were used solely for language polishing and grammar correction to im-prove the clarity and readability of the manuscript. They were not used to generate the core ideas, ex-perimental design, results, analyses, or references. The authors carefully reviewed all AI-assisted edits and take full responsibility for the integrity of the work, including the validity of the experimental results and the accuracy of all citations. 
+
+References 
+
+Zhixi Cai, Fucai Ke, Kevin Leo, Sukai Huang, Maria Garcia de la Banda, Peter J Stuckey, and Hamid Rezatofighi. 2026. Mata: A trainable hi-erarchical automaton system for multi-agent visual reasoning. arXiv preprint arXiv:2601.19204 .Ron Campos, Ashmal Vayani, Parth Parag Kulkarni, Rohit Gupta, Aritra Dutta, and Mubarak Shah. 2025. Gaea: A geolocation aware conversational model. 
+
+arXiv preprint arXiv:2503.16423 .Fenghua Cheng, Jinxiang Wang, Sen Wang, Zi Huang, and Xue Li. 2025. Geoguess: Multimodal reasoning based on hierarchy of visual information in street view. arXiv preprint arXiv:2506.16633 .Xinyu Geng, Yanjing Xiao, Yuyang Zhang, Hanwen Wang, Xinyan Liu, Rui Min, Tianqing Fang, and Yi R Fung. 2026. Geobrowse: A geolocation benchmark for agentic tool use with expert-annotated reasoning traces. arXiv preprint arXiv:2604.04017 .Narges Ghasemi, Amir Ziashahabi, Salman Avestimehr, and Cyrus Shahabi. 2025. Geotoken: Hierarchical geolocalization of images via next token prediction. 
+
+arXiv preprint arXiv:2511.01082 .Xusen Guo, Mingxing Peng, Xixuan Hao, Xingchen Zou, Qiongyan Wang, Sijie Ruan, and Yuxuan Liang. 2026. Agentsense: Llms empower generalizable and explainable web-based participatory urban sensing. In Proceedings of the ACM Web Conference 2026 ,pages 5439–5450. Lukas Haas, Michal Skreta, Silas Alberti, and Chelsea Finn. 2024. Pigeon: Predicting image geolocations. In Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition , pages 12893– 12902. Xiao Han, Chen Zhu, Hengshu Zhu, and Xiangyu Zhao. 2025. Swarm intelligence in geo-localization: A multi-agent large vision-language model collabora-tive framework. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 , pages 814–825. Xixuan Hao, Wei Chen, Yibo Yan, Siru Zhong, Kun Wang, Qingsong Wen, and Yuxuan Liang. 2025a. Ur-banvlp: Multi-granularity vision-language pretrain-ing for urban socioeconomic indicator prediction. In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pages 28061–28069. Xixuan Hao, Wei Chen, Xingchen Zou, and Yuxuan Liang. 2025b. Nature makes no leaps: Building con-tinuous location embeddings with satellite imagery from the web. In Proceedings of the ACM on Web Conference 2025 , pages 2799–2812. Xixuan Hao, Yutian Jiang, Jiabo Liu, Yihang Yang, Guangyin Jin, Song Gao, and Yuxuan Liang. 2026. Multi-agent collaborative reasoning with tool-augmented evidence for urban region profiling. In Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 2 ,pages 1590–1601. Xixuan Hao, Yutian Jiang, Xingchen Zou, Jiabo Liu, Yi-fang Yin, Song Gao, Flora Salim, Tianrui Li, and Yux-uan Liang. 2025c. Geospatial representation learning: A survey from deep learning to the llm era. arXiv preprint arXiv:2505.09651 .Yuxiang Ji, Yong Wang, Ziyu Ma, Yiming Hu, Hailang Huang, Xuecai Hu, Guanhua Chen, Liaoni Wu, and Xiangxiang Chu. 2026. Thinking with map: Rein-forced parallel map-augmented agent for geolocaliza-tion. arXiv preprint arXiv:2601.05432 .Furong Jia, Ling Dai, Wenjin Deng, Fan Zhang, Chen Hu, Daxin Jiang, and Yu Liu. 2026. Spotagent: Grounding visual geo-localization in large vision-language models through agentic reasoning. arXiv preprint arXiv:2602.09463 .Pengyue Jia, Yiding Liu, Xiaopeng Li, Yuhao Wang, Yantong Du, Xiao Han, Xuetao Wei, Shuaiqiang Wang, Dawei Yin, and Xiangyu Zhao. 2024. G3: an effective and adaptive framework for worldwide geolocalization using large multi-modality models. 
+
+Advances in neural information processing systems ,37:53198–53221. Pengyue Jia, Yingyi Zhang, Xiangyu Zhao, and Sharon Li. 2025. Geoarena: An open platform for benchmarking large vision-language models on worldwide image geolocalization. arXiv preprint arXiv:2509.04334 .Yutian Jiang, Jiabo Liu, Xixuan Hao, and Yuxuan Liang. 2026. CoST: Semantic-aware urban understand-ing via spatial-temporal alignment. arXiv preprint arXiv:2608.21041 .Saeed Khaki, Ashudeep Singh, Nima Safaei, and Ka-mal Ginotra. 2026. Vistira: Closing the image-text modality gap in visual math reasoning via structured tool integration. arXiv preprint arXiv:2601.14440 .Ling Li, Yu Ye, Yao Zhou, Bingchuan Jiang, and Wei Zeng. 2024. Georeasoner: Geo-localization with rea-soning in street views using a large vision-language model. arXiv preprint arXiv:2406.18572 .Ling Li, Yao Zhou, Yuxuan Liang, Fugee Tsung, and Jiaheng Wei. 2025. Recognition through reasoning: Reinforcing image geo-localization with large vision-language models. arXiv preprint arXiv:2506.14674 .Quanjiang Li, Zhiming Liu, Wei Luo, Tingjin Luo, and Chenping Hou. 2026a. Correcting visual blur induced by attention distraction to reduce hallu-cinations: Algorithm and theory. arXiv preprint arXiv:2605.24602 .Renda Li, Hailang Huang, Fei Wei, Feng Xiong, Yong Wang, and Xiangxiang Chu. 2026b. Adacurl: Adap-tive curriculum reinforcement learning with invalid sample mitigation and historical revisiting. In Pro-ceedings of the AAAI Conference on Artificial Intelli-gence , volume 40, pages 23123–23131. Jinkun Liu, Haohan Chi, Lingfeng Zhang, Yifan Xie, YuAn Wang, Long Chen, Hangjun Ye, Xiaoshuai Hao, and Wenbo Ding. 2026. Thinking in text and images: Interleaved vision–language reasoning traces for long-horizon robot manipulation. arXiv preprint arXiv:2605.00438 .Maria Lymperaiou, Vasileios Karampinis, Giorgos Filandrianos, Angelos Vlachos, Chrysoula Zerva, and Athanasios Voulodimos. 2026. Reasoning or pattern matching? probing large vision-language models with visual puzzles. arXiv preprint arXiv:2601.13705 .Anastasios Noulas, Salvatore Scellato, Cecilia Mascolo, and Massimiliano Pontil. 2011. An empirical study of geographic user activity patterns in foursquare. In 
+
+Proceedings of the International AAAI Conference on Web and Social Media , volume 5, pages 570–573. Shraman Pramanick, Ewa M Nowara, Joshua Glea-son, Carlos D Castillo, and Rama Chellappa. 2022. Where in the world is this image? transformer-based geo-localization in the wild. In European Conference on Computer Vision , pages 196–215. Springer. Zile Qiao, Guoxin Chen, Xuanzhong Chen, Donglei Yu, Wenbiao Yin, Xinyu Wang, Zhen Zhang, Baix-uan Li, Huifeng Yin, Kuan Li, and 1 others. 2025. Webresearcher: Unleashing unbounded reasoning capability in long-horizon agents. arXiv preprint arXiv:2509.13309 .Yujia Qin, Shihao Liang, Yining Ye, Kunlun Zhu, Lan Yan, Yaxi Lu, Yankai Lin, Xin Cong, Xiangru Tang, Bill Qian, and 1 others. 2024. Toolllm: Facilitating large language models to master 16000+ real-world apis. In International Conference on Learning Rep-resentations , volume 2024, pages 9695–9717. Yulei Qin, Xiaoyu Tan, Zhengbao He, Gang Li, Haojia Lin, Zongyi Li, Zihan Xu, Yuchen Shi, Siqi Cai, Renting Rui, and 1 others. 2025. Learn the ropes, then trust the wins: self-imitation with progressive exploration for agentic reinforcement learning. arXiv preprint arXiv:2509.22601 .Timo Schick, Jane Dwivedi-Yu, Roberto Dessì, Roberta Raileanu, Maria Lomeli, Eric Hambro, Luke Zettle-moyer, Nicola Cancedda, and Thomas Scialom. 2023. Toolformer: Language models can teach themselves to use tools. Advances in neural information process-ing systems , 36:68539–68551. Paul Hongsuck Seo, Tobias Weyand, Jack Sim, and Bohyung Han. 2018. Cplanet: Enhancing image ge-olocalization by combinatorial partitioning of maps. In Proceedings of the European Conference on Com-puter Vision (ECCV) , pages 536–551. David G Shatwell, Ishan Rajendrakumar Dave, Sirnam Swetha, and Mubarak Shah. 2025. Gt-loc: Unifying when and where in images through a joint embedding space. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 1–11. Mohit Talreja, Joshua Diao, Jim Thannikary James, Radu Casapu, Tejas Santanam, Ethan Mendes, Alan Ritter, Wei Xu, and James Hays. 2026. Georc: A benchmark for geolocation reasoning chains. arXiv preprint arXiv:2601.21278 .Dat Tran and Douwe Kiela. 2026. Single-agent llms out-perform multi-agent systems on multi-hop reasoning under equal thinking token budgets. arXiv preprint arXiv:2604.02460 .Vicente Vivanco Cepeda, Gaurav Kumar Nayak, and Mubarak Shah. 2023. Geoclip: Clip-inspired align-ment between locations and images for effective worldwide geo-localization. Advances in Neural In-formation Processing Systems , 36:8690–8701. Nam Vo, Nathan Jacobs, and James Hays. 2017. Revis-iting im2gps in the deep learning era. In Proceedings of the IEEE international conference on computer vision , pages 2621–2630. Chun Wang, Xiaojun Ye, Xiaoran Pan, Zihao Pan, Hao-fan Wang, and Yiren Song. 2025a. Gre suite: Geo-localization inference via fine-tuned vision-language models and enhanced reasoning chains. arXiv preprint arXiv:2505.18700 .Yikun Wang, Zuyan Liu, Ziyi Wang, Han Hu, Pengfei Liu, and Yongming Rao. 2025b. Geovista: Web-augmented agentic visual reasoning for geolocaliza-tion. arXiv preprint arXiv:2511.15705 .Tobias Weyand, Ilya Kostrikov, and James Philbin. 2016. Planet-photo geolocation with convolutional neural networks. In European conference on computer vi-sion , pages 37–55. Springer. Chenjie Yang, Yutian Jiang, and Chenyu Wu. 2026. Skill-conditioned visual geolocation for vision-language. arXiv preprint arXiv:2604.09025 .Bo Yu, Fengze Yang, Yiming Liu, Chao Wang, Xuewen Luo, Taozhe Li, Ruimin Ke, Xiaofan Zhou, and Chenxi Liu. 2026. Locatability-guided adaptive reasoning for image geo-localization with vision-language models. arXiv preprint arXiv:2603.13628 .Heng Zheng, Yuling Shi, Xiaodong Gu, Haochen You, Zijian Zhang, Lubin Gan, Hao Zhang, Wenjun Huang, and Jin Huang. 2025. Graphgeo: Multi-agent de-bate framework for visual geo-localization with het-erogeneous graph neural networks. arXiv preprint arXiv:2511.00908 .Siru Zhong, Xixuan Hao, Hao Miao, Yan Zhao, Qing-song Wen, Roger Zimmermann, and Yuxuan Liang. 2025. Multimodal learning for spatio-temporal data mining. In Proceedings of the 33rd ACM Inter-national Conference on Multimedia , pages 14338– 14339. Siru Zhong, Xixuan Hao, Yibo Yan, Ying Zhang, Yangqiu Song, and Yuxuan Liang. 2024. Urban-cross: Enhancing satellite image-text retrieval with cross-domain adaptation. In Proceedings of the 32nd ACM International Conference on Multimedia , pages 6307–6315. King Zhu, Hanhao Li, Siwei Wu, Tianshun Xing, Dehua Ma, Xiangru Tang, Minghao Liu, Jian Yang, Jiaheng Liu, Yuchen Eleanor Jiang, and 1 others. 2025. Scal-ing test-time compute for llm agents. arXiv preprint arXiv:2506.12928 .Xingchen Zou, Yibo Yan, Xixuan Hao, Yuehong Hu, Haomin Wen, Erdong Liu, Junbo Zhang, Yong Li, Tianrui Li, Yu Zheng, and 1 others. 2025. Deep learn-ing for cross-domain data fusion in urban computing: Taxonomy, advances, and outlook. Information Fu-sion , 113:102606. Appendix 
+
+A Experiment Results 
+
+To provide a more fine-grained evaluation of GeoPAVE on PAVED, we further report Acc@10km and Acc@100km in addition to the main thresholds. These two intermediate thresh-olds measure city-level and regional-level local-ization accuracy, respectively, and help clarify whether the gains of GeoPAVE remain consistent beyond street-level prediction. As shown in Ta-ble 6, GeoPAVE achieves 47.76% at Acc@10km and 65.31% at Acc@100km, outperforming all baselines at both thresholds. Compared with the strongest closed-source baseline, Gemini-3.1-Pro, GeoPAVE improves Acc@10km by 2.26 per-centage points and Acc@100km by 4.61 percent-age points. These results suggest that evidence-grounded verification not only improves fine-grained geo-localization, but also provides stable benefits for broader city- and region-level geo-graphic reasoning. 
+
+B Datasets 
+
+To ensure distributional diversity and rigorously evaluate the open-world geolocalization capabili-ties of agentic models, our evaluation spans three distinct datasets. These datasets were carefully se-lected and curated to assess models across legacy internet photos, region-specific urban environ-ments, and human-centric reasoning scenarios. 
+
+B.1 PAVED 
+
+PAVED (Perception-and-Verification-Engine-Dataset) consists of 2,524 manually filtered street-view images collected from worldwide hu-man check-ins, with hypothesis locations sourced from the Foursquare check-in corpus (Noulas et al., 2011). Each image is anchored to a real point of interest visited by users and corresponds to accessible, semantically meaningful urban scenes, such as commercial streets, local neighborhoods, storefronts, road signs, and surrounding POIs. We retrieve high-resolution imagery through Google Maps and manually filter out non-localizable samples, including indoor scenes, close-up objects, visually uninformative views, and overly iconic global landmarks. As a result, PAVED focuses on realistic geo-localization cases where models must infer locations from rich but often ambiguous street-level semantic cues. As shown in Table 1, PAVED differs from ex-isting geo-localization benchmarks in both data construction and reasoning supervision. While prior datasets often emphasize either global cover-age, retrieval-style evaluation, or final-coordinate prediction, PAVED jointly provides global human-centric imagery, reasonable geo-localizability, high-resolution visual evidence, data diversity, and nu-anced distance/address-level evaluation. More im-portantly, PAVED is paired with structured Chain-of-Thought annotations that decompose each sam-ple into hypothesis generation and tool-augmented verification. These trajectories record how exter-nal evidence is retrieved, evaluated, and used to refine hypothesis locations, enabling PAVED to evaluate whether agentic models can actively ver-ify hypotheses rather than rely only on parametric priors. Unlike existing benchmarks that rely on ran-domly scraped coordinates or easily recognizable landmarks (Li et al., 2025), PAVED is constructed from the Foursquare check-in corpus (Noulas et al., 2011), ensuring that every image is anchored to genuine human activity and accessible, semanti-cally meaningful places (e.g., commercial districts, local neighborhoods). All corresponding high-resolution imagery is retrieved via Google Maps to support reliable visual clue extraction and ground-ing. To maintain meaningful gep-localization dif-ficulty, we conducted localizability filtering to re-move non-localizable images (e.g., indoor rooms, close-up objects) and easily recognizable global landmarks. Most importantly, PAVED is accompa-nied by Structured Chain-of-Thought (Structured CoT) annotations that decouple the reasoning pro-cess into a hypothesis-generation state and a tool-augmented verification state. This unique structure provides a robust testbed to evaluate whether agen-tic models can actively retrieve external informa-tion to validate or refine their hypotheses, rather than relying solely on parametric priors. 
+
+B.2 Details of Benchmarks IM2GPS3K. As a standard and widely rec-ognized global benchmark (Vo et al., 2017), IM2GPS3K contains 2,997 geotagged images sourced from Flickr. This dataset serves to evaluate general, open-world geo-localization capabilities Model Performance on PAVED (%) 
+
+500m 2km 10km 25km 100km 200km 750km GeoCLIP 2.58 7.49 16.36 24.52 32.21 37.08 59.31 GeoReasoner 0.99 5.23 21.35 31.42 34.07 36.57 50.71 GAEA 1.86 7.25 24.60 34.39 38.19 41.64 61.69 GeoVista 1.55 6.74 26.78 39.22 42.31 44.97 63.31 GLOBE 0.67 2.85 10.34 14.86 18.23 20.80 38.99 Thinking with Map 3.69 9.65 28.97 40.53 44.46 47.38 70.55 Thinking with Map*4+verifier 9.09 17.89 38.46 51.03 55.29 58.07 78.30 Gemini-3.1-Pro 11.10 17.00 45.50 57.50 60.70 63.40 77.20 GPT-5.5 5.31 13.16 30.06 39.42 43.55 47.28 67.51 GPT-4o-mini 2.77 10.62 26.39 34.90 38.11 40.77 52.93 Gemini-3.0-Flash 14.92 23.34 45.96 54.74 62.84 64.45 78.80 GeoPAVE (GPT-4o-mini) 2.87 11.36 29.46 36.84 42.30 45.05 62.28 GeoPAVE (Gemini-3.0-Flash) 16.87 26.89 47.76 59.96 65.31 69.35 85.86 
+
+Table 6: Comparison of geolocation accuracy on PAVED under different error thresholds (values in %). Best results are shown in bold. GeoPAVE is evaluated with GPT-4o-mini and Gemini-3.0-Flash as its respective base models. COWMV 
+
+> 73.63%
+> CWMV
+> 13.46%
+> COMV
+> 4.45%
+> CMV
+> 2.90%
+> COWMRV
+> 1.95%
+> Others
+> 3.61%
+> Candidate
+> 100.00%
+> OCR
+> 82.01%
+> Web
+> 89.79%
+> Map
+> 99.64%
+> Refine
+> 3.38%
+> Validate
+> 97.62%
+> Legend
+> Candidate OCR Web Map Refine Validate
+> COWMRV
+
+Figure 6: Tool Invocation Patterns in PAVED Verifica-tion Traces. 
+
+on legacy internet photos. Because these images are largely crowd-sourced and vary significantly in quality, visual composition, and geographic con-text, they pose a traditional yet robust challenge for testing whether models can extract meaningful location cues from unstructured and often noisy visual data. 
+
+MAPBench-V2. To test fine-grained, region-specific reasoning and robustness, we utilize the 2.4K-image test split of MAPBench-V2 (Ji et al., 2026). This benchmark is heavily China-centered, featuring a diverse array of urban points of interest (POIs) and street-view scenes across multiple cities. Evaluating on MAPBench-V2 allows us to assess a model’s ability to interpret specific regional in-Missing Candidate Coverage Ground GT: Moscow, Russia              
+
+> Prediction: Sydney, Australia
+> Error: 14,497.47 km
+> Cause: Sparse location-discriminative cues
+> •Moscow absent from candidate set
+> •misleading POI evidence favors Sydney
+> •failed web verification prevents recovery
+> False Textual Grounding Ground GT: Melbourne, Australia
+> Prediction: KICKZ Stachus, Munich, Germany
+> Error: 16,119.78 km
+> Cause: OCR over-weights “KICKZ”
+> •treated as a location-specific anchor
+> •verification reinforces the Munich hypothesis
+> •failed web search prevents correction
+
+Figure 7: Representative GeoPAVE failures caused by missing candidate coverage and false textual grounding 
+
+frastructure, localized textual cues (e.g., Chinese storefront signage), and distinct architectural styles, thereby testing the limits of its geographic knowl-edge and fine-scale urban geolocalization. 
+
+B.3 Baselines Open-source Models 
+
+• GeoCLIP (Vivanco Cepeda et al., 2023): ACLIP-inspired image-to-GPS retrieval approach that models the Earth as a continuous space. It employs positional encoding with random Fourier features and constructs a hierarchical representation to effectively align image em-beddings with corresponding GPS locations for worldwide geolocalization. • GeoReasoner (Li et al., 2024): A novel frame-50 100   
+
+> Cluster sample count
+> Max spread (km)
+> 10 km 15 km 25 km
+> (b) (a)
+> Europe N. America Oceania Asia S. America Africa
+> RUS GBR BEL DEU ESP ITA NLD UKR OTH USA MEX CAN OTH AUS NZL TUR IDN MYS JPN CHN THA PHL KOR OTH BRA CHL PRY ARG PER COL OTH ZAF KEN GHA OTH
+> 10 20 50 100 200 400
+
+Figure 8: Geographical Distribution of PAVED. Our dataset provides high-resolution, globally annotated imagery sourced from real human check-ins, designed to evaluate the general perception and verification abilities of agentic models. 
+
+work leveraging large vision-language mod-els (LVLMs) augmented with human inference knowledge derived from real geo-localization games. To ensure data quality, it first curates a dataset of highly locatable street views, fol-lowed by specialized fine-tuning through ded-icated reasoning and location-tuning stages to enhance geographical deduction. • GAEA (Campos et al., 2025): A conversational visual-language model explicitly designed for geolocation awareness. It is trained on GAEA-1.4M, a synthesized large-scale dataset built upon OpenStreetMap attributes, enabling nu-anced location-specific reasoning and dialogue beyond pure coordinate prediction. • GeoVista (Wang et al., 2025b): A web-augmented agentic model designed for geolocal-ization that integrates explicit tool invocations, such as image zooming and web searching, di-rectly into the visual reasoning loop. It is opti-mized through supervised fine-tuning followed by reinforcement learning. • smileGeo (Han et al., 2025): A collaborative swarm intelligence framework that leverages multiple Internet-enabled LVLM agents to as-sociate images with precise geographic locations. It facilitates inter-agent communication to synthe-size models’ inherent knowledge with retrieved web information, employing a dynamic learning strategy to optimize interactions and reduce re-dundant communication. • Thinking with Map (Ji et al., 2026): A map-augmented reasoning agent that utilizes reinforce-ment learning to gather geographic evidence. To comprehensively evaluate its capacity, we bench-mark it under two distinct inference settings: 
+
+– 1 rollout: The base setting where the RL-finetuned agent is directly utilized to perform a single-pass inference for coordinate predic-tion. 
+
+– 4 rollouts: A parallel test-time scaling frame-work where four agents generate independent hypothesis locations. In our implementation, considering the trade-off between reasoning performance and computational overhead, we adapted the original pipeline by deploying Gemini 3.0 Flash as the strict verifier (in place of the original Qwen3-VL-235B-A22B) to syn-thesize the gathered evidence and output the most geographically plausible final coordinate. 
+
+Closed-source Models 
+
+• Gemini 3.1 Pro: State-of-the-art native multi-modal foundation model developed by Google. Thanks to its massive context windows and ad-vanced high-resolution visual processing capa-bilities, Gemini 3.1 Pro excels at extracting fine-grained geographic clues (e.g., street signs, ar-chitectural styles, and vegetation), serving as a heavy-weight baseline offering deep, multi-step spatial reasoning and extensive zero-shot world knowledge. • GPT-5.5: The latest proprietary large multi-modal model introduced by OpenAI, represent-ing the current frontier of closed-source visual reasoning. It demonstrates unprecedented zero-shot generic visual comprehension and cross-lingual text-in-image reading capabilities. For geolocalization, it leverages powerful chain-of-thought (CoT) reasoning to synthesize diverse en-vironmental clues and accurately deduce global coordinates even in unconstrained or ambiguous street views. 
+
+C Evaluation Metric Details 
+
+This section supplements the evaluation metrics defined in Section 5.1. We provide implementation details for coordinate parsing, distance computa-tion, candidate-based diagnostics, and aggregation. 
+
+Coordinate accuracy. For each image Ii, a method outputs a final coordinate ˆpi = ( clat i, clon i).If a response contains multiple coordinates, we use the coordinate explicitly marked as the final answer. For GeoPAVE, this corresponds to the final predic-tion after verification. For baselines, we parse the final latitude–longitude pair using a deterministic coordinate parser. We compute the geographic error using the haversine distance with Earth radius R =6371 .0088 km. Distance-threshold accuracy is de-fined as: 
+
+Acc@ r = 100 
+
+N
+
+> N
+
+X
+
+> i=1
+
+1 [d(ˆ pi, p ∗ 
+
+> i
+
+) ≤ r] .
+
+We report Acc@ r, where a prediction is consid-ered correct if its haversine distance to the ground-truth coordinate is within radius r. We evaluate 
+
+r ∈ { 0.5, 2, 10 , 25 , 100 , 200 , 750 } km, and present representative thresholds in the main tables due to space constraints. Predictions with missing, invalid, or unparsable coordinates are counted as incorrect for all thresholds. 
+
+Candidate-based diagnostics. For GeoPAVE, the initial candidate set H(0)  
+
+> i
+
+is the set of hypothe-ses generated by the perception module before ver-ification. The initial prediction ˜pi is the top-ranked candidate before verification, and the final predic-tion ˆpi is the coordinate selected after evidence-grounded refinement. For methods that output only one coordinate, the initial candidate set is treated as a singleton. We use the same definitions of Candidate Oracle Recall (COR), Correction Recall (CR), and Log Correction Gain (LCG) as in Section 5.1. For CR, we set τ = r unless otherwise specified, meaning that CR@ r measures the fraction of samples that are initially wrong at threshold r but become cor-rect after verification. If no sample fails initially at threshold r, CR is reported as N/A. For LCG, in-valid predictions are assigned a clipped maximum error of 20 ,015 km, approximately half of Earth’s circumference. 
+
+D Implementation Details 
+
+D.1 Perception 
+
+The perception stage first produces a coarse fall-back and three candidate locations, each with con-fidence, uncertainty tags, and recommended veri-fication actions. We expose two image-level tools, Zoom-Crop and OCR, whose definitions are shown in Figure 9 and Figure 10. The controller maps uncertainty tags to tool actions through the rout-ing policy in Figure 11, and the OCR prompt is provided in Figure 12. 
+
+D.2 Verification 
+
+The verification stage grounds each perception can-didate with OCR, Web, and Map evidence. We define the verification tools in Figure 13, Fig-ure 14, and Figure 15. Map evidence is exposed through three compact sub-tools rather than raw map-service outputs. Tool invocation and refine-ment follow Figure 16. All tool outputs are serial-ized into the compact interface in Figure 17 before being sent to the verification refiner prompt in Fig-ure 18. 
+
+D.3 Qualitative Results 
+
+Figure 19 shows that our proposed model (GeoPAVE) produces reasoning trajectories with improved coherence and interpretability. In par-ticular, the model keeps ambiguous visual cues as explicit hypotheses, records uncertainty when de-cisive text is absent, and uses external evidence to prevent visually plausible but over-specific candi-date coordinates from being accepted. We present a comparative example in Figure 19 to illustrate the difference in reasoning capabilities. Given a suburban street view, GPT-5.5 suffers from a severe cue-level error; it incorrectly identifies the scene as having right-hand traffic and misinterprets the road infrastructure as European, ultimately pre-dicting Luxembourg with a distance error of over 8,700 km. Gemini-3.1-Pro demonstrates stronger perception by correctly identifying left-hand traf-fic, the distinctive interlocking zig-zag bricks, and the green palisade fencing, narrowing the location down to South Africa. However, it relies entirely Tool: Zoom-Crop 
+
+Description: Crops a complete local region for close inspection when a visible sign, storefront, plate, address panel, or landmark detail is present but not readable at full-image scale. 
+
+Arguments: 
+
+• bbox_2d (array of numbers): Bounding box in normalized image coordinates. (Required) 
+
+• label (string): Short label for the target region. (Optional) 
+
+> Figure 9: Perception-stage Zoom-Crop tool definition.
+
+Tool: OCR 
+
+Description: Reads legible text from the original image or a returned crop, and converts it into compact place-like and auxiliary text evidence. 
+
+Arguments: 
+
+• image_id (string): The original image or the crop identifier returned by Zoom-Crop . (Required) 
+
+> Figure 10: Perception-stage OCR tool definition.
+
+on its internal parametric memory, leading to an incorrect city-level prediction (Pretoria). In contrast, GeoPAVE exhibits a structured rea-soning trajectory. It first extracts fine-grained vi-sual evidence, including the yellow road edge lines and interlocking brick median paving. More impor-tantly, instead of making an immediate point pre-diction, our model formulates multiple hypotheses (Johannesburg vs. Pretoria) and leverages external tool-use (e.g., web queries for “yellow road edge lines left hand drive countries”) to evaluate candi-date consistency. When overly specific retrieved candidates conflict with the hilly sports-field scene, the evidence gate rejects them and falls back to the broader Johannesburg hypothesis. 
+
+D.4 Failure Analysis 
+
+Although GeoPAVE achieves the best overall per-formance on PAVED, its localization remains im-perfect. Acc@200km is 69.35%, compared with 85.86% at 750 km (Table 2), indicating that fine-grained regional and city-level localization is still challenging. The two cases in Figure 7 further il-lustrate how an early error can propagate through the reasoning process when the correct candidate is missing or external verification is unavailable. • False textual grounding. The ground-truth location is Melbourne, Australia (−37 .815567 , 144 .964966 ), whereas GeoPAVE predicts KICKZ Stachus in Munich, Germany ( 48 .138758 , 11 .567166 ), resulting in an error of 16,119.78 km. The visible “KICKZ” text is assigned excessive importance and treated as a location-specific anchor. Once Munich enters the candidate set, the subsequent support and verification stages search for evidence consistent with this hypothesis rather than testing whether the textual cue is geographically unique. The intended web queries also fail, leaving the model without independent evidence to reject the initial hypothesis. • Missing candidate coverage. The ground-truth location is Moscow, Russia ( 55 .739385 ,
+
+37 .584894 ), but GeoPAVE predicts Sydney, Australia ( −33 .862250 , 151 .207684 ), pro-ducing an error of 14,497.47 km. The night-time street scene contains little location-discriminative information, with a service-provider watermark serving as the only tex-tual cue. Consequently, the initial hypothesis-generation stage produces only coarse city-level candidates and does not include Moscow. Misleading nearby-POI evidence then shifts the prediction toward Sydney, while failed web searches prevent the model from intro-ducing or verifying alternatives outside the initial candidate set. Algorithm: Perception Tool Routing 
+
+Require: Image I, top candidate c1, uncertainty tags T , recommended actions A, need-zoom flag z, zoom targets Z.1: Ttext ← { TEXT_UNCLEAR , SYMBOLS_UNCLEAR }.2: Ttext ← Ttext ∪ { NEED_ZOOM }.3: Ztext ← { sign_text , license_plate , storefront }.4: Tmap ← { CONTEXT_MISSING , TOPOGRAPHY_UNCLEAR , LANDMARK_ID_UNCLEAR }.5: Tmap ← Tmap ∪ { WATERBODY_DOMINANT , CONFLICTING_CUES }.6: rtext ← z or T ∩ Ttext ̸ = ∅ or Z ∩ Ztext ̸ = ∅.7: rtext ← rtext or OCR ∈ A or ZOOM ∈ A.8: if no visible text, sign, storefront, plate, or landmark detail exists then 
+
+9: Skip image tools. 10: else if visible text is already readable then 
+
+11: Store it as OCR memory. 12: else if rtext then 
+
+13: Crop the complete text-bearing object if a close-up is needed. 14: Run OCR on the crop or original image. 15: end if 
+
+16: if OCR memory contains a place, brand, road, or venue, or visual/text cues create an unresolved location conflict then 
+
+17: Record a short reasoning Web query or POI query for Verification. 18: end if 
+
+19: if T ∩ Tmap ̸ = ∅ then 
+
+20: Record a Map Context request for Verification. 21: end if 
+
+Figure 11: Perception-stage tool routing algorithm. 
+
+Prompt: OCR Module 
+
+You are an OCR module. Read ALL legible text from the image. Return ONLY a valid JSON object with this schema (no markdown, no extra text): {"place_like_texts": ["...", "..."], "other_texts": ["...", "..."] }Rules: - place_like_texts: ONLY snippets that look like names of places/venues/brands/organizations. - other_texts: any other readable text (optional). - Prefer short readable snippets over empty output when at least 3 consecutive visible characters can be read. - If a snippet may be useful for geolocation but you are unsure whether it is a place/brand/organization, include it in other_texts instead of dropping it. - If nothing readable, return empty lists. - Do NOT invent text you cannot see. 
+
+Figure 12: OCR module prompt used in the perception stage. 
+
+Tool: Text Evidence 
+
+Description: Reuses OCR memory as image-grounded anchors for candidate validation and address refinement. 
+
+Arguments: 
+
+• ocr_texts (array of strings): Place-like and auxiliary snippets extracted from the image. (Re-quired) 
+
+Figure 13: Verification-stage text evidence tool definition. Tool: Web Evidence 
+
+Description: Executes perception-authored reasoning, OCR, and POI queries, then returns compact search evidence for each candidate. 
+
+Arguments: 
+
+• queries (array of strings): Web or POI-oriented queries authored during perception. (Required) 
+
+> Figure 14: Verification-stage web evidence tool definition.
+
+Tool: Map Context 
+
+Description: Provides compact map-side evidence for a candidate location, including local POI context, terrain plausibility, and spatial feature consistency. The tool returns structured support/refute signals rather than raw map-service outputs. 
+
+Arguments: 
+
+• coordinate (pair of floats): Candidate latitude and longitude. (Required) 
+
+• radius_m (integer): Local validation radius; default is 500m. (Optional) 
+
+• keyword (string): Optional POI name or category from perception queries. (Optional) 
+
+• expected_terrain (string): Predicted terrain tag, e.g., coastal, flat, hilly, or alpine. (Optional) 
+
+• expected_features (array of strings): Visual features to verify, such as coastline, river, forest, peak, bridge, station, or park. (Optional) 
+
+Core Capabilities: 
+
+• Neighborhood POI Probe: counts nearby POIs and returns nearest POI names, types, and distances within the local radius. • Topographic Consistency Check: compares external elevation evidence with the terrain/elevation tag predicted from the image. • Spatial Feature Cross-Check: checks local map-feature counts and ring-style spatial evidence to detect contradictions with the visual scene. 
+
+> Figure 15: Verification-stage map context tool definition.
+
+Algorithm: Verification Tool Routing 
+
+Require: Initial hypotheses Z(0) = {h(0)  
+
+> i
+
+}Ki=1 , perception output P , OCR memory O, tool availability G, budgets B.
+
+Ensure: Evidence pool E, refined hypotheses Z(1) , and final prediction ˆh.
+
+Part I: Skill Invocation 
+
+1: Initialize evidence pool E ← ∅ and query bank Q ← ∅ .2: Append to Q: P. reasoning_web_queries , P. ocr_web_queries , P. poi_search_queries , and candidate-level Web/POI queries from Z(0) .3: Deduplicate Q, reject generic or malformed queries, and retain at most BQ admitted queries. 4: Let U1 and c(0) 1 denote the top-hypothesis uncertainty tags and confidence. 5: if Web Evidence is available and Q contains admitted Web queries then 
+
+6: if the Web circuit is open or the text-only path has no OCR anchor then 
+
+7: Skip Web Evidence and record the skip reason. 8: else 
+
+9: Invoke Web Evidence on the top budgeted Web queries and add compact snippets/entities to E.10: end if 
+
+11: end if 
+
+12: Select up to BV validation hypotheses from Z(0) by confidence, semantic specificity, and uncertainty; include low-confidence or conflict-marked candidates. 13: for each selected hypothesis h(0)  
+
+> i
+
+do 
+
+14: Add Text Evidence from OCR memory O to Ei.15: Invoke Map Context for h(0)  
+
+> i
+
+when map evidence is available or Ui contains context, topography, landmark, waterbody, or conflicting-cue uncertainty. 16: Add Neighborhood POI Probe within 500m, matched POI detail when an anchor matches, and topographic consistency evidence to Ei.17: Serialize h(0)  
+
+> i
+
+, image summary, query bank, OCR memory, Web Evidence, and Map Context as 
+
+CONTEXT _JSON i.18: end for Part II: Refinement 
+
+19: if no low-confidence, conflict, query, or external-evidence signal is present then 
+
+20: Skip refinement and keep the current evidence-gated ranking. 21: end if 
+
+22: for each serialized context CONTEXT _JSON i do 
+
+23: ji ← VerificationRefiner(CONTEXT _JSON i).24: Parse ji as { confidence , consistent , reason_short , refined_address , conflicting_cues ,
+
+new_candidates }. 25: if ji.conflicting_cues ̸ = ∅ then 
+
+26: Cap ji.confidence < 0.90 .27: end if 
+
+28: Add a self-consistency evidence item to E with decision S UPPORT , R EFUTE , or N ODATA .29: if ji.consistent and ji.confidence ≥ 0.90 then 
+
+30: Accept h(0)  
+
+> i
+
+as validated; apply refined_address only as an address refinement for the same hypothesis. 31: return Z(1) and ˆh = h(1)  
+
+> i
+
+.32: else 
+
+33: Keep h(0)  
+
+> i
+
+unresolved and collect at most BS admissible proposals from refined_address and 
+
+new_candidates .34: end if 
+
+35: end for 
+
+36: for each collected proposal qs do 
+
+37: Land qs as a new candidate, then repeat Map Context serialization and VerificationRefiner scoring. 38: if the spawned candidate reaches confidence ≥ 0.90 then 
+
+39: Insert it into Z(1) and return it as ˆh.40: end if 
+
+41: end for 
+
+42: Select ˆh = arg max hi∈Z(1) c(1)  
+
+> i
+
+among evidence-gated candidates; if none is validated, keep the best unresolved score below 0.90 and expose remaining conflicts. 
+
+Figure 16: Verification-stage tool routing and refinement algorithm. Interface: Tool-Evidence Serialization 
+
+Tool outputs are serialized as CONTEXT_JSON: {"task": "Judge whether one candidate is self-consistent with image reasoning and tool evidence. Return JSON only.", "candidate": {...}, "image_summary": { "text_presence": "...", "scene_clues": ["..."], "expected_elevation_tag": "...", "top_level_conflicting_cues": ["..."] }, "query_bank": [{"q": "...", "src": "...", "web": true, "poi": false}], "ocr_texts": ["..."], "web_search": [{"query": "...", "title": "...", "url": "...", "snippet": "..."}], "web_entities": ["..."], "nearby": {"count": 0, "radius_m": 500, "pois": [...]}, "poi_details": [{...}], "elevation_m": 0.0 }
+
+Figure 17: Tool-evidence serialization interface passed to the verification refiner. 
+
+Prompt: Verification Refiner 
+
+Return ONLY a valid JSON object with this exact shape: {"confidence":0.0,"consistent":false,"reason_short":"<=160 chars","refined_address":""," conflicting_cues":[],"new_candidates":[]} Rules: confidence is this perception candidate's consistency after merging image reasoning/ memory with new external evidence. If evidence supports refining the address for the SAME perception candidate, set refined_address. If confidence stays <0.90, propose a next candidate only when the evidence clearly supports switching; otherwise leave new_candidates empty and the controller will advance to the next perception candidate. If conflicting cues remain, confidence MUST be < 0.90. Use only provided evidence; do not invent street names or POIs. Do not force new candidates to be near the fallback; judge semantic consistency from the evidence. CONTEXT_JSON: {CONTEXT_JSON} 
+
+Figure 18: Verification refiner prompt. Johannesburg, South Africa 
+
+GPT-5.5 Luxembourg, Luxembourg Visual premise: Calls the scene “Luxembourg City” with right-hand traffic, European road furni-ture, Luxembourg-style curbs/paving, and a fenced sports field. 
+
+Place prior: Maps the tree-lined sports-ground scene to Limpertsberg/Belair near Avenue de la Faïencerie and Val Sainte-Croix. 
+
+Failure mode: The wrong traffic-direction cue compounds into a European location prior. 
+
+Final: Luxembourg, Luxembourg; error 8706.31 km 
+
+.
+
+GeoPAVE Johannesburg, South Africa Perception: Extracts left-hand driving, yellow road edge lines, interlocking brick median paving, green sports-field fencing, and hilly Highveld-like terrain; no decisive text is readable. 
+
+Routing: Marks TEXT_UNCLEAR and GENERIC_SCENE , routing the case from direct prediction to Web, POI, and map-context verification. 
+
+Hypotheses: Maintains Johannesburg (0.60), Pretoria (0.30), and Durban (0.10), preserving candi-date diversity under ambiguity. 
+
+Tools: Issues the cue-aligned Web queries and candidate-specific POI/map checks described in the method. 
+
+Evidence pool: Serializes Johannesburg evidence at Sandhurst/Sandton and Pretoria evidence at Pretoria Central together with nearby POI and terrain context. 
+
+Refiner: Re-scores the candidate set against the evidence pool; both landed candidates are downgraded to 0.30 consistency. 
+
+Decision: Applies R EFUTE to the precise candidates and keeps the broader Johannesburg fallback because dense CBD contexts conflict with the hilly sports-field scene. 
+
+Final: Falls back to the broader Johannesburg hypothesis; error 8.24 km .
+
+Gemini-3.1-Pro Pretoria, South Africa Perception: Correctly identifies left-side driving, interlocking zig-zag bricks, green palisade-style fencing, curved streetlights, and rolling Highveld terrain. 
+
+Scene layout: Uses tall curved streetlights and the general urban/suburban road layout as South African context. 
+
+Ambiguity: Notes that the terrain suggests either Pretoria or Johannesburg, but does not verify the city-level choice. 
+
+Final: Stops after single-pass reasoning and selects Pretoria; error 50.24 km .
+
+Figure 19: Reasoning comparison of three different models (GeoPAVE, Gemini-3.1-Pro, and GPT-5.5) on the same input image. Reliable visual cues identified by the models are marked in blue, while severe visual hallucinations are marked in red. GeoPAVE preserves uncertainty, verifies candidate consistency, and avoids accepting over-specific coordinates that conflict with the visual scene.

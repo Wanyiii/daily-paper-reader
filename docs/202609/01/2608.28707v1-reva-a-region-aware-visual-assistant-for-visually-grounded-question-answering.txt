@@ -1,0 +1,384 @@
+Title: ReVA: A Region-Aware Visual Assistant for Visually Grounded Question Answering
+
+URL Source: https://arxiv.org/pdf/2608.28707v1
+
+Published Time: Tue, 01 Sep 2026 00:05:00 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# ReVA: A Region-Aware Visual Assistant for Visually Grounded Question Answering 
+
+Anoop Senthil ∗
+
+School of Electronic Engineering and Computer Science Queen Mary University of London 
+
+London, United Kingdom a.senthil@se25.qmul.ac.uk 
+
+Abstract —Multimodal Large Language Models (MLLMs) have achieved remarkable progress in Visual Question Answering (VQA), yet they continue to struggle with questions requiring precise spatial reasoning and fine-grained visual understanding. These limitations often manifest as object, attribute, and spatial hallucinations, where models generate confident but visually unsupported responses due to insufficient region-level and fine-grained visual grounding. To address this challenge, we propose ReVA, a region-aware VQA model that employs a frozen CLIP ViT-L/14 Vision Transformer (ViT) and a Qwen2.5-7B-Instruct large language model (LLM) connected through a dual bridge that aligns both whole-image and region-level representations with the LLM’s embedding space. The image bridge maps final transformer block features into image tokens. The region bridge maps cropped features from enriched intermediate features across ViT blocks so early texture and later object cues are more evident, into K region tokens for every bounding box. ReVA uses a detector stack that supplies automatic zero-shot bounding boxes that are both question-agnostic and question-dependent, using RAM++ (Recognize Anything Model), spaCy, and Grounding DINO. The image tokens and region tokens are concatenated as an LLM prompt prefix to jointly encode scene-level context and fine-grained regional evidence when answering questions. Evaluated on VQAv2, MMBench, POPE, and SEED-Bench, ReVA achieves 82.85% mean F1 on POPE, compared with 81.14% for an image-token baseline without region tokens. These results demonstrate that explicit region-aware visual rep-resentations reduce object hallucination and improve the factual grounding of MLLMs. 
+
+Index Terms —Visual Question Answering, Multimodal Large Language Models, Region Grounding, Multimodal Context En-gineering, Vision–Language Alignment, LoRA Fine-Tuning 
+
+I. I NTRODUCTION 
+
+This work presents ReVA (Region-Aware Visual Assistant), a region-aware VQA model built to ground language in both the broader scene and the fine-grained visual evidence within it (Fig. 1). At its core, ReVA pairs a frozen CLIP ViT-L/14 Vision Transformer (ViT) (Radford et al. 2021; Dosovitskiy et al. 2021), operating at 336 px, with a Qwen2.5-7B-Instruct backbone (Qwen Team 2024) adapted via LoRA (Hu et al. 2022), linked by an image bridge and a region bridge. The image bridge maps final transformer block features into 576 image tokens. For local evidence, RAM++ (Recognize Any-
+
+∗The source code and pre-trained weights for ReVA are publicly available at https://github.com/anoop675/reva .
+
+thing Model) (Huang et al. 2023) tags objects in the image, spaCy (Honnibal et al. 2020) adds nouns from the question so named objects are not missed, and Grounding DINO (Liu et al. 2024 b) localises each tag to a box. This makes the region detector’s proposals both question-agnostic and question-dependent. The region bridge then crops intermediate ViT-block features with those boxes and maps each crop to region tokens. The LLM therefore sees what lies inside each box, and the boxes themselves never appear in the prompt as text. Training has three stages so each bridge aligns before the LLM combines them: Stage 1 trains only the image bridge on whole-image captions (CLIP and Qwen frozen); Stage 2 trains the region bridge on box-linked descriptions with frozen backbones; Stage 3 adapts Qwen with LoRA to answer from the concatenated image and region tokens. In later comparisons, the image-token baseline uses the Stage 1 image bridge plus a separately trained Stage 3 LoRA with no region tokens; ReVA is the full model after all three stages, using region tokens from proposed boxes at inference. Recent MLLMs—LLaVA (Liu et al. 2024 a), InstructBLIP (Dai et al. 2023), Qwen-VL (Bai et al. 2023)—encode the image, project patches into the LLM, and generate an answer. That whole-image path is strong for scene-level understanding, yet even a dense 576-token grid at 336 px can leave spatial relations and attribute–instance binding ambiguous without explicit local evidence. GPT4RoI (Zhang et al. 2023) supplies learned RoI tokens; Shikra (Chen et al. 2023) supplies box text. ReVA follows the RoI-token approach, expands each box into K region tokens rather than a single pooled vector, and keeps the user question as ordinary natural language. Local evidence enters only as region tokens, as a prefix of the LLM prompt. II. R ELATED WORK 
+
+a) Connecting vision encoders to language models: The dom-inant recipe for modern MLLMs starts from a pretrained vision encoder and a pretrained LLM, learns a bridge between them, and often adapts the LLM while keeping the vision encoder frozen. BLIP-2 (Li et al. 2023 b) introduced a lightweight Querying Transformer (Q-Former) that extracts a small set of query embeddings from a frozen image encoder for the LLM to read, and InstructBLIP (Dai et al. 2023) made this arXiv:2608.28707v1 [cs.CL] 27 Aug 2026 bridge instruction-aware by also feeding the task instruction into the Q-Former, so the visual features it extracts depend on the question being asked. LLaVA (Liu et al. 2023) showed that an even simpler bridge—a linear projection, upgraded to a two-layer MLP in LLaVA-1.5 (Liu et al. 2024 a)— trained on visual-instruction data is remarkably effective, while Qwen-VL (Bai et al. 2023) compressed patch features into a fixed-length sequence through a position-aware cross-attention adapter. ReVA’s image bridge sits in this lineage: a frozen CLIP encoder (Radford et al. 2021) feeds a two-layer MLP (the Image Feature Projector) into Qwen2.5-7B-Instruct (Qwen Team 2024). On its own, that image bridge presents the image as one holistic token set—strong for scene-level understanding, but with no explicit handle on individual objects. 
+
+b) Making MLLMs region-aware: Two broad strategies have emerged to restore that missing locality. The first encodes location in the text stream: Shikra (Chen et al. 2023) writes bounding boxes as plain numbers in natural language with no extra vocabulary or detector, Kosmos-2 (Peng et al. 2023) attaches discrete location tokens to phrases in a Markdown-style hyperlink format (trained on its large-scale GRIT corpus), and Qwen-VL (Bai et al. 2023) wraps normalised box strings in special tokens. These schemes are elegant, but they ask the LLM to handle spatial position as text or location tokens rather than as cropped visual evidence. The second strategy instead feeds the LLM visual features taken from the region itself. GPT4RoI (Zhang et al. 2023) builds a multi-level CLIP feature pyramid, incorporates feature coordinates (Liu et al. 2018) for absolute position, and uses RoI Align (He et al. 2017) so that each box replaces a <region> placeholder with region features interleaved in the instruction. Ferret (You et al. 2024; Zhang et al. 2024) takes a hybrid route: discrete coordinates plus continuous features from a spatial-aware visual sampler that covers points, boxes, and free-form shapes. GLaMM (Rasheed et al. 2024) pushes grounding down to pixel-level segmentation masks, and Groma (Ma et al. 2024) treats regions as first-class visual tokens—encoding proposed regions into region tokens alongside global tokens so the LLM can ground by referring to those tokens rather than regressing coordinates. ReVA adopts the region-feature-as-token philosophy for VQA. Where it differs from GPT4RoI is how a box becomes tokens: rather than fusing the pyramid levels into a single RoI embedding, ReVA mixes them with multi-head self-attention and expands each box into K tokens through multi-token attention pooling, giving Qwen a richer local descriptor beside the 576 image tokens. It also keeps the user question as plain natural language without interleaving boxes, location tokens, or <region> placeholders into the query text. 
+
+c) Where the regions come from: At inference, GPT4RoI accepts boxes from the user or from an off-the-shelf detector; Ferret’s referring path takes user-specified regions (points, boxes, or free-form shapes) while its grounding path emits boxes in the response; and Groma trains its own region pro-poser. ReVA instead builds the region set automatically from off-the-shelf open-vocabulary detectors: RAM++ (Recognize Anything Model) (Huang et al. 2023) proposes open-set tags for what is present, and Grounding DINO (Liu et al. 2024 b)localises those tags into boxes from a text prompt. No detector is retrained, and the boxes only decide where to crop features rather than entering the prompt as text. This design tests whether region-aware gains are available under standard VQA inputs that use ordinary natural language questions with no additional spatial context interleaved in the question itself. III. S YSTEM ARCHITECTURE 
+
+Fig. 1 shows ReVA’s dual-bridge pipeline that supplies both image tokens and region tokens into Qwen. The image is encoded once by CLIP ViT-L/14, the Vision Transformer in the figure. The image bridge passes final transformer block fea-tures through the Image Feature Projector as 576 image tokens. The region bridge enriches intermediate transformer block features with CoordConv, per-level projection, and multi-head self-attention, then crops them with proposed box coordinates; they become K region tokens per box. Those visual tokens are concatenated with a short text footer (answer format, question, “Answer:”); Qwen then generates the reply. Stages 1–2 train the image bridge and the region bridge with frozen CLIP and Qwen; Stage 3 adds LoRA (Hu et al. 2022) in Qwen. 
+
+A. Image Alignment (image bridge) 
+
+The image bridge is a LLaVA-style two-layer MLP—the Image Feature Projector—that maps each CLIP patch into Qwen’s embedding space. Images are resized to 336 ×336 
+
+and encoded by CLIP ViT-L/14 (Radford et al. 2021) into a 24 ×24 grid of 1024-d patch tokens (CLS discarded). Let 
+
+f patch ∈ R1024 denote one such CLIP patch token. The Image Feature Projector maps each patch into Qwen’s 3584-d space, yielding an image token zimage ∈ R3584 :
+
+zimage = W2 GELU( W1 f patch + b1) + b2, (1) In Stage 1, the 576 image tokens are placed before the caption tokens to form the LLM input. The training objective is next-token prediction on the caption only: image-token positions are masked, so they contribute no loss, and the projector is trained to make the image tokens useful for generating the caption that follows. 
+
+B. Region Alignment (region bridge) 
+
+The region bridge maps a bounding box to region to-kens that describe its contents, following GPT4RoI (Zhang et al. 2023) with the modifications below. It comprises CoordConv, per-level projection, multi-head self-attention, RoI Align, multi-token attention pooling, and a final Region Fea-ture Projector. Starting from the same CLIP ViT used for the image bridge, intermediate transformer block features are taken, which represent early texture to higher-level object cues. Following CoordConv (Liu et al. 2018), normalised spatial channels are concatenated onto each 24 ×24 feature map so every patch embedding position carries absolute spatial Fig. 1. Overview of ReVA. The Vision Transformer is CLIP ViT-L/14. Image bridge: final transformer block features pass through the Image Feature Projector to image tokens. Region bridge: intermediate transformer block features are enriched (CoordConv, per-level projection, multi-head self-attention), cropped with RoI Align using RAM++ (Recognize Anything Model) tags localised by Grounding DINO, then pooled and mapped by the Region Feature Projector to region tokens. information. Each depth is then passed through a linear layer and LayerNorm so content and coordinates are mixed and the four levels share a common feature space for multi-head self-attention. Multi-head self-attention subsequently mixes them so that shallow texture and deeper semantics exchange information at the same patch embedding position. RoI Align extracts a fixed-size window of per-level cropped features from each boxed region of these enriched per-level features. Multi-token attention pooling then converts each window into K
+
+tokens rather than a single pooled vector, and the Region Feature Projector maps those tokens into Qwen’s embedding space. Stage 2 trains the region bridge alone with CLIP and Qwen frozen. The paragraphs below detail each step. 
+
+a) Intermediate transformer block features: GPT4RoI (Zhang et al. 2023) also draws region features from multiple CLIP ViT-L/14 layers, selecting L = {14 , 17 , 20 , 23 }, which are the eleventh-, eighth-, fifth-, and second-to-last blocks. That choice is also consistent with prior evidence that earlier ViT layers preserve texture and spatial layout while the last layer largely drops localisation (Goldblum et al. 2022), that the penultimate CLIP layer typically outperforms the last for MLLMs (Chen et al. 2025), and that CLIP’s deepest layers favour image–text alignment over visual discriminabil-ity (Zhou et al. 2025). For each ℓ ∈ L , patch tokens (CLS discarded) form map F(ℓ). The image bridge already uses only the final transformer block, which is the most image– text aligned but least localisation-preserving representation. The region bridge is therefore designed to read earlier and penultimate maps instead, so its region tokens retain finer spatial and object-level detail that the final block tends to lose. 
+
+b) CoordConv: ViT positions are only implicit and may weaken after reshape/crop, so we append normalised spatial coordinate channels (Liu et al. 2018) to each feature map to encode absolute spatial information. Let F(ℓ) denote the level-
+
+ℓ visual map; after appending the two coordinate grids xgrid 
+
+and ygrid , the augmented map is denoted ˜F(ℓ). In words, this changes the feature vector at each patch embedding position from 1024 channels (visual content only) to 1026 channels (visual content plus absolute x/y position). CoordConv (Liu et al. 2018) then mixes these coordinate channels with visual channels via a 1×1 channel-mixing operation. In ReVA, this mixing is implemented by the per-level linear layer in Eq. 2. c) Per-level projection: After CoordConv, each level is a 
+
+1026 -d map that still lives in its own representational space: block 14 has seen far fewer self-attention blocks than block 23, so raw features are not directly comparable. We therefore insert a learned projection before multi-head self-attention. A linear layer is chosen because it plays two roles at once. First, applied independently at each of the 576 patch embedding positions it is mathematically equivalent to a 1×1 convo-lution over the 24 ×24 map, so it performs the CoordConv channel mixing after spatial channels are appended, mixing position with visual content. Second, giving each level ℓ its own weights W (ℓ)proj lets shallower and deeper maps learn different transforms into a common feature space, which is what makes multi-head self-attention meaningful. Operating on the sequence layout rather than as Conv2d also keeps the module compatible with the attention that follows: 
+
+h(ℓ) 
+
+> s
+
+= LN (ℓ)
+
+W (ℓ)proj ˜f (ℓ) 
+
+> s
+
++ b(ℓ)proj 
+
+
+
+∈ R1026 ,s ∈ { 1, . . . , 576 }, ℓ ∈ L 
+
+(2) LayerNorm is chosen next because the four depths differ not only in semantics but in typical activation scale; without normalisation, multi-head self-attention would be biased by magnitude rather than by content. LN (ℓ) places every level on a consistent scale so that the subsequent multi-head self-attention compares compatible vectors. 
+
+d) Multi-head self-attention: With all four depths in a shared space, we apply multi-head self-attention across levels at every patch embedding position before RoI Align. Stacking the projected vectors at patch embedding position s gives a short sequence Hs ∈ R4×1026 ; multi-head self-attention over this length-4 sequence mixes the four depths so that shallow texture and deeper semantics exchange information at the same patch embedding position: 
+
+ˆHs = LN( Hs + MultiHeadAttn( Hs, Hs, Hs)) (3) We use six heads and dropout 0.1, with a residual connection and LayerNorm as in a standard transformer block (Vaswani et al. 2017). The 576 patch embedding positions are processed independently (effective batch B×576 ), so attention never mixes different patch embedding positions—only the four ViT depths at the same patch embedding position. The attended sequences are then reshaped back to enriched per-level features 
+
+ˆF(ℓ).
+
+e) RoI Align and multi-token attention pooling: RoI Align (He et al. 2017) generally crops each proposed box to a fixed 
+
+n×n feature window, preserving the features inside the box. In ReVA we set n=14 (scale 24 /336 ) to avoid aggressive feature compression before pooling while keeping compute manageable, and to convert box coordinates from the 336-pixel image grid to the 24 ×24 grid of patch embedding positions before cropping: 
+
+R(ℓ) 
+
+> b
+
+= RoIAlign 
+
+ ˆF(ℓ), b ; 14 ×14 
+
+
+
+∈ R1026 ×14 ×14 , ℓ ∈ L 
+
+(4) Where b is the bounding box. During region-alignment train-ing, GT boxes from the Stage 2 training corpora are used, and inference uses box proposals produced by the region detector. These per-level cropped features are then pooled into K tokens per level: each level has its own K=16 learnable queries that soft-attend over the 196 cells. Here each learnable query 
+
+k ∈ { 1, . . . , K } at depth ℓ produces one pooled vector z(ℓ)
+
+> b,k
+
+:
+
+α(ℓ) 
+
+> b,k,i
+
+= softmax i
+
+(q(ℓ) 
+
+> k
+
+)⊤W (ℓ) 
+
+> K
+
+r(ℓ)
+
+> b,i
+
+√1026 
+
+!
+
+, ℓ ∈ L 
+
+z(ℓ) 
+
+> b,k
+
+=
+
+> 196
+
+X
+
+> i=1
+
+α(ℓ) 
+
+> b,k,i
+
+W (ℓ) 
+
+> V
+
+r(ℓ) 
+
+> b,i
+
+∈ R1026 , ℓ ∈ L 
+
+(5) 
+
+f) Region Feature Projector: Multi-token attention pooling yields K vectors at each of the four ViT depths. For every query index k, those four level-specific vectors are concate-nated into one vector ub,k ∈ R4104 ; the Region Feature Projector—a two-layer MLP with LayerNorm, playing the same role as the Image Feature Projector—then maps it into Qwen space: 
+
+ub,k = Concat 
+
+
+
+z(ℓ)
+
+> b,k
+
+
+
+∈ R4104 , ℓ ∈ L (6) 
+
+zregion  
+
+> b,k
+
+= LN 2
+
+ W A 
+
+> 2
+
+LN 1
+
+ GELU  W A 
+
+> 1
+
+ub,k + bA
+
+> 1
+
+ + bA
+
+> 2
+
+
+
+(7) Stage 2 prepends these to region descriptions (caption loss on text only) plus InfoNCE (Chen et al. 2020) ( τ =0 .07 ,
+
+λitc =0 .5). Each of N boxes contributes K tokens beside the 
+
+576 image tokens. 
+
+C. Region Detector 
+
+At inference, RoI Align in the region bridge relies on automatic zero-shot bounding boxes to crop regional features. RAM++ (Recognize Anything Model) (Huang et al. 2023) produces a tag set of what is present in the image (at most 20 tags); this tag set is united with spaCy nouns extracted from the question. The union ensures that relevant nouns in the question are captured (via spaCy), while maintaining context about objects within the image (via RAM++). Grounding DINO (Liu et al. 2024 b) then localises each tag into at most one box. Near-duplicate boxes are removed by NMS at IoU ≥ 0.95 , at most 20 boxes are kept, and if nothing is detected the stack falls back to a single whole-image box. The boxes are used as crops for RoI Align only; they are not written into the prompt as text. A sample token layout of the LLM prompt is shown below.                
+
+> [576 image token embeddings] [N ×Kregion token embeddings] Answer the question using asingle word or phrase. Question:
+> <question >
+> Answer:
+
+IV. T RAINING REGIME 
+
+Training is split into three stages so each bridge learns one alignment before the LLM combines them (Table I). Stages 1– 2 train the image bridge and the region bridge only, with CLIP and Qwen frozen; Stage 3 freezes the image bridge and the region bridge and updates only LoRA adapters in Qwen. 
+
+A. Stage 1: Image Alignment 
+
+Stage 1 aligns the image bridge (Image Feature Projector) to Qwen on whole images. We ran pHash (Zauner 2010) (Hamming ≤ 4) on LLaVA-Pretrain (LCS-558K) (Liu et al. 2023) against COCO (Lin et al. 2014) and Visual Genome (Krishna et al. 2017). The flagged pairs were false positives, so we retained the full 558,128-image pool. Only the image bridge ( ∼16.5M parameters) is trained; CLIP and Qwen stay frozen, with gradient checkpointing on Qwen (Table II). 
+
+B. Stage 2: Region Alignment 
+
+Stage 2 trains the region bridge to describe box contents using decontaminated region–text pairs: COCO names (Lin et al. 2014), RefCOCO/+/g expressions (Yu et al. 2016), Visual Genome attributes (Krishna et al. 2017) (capped at 15 regions/image), and GRIT-20M (Peng et al. 2023) phrases. For this stage, training uses GT box proposals, while inference later uses Grounding DINO box proposals (Liu et al. 2024 b). We use only GRIT metadata shard 0, keep rows with grounded boxes and CLIP ViT-L/14 (Radford et al. 2021) similarity ≥ 0.30 , and cap at 250,000 rows before download. pHash (Hamming ≤ 4) removes overlap with POPE, VQAv2 test2015, MMBench, and SEED-Bench. For each (image, box, description) we minimized 
+
+L = Lcap + λitc Litc (8) i.e. teach fluent box captions ( Lcap ) while also pulling match-ing region/text pairs together in embedding space and pushing mismatches apart (Litc , InfoNCE (Chen et al. 2020) at 
+
+τ =0 .07 ). K region tokens are prepended; only description positions receive loss (region-token positions are masked). We set λitc =0 .5. The combined region–text pool is much larger for Visual Genome and COCO than for RefCOCO and GRIT, so a uniform shuffle would train mostly on the two large sources. We therefore draw each training batch so that the four sources contribute roughly equally, even though that means repeating some RefCOCO and GRIT pairs and skipping some Visual Genome and COCO pairs in a given epoch. 
+
+C. Stage 3: LoRA Instruction Tuning 
+
+After the image bridge and the region bridge are trained, Stage 3 teaches Qwen to use image and region tokens for VQA. We use a Stage 3 pool stored after decontamination, built from Visual7W (Zhu et al. 2016), GQA (Hudson and Manning 2019), VQAv2 (Goyal et al. 2017), VCR (Zellers et al. 2019), and A-OKVQA (Schwenk et al. 2022), with up to 20 boxes per image: VQAv2 and A-OKVQA use COCO train2014 ground-truth boxes (Lin et al. 2014), while GQA, Visual7W, and VCR use their own box annotations. Rather than sampling uniformly from the decontaminated pool—which is heavily skewed toward GQA and VQAv2— we target a fixed mix of Visual7W, GQA, VQAv2, VCR, and A-OKVQA at 35%, 30%, 15%, 10%, and 10%, ensuring adequate exposure to pointing (Visual7W), spatial awareness (GQA), open-ended perception (VQAv2), commonsense rea-soning (VCR), and MCQ-style answering (A-OKVQA). LoRA (Hu et al. 2022) updates Qwen attention and MLP layers; the image bridge and the region bridge stay frozen. Training runs for 10,000 optimiser steps with a weighted sampler that applies those source weights (Table II). V. E XPERIMENTAL SETUP 
+
+A. Benchmarks and Metrics 
+
+We report four primary Stage 3 suites, chosen because they stress complementary failure modes of whole-image MLLMs and are widely used in the literature we compare against. 
+
+VQAv2 (Goyal et al. 2017) (test-dev / test-standard) measures open-ended short-answer accuracy with the official soft-scoring protocol. Each question has ten human answers; a prediction that matches at least three annotators receives full credit, while rarer matches receive partial credit. We follow the official punctuation and digit/article normalisation of vqaEval.py . Gains here indicate that region tokens do not hurt broad question answering. 
+
+MMBench (Liu et al. 2024 c) (English) is a multiple-choice suite covering perception and reasoning skills. Accuracy under CircularEval (shuffled options) reduces lucky guessing and tests whether the model follows the intended choice, not just fluent text. 
+
+POPE (Li et al. 2023 c) probes object hallucination with yes/no questions on COCO in random, popular, and adver-sarial splits. We report per-split and mean F1 (Table V): precision/recall matter because models that over-answer “yes” can look accurate while hallucinating. Adversarial POPE is especially relevant to ReVA’s claim that local evidence should suppress false object claims. 
+
+SEED-Bench (Li et al. 2023 a) image split (SEED-Image; evaluation dimensions 1–9) is a broad multiple-choice com-prehension benchmark. We report image-only accuracy, not SEED All, because ReVA is an image VQA system and our evaluator excludes video questions. Overall SEED-Image accuracy summarises whether region grounding preserves gen-eral multimodal competence. Stage 2 and Stage 3 training pools are pHash-decontaminated against the reported eval image sets; Stage 3 also drops exact question/image ID overlaps. All reported eval-uations use greedy decoding. Where instance-level predictions are available, we additionally report two-sided paired t-tests and McNemar tests on matched questions between the image-token baseline and the full system (Tables VI and VII). Stage Objective Trainable module(s) Training data 
+
+1 Image–text alignment Image bridge (Image Feature Projector) LLaVA-Pretrain (LCS-558K) †
+
+2 Region–description alignment Region bridge (per-level projection, multi-head self-attention, multi-token attention pooling, Region Feature Projector) COCO, RefCOCO/+/g, Visual Genome, GRIT-20M shard 0 ( ≤250K rows) †
+
+3 Grounded VQA instruction tuning LoRA adapters (Qwen) Visual7W (35%), GQA (30%), VQAv2 (15%), VCR (10%), A-OKVQA (10%) †‡ 
+
+Table I. Overview of the three-stage ReVA training procedure. †Stage 1: pHash (Hamming ≤ 4) against COCO and Visual Genome; flagged pairs treated as false positives; full 558,128-image pool retained. Stage 2: pHash (Hamming ≤ 4) against POPE, VQAv2 test2015, MMBench, and SEED-Bench. Stage 3: hard-ID exclusion then pHash against the same eval image union. ‡Stage 3 region crops use up to 20 boxes per image across all sources: VQAv2 and A-OKVQA use COCO train2014 ground-truth boxes; GQA, Visual7W, and VCR use their own box annotations.                                                          
+
+> Hyperparameter Stage 1 Stage 2 Stage 3
+> Trainable module(s) Image bridge Region bridge Qwen LoRA adapters ( q/k/v/o ,gate/up/down) Epochs / optimiser steps 1 epoch 3 epochs 10,000 steps Per-device / micro-batch size 16 16 1Gradient accumulation 16 816 Effective batch size 256 128 16 Peak learning rate 10 −37×10 −510 −4
+> Warmup ratio 3% 6% 3% Loss objective Cross-entropy on caption tokens Lcap +λitc Litc (Eq. 8) Cross-entropy on answer tokens
+> λitc /τ—0.5 / 0.07 —Max target tokens 128 (caption) 64 (description) 32 (8 on A-OKVQA) Region tokens per box ( K)—16 16 Max boxes per image —GT boxes in Stage 2 corpora 20 LoRA rank r/α/ dropout ——16 / 32 / 0.05 Multi-head self-attention heads —6—Attention dropout —0.1 —
+
+Table II. Principal hyperparameters for the three-stage ReVA training pipeline. 
+
+B. Implementation 
+
+Experiments use PyTorch, Hugging Face Transformers, and PEFT LoRA. Inference proposals: Grounding DINO (Swin-T OGC) and RAM++ (Swin-L) on NVIDIA A100 GPUs (bf16). VI. R ESULTS AND ABLATIONS 
+
+A. Image Backbone Ablation 
+
+Stage 1 trains only the image bridge, so the backbone decision is independent of the region bridge and of LoRA. Table III compares frozen encoders under that setting; all runs use Qwen2.5-7B-Instruct, and ∗ marks Stage 1 zero-shot with frozen CLIP/Qwen. Raising CLIP from 224 to 336 px improves GQA val by 3.90 points and VQAv2 val by 3.75, consistent with a 24 ×24 (576-token) grid versus 16 ×16 (256). DINOv2-ViT-L/14 (Oquab et al. 2024) trails CLIP-ViT-L/14-336. We therefore fix CLIP ViT-L/14 at 336 px for all later stages. 
+
+B. Image-Token Baseline vs. Full System 
+
+The central comparison is whether region tokens help after LoRA teaches Qwen to use them. The image-token baseline keeps the Stage 1 image bridge and Stage 3 LoRA (Hu et al. 2022), but omits region tokens; the full system adds the Stage 2 region bridge and, at inference, RAM++ (Huang et al. 2023)/Grounding DINO (Liu et al. 2024 b) boxes. Table IV reports that comparison against published MLLMs on VQAv2, MMBench, and SEED-Image; Table V isolates object hallucination on POPE. All accuracy values use the protocols in Section V-A: VQAv2 soft accuracy (test-dev / test-standard), MMBench EN dev under CircularEval, and SEED-Image (dims 1–9), not SEED All. ∆ is the difference between ReVA with image and region tokens and ReVA with image tokens only. On VQAv2, the full system raises soft accuracy from 72.89 to 73.28 on test-dev ( +0 .39 ) and from 73.14 to 73.79 on test-standard ( +0 .65 ). Region tokens leave broad multiple-choice competence essentially unchanged: MMBench drops by 1.1
+
+points while SEED-Image rises by 0.18 . The MMBench dip is a skill-level trade-off rather than a uniform regression: localisa-tion and attribute comparison improve, while coarse perception and relation reasoning fall (Section VII). The clearer signal is POPE (Table V), where the full system improves mean F1 by 
+
++1 .71 over the image-token baseline (random +2 .11 , popular 
+
++1 .45 , adversarial +1 .57 ), consistent with local evidence helping suppress in-image object hallucination. Section VI-C tests that claim with instance-level paired t-tests and McNe-mar tests. Against open-source peers, ReVA remains below stronger VQAv2 numbers from models that train on VQAv2 images more aggressively, but the image-token vs. full contrast is the relevant control for the region-token claim. ReVA rows Model Backbone GQA val VQAv2 val GQA test-dev VQAv2 test-dev 
+
+ReVA (image tokens) ∗ CLIP-L/14 224 39.06 37.24 – –ReVA (image tokens) ∗ CLIP-L/14 336 42.96 40.99 39.74 40.22 
+
+ReVA (image tokens) ∗ DINOv2-L/14 37.84 35.81 – –
+
+Table III. Image backbone ablation (Stage 1, image alignment only). All models use Qwen2.5-7B-Instruct. ∗Stage 1 zero-shot: frozen CLIP/Qwen; only the image bridge (Image Feature Projector) is trained.                                                                                      
+
+> Model LLM VQAv2 test-dev VQAv2 test-std MMBench SEED-Bench
+> BLIP-2 OPT-6.7B 82.19 82.30 ——InstructBLIP ∗Vicuna-7B ——36.0 †58.8 ♯
+> LLaVA-1.5 Vicuna-7B 78.5 —64.3 ∗66.1 ♯
+> LLaVA-1.5 Vicuna-13B 80.0 —67.7 ∗68.2 ♯
+> Shikra Vicuna-7B 77.36 77.51 ——Ferret-v2 Vicuna-7B 81.5 ———Qwen-VL ∗Qwen-7B 79.5 —38.2 †62.3 ♯
+> Qwen-VL-Chat ∗Qwen-7B 78.2 —60.6 †65.4 ♯
+> GPT-4V ∗———75.0 §71.6 §
+> Gemini Pro ∗———75.2 §70.7 §
+> GPT-4o ∗———83.4 ‡—Claude 3.5 Sonnet ∗———79.7 ‡—DeepSeek-VL ∗DeepSeek-7B ——73.2 §70.4 §
+> ReVA (image tokens) Qwen2.5-7B 72.89 73.14 68.2 ∗66.57 ∗
+> ReVA (image + region) Qwen2.5-7B 73.28 73.79 67.1 ∗66.75 ∗
+> ∆—+0 .39 +0 .65 −1.1+0 .18
+
+Table IV. Comparison with state-of-the-art multimodal LLMs on VQAv2, MMBench, and SEED-Bench. Values are accuracy (%); SEED-Bench is image-only (dims 1–9), not SEED All. ∆ is the difference between ReVA with image and region tokens and ReVA with image tokens only. ∗Benchmark zero-shot; unmarked VQAv2 rows observe VQAv2 train images. 
+
+> †
+
+LLaVA-1.5 re-evaluation (Liu et al. 2024 a); §DeepSeek-VL (Lu et al. 2024); ‡DeepSeek-VL2 (Wu et al. 2024); 
+
+> ♯
+
+SEED-Bench ( img ) from LLaVA-1.5 (Liu et al. 2024 a) Table 4. 
+
+Model LLM POPE 
+
+Random Popular Adversarial Mean LLaVA-1.5 ∗ Vicuna-7B 87.3 86.1 84.2 85.9 LLaVA-1.5 ∗ Vicuna-13B 87.1 86.2 84.5 85.9 Shikra ∗ Vicuna-7B 86.19 83.16 82.49 83.9 Ferret ∗ Vicuna-7B 89.76 84.21 82.00 85.3 Ferret-v2 ∗ Vicuna-7B — — — 87.8 DeepSeek-VL ∗ DeepSeek-7B — — — 88.1 §
+
+ReVA (image tokens) ∗ Qwen2.5-7B 81.99 81.26 80.18 81.14 
+
+ReVA (image + region) ∗ Qwen2.5-7B 84.10 82.71 81.75 82.85 
+
+∆ — +2 .11 +1 .45 +1 .57 +1 .71 
+
+Table V. POPE F1 (%) on COCO (random / popular / adversarial; Mean is the unweighted average). ∗Benchmark zero-shot; 
+
+> §
+
+from DeepSeek-VL (Lu et al. 2024). ∆ is the difference between ReVA with image and region tokens and ReVA with image tokens only. Baselines from (Liu et al. 2024 a; You et al. 2024; Zhang et al. 2024; Lu et al. 2024). use greedy decoding with option-letter matching; MMBench is scored with VLMEvalKit (Duan et al. 2024) Circu-larEval, and ReVA’s 66.57 is SEED-Image from our evaluator (data_type=image , question_type_id ∈ { 1, . . . , 9}). 
+
+C. Statistical Significance 
+
+To test whether region tokens improve localised grounding and reduce hallucination, we compare the image-token base-line and the full ReVA system on matched questions using binary correctness (Tables VI and VII). We report a two-sided paired t-test ( H0: mean( d)=0 ) and McNemar’s test on discordant pairs ( H0: P (b01 )= P (b10 )), both at α=0 .01 . Here 
+
+b01 counts questions the base got right and the final system got wrong (region tokens flipped a correct answer), while b10 
+
+counts questions the base got wrong and the final system got right (region tokens fixed an incorrect answer). POPE is pooled across random/popular/adversarial as accuracy (not the F1 in Table V); MMBench uses per-question JSONL correctness rather than the CircularEval Overall in Table IV; SEED-Image uses dims 1–9. VQAv2 is excluded from these paired tests because labeled per-question JSONL dumps were unavailable; Benchmark n Base% Final% ∆ pt Sig?                         
+
+> POPE 9,000 83.63 84.81 +1 .18 3.165 ×10 −6Yes †
+> MMBench 4,329 77.96 77.32 −0.65 0.1615 No SEED-Image 14,232 66.57 66.75 +0 .18 0.5492 No VQAv2 —72.89 73.28 +0 .39 ——
+
+Table VI. Paired t-test (Base: image tokens; Final: image + region). †Significant at α=0 .01 .                    
+
+> Benchmark nb01 b10 pMcN Sig?
+> POPE 9,000 206 312 3.961 ×10 −6Yes †
+> MMBench 4,329 214 186 0.177 No SEED-Image 14,232 929 955 0.5646 No
+
+Table VII. McNemar test (Base: image tokens; Final: image + region) on discordant pairs. b01 : base correct, final incorrect (region tokens flipped a previously correct answer); 
+
+b10 : base incorrect, final correct (region tokens fixed a previously wrong answer). †Significant at α=0 .01 .Table VI therefore lists EvalAI overall soft scores only. Fig. 6 shows the corresponding null distributions. On POPE accuracy, the full system gains +1 .18 percentage points ( pt=3 .165 ×10 −6; McNemar p=3 .961 ×10 −6), signifi-cant at α=0 .01 under both tests. MMBench and SEED-Image show no significant change ( pt=0 .1615 and 0.5492 ; McNemar 
+
+p=0 .177 and 0.5646 ). Overall, region tokens help most on object-hallucination probes, where local evidence matters, and do not significantly change broad multiple-choice scores on MMBench or SEED-Image. VII. D ISCUSSION 
+
+a) Decontamination and data scale: We ran pHash (Ham-ming ≤ 4) on LCS-558K against COCO and Visual Genome. The flagged pairs were false positives, so we retained the full 558,128-image pool (Table VIII, Kept = Original). Stage 2 training images were decontaminated against POPE, VQAv2, MMBench, and SEED-Bench using pHash. Stage 3 fine-tuning images were decontaminated against POPE, VQAv2, MMBench, and SEED-Bench using hard-ID exclusion then pHash. Although the risk of contamination is lowered for Stages 2–3, residual overlap with evaluation images remains possible; Table VIII reports how much was removed, not that the remaining pools are fully clean. 
+
+b) MMBench skill trade-off: The CircularEval Overall drop of 1.1 points on MMBench (Table IV) is not uniform across skills. Relative to the image-token baseline, the full system gains on object localisation ( +8 .65 ), attribute comparison (+6 .82 ), identity reasoning ( +4 .45 ), fine-grained perception, and attribute reasoning—skills that benefit from cropped local evidence. It reduces performance on coarse percep-tion ( −4.73 ), relation reasoning ( −5.21 ), OCR ( −5.13 ), at-tribute recognition ( −6.76 ), and on image-quality judgement (−24 .53 ). This fits a capacity trade-off in which region tokens use prefix space for local object evidence at the expense of holistic scene and relation cues. The Overall drop is not significant under the paired t-test or McNemar test (Tables VI             
+
+> Stage Original Kept Removed
+> 1 (LCS-558K) 558,128 558,128 0.00% 2 (region corpora) 2,951,772 2,940,403 0.39% 3 (VQA pool) 1,704,599 1,699,447 0.30%
+
+Table VIII. Training-pool size after decontamination. and VII), so it is better read as a redistribution of skill than a reliable regression. VIII. F UTURE WORK 
+
+a) Train–test box gap: Replacing GT boxes with Ground-ing DINO proposals at training time—or mixing clean and noisy boxes—would shrink the mismatch that appears at inference. A light region reranker (score boxes by question relevance before packing the prefix) is a practical middle ground: keep at most N regions without forcing the LLM to attend to every detector proposal. 
+
+b) Architecture and compute: The region bridge adds up to 20 ×K tokens on top of the 576 image tokens, plus RAM++/Grounding DINO latency, so future variants should prune low-confidence or overlapping boxes, try a smaller K,or distill the region bridge into a lighter encoder. A Coord-Conv on/off ablation would isolate how much explicit spatial channels matter once RoI Align already crops local features. Swapping the frozen vision encoder under the same two-projector recipe would test whether the gains are backbone-specific. 
+
+c) Broader grounded tasks: The current version of ReVA is trained on short-phrase VQA. Further work can extend it to open-ended long answers, multi-turn referring dialogue, grounded captioning, and harder visual reasoning that needs several local clues in sequence. 
+
+d) Multi-seed replication: Tables VI–VII compare one check-point pair, so the tests measure question-level reliability rather than stability across training runs. Retraining Stages 1–3 with several seeds would show whether the POPE gain, and the non-significant MMBench and SEED-Image differences, hold more generally. IX. C ONCLUSION 
+
+This work asks whether ReVA answers visual questions more reliably when the language model receives both image tokens and explicit region tokens. On POPE, the full system improves mean F1 on every split over the image-token baseline (Table V). On VQAv2, soft accuracy rises on both test-dev and test-standard, completing the image-token versus image + region comparison alongside POPE, MMBench, and SEED-Image (Table IV). These results suggest that ReVA answers visual questions more reliably when it receives both the whole image and explicit region tokens from multi-level RoI-cropped ViT features, improving object-level grounding and reducing hallucination while largely preserving general VQA capability relative to a whole-image encoding alone. ACKNOWLEDGMENT 
+
+I thank Prof. Shalom Lappin for his supervision, guidance, and feedback throughout this project. I am also grateful to the School of Electronic Engineering and Computer Science at Queen Mary University of London, and to the comp-teach team that made this work possible. REFERENCES 
+
+Bai, J. et al. (2023), ‘Qwen-vl: A versatile vision-language model for understanding, localization, text reading, and beyond’, arXiv preprint arXiv:2308.12966 .Chen, H., Lin, J., Chen, X., Fan, Y., Dong, J., Jin, X., Su, H., Fu, J. and Shen, X. (2025), Multimodal language models see better when they look shallower, in ‘EMNLP’. Chen, K. et al. (2023), Shikra: Unleashing multimodal LLM’s referential dialogue magic, in ‘arXiv preprint arXiv:2306.15195’. Chen, T. et al. (2020), A simple framework for contrastive learning of visual representations, in ‘ICML’. Dai, W. et al. (2023), InstructBLIP: Towards general-purpose vision-language models with instruction tuning, in 
+
+‘NeurIPS’. Dosovitskiy, A. et al. (2021), An image is worth 16x16 words: Transformers for image recognition at scale, in ‘ICLR’. Duan, H. et al. (2024), VLMEvalKit: An open-source toolkit for evaluating large multi-modality models, in ‘ACM MM’. arXiv:2407.11691. Goldblum, M. et al. (2022), ‘What do vision trans-formers learn? a visual exploration’, arXiv preprint arXiv:2212.06727 .Goyal, Y. et al. (2017), Making the V in VQA matter: Elevating the role of image understanding in visual question answering, in ‘CVPR’. He, K. et al. (2017), Mask R-CNN, in ‘ICCV’. Honnibal, M., Montani, I., Landeghem, S. V. and Boyd, A. (2020), ‘spaCy: Industrial-strength natural language pro-cessing in Python’. Zenodo. Hu, E. J. et al. (2022), LoRA: Low-rank adaptation of large language models, in ‘ICLR’. Huang, X. et al. (2023), ‘Open-set image tagging with multi-grained text supervision’, arXiv preprint arXiv:2310.15200 
+
+.Hudson, D. A. and Manning, C. D. (2019), GQA: A new dataset for real-world visual reasoning and compositional question answering, in ‘CVPR’. Krishna, R. et al. (2017), Visual genome: Connecting language and vision using crowdsourced dense image annotations, in 
+
+‘IJCV’. Li, B. et al. (2023 a), ‘SEED-Bench: Benchmarking multimodal large language models’, arXiv preprint arXiv:2307.16125 .Li, J. et al. (2023 b), BLIP-2: Bootstrapping language-image pre-training with frozen image encoders and large language models, in ‘ICML’. Li, Y. et al. (2023 c), Evaluating object hallucination in large vision-language models, in ‘EMNLP’. Lin, T.-Y. et al. (2014), Microsoft COCO: Common objects in context, in ‘ECCV’. Liu, H. et al. (2023), Visual instruction tuning, in ‘NeurIPS’. Liu, H. et al. (2024 a), Improved baselines with visual instruc-tion tuning, in ‘CVPR’. arXiv:2310.03744. Liu, R. et al. (2018), An intriguing failing of convolutional neural networks and the CoordConv solution, in ‘NeurIPS’. Liu, S. et al. (2024 b), Grounding DINO: Marrying DINO with grounded pre-training for open-set object detection, in 
+
+‘ECCV’. Liu, Y. et al. (2024 c), MMBench: Is your multi-modal model an all-around player?, in ‘ECCV’. Lu, H. et al. (2024), ‘Deepseek-VL: Towards real-world vision-language understanding’, arXiv preprint arXiv:2403.05525 .Ma, C. et al. (2024), Groma: Localized visual tokenization for grounding multimodal large language models, in ‘ECCV’. Oquab, M. et al. (2024), ‘DINOv2: Learning robust visual features without supervision’, Transactions on Machine Learning Research .Peng, Z. et al. (2023), ‘Kosmos-2: Grounding multimodal large language models to the world’, arXiv preprint arXiv:2306.14824 .Qwen Team (2024), ‘Qwen2.5 technical report’, arXiv preprint arXiv:2412.15115 .Radford, A. et al. (2021), Learning transferable visual models from natural language supervision, in ‘ICML’. Rasheed, H. et al. (2024), GLaMM: Pixel grounding large multimodal model, in ‘CVPR’. Schwenk, D. et al. (2022), A-okvqa: A benchmark for visual question answering using world knowledge, in ‘ECCV’. Vaswani, A. et al. (2017), Attention is all you need, in 
+
+‘NeurIPS’. Wu, Z. et al. (2024), ‘Deepseek-VL2: Mixture-of-experts vision-language models for advanced multimodal under-standing’, arXiv preprint arXiv:2412.10302 .You, H. et al. (2024), Ferret: Refer and ground anything anywhere at any granularity, in ‘ICLR’. Yu, L. et al. (2016), Modeling context in referring expressions, 
+
+in ‘ECCV’. Zauner, C. (2010), Implementation and benchmarking of per-ceptual image hash functions, Master’s thesis, Upper Austria University of Applied Sciences, Hagenberg Campus. Zellers, R. et al. (2019), From recognition to cognition: Visual commonsense reasoning, in ‘CVPR’. Zhang, H. et al. (2024), ‘Ferret-v2: An improved baseline for referring and grounding with large language models’, arXiv preprint arXiv:2404.07973 .Zhang, S. et al. (2023), ‘GPT4RoI: Instruction tuning large language model on region-of-interest’, arXiv preprint arXiv:2307.03601 .Zhou, J., Jiang, J. and Zhu, Z. (2025), ‘Improving visual discriminability of CLIP for training-free open-vocabulary semantic segmentation’, arXiv preprint arXiv:2510.23894 .Zhu, Y. et al. (2016), Visual7W: Grounded question answering in images, in ‘CVPR’.

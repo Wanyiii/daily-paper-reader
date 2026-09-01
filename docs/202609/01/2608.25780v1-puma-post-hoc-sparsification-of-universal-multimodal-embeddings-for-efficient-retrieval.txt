@@ -1,0 +1,390 @@
+Title: PUMA: Post-Hoc Sparsification of Universal Multimodal Embeddings for Efficient Retrieval
+
+URL Source: https://arxiv.org/pdf/2608.25780v1
+
+Published Time: Thu, 27 Aug 2026 01:18:17 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# PUMA: Post-Hoc Sparsification of Universal Multimodal Embeddings for Efficient Retrieval 
+
+Matteo Attimonelli 1,2, Alessandro De Bellis 1, Franco Maria Nardini 3, Claudio Pomo 1
+
+Cosimo Rulli 3, Rossano Venturini 4, Tommaso Di Noia 11Politecnico di Bari, Italy 2Sapienza University of Rome, Italy 
+
+> 3
+
+ISTI–CNR, Pisa, Italy 4University of Pisa, Italy  
+
+> Correspondence: matteo.attimonelli@poliba.it
+
+Abstract 
+
+Universal multimodal embedders enable re-trieval across text, image, and combined queries, but their dense representations incur high memory and inference costs. Post-hoc sparsification could reduce these costs but re-mains underexplored for multimodal retrieval. We introduce PUMA , a sparse autoencoder recipe that maps universal multimodal embed-dings to compact sparse codes without retrain-ing the backbone: a pretraining stage preserves dense dot-product geometry, after which the sparse encoder is fine-tuned for retrieval. We evaluate on five benchmarks covering text-to-image and composed image retrieval. On Qwen3-VL-Embedding-2B, PUMA is statisti-cally indistinguishable from or improves over dense retrieval on four of five datasets. We further identify two failure modes of post-hoc sparsification: insufficient pre-TopK support and retrieval-misaligned active support. PUMA reduces vector storage by 8–16 × (FP32) and is up to 25 × faster than exact dense scoring on larger candidate pools, enabling efficient multimodal retrieval. Code is provided at our 
+
+GitHub Repository .
+
+1 Introduction 
+
+Universal multimodal embedders offer a practi-cal unified interface for retrieval across text, im-age, and mixed-modality queries (Lin et al., 2025; Zhang et al., 2025). A single backbone maps queries and candidates of any modality into one shared space, without separate retrieval heads or fusion modules. This generality comes at a cost: embeddings are dense, high-dimensional, and ex-pensive to store and score over large candidate sets. Exact dense scoring over n candidates with 
+
+d-dimensional embeddings costs O(nd ) per query, and approximate dense retrieval still requires spe-cialized vector indexes over large floating-point representations. Sparse retrieval offers a comple-mentary alternative, storing vectors as small sets of components and scoring through feature overlap. Prior works studied sparse text retrieval (For-mal et al., 2021b; Wen et al., 2025; Formal et al., 2026; Guo et al., 2026; Nguyen et al., 2026), spar-sity during multimodal contrastive pretraining (Qin et al., 2026), and post-hoc multimodal sparse au-toencoders for representation analysis (Kaushik et al., 2026). What remains underexplored is post-hoc sparsification for retrieval serving: can a frozen universal multimodal embedder be converted into a sparse retriever without retraining the backbone, while preserving quality across diverse tasks? We propose PUMA (Post-hoc Universal 
+
+Multimodal sparsific Ation), a post-hoc sparsifi-cation pipeline for frozen universal multimodal embedders. PUMA converts cached dense em-beddings into sparse retrieval codes using a TopK sparse autoencoder. PUMA is first trained to pre-serve the dense dot-product geometry and is then fine-tuned with the sparse dot-product used at re-trieval time. The resulting representation has ex-actly k active features per vector and can be scored as a sparse dot product. To the best of our knowl-edge, PUMA is the first work to study post-hoc sparsification of frozen universal multimodal em-bedders for retrieval serving. We evaluate PUMA on five M-BEIR datasets (Wei et al., 2024), with candidate pools ranging from roughly 5K to 542 K images. The tasks span two regimes: text-to-image retrieval , where text queries retrieve image candidates, and composed image retrieval , where a reference image and tex-tual modification are fused into a single query rep-resentation. The latter is especially challenging as sparsification must preserve the modification semantics of this fused image–text query while aligning it with target images. On Qwen3-VL-Embedding-2B (Li et al., 2026), PUMA significantly improves over dense retrieval on CIRR and Fashion200K, is statistically indis-tinguishable on FashionIQ and MSCOCO, and arXiv:2608.25780v1 [cs.IR] 26 Aug 2026 trails dense on VisualNews. On CIRR, PUMA reaches 0.533 Hit@5 and 0.436 nDCG@10, com-pared with 0.522 and 0.424 for dense retrieval. These gains are not explained by dimensional-ity reduction or domain-specific finetuning alone. In fact, PUMA outperforms dense TopK pruning, matched-memory PCA, a trained dense autoen-coder, and encoder-only sparse training. Compared to a dense retriever, PUMA uses 8–16 × less per-vector storage and makes exact sparse search up to 
+
+25 × faster on larger candidate pools. Our analysis identifies two ways in which post-hoc sparsification can fail. In some cases, the sparse encoder produces insufficient active features before TopK selection, so increasing k cannot help. In other cases, enough features are active, but they do not preserve the original dense ranking behav-ior. These failure modes suggest that future sparse multimodal retrievers must control both feature availability and retrieval alignment. We make the following contributions: 1. We formulate post-hoc sparsification of frozen universal multimodal embedders as a retrieval problem, motivated by the storage and scoring costs of dense multimodal representations. 2. We propose PUMA , a retrieval-aware TopK sparse-autoencoder recipe that converts dense multimodal embeddings into compact sparse codes without retraining the backbone. 3. We evaluate PUMA on five datasets spanning text-to-image and composed image retrieval, showing competitive performance with dense baselines at substantially lower storage cost. 4. We compare against dense TopK pruning, matched-memory PCA, a dense autoencoder, and encoder-only sparse training, and ana-lyze search time, statistical reliability, scaling, transfer, and k-selection failure modes. Our results show that post-hoc sparsification offers a practical path to efficient multimodal re-trieval, preserving the generality of universal em-bedders at a fraction of the storage and search cost. 
+
+2 Related Work 
+
+Universal multimodal retrieval. Universal mul-timodal retrieval aims to use a single embed-ding model across heterogeneous query–candidate pairs, including cross-modal and mixed-modality queries. M-BEIR (Wei et al., 2024) provides a unified benchmark across tasks and modalities, and MMEB (Jiang et al., 2025) broadens evalu-ation to new instruction-conditioned tasks. Recent dense embedders such as VLM2Vec (Jiang et al., 2025), MM-Embed (Lin et al., 2025), GME (Zhang et al., 2025), Qwen3-VL-Embedding (Li et al., 2026), and RZenEmbed (Jian et al., 2025) adapt multimodal LLMs or vision-language models into general-purpose embedding backbones; SER-VAL (Nguyen et al., 2025) explores a complemen-tary generate-and-encode route for visual document retrieval. PUMA is orthogonal to these works: rather than training a new model, we study whether pretrained dense representations can be sparsified post-hoc. We focus on universal multimodal em-bedders as they produce shared representations for mixed-modality inputs without modality-specific encoders or fusion modules. 
+
+Sparse retrieval and embedding compression. 
+
+Dense retrieval efficiency can be improved through quantization (Jégou et al., 2011), approximate search (Guo et al., 2020), or dense dimensionality reduction (Attimonelli et al., 2025), but these ap-proaches keep dense representations or change the search procedure. Sparse retrieval instead changes the representation structure, storing feature–weight pairs that can reuse lexical-search infrastructure. This paradigm has been studied extensively for text, both in lexical spaces (Formal et al., 2021b,a) and in latent sparse codes, including CSR (Wen et al., 2025; Guo et al., 2026), MILCO (Nguyen et al., 2026), and SPLARE (Formal et al., 2026). Sparsi-fication has also been explored in recommendation, including sparse contrastive supervision and sparse entity embeddings (Meehan and Pauwels, 2026; Vancura et al., 2026). PUMA builds on k-sparse au-toencoders (Makhzani and Frey, 2014) and recent SAE work in representation analysis (Huben et al., 2024; Bricken et al., 2023; Gao et al., 2025). The closest multimodal comparisons differ in goal and intervention point: Sparse CLIP (Qin et al., 2026) optimizes sparsity during contrastive pretraining, whereas PUMA sparsifies a pretrained embedder post-hoc; MGSAE (Kaushik et al., 2026) studies post-hoc SAEs for interpretability, whereas PUMA targets retrieval. PUMA adapts sparse autoencod-ing to frozen universal multimodal embedders by preserving dense retrieval geometry and fine-tuning the sparse encoder with a retrieval objective. Im-portantly, PUMA uses a shared multimodal repre-sentation rather than modality-specific ones. Stage 1 Embedding Cache  Stage 2 TopK Sparse Autoencoder             
+
+> Input Dense Vector
+> Sparse Code
+> Recon-struction
+> Stage 3 & Inference
+> Sparse Codes (TopK)
+> Query Code g(q)
+> Text Query
+> “pink handbag with chain strap” ∈ℝd Cached dense
+> embeddings Frozen
+> Universal Multimodal Embedder
+> q
+> d
+> Candidate Image Candidate Code g(di)
+> ∈ℝd TopK Selection
+> Encoder Decoder
+> Queries
+> Sparse Dot Product
+> ∈ℝd
+> Composed Query Candidate Ranking
+> ^x ∈ ℝd x ∈ ℝd z ∈ ℝd h ∈ ℝd+
+> Reconstruction Cross-modal Alignment Dot Product Distillation AuxK Feature
+> Revival Contrastive Blend
+> “make it pink”
+
+Figure 1: PUMA: (i) embeddings are cached using frozen embedders; (ii) a top-K SAE is trained to produce sparse representations; (iii) these representations are further tuned to optimize retrieval, and ranking is performed. 
+
+3 PUMA 
+
+Fig. 1 gives an overview of PUMA , a post-hoc sparsification approach for frozen multimodal em-bedders. PUMA converts dense embeddings from a frozen multimodal backbone into sparse retrieval codes. It learns an overcomplete dictionary of D la-tent features, with D ≫ d: a TopK encoder maps a dense embedding x ∈ Rd to a sparse code z ∈ RD
+
+with exactly k nonzero entries ( || z|| 0 = k), and a linear decoder reconstructs ˆx. Training has three stages. Stage ① caches dense embeddings from the frozen multimodal encoder. Stage ② pretrains the sparse autoencoder with reconstruction, retrieval-aware distillation, cross-modal alignment, feature revival for inactive dictionary atoms, and progres-sive k-annealing. Stage ③ fine-tunes the encoder with a contrastive loss on sparse codes, using the same sparse dot product used at retrieval time. 
+
+3.1 Problem Setting 
+
+Let f (·) be a frozen multimodal embedder that maps queries and candidates into a shared dense space. A query may be text only, image only, or composed from a reference image and a textual modification. We write q = f (query ) and d =
+
+f (candidate ), and dense retrieval ranks candidates by q⊤d. We learn a sparse encoder g(·) that maps any dense embedding to 
+
+z = g(x) ∈ RD, ∥z∥0 = k, (1) where D is the size of the learned sparse dictio-nary, D ≫ d, and k ≪ D is the number of active dictionary atoms per vector. Sparse retrieval ranks candidates by 
+
+ssparse (q, d) = g(q)⊤g(d). (2) The goal is to preserve dense retrieval rankings under a compact sparse representation. 
+
+3.2 TopK Sparse Autoencoder (SAE) 
+
+The sparse autoencoder computes, for each query and candidate embedding: 
+
+h = ReLU( Wenc x + benc ), (3) 
+
+z = g(x) = TopK( h, k ), (4) 
+
+ˆx = Wdec z + bdec . (5) Decoder ( Wdec ) columns are renormalized to unit norm after each optimization step to prevent scale drift. For our experiments, we set D=16 d.
+
+3.3 Stage ①: Embedding Cache 
+
+We run the frozen backbone f on the train, valida-tion, and candidate-pool partitions of each task and store the resulting dense embeddings. All subse-quent sparse training reads from this cache. This makes the training cost independent of the back-bone and ensures that dense and sparse variants use identical underlying embeddings. 
+
+3.4 Stage ②: Retrieval-Aware Sparse Pretraining 
+
+A reconstruction objective alone is not directly aligned with ranking. Moreover, post-hoc sparse autoencoders over multimodal embeddings can learn modality-specific dictionaries, where differ-ent atoms fire for images and text, weakening cross-modal scoring (Kaushik et al., 2026). Stage 2 there-fore trains on cached in-domain query–target pairs with the objective: 
+
+L2 = Lrec +λaLalign +λdLdist +λxLaux +λcLctr .
+
+(6) 
+
+Reconstruction. We reconstruct both query and candidate embeddings with cosine reconstruction: 
+
+Lrec = 1 − cos( x, ˆx). (7) Cross-modal alignment. To make dictionary us-age more balanced across modalities, we encourage paired cross-modal examples to activate overlap-ping atoms instead of assigning image and text em-beddings to disjoint subsets of the D-dimensional sparse space. For an image/text pair (ximg , xtxt )
+
+with sparse codes zimg and ztxt , we use 
+
+Lalign =∥mimg −mtxt ∥1+ 12
+
+X
+
+> j∈A
+
+|zimg ,j |−| ztxt ,j | .
+
+(8) where mimg and mtxt denote the TopK support masks, and A = {j : zimg ,j ̸ = 0 ∧ztxt ,j ̸ = 0 } is the co-active support. The first term encourages shared support; the second aligns magnitudes on atoms that fire for both modalities. The support masks come from the hard TopK forward pass; gradients for the support-alignment term are passed to the se-lected pre-TopK activations using the same straight-through treatment as the TopK operation (Kaushik et al., 2026). For retrieval pairs, we apply this align-ment to cross-modal query–target pairs: in text-to-image retrieval, this aligns the text-query code with the positive image-candidate code; in composed image retrieval, it aligns the composed image–text query code with the positive target-image code. 
+
+Dot-product distillation. We distill the dense retriever’s scoring geometry into sparse space, matching dense and sparse scores for each query– candidate pair: 
+
+Ldist =
+
+
+
+g(q)⊤g(d) − q⊤d
+
+2
+
+. (9) 
+
+Auxiliary feature revival (AuxK). A TopK en-coder gives gradient only to the k selected atoms, so the remaining D − k tend to die. Following Gao et al. (2025); Guo et al. (2026), we revive them by asking the dead atoms to reconstruct the resid-ual the main code missed. Let G ⊂ { 1, . . . , D }
+
+be the set of atoms inactive for more than T steps, and form an auxiliary code on the dead support 
+
+zaux = TopK kaux (softplus( h|G )) :
+
+Laux = Wdec zaux − sg[ x − ˆx] 22, (10) where sg[ ·] is the stop-gradient operator and en-sures that only dead atoms are updated by this term. 
+
+Stage ② contrastive blend. We include a small InfoNCE term on sparse codes during pretraining, 
+
+Lctr = − log exp( g(qi)⊤g(di)/τ )
+
+P 
+
+> j
+
+exp( g(qi)⊤g(dj )/τ ) , (11) which begins aligning the sparse representation with ranking before retrieval fine-tuning. 
+
+Progressive k-annealing. We start from a larger support kinit and linearly anneal to the target sup-port kfinal . This gives the dictionary a denser train-ing signal early and ends training at the sparsity used for retrieval (Guo et al., 2026). 
+
+3.5 Stage ③: Contrastive Retrieval Fine-Tuning 
+
+Stage ③ optimizes the sparse encoder for retrieval with the same dot product used at inference. We use InfoNCE with in-batch negatives and, when available, explicit hard negatives, while retaining reconstruction and distillation as regularizers: 
+
+L3 = Lctr + αLrec + βLdist , (12) with α=0 .1 and β=0 .05 in the main experiments. This stage shifts the model from reconstruction-oriented toward retrieval-oriented sparse scoring. 
+
+4 Experimental Setup 
+
+We evaluate on five M-BEIR datasets (Wei et al., 2024). Two are composed image retrieval tasks with image-plus-text queries and image candidates: 
+
+CIRR (26,116 train queries, 4,170 test queries, 21,551-image candidate pool) (Liu et al., 2021) and FashionIQ (6,003 test queries, 74,381-image candidate pool) (Wu et al., 2021). Three are text-to-image retrieval tasks: VisualNews (19,996 queries, 542,246 candidates), Fashion200K (1,746 queries, 201,824 candidates), and MSCOCO 
+
+(24,819 queries, 5,000 candidates). We focus on these two regimes because they capture comple-mentary aspects of multimodal retrieval: text-to-image retrieval is the standard cross-modal setting, while composed image retrieval tests whether a model can represent a genuinely multimodal query, combining visual context from a reference image with a textual modification. Together, the five tasks span candidate pools from roughly 5K to 542 Kimages. 
+
+Metrics. We report Hit@5, Recall@10, and nDCG@10. Hit@5 measures whether at least one relevant candidate appears in the top 5 and is the standard headline metric for CIRR and FashionIQ. Recall@10 measures coverage at a deeper cutoff, while nDCG@10 weights both relevance and rank position. We use nDCG@10 for validation. Backbones. We focus on universal multimodal embedding models because they directly out-put shared embeddings for text, images, and image–text inputs, without requiring late fusion of modality-specific representations. They also represent the current strong-performing class of multimodal retrievers. Our main experiments use Qwen3-VL-Embedding-2B (Qwen-2B) (Li et al., 2026), which produces d=2048 dimen-sional embeddings. We also evaluate Qwen3-VL-Embedding-8B (Qwen-8B, d=4096 ) (Li et al., 2026) for within-family scaling and RZenEm-bed (Jian et al., 2025) ( d=3584 ) for cross-family transfer. Dense baselines and all sparse variants use identical prompts, cached embeddings, and candi-date pools, to isolate sparsification effects. 
+
+Baselines. We compare PUMA against four base-lines. Full dense retrieval ranks candidates with the original frozen embeddings. Raw TopK dense 
+
+keeps the largest-magnitude dense coordinates with signed weights, representing a naïve sparsification baseline. Matched-memory PCA projects dense embeddings to dimension 2k using PCA fit on the candidate pool, approximately matching the stor-age of a sparse code with support k under FP32 
+
+(id , weight ) accounting. Trained dense AE is a linear autoencoder with bottleneck dimension 2k,trained on the same data with the same retrieval losses, optimization budget, and validation proto-col as PUMA where applicable; sparsity-specific components such as AuxK, TopK support anneal-ing, and support-mask alignment are omitted or replaced by dense analogs. Encoder-only TopK 
+
+keeps the TopK sparse encoder and retrieval su-pervision but removes the decoder and reconstruc-tion path, testing whether the autoencoding struc-ture contributes beyond sparse retrieval supervision alone. 
+
+Implementation details. All sparse models are trained on cached dense embeddings with the back-bone frozen, at expansion ratio 16 × (so D=32 ,768 
+
+for Qwen-2B and analogously for larger back-bones). Dense embeddings are extracted with vLLM when supported by the backbone, and sparse training/evaluation is implemented in PyTorch. All experiments are run on a machine equipped with a single NVIDIA H100 NVL GPU. We use linear warmup with cosine learning-rate decay, decoder column normalization after each step, and progres-sive k-annealing to the target support. Checkpoints are selected by held-out sparse nDCG@10; PUMA operating points are chosen on validation and evalu-ated once on test. Storage and search-time account-ing, along with full hyperparameters and hardware details, are reported in Sec. 5.4 and Sec. D. 
+
+5 Results 
+
+We first evaluate PUMA on Qwen3-VL-Embedding-2B across all five M-BEIR tasks, then test whether the result transfers to Qwen3-VL-Embedding-8B and RZenEmbed. We next compare against simpler dense and sparse com-pression baselines, analyze storage and search time, and ablate the main training components. Unless otherwise stated, significance is measured with 95% bootstrap intervals and 1000-trial paired approximate-randomization tests on nDCG@10. 
+
+5.1 Main Results on Qwen-2B 
+
+Tab. 1 reports results on the five M-BEIR tasks us-ing Qwen3-VL-Embedding-2B. PUMA is competi-tive with dense retrieval across the benchmark fam-ily: it significantly improves over dense retrieval on CIRR and Fashion200K, is statistically indistin-guishable on FashionIQ and MSCOCO, and trails dense only on VisualNews. On CIRR, PUMA im-proves nDCG@10 from 0.4235 to 0.4356 (p ≤
+
+0.001 ), while also improving Hit@5 and Re-call@10. On Fashion200K, the gain is larger, with nDCG@10 increasing from 0.0792 to 0.1144 
+
+(p ≤ 0.001 ). On FashionIQ and MSCOCO, the dif-ferences are small and not statistically reliable. Vi-sualNews is the only Qwen-2B setting where dense retrieval remains clearly ahead. Overall, PUMA matches or exceeds dense retrieval on four of five tasks by the primary criterion of competitive or bet-ter nDCG@10, while using substantially smaller sparse representations. Representative bootstrap intervals are reported in Sec. A. 
+
+5.2 Scaling and Cross-Family Transfer 
+
+To test generalization, we use the same sparsifi-cation recipe on Qwen3-VL-Embedding-8B and RZenEmbed, changing only cached embeddings. 
+
+Within-family scaling: Qwen-8B. On Qwen3-VL-Embedding-8B (Tab. 1), PUMA improves over dense retrieval on the two larger text-to-image datasets, VisualNews and Fashion200K, by about 
+
++0 .027 nDCG@10 in both cases ( p ≤ 0.001 ). It remains close to dense on MSCOCO and Fash-ionIQ, but falls below dense on CIRR. Thus, scal-ing the dense backbone strengthens PUMA on text-Table 1: Main results across three backbones (Qwen-2B, Qwen-8B, RZenEmbed). Bold = better of Dense/PUMA per (data, backbone, metric). PUMA k for Qwen-2B and RZenEmbed: 160 (CIRR/FashIQ/VisN), 128 (F200K), 144 (MSCOCO); for Qwen-8B: 144 (CIRR), 128 (elsewhere).                                                                                                            
+
+> Qwen-2B Qwen-8B RZenEmbed
+> Data Method H@5 R@10 N@10 H@5 R@10 N@10 H@5 R@10 N@10 CIRR Dense .5221 .6281 .4235 .5570 .6577 .4961 .5930 .6914 .4860
+> PUMA .5329 .6449 .4356 .5392 .6438 .4835 .5664 .6743 .4713 FashionIQ Dense .2029 .2680 .1706 .2321 .3027 .1942 .2342 .3061 .1952 PUMA .2062 .2697 .1681 .2348 .3055 .1922 .2424 .3144 .1994
+> VisualNews Dense .2666 .3318 .2256 .2720 .3396 .2296 .4587 .5410 .3933
+> PUMA .2590 .3243 .2168 .3052 .3820 .2561 .4215 .5069 .3588 Fashion200K Dense .1198 .0879 .0792 .1646 .1215 .1048 .2054 .1521 .1339 PUMA .1763 .1355 .1144 .2071 .1595 .1318 .2478 .1813 .1579
+> MSCOCO Dense .8049 .8721 .7181 .8184 .8835 .7349 .8447 .9012 .7630
+> PUMA .8098 .8805 .7191 .8220 .8871 .7297 .8270 .8884 .7384
+
+to-image retrieval, but does not automatically make composed retrieval easier to sparsify. 
+
+Cross-family transfer: RZenEmbed. On RZen-Embed (Tab. 1), PUMA exceeds dense on Fash-ionIQ and Fashion200K, with the Fashion200K gain statistically reliable ( p ≤ 0.001 ) and Fash-ionIQ trending positive ( p=0 .075 ). It remains be-low dense on CIRR, VisualNews, and MSCOCO. This shows that transfer is real but uneven across backbones. More broadly, the RZenEmbed results suggest that the PUMA recipe is not specific to the Qwen family, but that its success depends on backbone geometry and task regime. In particular, the mixed transfer pattern is consistent with the two-way diagnosis developed below: some settings fail because support is not available before TopK, while others fail because the available support is not retrieval-aligned enough. 
+
+Failure diagnostics. The two hardest settings fail for different reasons (Tab. 2). On Qwen-8B CIRR, the encoder produces only 166.5 positive pre-activations on average and realizes k=160 on only 81.8% of examples, so the requested support is not always available before TopK. On RZen Vi-sualNews, support is available: the model pro-duces 465.3 positive pre-activations on average and reaches k=160 on every example. Yet sparse nDCG@10 remains well below dense, indicating that the active features are not retrieval-aligned. Thus support availability is necessary but not suffi-cient; the active support must also preserve dense retrieval geometry. These diagnostics make the failure modes interpretable: post-hoc sparsifica-
+
+Table 2: Support diagnostics for two hard settings. Pos-pre: mean positive pre-TopK activations; Reach: frac-tion realizing k exactly; Used: distinct active features; PUMA/Dn: PUMA/dense nDCG@10.                
+
+> Setting kPos-pre Reach Used PUMA/Dn 8B CIRR 160 166.5 0.818 199 .484/.496 RZen VisN 160 465.3 1.000 497 .359/.393
+
+tion can fail either because the encoder does not produce enough pre-TopK support, or because the available support does not preserve retrieval rank-ings. Both diagnostics can be monitored during training and point to objectives that jointly improve dictionary coverage and retrieval alignment. 
+
+5.3 Alternative Compression Techniques 
+
+We compare PUMA with four compression base-lines designed to separate sparsity, memory bud-get, adaptation, and autoencoding effects, along with the original backbone without compression (Dense). Raw TopK dense coordinates test whether direct coordinate pruning is enough; matched-memory PCA tests whether a smaller dense repre-sentation suffices; the trained dense autoencoder tests whether matched-budget learned dense adap-tation closes the gap; and encoder-only TopK keeps the sparse encoder but removes the decoder, testing whether sparse supervision alone is sufficient. Tab. 3 compares PUMA on three representative Qwen-2B settings against raw TopK dense coordi-nates, matched-memory PCA, and an encoder-only TopK sparse model. Raw TopK is substantially weaker: on CIRR, it reaches 0.3769 nDCG@10 versus PUMA’s 0.4356 . Matched-memory PCA is Table 3: Alternative compressors vs. PUMA vs. base un-compressed model (Dense) on three Qwen-2B settings. Raw TopK and PCA at k=160 (PCA dim = 2 k = 320 ); Enc-only and PUMA at k=160 except F200K at k=128 .
+
+Bold = best per (data, metric); underline = second best.                                                  
+
+> Data Method Hit@5 R@10 nDCG@10 CIRR Dense .5221 .6281 .4235 Raw TopK .4655 .5688 .3769 PCA .5094 .6124 .4153 Enc-only .4518 .5614 .3631 PUMA .5329 .6449 .4356
+> FashionIQ Dense .2029 .2680 .1706
+> Raw TopK .1621 .2168 .1355 PCA .1891 .2504 .1574 Enc-only .1667 .2263 .1367 PUMA .2062 .2697 .1681 Fashion200K Dense .1198 .0879 .0792 Raw TopK .0762 .0621 .0513 PCA .0861 .0652 .0538 Enc-only .1495 .1164 .0967 PUMA .1763 .1355 .1144
+
+stronger ( 0.4153 ) but remains below both dense and PUMA. The encoder-only sparse model — same TopK encoder and retrieval supervision as PUMA but without a decoder or reconstruction pathway — reaches 0.3631 on CIRR, above raw TopK but clearly below PUMA. The pattern repro-duces on FashionIQ and Fashion200K. None of the three explanations holds: coordinate sparsity alone is insufficient, memory reduction alone is insuffi-cient, and sparse retrieval supervision without a reconstruction signal is insufficient. Tab. 4 compares PUMA with a learned dense compressor at the same memory budget (TrAE). The trained dense autoencoder uses bottleneck di-mension 2k and is trained on the same data with the same retrieval losses, optimization budget, and validation protocol as PUMA where applicable; sparsity-specific components such as AuxK, TopK annealing, and support-mask alignment are omitted or replaced by dense analogs. Across 15 model– dataset settings, the trained dense AE is below PUMA on 12. It wins only on MSCOCO for Qwen-2B/8B and on RZen–FashionIQ. Thus adaptation alone does not explain PUMA’s gains: at the same per-vector budget, the sparse representation is usu-ally the stronger retrieval representation. Together, these controls rule out simpler expla-nations for PUMA’s gains. Raw TopK shows that direct sparsification of dense coordinates is insuffi-cient; matched-memory PCA shows that memory reduction alone is insufficient; the trained dense 
+
+Table 4: Fixed-k matched-memory trained dense AE across backbones. nDCG@10; bold = best of Dense/PUMA/TrAE, underline = second best.                                                                  
+
+> Model Data kDense PUMA TrAE Qwen-2B CIRR 160 .4235 .4357 .3885 FashIQ 160 .1706 .1679 .1327 VisN 160 .2256 .2169 .2125 F200K 128 .0792 .1141 .1058 MSCOCO 144 .7181 .7191 .7196
+> Qwen-8B CIRR 144 .4961 .4835 .4354 FashIQ 128 .1942 .1922 .1478 VisN 128 .2296 .2561 .2523 F200K 128 .1048 .1322 .1183 MSCOCO 128 .7349 .7297 .7367
+> RZenEmbed CIRR 160 .4860 .4712 .4087 FashIQ 160 .1952 .1994 .1557 VisN 160 .3933 .3588 .3571 F200K 128 .1339 .1578 .1392 MSCOCO 144 .7630 .7384 .7445
+
+AE shows that supervised dense adaptation is usu-ally insufficient; and encoder-only TopK shows that sparse retrieval supervision without a decoder is insufficient. The evidence instead supports the full recipe: sparse structure, decoder-backed recon-struction, and retrieval-aligned fine-tuning. 
+
+5.4 Efficiency: Storage and Search Time 
+
+PUMA reduces storage by representing each vector with only k feature ids and weights. Under FP32 accounting, dense embeddings cost 4d bytes, while sparse codes cost 8k bytes with 32-bit ids and FP32 weights. At our operating points ( k ∈ [128 , 160] ), this gives an 8× reduction for Qwen-2B ( d=2048 )and up to 16 × for Qwen-8B ( d=4096 ). The 8k accounting is conservative. In a fixed index, feature ids only need to address atoms that appear in the candidate pool. Remapping corpus-active atoms at index construction leaves sparse vectors and retrieval scores unchanged, but reduces id width. In our diagnostics, at most 497 atoms are active, so 9-bit ids suffice; at k=128 , this reduces PUMA storage from 1,024 to 656 bytes per vector. This remapping is optional, so the trend remains the deployment-agnostic 8–16 × reduction. We also compare against quantized dense stor-age. FP16 and INT8 dense retrieval are essentially lossless in our measurements: on representative settings spanning CIRR, Fashion200K, and Visu-alNews at Qwen-2B and Qwen-8B, nDCG@10 changes by at most 0.001 between FP32, FP16, and INT8 dense retrieval. For example, CIRR-2B gives 0.4239 /0.4241 /0.4236 for FP32/FP16/INT8, Table 5: Per-vector storage in bytes at k=128 . Compact ids remap logical atoms to corpus-active ids of width 
+
+⌈log 2 Dactive ⌉ bits. The 9-bit row is a worst-case bound across our measured settings; the 8-bit row applies when 
+
+Dactive ≤ 256 (e.g., Qwen-8B CIRR).                              
+
+> Representation 2B (B) 8B (B) vs full dense Full dense ( 4d, FP32) 8192 16384 1×
+> Full dense ( 2d, FP16) 4096 8192 2×
+> Full dense ( d, INT8) 2048 4096 4×
+> Trained dense AE ( 2k, FP32) 1024 1024 8 / 16 ×
+> PUMA, 32-bit ids ( 8k)1024 1024 8 / 16 ×
+> PUMA, 16-bit ids ( 6k)768 768 10.7 / 21.3 ×
+> PUMA, 9-bit ids 656 656 12.5 / 25.0 ×
+> PUMA, 8-bit ids —640 — / 25.6 ×
+
+and VisualNews-8B gives 0.2292 /0.2292 /0.2292 .Thus FP16 gives a free 2× dense-storage reduction and INT8 gives a free 4× reduction. PUMA re-mains smaller even against INT8 dense: with 9-bit ids and FP32 sparse weights, PUMA uses 656 bytes per vector, compared with 2,048 bytes for INT8 dense at Qwen-2B and 4,096 bytes at Qwen-8B. Quantization is complementary to PUMA, since the sparse weights can also be quantized; thus, the FP32-weight accounting in Tab. 5 is conservative. PUMA also improves exact search time on large candidate pools. On VisualNews 8B (542K can-didates), exact dense search takes 423 .8 s versus 
+
+17 .3 s for sparse search ( 24 .5× faster). On Fash-ion200K 8B (202K candidates), the gap is 13 .8 sversus 0.77 s ( 17 .9× faster). Dense search re-mains faster only on the much smaller MSCOCO pool, where sparse-kernel overhead dominates the low candidate count. These timings compare ex-act dense and exact sparse scoring to isolate the representation-level effect. 
+
+5.5 Ablation: Which Components Matter? 
+
+We use leave-one-out ablations on two Qwen-2B tasks: CIRR for composed retrieval and Fash-ion200K for text-to-image retrieval. Each run re-moves one loss or stage while keeping the remain-ing training protocol fixed. The ablation uses a fixed k=128 to compare variants under a common support; main results use the validation-selected operating points in Tab. 1. 
+
+Stage ② leave-one-out. We remove one Stage ②
+
+loss at a time while keeping the rest of PUMA fixed (Tab. 6). All three terms are load-bearing, but their importance differs by task. On CIRR, every single ablation drops PUMA below dense, with AuxK feature revival causing the largest loss. 
+
+Table 6: Leave-one-out ablation at Qwen-2B. Stage ②
+
+rows zero one term of Eq. (6); Stage ③ OFF skips con-trastive fine-tuning. Other settings match full PUMA. n@10 is nDCG@10; ∆ is relative to PUMA.                                         
+
+> CIRR Fashion200K
+> Variant kn@10 ∆n@10 ∆
+> Dense –.4235 .0792
+> PUMA (full) 128 .4333 —.1144 —
+> Stage ②(Eq. (6) )
+> −L align 128 .4072 −.026 .1009 −.014
+> −L aux 128 .3975 −.036 .0995 −.015
+> −L (2) ctr 128 .4061 −.027 .0857 −.029
+> Stage ③:
+> Stage ③OFF 128 .4140 −.019 .1050 −.009
+
+On Fashion200K, the Stage ② contrastive blend is most important, while cross-modal alignment and AuxK still provide clear gains. Thus the full recipe is needed for the composed-retrieval win, whereas Fashion200K remains above dense. 
+
+Stage ③ leave-one-out. The Stage ③ row eval-uates the Stage ② checkpoint directly, without contrastive fine-tuning. On Qwen-2B, removing Stage ③ hurts both tasks: −0.019 nDCG@10 on CIRR and −0.009 on Fashion200K. At 8B, the effect depends on support availability. Remov-ing Stage ③ slightly hurts FashionIQ ( 0.1922 →
+
+0.1883 ), but improves CIRR in the support-starved regime identified in Sec. 5.2. This suggests that Stage ③ is useful when enough support is available, while the 8B CIRR reversal is another symptom of the support-unavailable failure mode. 
+
+6 Conclusion 
+
+We presented PUMA , a post-hoc recipe that con-verts frozen universal multimodal embeddings into compact sparse retrieval codes. On Qwen3-VL-Embedding-2B, PUMA is competitive with dense retrieval across five M-BEIR tasks, with significant gains on CIRR and Fashion200K, near parity on FashionIQ and MSCOCO, and a remaining gap on VisualNews. The gains are not explained by dimensionality reduction alone: raw TopK, PCA, trained matched-memory dense autoencoders, and encoder-only sparse training all fall short in repre-sentative comparisons. The remaining challenge is to jointly ensure sufficient pre-TopK support and retrieval alignment of the active support, the two axes isolated by our failure diagnostics. Limitations 
+
+This work opens several directions for future study. First, our main experiments focus on the Qwen embedding family, with RZenEmbed included as a cross-family check. The transfer results show that PUMA is not Qwen-specific, but they also suggest that sparsification behavior depends on the geome-try of the frozen backbone. Evaluating additional universal multimodal embedders would clarify how broadly the recipe applies. Second, our failure analysis diagnoses two bot-tlenecks but does not solve them. In particular, the Qwen-8B CIRR setting shows that stronger dense backbones can become support-limited be-fore TopK selection, while RZenEmbed Visual-News shows that available support is not always retrieval-aligned. Future work should develop ob-jectives that jointly encourage sufficient dictionary coverage and retrieval-aligned active features. Finally, PUMA is a post-hoc method and there-fore inherits the representational properties of the frozen backbone. This is desirable for efficiency because the backbone is not retrained, but it also means that any domain imbalance or bias in the dense embedding space may propagate to the sparse codes. Deployment-sensitive settings should therefore audit the sparsified retriever alongside the original dense model. 
+
+Acknowledgments 
+
+This work has been carried out while Mat-teo Attimonelli was enrolled in the Italian Na-tional Doctorate on Artificial Intelligence run by Sapienza University of Rome in collabora-tion with Politecnico Di Bari . We acknowledge the CINECA award under the ISCRA initiative for the availability of high-performance comput-ing resources and support. We acknowledge ISCRA for awarding this project access to the LEONARDO supercomputer, owned by the Eu-roHPC Joint Undertaking, hosted by CINECA (Italy). This publication was funded by the fol-lowing projects: "New Kocs Era" (project code CDP001540; CUP B85H24002010007); "AURA – Augmented Unified Resource for Agents" (project code CDP001572); This research was conducted as part of the ENRESFOOD project, funded un-der the FutureFoodS partnership. The work re-ceived funding from the Austrian Science Fund (FWF; 10.55776/KIN4661525), the Dutch Ministry of Agriculture, Fisheries, Food Security and Nature (BO-43-219-026), the Italian Ministry of Univer-sity and Research (MUR), and the German Fed-eral Ministry of Research, Technology and Space (031B1717). 
+
+References                             
+
+> Matteo Attimonelli, Alessandro De Bellis, Claudio Pomo, Dietmar Jannach, Eugenio Di Sciascio, and Tommaso Di Noia. 2025. Do we really need special-ization? evaluating generalist text embeddings for zero-shot recommendation and search. In RecSys ,pages 575–580. ACM. Trenton Bricken, Adly Templeton, Joshua Batson, Brian Chen, Adam Jermyn, Tom Conerly, Nick Turner, Cem Anil, Carson Denison, Amanda Askell, Robert Lasenby, Yifan Wu, Shauna Kravec, Nicholas Schiefer, Tim Maxwell, Nicholas Joseph, Zac Hatfield-Dodds, Alex Tamkin, Karina Nguyen, and 6 others. 2023. Towards monosemanticity: Decompos-ing language models with dictionary learning. Trans-former Circuits Thread .Thibault Formal, Carlos Lassance, Benjamin Pi-wowarski, and Stéphane Clinchant. 2021a. SPLADE v2: Sparse lexical and expansion model for informa-tion retrieval. CoRR , abs/2109.10086. Thibault Formal, Maxime Louis, Hervé Déjean, and Stéphane Clinchant. 2026. Learning retrieval models with sparse autoencoders. In ICLR . OpenReview.net. Thibault Formal, Benjamin Piwowarski, and Stéphane Clinchant. 2021b. SPLADE: sparse lexical and ex-pansion model for first stage ranking. In SIGIR ,pages 2288–2292. ACM. Leo Gao, Tom Dupré la Tour, Henk Tillman, Gabriel Goh, Rajan Troll, Alec Radford, Ilya Sutskever, Jan Leike, and Jeffrey Wu. 2025. Scaling and evaluating sparse autoencoders. In ICLR . OpenReview.net. Lixuan Guo, Yifei Wang, Tiansheng Wen, Yifan Wang, Aosong Feng, Bo Chen, Stefanie Jegelka, and Chenyu You. 2026. Csrv2: Unlocking ultra-sparse embeddings. In ICLR . OpenReview.net. Ruiqi Guo, Philip Sun, Erik Lindgren, Quan Geng, David Simcha, Felix Chern, and Sanjiv Kumar. 2020. Accelerating large-scale inference with anisotropic vector quantization. In ICML , Proceedings of Ma-chine Learning Research, pages 3887–3896. PMLR. Robert Huben, Hoagy Cunningham, Logan Riggs Smith, Aidan Ewart, and Lee Sharkey. 2024. Sparse autoen-coders find highly interpretable features in language models. In ICLR . OpenReview.net. Hervé Jégou, Matthijs Douze, and Cordelia Schmid. 2011. Product quantization for nearest neighbor search. IEEE Trans. Pattern Anal. Mach. Intell. ,33(1):117–128.
+
+Weijian Jian, Yajun Zhang, Dawei Liang, Chunyu Xie, Yixiao He, Dawei Leng, and Yuhui Yin. 2025. Rzen-embed: Towards comprehensive multimodal retrieval. 
+
+CoRR , abs/2510.27350. Ziyan Jiang, Rui Meng, Xinyi Yang, Semih Yavuz, Yingbo Zhou, and Wenhu Chen. 2025. Vlm2vec: Training vision-language models for massive multi-modal embedding tasks. In ICLR . OpenReview.net. Chiraag Kaushik, Davis Barch, and Andrea Fanelli. 2026. Learning multimodal dictionary decompo-sitions with group-sparse autoencoders. In ICLR .OpenReview.net. Mingxin Li, Yanzhao Zhang, Dingkun Long, Keqin Chen, Sibo Song, Shuai Bai, Zhibo Yang, Pengjun Xie, An Yang, Dayiheng Liu, Jingren Zhou, and Junyang Lin. 2026. Qwen3-vl-embedding and qwen3-vl-reranker: A unified framework for state-of-the-art multimodal retrieval and ranking. CoRR ,abs/2601.04720. Sheng-Chieh Lin, Chankyu Lee, Mohammad Shoeybi, Jimmy Lin, Bryan Catanzaro, and Wei Ping. 2025. Mm-embed: Universal multimodal retrieval with multimodal LLMS. In ICLR . OpenReview.net. Zheyuan Liu, Cristian Rodriguez Opazo, Damien Teney, and Stephen Gould. 2021. Image retrieval on real-life images with pre-trained vision-and-language models. In ICCV , pages 2105–2114. IEEE. Alireza Makhzani and Brendan J. Frey. 2014. k-sparse autoencoders. In ICLR (Poster) .Gregor Meehan and Johan Pauwels. 2026. Sparse con-trastive learning for content-based cold item recom-mendation. CoRR , abs/2604.12990. Thong Nguyen, Yibin Lei, Jia-Huei Ju, Eugene Yang, and Andrew Yates. 2026. Milco: Learned sparse re-trieval across languages via a multilingual connector. In ICLR . OpenReview.net. Thong Nguyen, Yibin Lei, Jia-Huei Ju, and Andrew Yates. 2025. SERVAL: surprisingly effective zero-shot visual document retrieval powered by large vi-sion and language models. In EMNLP , pages 30807– 30822. Association for Computational Linguistics. Chuan Qin, Constantin Venhoff, Sonia Joseph, Fanyi Xiao, and Stefan Scherer. 2026. Sparse CLIP: co-optimizing interpretability and performance in con-trastive learning. In ICLR . OpenReview.net. Vojtech Vancura, Martin Spisák, Rodrigo Alves, and Ladislav Peska. 2026. Efficient learning of sparse representations from interactions. In WWW , pages 8577–8580. ACM. Cong Wei, Yang Chen, Haonan Chen, Hexiang Hu, Ge Zhang, Jie Fu, Alan Ritter, and Wenhu Chen. 2024. Uniir: Training and benchmarking universal multimodal information retrievers. In ECCV (87) ,Lecture Notes in Computer Science, pages 387–404. Springer. Tiansheng Wen, Yifei Wang, Zequn Zeng, Zhong Peng, Yudi Su, Xinyang Liu, Bo Chen, Hongwei Liu, Ste-fanie Jegelka, and Chenyu You. 2025. Beyond ma-tryoshka: Revisiting sparse coding for adaptive repre-sentation. In ICML , Proceedings of Machine Learn-ing Research. PMLR / OpenReview.net. Hui Wu, Yupeng Gao, Xiaoxiao Guo, Ziad Al-Halah, Steven Rennie, Kristen Grauman, and Rogério Feris. 2021. Fashion IQ: A new dataset towards retriev-ing images by natural language feedback. In CVPR ,pages 11307–11317. Computer Vision Foundation / IEEE. Xin Zhang, Yanzhao Zhang, Wen Xie, Mingxin Li, Ziqi Dai, Dingkun Long, Pengjun Xie, Meishan Zhang, Wenjie Li, and Min Zhang. 2025. Bridging modal-ities: Improving universal multimodal retrieval by multimodal large language models. In CVPR , pages 9274–9285. Computer Vision Foundation / IEEE. A Bootstrap Confidence Intervals 
+
+Table 7: Representative 95% bootstrap intervals for nDCG@10 on Qwen-2B. Rows show a PUMA win, near parity, and a dense win.         
+
+> Data Dense PUMA CIRR .4233 [.4105,.4349] .4331 [.4214,.4446]
+> FashIQ .1705 [.1624,.1785] .1681 [.1602,.1760] VisN .2258 [.2209,.2308] .2169 [.2122,.2218]
+
+B Support-Usage Diagnostics 
+
+Tab. 8 reports pre-activation statistics for our check-points. Encoder-only training and the final SAE are both well past support saturation on 2B (mean pos-itive pre-activations ≫ k, exact realization of the requested k on every example). On 8B, the SAE’s positive pre-activations drop sharply, explaining the support-limited regime described in Sec. 5.2. 
+
+Table 8: Support-usage diagnostics ( k=128 ). Pos-pre: mean positive pre-activations before TopK. Ac-tive: mean surviving features at native support. Reach: fraction of examples realizing k exactly.                 
+
+> Data Setting Pos-pre Active Reach CIRR Enc-only 2B 3774.4 128.0 1.000 CIRR PUMA 2B 363.8 128.0 1.000 CIRR PUMA 8B 167.5 128.0 1.000
+
+C Additional Ablation Study 
+
+Effect of the target sparsity k. Fig. 2 sweeps the inference-time support k ∈ { 64 , 96 , 128 , 144 , 160 }
+
+at Qwen-2B on CIRR, FashionIQ, and Fash-ion200K. Quality saturates around k = 128 : in-creasing k further yields diminishing returns, while 
+
+k = 64 already reaches near-saturation on Fash-ionIQ and Fashion200K. CIRR is the most k-sensitive of the three (the most stringent regime, as expected for composed queries), but its curve also flattens past k = 128 . Combined with the storage analysis in Sec. 5.4, this places the practical operat-ing point in the k ∈ [96 , 160] band: smaller k gives a tighter index, larger k recovers a tail of the dense ranking. Expansion ratio D = 16 d is held fixed across all experiments; varying D is left for future work. 
+
+Cross-modal alignment impact. The Stage ②
+
+LOO above shows that removing Lalign costs re-trieval quality, but does not show that the loss ac-tually drives paired queries and candidates onto a common subset of dictionary atoms. To check this directly, we measure the Jaccard overlap of the TopK supports of paired and random query– candidate pairs on the trained PUMA-2B check-points (Tab. 9). On all three datasets the paired sup-port overlap is substantially larger than the random baseline: +0 .177 on CIRR, +0 .134 on FashionIQ, and +0 .088 on Fashion200K. The lift is largest on the two composed-retrieval datasets, which is where the alignment loss is supervised on gen-uinely cross-modal (q, d+) pairs. Across all three datasets fewer than 500 atoms ever fire, mirroring the concentration observed in Tab. 2, so the align-ment behavior holds within an active dictionary that is two orders of magnitude smaller than the trainable D = 16 d.
+
+Table 9: Cross-modal TopK-support Jaccard on Qwen-2B PUMA (k=128 , D=32 ,768 ). Paired: 
+
+(query , positive candidate ) pairs. Random: query paired with a uniformly sampled candidate. Lift is paired − random.                     
+
+> Dataset Pairs Paired JRandom JLift |Dactive |
+> CIRR 4170 0.351 0.174 +0 .177 481 FashionIQ 6003 0.314 0.180 +0 .134 424 Fashion200K 1719 0.211 0.123 +0 .088 447
+
+Ultra-sparse regime ( k ≤ 64 ). Although our headline operating points sit in k ∈ [64 , 160] , two questions remain: (i) how steeply does PUMA degrade as k shrinks toward the ultra-sparse regime used by SPLADE-style text retrievers, and (ii) how cheap can the index be made before retrieval collapses? Tab. 10 extends the sweep with k ∈ { 16 , 32 , 48 , 64 } on the same three 2B datasets. The curve is smooth: nDCG@10 at 
+
+k = 16 already captures 74% of the dense score on CIRR ( 0.313 /0.4235 ) and 69% on Fashion200K (0.054 /0.0792 ). By k = 48 PUMA reaches 96% of dense on CIRR ( 0.407 ) and exceeds dense on Fash-ion200K ( 0.110 vs 0.079 , where dense is weak). The implication is a per-corpus storage knob: with 
+
+9-bit ids, k = 16 corresponds to ∼ 82 bytes per vector ( ∼ 100 × smaller than FP32 dense at 2B), trading ∼ 25% of dense quality on the hardest of the three tasks; k = 48 at ∼ 246 bytes ( ∼ 33 ×)preserves it within 4% . The ultra-sparse rows there-fore extend the sparsity-vs-quality frontier of Fig. 2 rather than break it. 64 96 128 144 160          
+
+> k(active features) 0.420 0.425 0.430 0.435 nDCG@10
+> CIRR
+> 64 96 128 144 160
+> k(active features) 0.1575 0.1600 0.1625 0.1650 0.1675 0.1700
+> FashionIQ
+> 128 144 160
+> k(active features) 0.08 0.09 0.10 0.11
+> Fashion200K
+> PUMA Dense
+
+Figure 2: PUMA nDCG@10 at Qwen-2B as the target sparsity k varies, on CIRR, FashionIQ, and Fashion200K. Dashed line: dense baseline. Table 10: Ultra-sparse PUMA at Qwen-2B (test split). Rows extend Fig. 2 below the k = 64 point. All numbers measured from the same checkpoints used in Tab. 1, with k varied only at inference.                                                  
+
+> Setting kHit@5 R@10 nDCG@10 CIRR dense .5221 .6281 .4235 16 .3784 .4874 .3133 32 .4540 .5622 .3743 48 .4887 .6038 .4070 64 .4990 .6185 .4177 FashionIQ dense .2029 .2680 .1706 16 .1129 .1566 .0914 32 .1609 .2152 .1297 48 .1821 .2401 .1478 64 .1922 .2580 .1580 Fashion200K dense .1198 .0879 .0792 16 .0861 .0799 .0543 32 .1449 .1326 .0900 48 .1629 .1556 .1099 64 .1763 .1654 .1151
+
+D Training Details 
+
+We train SAEs for two stages on cached query/candidate embeddings from each M-BEIR task. Stage ② (sparse pretraining) optimizes the objective in Eq. (6) with cosine reconstruction, retrieval-similarity supervision, AuxK feature re-vival, and a small Stage ② contrastive blend; Stage ③ (retrieval fine-tuning) emphasizes In-foNCE on sparse codes with reconstruction and distillation kept as small regularizers. Both stages use AdamW with linear warmup and cosine decay, decoder column-norm renormalization after each step, and progressive k-annealing toward the tar-get sparsity. For Qwen3-VL-Embedding-2B we use D=32 ,768 ; for 8B we use the analogously ex-panded D=16 d. Checkpoints are selected on held-out sparse nDCG@10 evaluated on the validation split. 
+
+Loss weights. Tab. 11 lists all loss weights and their sources. The values are held fixed across datasets and backbones — no per-task tuning. Each is motivated by a deliberate role rather than a grid search: λa comes from MGSAE-style alignment defaults (Kaushik et al., 2026) and is moderate so the alignment/distillation signal shapes the sup-port pattern without dominating reconstruction; 
+
+λx=1 /32 is the standard AuxK weight reported in TopK SAE work (Gao et al., 2025) and adopted by CSRv2 (Guo et al., 2026); λc, α, β are deliber-ately small ( ≤ 0.1) so the auxiliary terms remain present during contrastive training without over-whelming the ranking objective; and τ =0 .05 is the common temperature in contrastive retrieval. In the retrieval-cache training mode used through-out the paper, Lalign and Ldist collapse to a single retrieval-similarity distillation term, so a shared scalar λa=λd controls both. The leave-one-out study in Tab. 6 validates this choice: each weight is load-bearing — zeroing any single one produces a measurable, smooth degradation rather than a sharp peak around the chosen value — which is the signature of moderate, untuned regularizers rather than over-fit hyperparameters. 
+
+Table 11: PUMA loss weights, held fixed across all datasets and backbones.                     
+
+> Weight Value Source / role
+> λa=λd0.3Alignment / dot-product distillation
+> λx1/32 AuxK default (Gao et al., 2025)
+> λc0.05 Stage ②InfoNCE blend (small regularizer)
+> α0.1Stage ③reconstruction regularizer
+> β0.05 Stage ③distillation regularizer
+> τ0.05 InfoNCE temperature
+
+Optimization. AdamW with weight decay 10 −2.Learning rates: 3×10 −4 (Stage ②), 1×10 −4
+
+(Stage ③), each with 1,000 / 500 linear warmup steps followed by cosine decay. Stage ② runs 
+
+40 ,000 steps; Stage ③ runs 5,000 steps. Batch size 
+
+64 throughout. Validation-based checkpoint selec-tion uses a 10% slice of the training pairs evaluated on sparse nDCG@10 at the target k.

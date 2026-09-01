@@ -1,0 +1,912 @@
+Title: GeoRay: Gauge-Aware Feed-Forward Satellite 3D Reconstruction in the Geodetic Frame
+
+URL Source: https://arxiv.org/pdf/2608.29680v1
+
+Published Time: Tue, 01 Sep 2026 01:16:08 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+> 1
+
+# GeoRay: Gauge-Aware Feed-Forward Satellite 3D Reconstruction in the Geodetic Frame 
+
+Zhe Dong, Wanqing Wu, Yuzhe Sun, Haochen Jiang, Yuchen Ma, Lecheng Ren, Tianzhu Liu, Member, IEEE ,and Yanfeng Gu, Senior Member, IEEE 
+
+Abstract —Feed-forward 3D foundation models reconstruct perspective scenes in one pass. Satellite photogrammetry needs a different product, one that domain adaptation alone does not deliver: dense surface height in an absolute geodetic frame under non-central rational polynomial cameras (RPCs). Perspective-pretrained features are not reliably observable along RPC height rays, absolute elevation carries a low-order height–datum gauge exchangeable with sensor bias to first order, and monocular and multi-view cues fail in different regions. GeoRay treats all three. Lightweight ray-consistent adapters make a frozen backbone matchable along native RPC rays. An explicit datum mechanism separates relief from absolute level and is equivariant to the vertical origin by construction, so one trained model serves zero-, one-, and sparse-control inference. Calibrated inverse-variance fusion combines the two relief streams. SatGauge, our absolute-frame benchmark of eighteen systems across in-domain, cross-dataset, and cross-city tiers, scores absolute placement without registration or test-reference leakage. On 26 held-out US3D tiles, GeoRay attains 2.99 m absolute MAE at 91 .9% coverage, improves completeness-aware accuracy by 46 .4 points over the strongest compliant feed-forward baseline, remains the most ac-curate such system under both transfer shifts, and runs in 24 smodel-forward time per tile. Code and models will be released at https://github.com/HIT-SIRS/GeoRay. 
+
+Index Terms —Satellite photogrammetry, rational polynomial camera, feed-forward 3D reconstruction, gauge ambiguity, un-certainty calibration. 
+
+I. I NTRODUCTION 
+
+# FEED-FORWARD 3D models now recover scene geom-etry from one or many images in a single pass [1]– [3], while monocular foundation models provide strong metric or relative geometry priors [4], [5]. Their success, however, has been established primarily under central-perspective im-age formation. Satellite photogrammetry differs in ways that matter for deployment: pushbroom sensors have no single pro-jection center [6], geometry is delivered as an RPC mapping [7], and the required product is a digital surface model whose height is meaningful in an absolute geodetic frame. Existing high-accuracy solutions therefore remain dominated by per-scene optimization [8]–[10] or satellite-specific supervised 
+
+This work was supported by the National Natural Science Foundation of China under Grant 624B2051. (Corresponding author: Yanfeng Gu.) 
+
+Z. Dong, Y. Sun, H. Jiang, Y. Ma, T. Liu, and Y. Gu are with the School of Electronics and Information Engineering, Harbin Institute of Technology, Harbin 150001, China (e-mail: guyf@hit.edu.cn). W. Wu is with the 54th Research Institute, China Electronics Technology Group Corporation, Shijiazhuang 050081, China, and also with the State Key Laboratory of Comprehensive PNT Network and Equipment Technology, Shijiazhuang 050081, China. L. Ren is with the School of Electrical and Electronic Engineering, Uni-versity of Manchester, Manchester M13 9PL, U.K. 
+
+models [11]–[13]. This paper asks whether feed-forward foun-dation geometry can be transferred to native RPC imaging without sacrificing absolute elevation, completeness, or cali-brated uncertainty. Three obstacles stand in the way. First, ray-field observ-ability : perspective-pretrained features are not trained to be compared at object-space points reached by a non-central RPC height ray. Second, height–datum gauge freedom : under the standard low-order RPC bias model, a dominant component of vertical placement can be exchanged with image-space sensor bias to first order [14]–[16]; accurate local relief therefore does not imply correct absolute elevation. Third, heteroge-neous evidence : monocular priors and multi-view matching fail in different regions, so a fixed preference for either source is suboptimal. Between them they determine what is observable, what stays ambiguous, and when further evidence can improve a prediction. GeoRay handles all three within one feed-forward model. A frozen VGGT backbone [2] is adapted with lightweight ray-consistent low-rank modules so that cross-view evidence localizes correctly along RPC height hypotheses. The resulting multi-view branch predicts relief and its uncertainty, while a frozen MoGe-2 prior [5] supplies a complementary monoc-ular relief estimate. Absolute level is handled separately by a datum mechanism whose response to a change of vertical origin is fixed analytically, with only a small invariant residual learned from data. The two relief streams are then combined by calibrated inverse-variance weighting. One trained model then covers zero control, a single height control, and sparse affine control. The evaluation follows from the same analysis. Alignment hides the very vertical placement error under study, test-reference height ranges leak information into learned pre-dictors, and error averages reward partial surfaces. We in-troduce SatGauge, a protocol over public satellite datasets that scores in the absolute geodetic frame, declares control budgets, excludes reference-derived test inputs, and reports accuracy jointly with completeness and relief fidelity across three transfer tiers. On 26 held-out US3D tiles, GeoRay reaches 2.99 m absolute MAE at 91 .9% coverage and 72 .6% completeness-aware accu-racy at 2.5 m, a 46 .4-point margin over the strongest compliant feed-forward baseline. The same model remains the most ac-curate compliant feed-forward system under cross-dataset and cross-city transfer. Mechanism studies show that ray-consistent adaptation reduces height-hypothesis mislocalization, that the measured camera gauge accounts for a large share of the arXiv:2608.29680v1 [cs.CV] 30 Aug 2026 2(b) Height–datum gauge  (c) Heterogeneous evidence (a) Observability   
+
+> mislocalized
+> Height Ray
+> Frozen
+> Profile
+> True Height
+> Mislocalized
+> Datum
+> Offset
+> Monocular Failure
+> Multi-view Failure
+> Fig. 1. Three structural obstacles to absolute satellite 3D. (a) RPC ray-field observability, (b) the height–datum gauge, and (c) heterogeneous monocular and multi-view evidence motivate the three components of GeoRay.
+
+absolute error of pinhole-native feed-forward baselines, and that predicted monocular uncertainty orders where multi-view evidence helps most. Fig. 1 collects the three obstacles and the component of GeoRay that addresses each. We make four contributions. (1) We introduce RPC ray-field observability as a measurable property of feed-forward geometry features and show how lightweight adaptation restores localization along native RPC height rays. (2) We formulate the low-order height–datum gauge of RPC reconstruction, quantify its identifiability on delivered cameras, and convert it into an explicit datum mech-anism that supports multiple control regimes. (3) We derive and test a conditional gain law linking the value of multi-view evidence to predicted monocular uncertainty under calibrated fusion. (4) We introduce SatGauge, a unified absolute-frame evaluation of eighteen systems across three generalization tiers with explicit leakage and completeness controls. II. R ELATED WORK 
+
+A. Feed-Forward Geometry Foundation Models 
+
+Feed-forward 3D models regress dense geometry directly from images, from pointmap-based multi-view systems [1]– [3], [17] to monocular metric or affine-invariant priors [4], [5], [18]–[21]. Their representations build on large vision transformers [22]–[24], but their geometric parameterizations are developed for central-perspective imagery. Applying these models to pushbroom data therefore raises a representation question: are their features still localizable when correspon-dence is sampled along RPC object-space height rays? EO-VGGT [25] independently shows the value of injecting orbital geometry into a frozen VGGT backbone. GeoRay takes up the adjacent questions of ray-field observability, absolute ele-vation, and the conditional value of multi-view evidence. 
+
+B. Satellite 3D Reconstruction under RPC Cameras 
+
+Classical satellite photogrammetry operates directly on RPC geometry [6], [7]. S2P [8] and related stereo pipelines com-bine hand-crafted matching [26], [27], while generic recon-struction pipelines such as COLMAP [28] can be used through local perspective approximations [29]. Learned satellite MVS replaces hand-crafted matching with differentiable RPC warp-ing and cost volumes [11], [30]–[32], but typically relies on satellite-specific training and dense height supervision. Neural rendering provides a second line of work: S-NeRF, Sat-NeRF, and EO-NeRF [9], [33], [34] optimize each scene under satel-lite cameras in the spirit of instant neural fields [35]; EOGS and EOGS++ [10], [36] reduce that cost with Gaussian splat-ting [37], and SatSplat [38] adds online camera refinement; and RPC-GS [39] renders Gaussians natively through RPCs. These methods establish strong per-scene geometry, but they do not resolve the feed-forward question addressed here: what native multi-view RPC evidence can identify about absolute height and how that information should interact with a reusable foundation prior. 
+
+C. Generalizable Sparse-View Reconstruction 
+
+Generalizable Gaussian splatting predicts scene primitives in one forward pass. pixelSplat [40], MVSplat [41], DepthSplat [42], HiSplat [43], TranSplat [44], and AnySplat [45] progressively improve sparse-view reconstruction through learned matching, monocular priors, and hierarchical or transformer aggregation. Satellite variants such as SkySplat [12] and SatSurfGS [46] demonstrate that generalizable splatting can be adapted to multi-temporal orbital imagery. GeoRay differs in both output and analysis. Its primary prediction is a geodetically referenced height field, and it keeps observable relief, datum freedom, and uncertainty-weighted evidence apart instead of folding their interaction into a single learned fusion block. 
+
+D. Uncertainty and Gauge Ambiguity 
+
+Heteroscedastic regression [47], deep ensembles [48], and post-hoc calibration [49] provide established tools for predic-tive uncertainty. Photogrammetric adjustment, in parallel, has 3Input          
+
+> RPC
+> ir,
+> VGGT
+> ……
+> MoGe-2
+> ………
+> 1I
+> 2I
+> rI
+> Depth Standardization
+> Calibrated Fusion
+> Per-view
+> Features
+> Geometry-aware Ray Tokens Ray Transformer
+> Metric Scale
+> Estimation Median Centering
+> Posterior Uncertainty Estimation
+> Median Centering
+> Datum Head Relief Head
+> RPC Height-Ray Sampling
+> Source Feature Reference Feature
+> Object-space Height Ray
+> Trainable Frozen Analytic / Deterministic
+> Fig. 2. GeoRay architecture. RPC ray reasoning estimates relief, the datum head anchors absolute level to the RPC height coordinates, and calibrated precision fusion returns bHwith uncertainty bσ. Lock symbols mark frozen backbones, flame symbols mark trainable modules, and gray blocks denote parameter-free analytic operators.
+
+long recognized the coupling between absolute geolocation and systematic sensor error: vendor RPCs are corrected by low-order image-space bias models [14], [15], and bundle adjustment is defined only up to gauge freedoms fixed by external constraints [16]. A remaining gap is a unified feed-forward treatment in which this ambiguity is made explicit, learned uncertainty is calibrated on the same output frame, and sparse control has a precise role. GeoRay connects these ideas in a single satellite reconstruction model. III. M ETHOD 
+
+A. Problem Setting: Reconstruction in RPC Object Space 
+
+A satellite acquisition provides views {(Ii, Pi)}Ni=1 of a geographic tile, where Pi is the rational polynomial camera of view i: a pair of rational maps between normalized geode-tic coordinates (ϕ, λ, h ) and normalized image coordinates 
+
+(r, c ) [7]. Because the pushbroom sensor assigns each scan-line its own perspective center [6], no single global pinhole epipolar geometry exists and depth along a pinhole ray is not a meaningful variable. The natural parameterization is instead the localization ray : for a pixel p in a reference view r and a height hypothesis h,
+
+x = Lr (p, h ) ∈ R3, qi = Pi(Lr (p, h )) , (1) where Lr is the inverse RPC of the reference view and qi
+
+the reprojection into view i. Sweeping h traces a curve in object space, sampled in meters of geodetic height rather than in depth. The sensitivity of correspondence to height is the 
+
+disparity rate 
+
+ρi(p) = ∂q i 
+
+> ∂h
+
+(p, h ) 2
+
+[px/m ], (2) which is nearly constant over the relevant bracket and is set by the convergence geometry of the acquisition; it plays the role that the baseline-over-depth ratio plays for pinhole stereo, and it will recur as the natural conditioning variable for both adaptation and fusion. Given N views ( N =3 throughout), the task is to predict a geodetically referenced height field 
+
+bH : Ω → R with per-pixel uncertainty bσ in a single forward pass, evaluated in the absolute vertical datum without any alignment to reference data. Vendor RPCs carry systematic pointing error, classically corrected by low-order bias compen-sation [14], [15]; the coupling this induces between absolute height and sensor bias is formalized in Sec. III-D. 
+
+B. Architecture Overview 
+
+Fig. 2 summarizes the model. Multi-view images are en-coded by a frozen VGGT backbone [2]; trainable low-rank adapters make its features suitable for RPC ray sampling. For each reference pixel, RPC geometry maps a set of met-ric height hypotheses into the source feature maps, forming geometry-aware ray tokens that are reasoned over by a com-pact Ray Transformer. The resulting height posterior yields a multi-view relief estimate bHmv and uncertainty bσmv . In parallel, frozen MoGe-2 [5] is queried once on the reference image and converted to a metric monocular relief estimate 
+
+bHmono with uncertainty bσmono . The datum head anchors the absolute level, which ray matching alone cannot identify, to the height coordinates delivered with the RPCs and corrects it with a learned residual; calibrated fusion then combines the median-centered relief fields according to their predicted precision. The complete prediction is 
+
+( bH, bσ) = F {Ii, Pi}Ni=1 ; θadapt 
+
+ , (3) where θadapt contains only low-rank adapters and lightweight heads: 12 .4 M trainable parameters versus 1.240 B frozen parameters, approximately one percent of the system; both foundation backbones remain frozen. Each obstacle has its own mechanism: RPC observability, datum identifiability, and heterogeneous-evidence fusion. 4
+
+C. RPC Ray-Field Observability 1) The property: Let Fi = Φ( Ii) ∈ RH′×W ′×C be features from a frozen encoder Φ. For reference pixel p and hypothesis heights {hk}Kk=1 spanning a bracket [hmin , h max ], define ray-field samples and tokens 
+
+fi,k (p) = Fi(Pi(Lr (p, h k))) , (4) 
+
+tk(p) = A(f1,k (p), . . . , f N,k (p)) , (5) where A aggregates across views (feature correlation with a learned mixing layer). A matching distribution follows from a scoring head s:
+
+πk(p) = exp  s(tk(p)) P 
+
+> k′
+
+exp  s(tk′ (p))  . (6) We call the pair (Φ , s ) ray-field observable on a domain if π(p)
+
+concentrates near the true surface height for textured, unoc-cluded pixels. The definition is operational: concentration (the entropy of π), localization (the distance from the mode to the true height), and the dependence of both on the disparity rate 
+
+ρ can each be measured directly. Perspective pretraining does not optimize features for comparison at object-space points reached by rational maps under scanline-varying projection centers. Sec. V-E shows that frozen profiles can be locally sharp yet systematically mislocalized. What adaptation has to restore is localization, for which raw peak contrast is not a proxy. 
+
+2) Ray-consistent adaptation: We restore observability with low-rank adapters [50] ∆Φ on the frozen encoder, trained specifically through ray-field supervision, and acompact geometry token attached to each height hypothesis before scoring. The implemented token records the hypothesis coordinate relative to the bracket and its step, together with disparity-rate–step, pairwise viewing angle, and ground-sampling-distance cues; expressed this way, every entry of the token is invariant to the change of vertical origin introduced in Sec. III-D. The same scoring head can then condition its evidence on the local acquisition geometry without replacing the pretrained representation or fitting a pinhole surrogate. The expected height P 
+
+> k
+
+πkhk is the height-domain counterpart of the soft-argmin readout of learned stereo [51]. A lightweight relief head , a convolutional decoder over the token field, refines it by sharpening discontinuities and suppressing per-pixel outliers. Since the head reads only ray-field internals, its output inherits the invariance of Remark 1: it refines relief and leaves the datum untouched. The multi-view branch outputs bHmv and bσmv . Sec. V-E isolates the representation-level effect of the adaptation and tests its dependence on the supplied RPC geometry. 
+
+D. The Height–Datum Gauge 1) Observation model and identifiability: Sensor pointing error is classically modeled as a low-order image-space cor-rection to each RPC [14], [15]. Writing βi for the (unknown) correction parameters of view i, the reprojection consistent with a height field H is 
+
+qi(p) = Pi(Lr (p, H (p))) + Ai(p) βi, (7) with Ai the design matrix of the bias model (constant and linear image-coordinate terms). Multi-view matching observes only the qi. Linearizing at a working solution, write ji(p) = 
+
+∂q i/∂h ∈ R2 for the height Jacobian of view i, so that 
+
+ρi = ∥ji∥2 of Eq. (2) is its magnitude. A vertical perturba-tion δH displaces view i’s reprojection by ji(p) δH (p), and is unobservable exactly when that image-space footprint is reproducible by admissible bias updates: 
+
+ji(p) δH (p) + Ai(p) ∆ βi = 0 ∀i, p. (8) 
+
+Proposition 1 (First-order gauge and gauge fixing): Fix a tile, and let ε > 0 denote the reprojection precision below which matching evidence is not informative. Define 
+
+R(δH ) = min  
+
+> {∆βi}
+
+max  
+
+> i
+
+ji δH + Ai ∆βi L2(Ω) , (9) where the norm is the root mean square over tile pixels. Write ji(p) = ρi(p)ni(p) and let η bound the relative spatial variation of ρi and ni over the tile. For the affine height family 
+
+B = span {1, x, y } induced by the constant and linear terms of the standard image-space bias model: (i) every b ∈ B admits an admissible bias update with R(b) = O(η ρ ∥b∥), and is therefore ε-unobservable whenever this residual lies below ε;(ii) in the locally affine, constant-Jacobian limit η → 0, B
+
+is an exact three-dimensional null subspace of the linearized observation model; and (iii) control points {(xj , h ∗ 
+
+> j
+
+)}kj=1 fix any chosen components of this subspace through 
+
+bH(k) = bH + b∗, b∗ = arg min 
+
+> b∈B
+> k
+
+X
+
+> j=1
+
+  bH(xj ) + b(xj ) − h∗
+
+> j
+
+2,
+
+(10) which is unique whenever the corresponding control-point de-sign has full column rank. In particular, one point fixes the scalar sub-gauge span {1}. The accuracy of the affine approx-imation is a property of the cameras, not of a reconstruction model, and is measured directly in Sec. V-F. 
+
+Proof. At first order, a height perturbation is hidden whenever its image-space footprint jiδH can be represented by the ad-missible bias field Ai∆βi. In the constant-Jacobian limit, the constant and linear bias terms generate an affine scalar field along the fixed height sensitivity direction, so every b ∈ B has a bias witness and therefore zero residual. Allowing ρi and ni
+
+to vary by a relative O(η) while retaining that witness perturbs the cancellation by O(ηρ i|b|) pointwise, yielding the stated RMS bound. The control problem in Eq. (10) is ordinary least squares on the selected gauge basis and is unique under the stated rank condition. The proposition establishes this modeled low-order null subspace; it does not require that no additional near-null modes exist for a particular camera configuration. □
+
+The experiments probe the scalar sub-gauge with one con-trol point and the full affine family with ten spatially dis-tributed points. The same correction basis is applied to every method, and Sec. V-F measures how accurately the first-order gauge describes the delivered RPCs. 
+
+2) An exact coordinate-origin symmetry: The scalar gauge admits an exact training-time construction. Let δ ∈ R and transform a training sample by 
+
+H∗ 7 → H∗ + δ, oi 7 → oi + δ ∀i, (11) 5(a) 
+
+> =
+> Δπ( p)
+> × 10 −7
+> 0.2
+> 0
+> +3
+> −3
+
+= 1.8 × 10 −7   
+
+> 163 96 −18.29 m
+
+View 1 
+
+View 2 
+
+① Companion views 
+
+h + δ frame 
+
+h frame 
+
+δ = 50m 
+
+② Height hypothesis ladder    
+
+> measured=injected
+> Both views in frame
+> k=1 96 63 96 63 96 63
+> One view clipped
+
+③ Sampled ray field 
+
+④ Hypothesis posterior 
+
+> = +50.000000 m
+> −18.29
+> +31.71
+> Multi -view relief
+> Monocular relief
+> δ-invariant summary
+
+−
+
+Analytic anchor 
+
+Learned residual 
+
++ + Absolute level         
+
+> +δ
+> 0
+> 0
+> 0
+> Forward Gradient Gradient stopped δ-shifted or learned Invariant to δ Analytic +δ 0δ-response
+> +δ
+> +δ
+
+(b)    
+
+> Fig. 3. Height–datum gauge and datum recovery. (a) A joint vertical-origin shift leaves RPC ray samples and the posterior unchanged while translating the height hypotheses, demonstrating that ray-internal evidence cannot identify the datum. (b) The datum head combines an equivariant analytic anchor with aδ-invariant residual to place the absolute level.
+
+where oi is the height offset of view i’s RPC; the hypothesis bracket, anchored to the reference offset, shifts with it, and the images are untouched. This is a change of vertical origin rather than an image-space bias step: the RPC evaluates the normalized height (h − oi)/s i, so shifting H∗ and oi together leaves that argument, and hence every reprojection, identically 
+
+unchanged, with no bias update required. The symmetry is therefore exact, and distinct from the first-order gauge of Proposition 1, which concerns height perturbations absorbed by bias updates at fixed cameras. The transformed sample is exactly as consistent with the observations as the original: the entire ray field is unchanged, while object-space samples translate vertically with the frame. Because the two samples are observationally identical, Eq. (11) provides no learnable cue for the datum estimator; instead, it defines an equivariance requirement: the estimate must move with δ at unit slope although the ray field is unchanged. The shift serves three purposes: a diagnostic that exposes which pathways carry the origin (Remark 1, Fig. 3(a)), a constraint on where a datum estimator may look, and a held-out check on the resulting construction (Sec. V-F). 
+
+Remark 1 (Gauge blindness of ray-internal readouts): Un-der the joint shift of Eq. (11), every reprojection qi,k , every sampled feature, and hence every quantity computed from the ray field alone, including its pooled summary statistics, is invariant to δ. Any datum estimator that reads only ray-field internals is structurally blind to the gauge it must track; equivariance is impossible for it, not merely difficult to learn. Remark 1 is verified end to end in Fig. 3(a) and dictates the design of Fig. 3(b). In the multi-view branch the hypothesis coordinates hk are the only quantity that carries the vertical 6
+
+origin, so the tile level of its readout, med( bHmv ), is exactly equivariant to Eq. (11), while the monocular relief of Sec. III-E is exactly invariant. Their difference is thus a δ-sensitive scalar available in closed form. We use it as an analytic anchor and confine learnable capacity to a residual that is δ-invariant by construction: 
+
+c∆d = sg 
+
+h
+
+med   bHmv 
+
+ − med   bHmono 
+
+i| {z }
+
+> analytic anchor (equivariant)
+
++ rψ
+
+ zinv 
+
+, (12) where med( ·) is the tile median, sg[ ·] is stop-gradient, zinv 
+
+is a pooled δ-invariant ray summary, and rψ is a lightweight residual MLP. The learned residual is isolated from the an-alytic anchor and cannot alter its coordinate-origin response, so Eq. (12) is exactly equivariant to the shift in Eq. (11). The final absolute level is 
+
+bd = med   bHmono 
+
+ + c∆d, (13) Because the monocular median cancels algebraically in the composition of Eqs. (12)–(13), the forward pass reduces to 
+
+bd = med( bHmv ) + rψ (zinv ): the absolute level is the tile level of the ray-field readout plus a learned correction that can only depend on invariant ray statistics. We keep the monocular-referenced form because it is the form in which Fig. 3(b) and the anchor loss of Sec. III-F are stated, and because it makes explicit that the monocular branch contributes relief only. The analytic term fixes the gauge response; the residual corrects systematic level error without touching it. In zero-control mode the vertical origin is the one supplied by the delivered RPC height coordinates, and the residual corrects the systematic part of the vendor-level error that is predictable from invariant ray statistics; a bias-induced shift in the affine family of Proposition 1 that is not systematic remains uniden-tifiable from ray evidence alone and must be resolved by ex-ternal control. The same trained model supports zero control, a single scalar-height control, or sparse affine control through Eq. (10). 
+
+E. Calibrated Fusion and the Conditional Gain Law 1) From the monocular prior to metric relief: The monoc-ular branch is used as a relief prior, not as an absolute-height estimator. MoGe-2 [5] is queried once on the reference image. Its scalar depth field z is passed through the deterministic standardization used by its public implementation, denoted 
+
+S[z], and a lightweight learned scale maps that standardized field to metric relief, 
+
+bHmono (p) = aθ S[z]( p), (14) where S[z] is centered and normalized within the tile. No geodetic offset is taken from the monocular model; the abso-lute level is owned exclusively by the datum mechanism of Sec. III-D. This separation is also what makes the monocular relief invariant to the coordinate-origin shift of Eq. (11). 
+
+2) Placing two streams on one uncertainty scale: The monocular calibration pathway predicts the metric relief scale and a per-pixel uncertainty bσmono ; its height loss is evalu-ated after median centering, so it cannot absorb the absolute datum. The multi-view pathway supplies its own per-pixel relief uncertainty bσmv alongside the ray-field estimate. Both are trained with the heteroscedastic likelihood term in Eq. (17), and Sec. V-G evaluates both the ordering and the empirical interval scale before these uncertainties are used for fusion. 
+
+3) Fusion: Fusion is performed in relief space. Let eH =
+
+H − med( H) and define the multi-view precision weight 
+
+w(p) = bσ−2mv (p)
+
+bσ−2mv (p) + bσ−2mono (p) .
+
+The absolute prediction is 
+
+bH(p) = bd + w(p) eHmv (p) +  1 − w(p) eHmono (p), (15) with bσ2(p) =  bσ−2mv (p) + bσ−2mono (p)−1. The rule is mini-mal by design, which keeps the arbitration transparent: each source contributes in proportion to its predicted precision. The conditional-independence approximation between the two streams can make the fused uncertainty optimistic, so Sec. V-G evaluates interval coverage in both the relief and the absolute frame. 
+
+4) The conditional gain law: Define the pointwise gain over the calibrated monocular prior as 
+
+G(p) = bd + eHmono (p) − H∗(p) − bH(p) − H∗(p) , (16) which is positive where multi-view evidence improves the prediction. The conditional gain law states that E[G | bσmono ]
+
+increases with predicted monocular uncertainty: geometry should contribute most where the prior itself signals unrelia-bility. The conditioning variable is available before the recon-struction error is known, so the relation is prospective, not a post-hoc error taxonomy. Sec. V-G tests the association against a pairing-permutation null and verifies the calibration required to interpret bσmono as a reliability variable. 
+
+F. Training Objective 
+
+All trainable components are optimized jointly: 
+
+L = λhLh + λray Lray + λmono Lmono 
+
++ λanc Lanc + λnll Lnll + λgrad Lgrad . (17) The terms have distinct structural roles. Lh supervises fused height, Lray supervises the height posterior in Eq. (6), Lmono 
+
+trains the monocular metric relief after median centering, Lnll 
+
+calibrates the two predicted variances, and Lgrad preserves height discontinuities. The anchor loss trains the datum resid-ual on the tile level, 
+
+Lanc = c∆d − sg 
+
+
+
+med( H∗) − med( bHmono )
+
+
+
+, (18) which, with the monocular medians cancelling, makes rψ pre-dict the residual tile-level error of the multi-view readout from invariant ray statistics. All loss weights are fixed across the re-ported training runs. Two identities hold by construction under the shift of Eq. (11); we monitor them instead of optimizing them, 
+
+Ctrk =
+
+c∆d δ
+
+− c∆d
+
+
+
+− δ , (19) 
+
+Cinv =
+
+ bHδ − δ
+
+
+
+− bH 1
+
+; (20) 7L1 · Jacksonville  L2 · San Fernando  L3 · Atlanta                
+
+> (a) Relative relief
+> 51 tiles
+> 025 50 75 100
+> Reference relief Q₉₅ − Q₀₅ (m)
+> L1
+> 19.3
+> L2
+> 18.1
+> L3
+> 43.9
+> (b) View convergence
+> 51 tiles
+> 15 25 35 45
+> Median convergence angle (deg)
+> 31.2
+> 17.5
+> 41.0
+> (c) RPC height sensitivity
+> 51 tiles × 3 views · open marker: least sensitive
+> 00.4 0.8 1.2 1.6
+> RPC height sensitivity ρ (px/m)
+> 1.21
+> 0.44
+> 1.06
+
+Fig. 4. Domain shifts across the three SatGauge tiers. Reference relief, view convergence, and RPC height sensitivity summarize the complementary geometric shifts from L1 to L3. TABLE I THREE SAT GAUGE GENERALIZATION TIERS AND THEIR DATA SOURCES .
+
+L1 In-domain L2 Cross-dataset L3 Cross-city 
+
+Source US3D [52] IARPA MVS3D [53] ATL-SN4 [54] Sensor WorldView-3 WorldView-3 WorldView-2 Region Jacksonville, Omaha San Fernando Atlanta Units 234 / 26 tiles 3 AOIs 22 tiles Reference US3D DSM airborne lidar SN4 DSM Shift none (train dist.) region + reference sensor + city + angle 
+
+both vanish identically for the construction of Eq. (12), so they contribute no gradient and serve as consistency assertions that would expose any leak of the vertical origin into a nominally invariant pathway. Sec. V-F reports their held-out value. IV. S AT GAUGE : A BSOLUTE -F RAME EVALUATION 
+
+Existing evaluation conventions can obscure absolute satellite 3D: registration removes the vertical placement under study, test-reference height ranges leak information into learned predictors, and pointwise error alone can reward partial surfaces. SatGauge evaluates public datasets under two governing principles: predictions are scored first in the absolute geodetic frame, and all test-time information comes from imagery, RPC metadata, or training-side statistics, never from the evaluated reference. 
+
+A. Three Tiers of Generalization 
+
+Table I separates three forms of transfer. L1 uses spatially disjoint US3D [55], [56] tiles from Jacksonville and Om-aha. L2 evaluates the unchanged model on IARPA MVS3D, introducing a new region and an independent airborne-lidar 
+
+TABLE II THE SAT GAUGE EVALUATION CONTRACT .
+
+Requirement Operational rule 
+
+Absolute scoring No registration before scoring; aligned metrics reported as diagnostics only. Control budgets Every row labeled k ∈ { 0, 1, 10 }; identical cor-rection family for all methods. Leakage control Test-time inputs enumerated per method; reference-derived tile quantities excluded. Visible degeneracy Accuracy, coverage, and relief fidelity reported jointly; frozen family-level output adapters. 
+
+reference. L3 changes sensor generation, city, and viewing geometry simultaneously using SpaceNet-4 Atlanta. We re-port the tiers separately because they probe different failure axes; Fig. 4 summarizes the associated relief and acquisition geometry. 
+
+B. Evaluation Principles 
+
+Four rules define the evaluation; Table II states them in operational form. 
+
+Absolute placement is ranked before any registration; aligned error is reported only to diagnose removable translation. Control is explicit : every result states whether it uses zero, one, or ten height controls, with the same correction family available to all methods. Test information is leakage-free : hypothesis ranges and normalizations are derived from RPC metadata or training statistics, not from the evaluated reference. Completeness is visible : absolute error is reported together with coverage, relief fidelity, and 
+
+PAG c, so partial or flattened surfaces cannot appear strong through a favorable valid-pixel subset. Per-scene optimization 8                              
+
+> TABLE III MAPPING FROM EACH EXPERIMENT TO ITS DATA SUPPORT ,TRACK ,
+> TRAINING BUDGET ,AND REPORTING LOCATION .
+> Experiment Support Track Budget Where
+> Main comparison L1: 26 tiles FF-MV prod. Sec. V-B Generalization L2: 3 AOIs; L3: 22 FF-MV prod. Sec. V-C Per-scene context 6 L1 tiles; 3 AOIs per-scene † prod. Sec. V-D Mechanisms I–III L1 (+L2 where noted) —prod. V-E–V-G Ablations L1: 26 tiles FF-MV red. Sec. V-H Backbone swaps L1: 26 tiles FF-MV red. Sec. V-H
+
+is reported separately, as an accuracy–compute reference, and is kept out of the feed-forward ranking. V. E XPERIMENTS 
+
+A. Experimental Setup 1) Metrics: Let Ωval denote reference-valid pixels and 
+
+Ωeval ⊆ Ωval the pixels predicted by a method. Absolute MAE 
+
+is measured directly in the geodetic frame; aligned MAE is a diagnostic after bounded 3-DoF translation, with the accepted-registration fraction reported as Reg. To couple accuracy with completeness, we use 
+
+PAG c 
+
+> τ
+
+= {p ∈ Ωeval : | bHreg (p) − H∗(p)| < τ }
+
+|Ωval | , (21) with τ ∈ { 2.5, 7.5} m; unpredicted pixels count as failures. Here bHreg is the prediction after the diagnostic translation, which is computed for every tile; the acceptance guard decides only which tiles enter the Aln. average (the fraction reported as Reg.), so PAG c 
+
+> τ
+
+is defined for every method regardless of Reg. Coverage is reported using the denominator native to each benchmark tier, and relief fidelity is the ratio between the predicted and reference 5–95 percentile height spreads. We also report error on strong height discontinuities. For GeoRay, uncertainty quality is measured by Gaussian negative log-likelihood, interval coverage, and AUSE from bσ-ordered sparsification [57]. All aggregates are unweighted means over tiles. Table III maps every experiment to its data support, training budget, and comparison track. 
+
+2) Geodetic reference handling: All heights are expressed in the height convention of the reference product released with each tier, and RPCs are used as delivered, with the hypothesis bracket anchored to their height offset. Absolute here means scored in that frame with no alignment to the reference; it is not a claim of independently surveyed orthometric accuracy. Any residual difference between the RPC and reference height conventions would enter as a tile-constant offset, i.e., the scalar sub-gauge span {1} that the k=1 experiments of Sec. V-F mea-sure directly; the anchor-only absolute error on L1 ( 3.63 m, Table VIII) and the zero-shot absolute error on L2 ( 3.21 m) are well below the geoid–ellipsoid separation at those sites, which excludes a convention mismatch of that magnitude. 
+
+3) Baselines and Comparability: Seventeen baselines span classical photogrammetry [8], [26], [27], supervised satellite MVS [11], [32], generalizable splatting [12], [40]–[44], zero-shot foundation models [2], [19], [45], and per-scene optimiza-tion [9], [10], [33], [36], [58]. Concurrent methods without public code at submission [13], [25], [38], [39], [46] are discussed but not re-implemented. All methods receive the same fixed view triplets and are mapped to a common geodetic height grid. Pinhole-native models use the best-fit local perspective approximation to the RPC [29]; non-height outputs are converted by fixed family-level adapters. Rows that fit an affine height map to the test reference are marked as oracle context and excluded from ranking. When ground control is provided, every method re-ceives the same seeded control locations and the same cor-rection basis of Proposition 1. These choices preserve each method’s native inference while making absolute placement, completeness, and control budget comparable. 
+
+4) Implementation: Training uses 256 2 crops, three views, and K=96 height hypotheses for 20k AdamW iterations with cosine decay (model selection at the best dev-validation check-point, 16k). Rank-16 LoRA adapters ( α=32 ) are inserted into the attention projections and upper-block MLPs of the frozen VGGT encoder; MoGe-2 remains frozen. AdamW (weight decay 0.01 , gradient clipping at norm 1) uses learning rates of 2 × 10 −4 for the adapters and heads and 1 × 10 −4 for the LoRA parameters, with a 1k-iteration linear warmup be-fore the cosine decay; batches hold two crops per GPU with two-step gradient accumulation on 3–6 GPUs (effec-tive batch 12 –24 ). The Ray Transformer has 4 layers, 8
+
+heads, and width 256 (feed-forward 1024 ) over the K=96 
+
+hypotheses; the datum residual is a two-layer MLP of width 
+
+64 and the relief head a two-level UNet of base width 
+
+32 . The loss weights (λh, λ ray , λ mono , λ anc , λ nll , λ grad ) are 
+
+(1 , 0.5, 0.2, 0.2, 0.1, 0.05) , with λnll ramped linearly over the first 3k iterations. Training batches are δ-shifted with prob-ability 0.5 (δ ∼ U (−10 , 10) m), which leaves the objective unchanged under the exact symmetry of Eq. (11) and exercises the consistency identities of Sec. III-F during training; height brackets are anchored to the reference-view RPC using extents fixed from training data. Model selection uses eight spatially disjoint development tiles from the training region. Full tiles are decoded in the geodetic frame from 256 -pixel windows. On one A800 GPU, GeoRay requires 24 .0 s of model-forward time ( 89 .5 s end to end) per L1 tile. 
+
+B. Main Results 
+
+Table IV establishes the central result: preserving absolute placement changes the ranking of satellite 3D systems. Geo-Ray reaches 2.99 m absolute MAE and 1.78 m aligned MAE at 91 .9% coverage, while several perspective-native models keep reasonable local relief but carry large vertical offsets. Its completeness-aware accuracies at 2.5 and 7.5 m are 72 .6% 
+
+and 89 .7% (Fig. 6), 46 .4 and 27 .3 points above the strongest compliant feed-forward baseline. Sat-MVSF reaches 4.70 mover only 12 .4% of the surface, which is why error and com-pleteness have to be read together. The gain is consistent across the test set. A tile bootstrap gives a 95% interval of [2.36, 3.74] m for GeoRay’s mean absolute error, and GeoRay wins all 26 tiles against SkySplat in both absolute error and PAG c2.5. The paired absolute-error margin is [6.81, 10.74] m at 95% confidence, and the advantage 9      
+
+> TABLE IV ABSOLUTE DSM RECONSTRUCTION ON 26 HELD -OUT US3D TILES WITHOUT GROUND CONTROL .
+
+Absolute placement Accuracy–completeness Relief Method Abs. MAE ↓ Aln. MAE ↓ Reg. ↑ PAG c2.5 ↑ PAG c7.5 ↑ Cov ↑ RF ( 100 ideal) (m) (m) (%) (%) (%) (%) (%) 
+
+Feed-forward multi-view (primary track) 
+
+DepthSplat [42] 25.90 12.16 96.2 10.0 30.8 88.9 273.7 HiSplat [43] 33.68 7.90 53.8 15.8 43.5 81.4 233.0 MVSplat [41] 101.96 3.49 3.8 25.9 61.9 84.0 38.1 pixelSplat [40] 227.71 – 0.0 21.5 51.5 79.7 131.6 SatMVS [11] 8.16 6.26 73.1 26.2 62.4 90.1 219.0 Sat-MVSF [32] 4.70 3.36 80.8 7.8 11.1 12.4 108.5 
+
+SkySplat [12] 11.73 8.04 92.3 18.9 47.6 77.9 187.0 TranSplat [44] 49.71 25.08 11.5 4.2 10.9 68.1 610.7 
+
+Context: classical CPU pipeline ( †) and test-calibrated foundation models ( ‡)
+
+S2P † [8] 15.59 4.89 50.0 19.3 37.1 47.4 36.0 AnySplat ‡ [45] 12.39 6.59 69.2 25.9 62.5 93.0 99.6 DA3 ‡ [19] 11.11 5.47 92.3 28.9 67.4 92.9 101.9 VGGT ‡ [2] 11.83 6.11 92.3 27.2 62.1 93.1 96.5 GeoRay (ours) 2.99 1.78 96.2 72.6 89.7 91.9 88.4      
+
+> Abs./Aln.: MAE before/after bounded 3-DoF translation, Aln. averaged over tiles with an accepted alignment; Reg.: fraction of such tiles. PAG c
+> τmeasures the fraction of all reference pixels both predicted and within τafter diagnostic alignment. Cov and RF are computed in the absolute frame. †Per-scene context; ‡test-reference calibration, excluded from ranking.
+
+0
+
+20 
+
+40 
+
+60 
+
+80 
+
+0.2 1 5 20 100 
+
+> PAG  c2.5  (%)
+
+Forward time per tile (s) 
+
++46.4 GeoRay (ours) 
+
+SatMVS 
+
+Sat-MVSF S2P †
+
+SkySplat pixelSplat HiSplat MVSplat DepthSplat 
+
+TranSplat 
+
+VGGT ‡
+
+DA3 ‡
+
+AnySplat ‡
+
+supervised stereo splatting 
+
+foundation ‡ 
+
+classical †   
+
+> Fig. 5. Accuracy–efficiency trade-off on US3D. Completeness-aware accu-racy is plotted against model-forward time per tile.
+
+persists under sparse ground control (Table V). Fig. 5 plots the same accuracy against model-forward time per tile, obtained in one feed-forward pass with no scene-specific optimization. 
+
+C. Generalization across Tiers 
+
+Table VI evaluates unchanged models under two out-of-distribution shifts. On L2, GeoRay achieves the best abso-lute and aligned error among compliant feed-forward methods (3.21 /2.86 m) at 86 .7% coverage. Sat-MVSF is close in abso-lute error ( 3.37 m) but covers only 39 .1% , whereas SkySplat                                       
+
+> TABLE V SPARSE -CONTROL RESPONSE ON US3D UNDER THE SHARED AFFINE CORRECTION MODEL .Method k=0 k=1 k=10 ∆gauge
+> pixelSplat 227.71 11.15 8.89 96 .1%
+> MVSplat 101.96 7.87 6.12 94 .0%
+> HiSplat 33.68 14.38 11.46 66 .0%
+> DepthSplat 25.90 18.06 13.40 48 .3%
+> TranSplat 49.71 37.96 32.13 35 .4%
+> SkySplat ∗11.73 10.88 8.68 26 .0%
+> GeoRay (ours) 2.99 2.14 1.82 39 .2%
+> All methods use identical control locations and the same correction basis.
+> ∆gauge is the fraction of zero-control error removed at k=10 ;∗denotes an RPC-native baseline.
+
+preserves more coverage but larger error. The L1 advantage thus survives a new region and an independent lidar reference. L3 jointly changes city, sensor, and acquisition geome-try. Under this stronger shift, GeoRay retains 90 .7% cov-erage and the best compliant feed-forward absolute/aligned error ( 23 .88 /15 .74 m), while supervised satellite MVS and perspective-native systems either lose coverage, inflate relief, or retain large datum error. Figs. 7 and 8 show the same pattern visually: accuracy degrades under the shift, while the reconstructed surface stays substantially more complete and better placed in the geodetic frame. We keep the three tiers separate, since averaging distinct shifts into one number would hide exactly this structure. 
+
+D. Comparison with Per-Scene Reconstruction 
+
+Per-scene optimization refits every scene independently and so provides an accuracy–compute reference (Table VII). On the common six-scene US3D subset, GeoRay reaches 2.49 mabsolute error in 24 .0 s of model-forward time ( 89 .5 s end to 10 RGB  Reference  VGGT ‡ DA3 ‡ AnySplat ‡ DepthSplat  HiSplat  SkySplat  SatMVS  GeoRay (ours) 
+
+> US3D (L1) IARPA MVS3D (L2)
+> JAX_207 OMA_043 OMA_244 IARPA_001 IARPA_002 IARPA_003
+> -6
+> -25
+> 304
+> 285
+> 312
+> 281
+> 32
+> 21
+> 39
+> 19
+> 46
+> 19
+> m
+> m
+> m
+> m
+> m
+> m
+
+Fig. 6. Qualitative relief reconstruction on L1 and L2. All methods share the reference display range and per-tile median alignment so the comparison emphasizes local relief and completeness. TABLE VI ZERO -SHOT TRANSFER FROM US3D TO IARPA MVS3D (L2) AND ATL-SN4 (L3). 
+
+IARPA MVS3D (L2) ATL-SN4 (L3) Method Abs. ↓ Aln. ↓ Reg. ↑ Cov g ↑ RF Abs. ↓ Aln. ↓ Reg. ↑ Cov g ↑ RF (m) (m) (%) (%) (%) (m) (m) (%) (%) (%) 
+
+Feed-forward multi-view (primary track) 
+
+DepthSplat 7.41 6.18 100.0 87.6 180.3 58.67 38.72 90.9 74.8 352.0 HiSplat 17.72 6.91 33.3 82.6 123.4 99.73 28.59 13.6 55.9 296.6 MVSplat 60.12 4.36 33.3 84.5 37.2 375.25 – 0.0 80.1 52.1 pixelSplat 6.58 – 0.0 86.8 84.2 45.47 23.87 9.1 60.8 204.2 SatMVS 5.66 5.19 100.0 79.2 103.1 115.11 49.10 31.8 71.7 360.4 Sat-MVSF 3.37 3.33 100.0 39.1 100.8 50.01 – 0.0 0.2 453.8 SkySplat 5.07 3.25 100.0 96.0 100.6 69.48 37.11 63.6 83.5 283.2 TranSplat 59.22 7.70 33.3 82.7 56.2 373.14 – 0.0 77.3 59.1 
+
+Context: per-scene ( †) and test-calibrated ( ‡)
+
+S2P † 2.02 1.59 100.0 59.5 100.8 6.63 6.50 86.4 21.7 84.7 AnySplat ‡ 15.39 5.73 100.0 78.9 189.2 17.38 14.47 40.9 93.9 68.5 DA3 ‡ 13.39 5.25 100.0 78.2 197.3 14.52 12.68 59.1 93.5 64.5 VGGT ‡ 13.79 5.59 100.0 78.3 199.6 17.06 13.83 50.0 93.9 67.8 GeoRay (ours) 3.21 2.86 100.0 86.7 81.0 23.88 15.74 45.5 90.7 118.7 
+
+Columns follow Table IV; Cov g is grid coverage using each tier’s common scorer. Aligned MAE is reported only for tiles with an accepted bounded translation; “–” indicates that none is accepted. 
+
+end), compared with 2.89 m in 1964 s for EOGS, while cover-ing more of the surface. On the three IARPA AOIs, EOGS is more accurate ( 1.68 versus 3.21 m) but requires two orders of magnitude more computation. GeoRay is thus a reusable feed-forward model that complements scene-specific optimization, which stays preferable wherever maximum per-scene accuracy justifies the extra compute. 11 Reference   
+
+> Cov g58.9% Δz +0.12 m
+
+Sat-MVSF   
+
+> Cov g100.0% Δz +0.18 m
+
+SatMVS   
+
+> Cov g100.0% Δz +0.26 m
+
+GeoRay (ours)             
+
+> JAX_331
+> L1 · US3D
+> m
+> 0
+> -23
+> Cov g7.8% Δz -0.34 m Cov g100.0% Δz +61.41 m Cov g 100.0 %Δz -1.95 m
+> ATL_306
+> L3 · ATL
+> m
+> 275
+> 226
+> Fig. 7. Unregistered surfaces in the geodetic frame. Representative in-domain and cross-city reconstructions are rendered at their predicted absolute elevations with a shared vertical scale within each row. TABLE VII COMPARISON WITH PER -SCENE RECONSTRUCTION ON THE COMMON NINE -SCENE SUBSET .
+
+US3D subset (6 scenes) IARPA (3 AOIs) Method Abs. ↓ Aln. ↓ Cov ↑ RF Time ↓ Abs. ↓ Aln. ↓ Cov ↑ RF Time ↓
+
+(m) (m) (%) (%) (s) (m) (m) (%) (%) (s) S2P † [8] 15.96 4.90 45.5 30.9 123 2.02 1.59 59.5 100.8 32 NeRF † [58] 11.57 3.40 99.4 7.8 16435 6.92 3.83 96.8 129.9 12035 S-NeRF † [33] 5.99 4.93 ∗ 99.3 57.6 28240 7.91 4.34 96.8 46.9 30721 Sat-NeRF † [9] 5.39 2.10 ∗ 99.3 72.8 30426 2.12 1.86 96.6 100.2 32598 EOGS † [10] 2.89 2.89 32.7 97.8 1964 1.68 1.47 100.0 99.9 1358 EOGS++ † [36] 3.01 2.44 32.7 85.8 2781 1.98 1.39 100.0 99.0 1388 GeoRay (ours) 2.49 1.68 85.7 89.6 24.0 / 89.5 3.21 2.86 86.7 81.0 9.1  
+
+> Abs. averages all scenes; Aln. averages scenes with accepted bounded registration. Coverage follows each method’s native output support; RF uses the common valid intersection. Time is per-scene wall-clock on identical hardware; for GeoRay the US3D entry gives model-forward / end-to-end time and the IARPA entry model-forward time. ∗Aln. aggregated over the single US3D scene passing the registration guard; the other five are excluded as unregistered.
+
+E. Mechanism I: RPC Ray-Field Observability (C1) 
+
+Frozen perspective-pretrained features are not reliably ob-servable along RPC height rays, and lightweight ray-consistent adaptation restores the property. This section characterizes the intervention at the feature level, whereas the ablation table reports it as an end-to-end metric delta, and the two readings answer different questions. All mechanism analyses here and in the two sections that follow use the production model (Table III); the reduced-budget protocol applies only to the ablations. 
+
+Protocol. On a fixed, deterministically sampled set of 2,600 
+
+pixels spanning building edges, rooftops, and ground across all test tiles, we trace each pixel’s RPC height ray and record the cross-view feature-cosine profile over the K hypotheses, under an identical similarity metric and normalization for frozen and adapted features; the ray-readout posterior is recorded separately, so feature-level and head-level effects are never conflated. 
+
+Findings (Fig. 9(a)–(c)). Frozen profiles peak a median 
+
+6.99 m from the true height at contrast 0.192 ; adaptation moves the peak to a median 2.72 m (P90 8.62 m), a 2.6×
+
+localization gain, while the raw contrast falls to 0.138 . Higher contrast in the frozen features is thus no evidence of better localization: it accompanies larger per-pixel DSM error (Spear-man rs = 0 .36 ). The ray readout supplies the final posterior sharpness, so adaptation corrects localization and the readout sharpens the posterior. 
+
+Counterfactuals (Fig. 9(d)). Five RPC corruption families (shuffled view–RPC pairing, height offset, drift, randomized rays, and view swap) each break the correspondence between images and cameras; reconstruction degrades by 1.2–30 .4×,and for four of the five the degradation grows monotonically over training. A sixth family permutes the views together with their RPCs, so every image–camera pair survives and the geometry is untouched: it costs nothing ( 1.00 ×). This paired-view permutation is the control the analysis requires: what degrades reconstruction is corrupted camera geometry, not perturbed input, so the restored competence is geometric and not an effect of memorized appearance. 12 0   
+
+> 25
+> 50
+> 75
+> 100
+> 310 30 100
+
+Absolute MAE (m, log) 
+
+> Coverage (%)
+> L1 L2 L3 L1 L2 L3
+> L1 L2
+> L3
+
+GeoRay (ours)    
+
+> SatMVS Sat-MVSF
+> error ×14,
+> coverage 90→ 72
+> surface collapses to 0.2%
+> GeoRay (ours)
+> SatMVS Sat-MVSF
+> complete
+> & accurate
+> Fig. 8. Accuracy–coverage trajectories across the three tiers. Paths from L1 to L3 separate error growth at retained coverage from apparent accuracy caused by coverage collapse.
+
+F. Mechanism II: The Height–Datum Gauge (C2) 
+
+The gauge behaves as constructed: the datum estimate tracks an injected shift with slope 1.00 , a single control point removes most of the residual scalar datum error, and what remains is a low-order field. We establish each claim in turn. 
+
+Validity of the first-order gauge. Proposition 1 is an ap-proximation, and its quality is a property of the cameras, so we measure it on them with no model in the loop. For each tile and each view we inject the modes of B at amplitudes 
+
+δ ∈ {± 10 , ±30 , ±50 } m, form the exact reprojection displace-ment field, and fit the admissible bias update of Eq. (7) to it in least squares; what is left is R of Eq. (9). At δ = 50 mthe constant mode leaves R = 1 .3×10 −4 px against a dis-placement field of 75 .1 px, and the affine modes leave at most 
+
+0.051 px at the worst tile. Divided by the disparity rate, the 
+
+constant-mode residual is 7×10 −5 m of observable height out of the 50 m injected: multi-view evidence, read at any precision these cameras support, constrains a part in 10 6 of a scalar datum shift, and the tilt modes, whose residual is two orders larger, remain far below any usable matching precision. That the number is small is only meaningful against a control, so we repeat the fit for a perturbation outside B, which the bias model has no witness for: it leaves a residual five to six orders of magnitude larger on every tier ( 1.2×10 5 to 1.7×10 6 times the constant-mode value). The separation is wide enough to identify the affine family as a genuine near-null direction of these cameras and not an artifact of the fit. The measured residual sits far below the O(η) bound of Proposition 1(i) because the bias design absorbs the affine part of the variation of ji as well, leaving second-order terms; the bound is an upper bound and these cameras are better behaved than it requires. The same measurement on the strongly oblique cross-city cameras ( R = 0 .015 px) is what Sec. V-I reads its residual datum field against. 
+
+Gauge tracking. We vary the RPC height origin over the tested δ ∈ [−7, 7] m sweep while leaving the images fixed. The datum estimate follows with unit slope to numerical precision, with maximum residual below 6.53 μm (Fig. 10(b)). The same equivariance holds for the full prediction, not only the datum head: over the same sweep the fused height field follows the injection with slope 0.9999 , its displacement from the shifted reference staying within 0.008 m at the 95 th percentile. The monocular relief is unchanged to the reported precision, as required by the coordinate-origin separation in Sec. III-D. The experiment is a direct held-out verification of the constructive equivariance and reports the held-out value of the consistency identities of Sec. III-F; it makes no extrapolation claim beyond the ±10 m training-shift interval. 
+
+Control response, and what it reveals about the field. Ta-ble V applies the correction family of Proposition 1 identically to every method. The last column estimates how much of each system’s absolute error is attributable to the low-order datum component rather than the remaining relief error. The two sys-tems with the largest absolute errors, both pinhole-native, place 
+
+94 and 96% of that error in the datum ( 101 .96 → 6.12 and 
+
+227 .71 → 8.89 m). Most of their error is thus a matter of abso-lute placement, not local relief, exactly as expected when the low-order gauge dominates the unregistered prediction. The RPC-native baseline leaves the smallest share ( 26 .0% ), con-sistent with its explicit treatment of RPC geometry. TranSplat shows the opposite pattern: only about one third of its error is removable, indicating that relief error dominates. Since the reported share is a ratio, it describes error composition and not error magnitude. The gauge belongs to the observation model and is inherited by every method: absolute satellite reconstruction is limited by identifiability as much as by model capacity. Even after correction, the best-responding baseline, MVSplat, ends at 6.12 m versus GeoRay’s zero-control 2.99 m. The ordering is also unchanged on both shift tiers, where HiSplat reaches 7.21 and 39 .96 m under the same ten points. GeoRay’s own response separates the two control regimes as the analysis predicts. One point fixes the scalar gauge and recovers 70 .7% of the remaining absolute–aligned gap (2.992 → 2.137 m against the 1.782 m aligned floor); ten constrain the affine field ( 1.82 m). Under transfer the regimes diverge: on L2, where the zero-control datum gap is already 
+
+0.35 m and below the noise of a single control height, one point cannot help ( 3.21 → 3.99 m) while ten distributed points do ( 3.13 m), whereas on L3 the scalar correction provides limited improvement for the smooth low-order field of Sec. V-I (23 .88 → 22 .09 m), while the affine correction reduces the error to 16 .94 m, recovering 74% of the affine-oracle gain. 
+
+Population view. Per-tile signed datum errors separate the families (Fig. 10(d)): pinhole-derived methods scatter over tens of meters, supervised RPC-MVS depends on its height prior, and GeoRay concentrates near zero. 
+
+G. Mechanism III: Calibration and the Conditional Gain Law (C3) 
+
+The fusion of Eq. (15) requires uncertainties that are use-ful both for ranking and for scale. On held-out data, pre-dicted uncertainty yields NLL = 2 .53 and sparsification error 13 (b) 
+
+(c)  (d) (a)                         
+
+> Frozen Adapted
+> 0.190
+> 0.139
+> peak error 6.99 → 2.72 m
+> Truth
+> 0.2 0.1 00.1 0.2
+> −30
+> −20
+> −10
+> 0
+> 10
+> 20
+> softmax weight over the K= 96 hypotheses
+> height hypothesis (m)
+> Similarity Readout
+> 12.5× narrower
+> Truth
+> 10.5 00.5 1
+> 250
+> 300
+> 350
+> 400
+> 450
+> profile, peak -normalised
+> height hypothesis (m)
+> 64% of 2,600 pixels improve
+> Median 6.99 → 2.72 m
+> 110
+> 1
+> 10
+> frozen peak error (m, log)
+> adapted peak error (m, log)
+> Height offset 30.4×
+> Shuffled view –RPC
+> pairing pairing 12.4×
+> Randomized rays 2.43 ×
+> Drift 2.41 ×
+> View swap 1.24 ×
+> Paired permutation 1.00×
+> 1310 30
+> degradation at 16k iterations ( ×, log)
+
+Fig. 9. Observability along RPC height rays. Matching localization, posterior concentration, and camera counterfactuals isolate the effect of ray-consistent adaptation. Unabsorbed   
+
+> Tilt
+> Constant
+> 1 px
+> 10 30 50
+> 10 ⁻⁵
+> 10⁻³
+> 10 ⁻¹
+> 10¹
+
+injected datum shift | δ| (m) 
+
+> reprojection RMS (px)
+
+(a)     
+
+> ≤ 6.53 μm
+> −7−3.5 03.5 7
+> −5
+> 0
+> 5
+
+injected shift δ (m) 
+
+> d̂ − δ (μm)
+
+(b)   
+
+> GeoRay −39 %
+> SkySplat −26%
+> DepthSplat −48%
+> HiSplat −66%
+> TranSplat −35%
+> MVSplat −94%
+> pixelSplat −96%
+> k = 10 k = 0
+> 10 100
+> absolute MAE (m, log)
+
+(c)           
+
+> GeoRay 0.92
+> SkySplat 0.88
+> S2P 0.54
+> SatMVS 0.65
+> Sat-MVSF 0.58
+> MVSplat 1.00
+> DepthSplat 0.85
+> sm
+> −10 010 100
+
+signed datum error ed (m, symlog) 
+
+(d) 
+
+Fig. 10. The height–datum gauge, measured. Injected-shift response, per-camera gauge spectra, and sparse-control behavior establish the low-order structure of absolute error. 
+
+AUSE = 1 .02 m [57] (Fig. 11(c)), with conservative empirical interval coverage and spatial agreement with realized error. These results license the use of predicted uncertainty as the conditioning variable below. 
+
+Calibration. Sparsification evaluates the ordering of pre-dicted uncertainty; calibration of its numerical scale is a sep-arate question, and that scale enters the fusion weights of Eq. (15). We report interval coverage against nominal [59], [60], read on the median-centered residual that bσ models, with the absolute-frame result reported alongside it so that per-tile datum error remains visible. The intervals are conservative, not exact. The nominal 68 .3% and 95 .0% levels cover 87 .0% and 
+
+97 .0% at a variance-scaling factor RMS( e/ bσ) = 0 .78 , indicat-ing conservative scale calibration rather than overconfidence. The excess coverage is concentrated at the narrower interval and nearly vanishes at the wider one. The pattern points to non-Gaussian residuals, more sharply peaked near zero but heavier tailed, so a single variance rescaling cannot match both coverage levels at once. The calibration head acts on the fusion weights and on the ordering (its removal costs 0.031 –0.198 macross the tiers, below) rather than on the interval scale, which the heteroscedastic likelihood already sets ( 0.79 , at 86 .4% and 
+
+97 .0% , without the head). In the absolute frame, the same intervals cover 66 .7% and 85 .1% . The lower coverage reflects the datum component that bσ does not model and that Fig. 10(d) reports across the test population. The measured over-coverage is conservative despite the shared-image dependence between the two streams, so the independence approximation does not create an overconfident interval in practice. A datum-consistent sweep over fixed global weights then provides a direct refer-ence for the learned gate (Fig. 11(d)). Its best fixed choice lies at the boundary, w = 1 , with 3.180 m MAE; under the same protocol, the learned gate reaches 3.143 m, a 0.036 m gain. The sweep scores every w on the joint valid-pixel mask of the three 14 (b)    
+
+> 0.96
+> Max 0.88
+> 0 / 500
+> μ 0.008 σ 0.342 −1 01
+> rs, permuted pairing
+> 0
+> 50
+> 100
+
+(c)       
+
+> +28.2
+> q0.683 → 87.0%
+> q0.95 → 97.0%
+> NLL 2.529 AUSE 1.015 m
+> 050 100
+> nominal coverage q(%)
+> empirical coverage (%)
+
+(d)            
+
+> w0.951 Fixed, w = 1 3.180
+> Learned 3.143 Δ 0.036
+> Official † 2.992 Δ 0.188 †Cross-harness 00.5 1.0
+> 3.2
+> 3.4
+> 3.6
+> 3.8
+> 4.0
+> fixed weight won the multi-view branch
+> absolute MAE (m) decile of predicted σmono
+
+(a)              
+
+> 1.91 m rs= 0.96 123456789 10
+> 0
+> 0.5 1.0
+> 1.5
+> 2.0
+> fusion gain (m)
+> 3.7 54.6
+> σmono (m, log)
+> 0.50 m
+> Fig. 11. Calibration and the conditional gain law. Reliability, interval coverage, permutation and fixed-weight controls test where multi-view evidence should dominate.
+
+streams with the per-tile datum held fixed, whereas the main evaluation protocol scores the fused raster on its own support; the same predictions therefore carry a constant ≈ 0.19 m offset at every w. The reported 2.992 m result follows the main-table protocol and is kept separate from the fixed-weight sweep. The learned weight distribution is concentrated near the same boundary (median 0.951 , mode 0.95 ), so the learned weights remain close to the fixed-weight optimum while retaining the pixelwise variation tested by the conditional law below. 
+
+The conditional law. Stratifying the fusion gain of Eq. (16) by predicted monocular uncertainty yields a profile that rises with predicted uncertainty from 0.50 m in the most confi-dent decile to 1.91 m in the least, a 3.8× rise with rank correlation 0.96 across the ten deciles (Fig. 11(a)). A per-mutation null tests whether this ordering could arise from the marginal distributions alone. Each of 500 repetitions ran-domly permutes the pixel pairing between predicted monocu-lar uncertainty and realized fusion gain over the full leakage-controlled pixel set, then recomputes the decile profile and its rank correlation. The null centers at 0.008 ± 0.342 , no draw reaches the observed 0.96 (0/500 exceed; plus-one Monte-Carlo p = 1 /(500 + 1) ≈ 0.002 ; Fig. 11(b)). The uncertainty– gain ordering is therefore a population-level association and not an artifact of the decile marginals. 
+
+Disparity rate acts at acquisition scale. Binning the same pixels by ρeff = ( P 
+
+> i
+
+ρ2 
+
+> i
+
+)1/2, the precision with which a triplet resolves height, initially suggests the expected geometric trend, but that trend disappears after controlling for tile identity. An analysis of variance places essentially all of the variation of 
+
+ρeff between tiles and none within them, so binning pixels by it bins them by tile identity; removing per-tile means leaves the marginal at 0.062 m and non-monotonic. We therefore state the law on predicted uncertainty alone. The controlled result is still informative: the near-constancy of ρeff within a tile supports the magnitude component of the tile-scale regime assumed in Proposition 1. The law’s structure transfers across domains: under the L2 shift the multi-view gain stays con-centrated in the least-confident pixels (Spearman 0.98 ), with                                                                
+
+> TABLE VIII ABLATIONS ON THE 26 HELD -OUT US3D TILES .Configuration Abs. ↓PAG c2.5↑Cov ↑RF (m) (%) (%) (%)
+> Inference ablations on the final model
+> GeoRay (final) 2.99 72.6 91.9 88.4 datum head, anchor only ( rψ≡0)3.63 68.9 87.2 86.1 w/o datum head ( c∆d≡0)150.84 47.1 89.8 71.9 uncalibrated fusion 3.02 71.9 92.0 86.2 two views 3.34 68.9 92.0 84.8
+> Fusion-arm checks (inference-time switches)
+> multi-view only 3.01 72.5 91.9 89.9 monocular only 3.86 57.5 92.5 71.8 fixed-weight model ( w≡0.5)3.26 67.6 92.3 78.6
+> Matched-compute retraining
+> Full model (matched compute) 3.59 69.1 91.7 86.2 w/o ray-field adaptation 20.47 26.4 90.7 115.4 multi-view only (retrained) 7.45 42.7 92.1 70.1
+
+a top-decile gain of 1.0 m against 1.9 m in domain — the re-duced magnitude reflecting that the multi-view geometry itself degrades under the same shift. L2 also has the weakest view convergence of the three tiers ( 17 .5◦ median versus 31 .2◦ and 
+
+41 .0◦, Fig. 4(b)), providing a direct geometric explanation for the reduced gain. A further consequence is that the contribu-tion of the fusion components changes as geometry weakens. Switching the monocular stream off costs 0.014 , 0.056 , and 
+
+0.554 m in domain, on L2, and on L3; bypassing calibration costs 0.031 , 0.198 , and 0.134 m. Relative to each tier’s error scale, the monocular stream increases steadily in importance (0.5, 1.7, 2.3% ), whereas the calibration effect is largest on L2 (1.0, 6.2, 0.6% across L1–L3). This pattern is consistent with L2 having the weakest convergence while retaining a compar-atively accurate surface; on L3, large residual errors dominate the uncertainty-scale effect. Both components therefore matter most where multi-view evidence is weak, as the conditional law predicts. What the experiments establish is the conditional relationship, not a uniform mean shift. Since the law is stated on quantities available before reconstruction, it can also signal when additional multi-view acquisition is likely to pay off. 15              
+
+> TABLE IX MONOCULAR -PRIOR SWAP UNDER MATCHED COMPUTE .Monocular prior Budget Abs. MAE ↓PAG c2.5↑
+> MoGe-2 [5] production 2.99 72.6 MoGe-2 matched 3.59 69.1 Depth-Anything-V2 [4] matched 3.58 69.0
+
+H. Ablations and Sensitivity 
+
+Table VIII separates large structural effects from local de-sign choices. Removing ray-field adaptation in matched re-training raises absolute MAE from 3.59 to 20 .47 m, con-firming that perspective-pretrained features must be adapted to native RPC rays. Removing the datum mechanism from the final model raises error from 2.99 to 150 .84 m; retaining only the analytic anchor gives 3.63 m, showing that the an-alytic construction provides most of the absolute placement while the learned residual refines it. In the matched retraining arm, removing the monocular stream raises error from 3.59 
+
+to 7.45 m. The two arms address different regimes. With a converged multi-view branch, in-domain multi-view evidence is already strong and the average effect of the monocular prior is correspondingly small ( 0.014 m); under matched compute it compensates for an undertrained multi-view branch ( 3.59 
+
+against 7.45 m without it). Its value concentrates where multi-view evidence is weak, whether from a limited training budget or, as on L3 (Sec. V-G), from weak geometry. The three fusion-arm rows are inference-time switches on the shared fi-nal checkpoint ( w≡1, w≡0, w≡0.5); no retraining is involved. The remaining changes are comparatively small: uncali-brated fusion gives 3.02 m, two views give 3.34 m, and varying the hypothesis count over K ∈ [48 , 144] moves absolute er-ror by less than 0.1 m. Table IX swaps the monocular prior under the same matched budget, where Depth-Anything-V2 and MoGe-2 give 3.58 and 3.59 m, so the result does not rest on one particular prior. The inference-time single-stream and fixed-weight switches remain competitive in domain, as expected of C3, which is a conditional reliability claim and not a claim of a large uniform average gain. We do not interpret differences among closely matched variants; the ablation is designed to expose large effects, not to rank configurations separated by marginal numbers. 
+
+I. Scope and Outlook 
+
+Fig. 12 characterizes the residual structure under the strongest cross-city shift. Under the strong L3 shift, the residual changes from predominantly local structure error to a smoother low-order field; sparse affine control reduces the tier error from 23 .88 to 16 .94 m and recovers 74% of the corresponding affine oracle gain. Predicted uncertainty highlights difficult regions, while the remaining low-order datum component is better addressed by geometric control; the two mechanisms are complementary. The present formulation has two main limitations. The gauge basis is intentionally low order, and the uncertainty model describes relief but not the per-tile datum. Richer m   
+
+> 62.8
+> −28.6
+> (b) Predicted σ
+> m
+> 17.3
+> 7.3
+> m
+> >28.5
+> 0.2
+> μ 17.2
+> m
+> 6.13
+> −6.13
+> (a) GeoRay surface
+> (c) Residual vs. reference (d) Gauge field
+> band-to-tile error ratio
+> 1.05 here 1.37 in domain
+> Fig. 12. Residual structure under cross-city transfer. Predicted uncertainty and the fitted low-order gauge separate local relief error from the remaining datum component on ATL 554.
+
+sensor-error bases and joint relief–datum uncertainty are natu-ral extensions. Variable-cardinality ray aggregation and coarse-to-fine height sampling are engineering extensions for large-area deployment. Overlap-and-blend window decoding can remove the faint window boundaries visible in some L2 tiles of Fig. 6 without changing the observability or gauge formu-lation. VI. C ONCLUSION 
+
+Satellite 3D reconstruction in the absolute geodetic frame is not perspective reconstruction at a different scale. Native RPC imaging creates three coupled requirements: correspon-dence must be observable along object-space height rays, ab-solute elevation must be separated from a low-order height– datum gauge, and monocular and multi-view evidence must be combined according to calibrated reliability. GeoRay ad-dresses these requirements explicitly through ray-consistent adaptation, a coordinate-equivariant datum mechanism, and precision-weighted relief fusion; SatGauge provides an eval-uation in which absolute placement and completeness remain visible. Across in-domain, cross-dataset, and cross-city tests, one trained model produces dense geodetic surfaces without per-scene optimization and leads the compliant feed-forward meth-ods in absolute accuracy. The mechanism experiments add matching evidence: adaptation restores localization along na-tive RPC rays, the measured camera gauge explains why sparse control acts mainly on absolute level, and uncertainty predicts where multi-view geometry contributes most. They point to a design principle for geometric foundation models under non-central sensing: preserve the native camera model, expose the gauge of the observation model, and learn only the degrees of freedom the measurements support. We expect the same formulation to carry over to other non-central or rolling-shutter sensors, to multi-date and multi-sensor constellations, and to radar–optical fusion, wherever a reusable geometric prior has to coexist with low-dimensional, physically interpretable sen-sor uncertainty. 16 
+
+ACKNOWLEDGMENT 
+
+This work was supported by the National Natural Science Foundation of China under Grant 624B2051. The authors thank the providers of the public datasets underlying Sat-Gauge: the Johns Hopkins University Applied Physics Lab-oratory and the IEEE GRSS Image Analysis and Data Fusion Technical Committee (US3D/DFC2019), IARPA (MVS3D), the SpaceNet partners (SN4), and Maxar/DigitalGlobe for the underlying imagery. REFERENCES [1] S. Wang, V. Leroy, Y. Cabon, B. Chidlovskii, and J. Revaud, “DUSt3R: Geometric 3D vision made easy,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2024, pp. 20 697–20 709. [2] J. Wang, M. Chen, N. Karaev, A. Vedaldi, C. Rupprecht, and D. Novotny, “VGGT: Visual geometry grounded transformer,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2025. [3] N. Keetha, N. M¨ uller, J. Sch¨ onberger, L. Porzi, Y. Zhang, T. Fischer, A. Knapitsch, D. Zauss, E. Weber, N. Antunes, J. Luiten, M. Lopez-Antequera, S. Rota Bul` o, C. Richardt, D. Ramanan, S. Scherer, and P. Kontschieder, “MapAnything: Universal feed-forward metric 3D re-construction,” in Proc. Int. Conf. 3D Vis. (3DV) , 2026. [4] L. Yang, B. Kang, Z. Huang, Z. Zhao, X. Xu, J. Feng, and H. Zhao, “Depth anything V2,” Adv. Neural Inf. Process. Syst. (NeurIPS) , vol. 37, pp. 21 875–21 911, 2024. [5] R. Wang, S. Xu, Y. Dong, Y. Deng, J. Xiang, Z. Lv, G. Sun, X. Tong, and J. Yang, “MoGe-2: Accurate monocular geometry with metric scale and sharp details,” in Adv. Neural Inf. Process. Syst. (NeurIPS) , 2025. [6] R. Gupta and R. I. Hartley, “Linear pushbroom cameras,” IEEE Trans. Pattern Anal. Mach. Intell. , vol. 19, no. 9, pp. 963–975, 1997. [7] C. V. Tao and Y. Hu, “A comprehensive study of the rational func-tion model for photogrammetric processing,” Photogramm. Eng. Remote Sens. , vol. 67, no. 12, pp. 1347–1357, 2001. [8] C. de Franchis, E. Meinhardt-Llopis, J. Michel, J.-M. Morel, and G. Fac-ciolo, “An automatic and modular stereo pipeline for pushbroom im-ages,” in ISPRS Ann. Photogramm. Remote Sens. Spat. Inf. Sci. , 2014. [9] R. Mar´ ı, G. Facciolo, and T. Ehret, “Sat-NeRF: Learning multi-view satellite photogrammetry with transient objects and shadow modeling using RPC cameras,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. Workshops (CVPRW) , 2022, pp. 1310–1320. [10] L. Savant Aira, G. Facciolo, and T. Ehret, “Gaussian splatting for efficient satellite image photogrammetry,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2025, pp. 5959–5969. [11] J. Gao, J. Liu, and S. Ji, “Rational polynomial camera model warping for deep learning based satellite multi-view stereo matching,” in Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV) , 2021. [12] X. Huang, X. Liu, Y. Wan, Z. Zheng, B. Zhang, M. Xiong, Y. Pei, and Y. Zhang, “SkySplat: Generalizable 3D gaussian splatting from multi-temporal sparse satellite images,” in Proc. AAAI Conf. Artif. Intell. ,vol. 40, no. 7, 2026, pp. 5158–5166. [13] Q. Yang, C. Zhou, X. Liu, R. Wang, M. Xu, M. D. Pes´ e, F. Luo, Y. Xu, Z.-Q. Cheng, Q. Chen, H. Qi, and S. Huang, “Sat3R: Satellite DSM reconstruction via RPC-aware depth fine-tuning,” arXiv preprint arXiv:2605.07264 , 2026. [14] J. Grodecki and G. Dial, “Block adjustment of high-resolution satellite images described by rational polynomials,” Photogramm. Eng. Remote Sens. , vol. 69, no. 1, pp. 59–68, 2003. [15] C. S. Fraser and H. B. Hanley, “Bias compensation in rational func-tions for IKONOS satellite imagery,” Photogramm. Eng. Remote Sens. ,vol. 69, no. 1, pp. 53–57, 2003. [16] B. Triggs, P. F. McLauchlan, R. I. Hartley, and A. W. Fitzgibbon, “Bundle adjustment—a modern synthesis,” in Vision Algorithms: Theory and Practice , ser. Lecture Notes in Computer Science. Springer, 2000, vol. 1883, pp. 298–372. [17] V. Leroy, Y. Cabon, and J. Revaud, “Grounding image matching in 3D with MASt3R,” in Proc. Eur. Conf. Comput. Vis. (ECCV) , 2024. [18] L. Yang, B. Kang, Z. Huang, X. Xu, J. Feng, and H. Zhao, “Depth anything: Unleashing the power of large-scale unlabeled data,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2024, pp. 10 371–10 381. [19] H. Lin, S. Chen, J. Liew, D. Y. Chen, Z. Li, G. Shi, J. Feng, and B. Kang, “Depth anything 3: Recovering the visual space from any views,” arXiv preprint arXiv:2511.10647 , 2025. [20] W. Yin, C. Zhang, H. Chen, Z. Cai, G. Yu, K. Wang, X. Chen, and C. Shen, “Metric3D: Towards zero-shot metric 3D prediction from a single image,” in Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV) , 2023. [21] M. Hu, W. Yin, C. Zhang, Z. Cai, X. Long, H. Chen, K. Wang, G. Yu, C. Shen, and S. Shen, “Metric3D v2: A versatile monocular geometric foundation model for zero-shot metric depth and surface normal esti-mation,” IEEE Trans. Pattern Anal. Mach. Intell. , vol. 46, no. 12, pp. 10 579–10 596, 2024. [22] A. Dosovitskiy, L. Beyer, A. Kolesnikov, D. Weissenborn, X. Zhai, T. Unterthiner, M. Dehghani, M. Minderer, G. Heigold, S. Gelly, J. Uszkoreit, and N. Houlsby, “An image is worth 16 ×16 words: Trans-formers for image recognition at scale,” in Proc. Int. Conf. Learn. Represent. (ICLR) , 2021. [23] M. Oquab, T. Darcet, T. Moutakanni, H. V. Vo, M. Szafraniec, V. Khali-dov et al. , “DINOv2: Learning robust visual features without supervi-sion,” Trans. Mach. Learn. Res. (TMLR) , 2024. [24] R. Ranftl, K. Lasinger, D. Hafner, K. Schindler, and V. Koltun, “Towards robust monocular depth estimation: Mixing datasets for zero-shot cross-dataset transfer,” IEEE Trans. Pattern Anal. Mach. Intell. , vol. 44, no. 3, pp. 1623–1637, 2022. [25] Q. Luo, Y. Pi, L. Wen, J. Yang, X. Wang, H. Zhang, and M. Wang, “EO-VGGT: Orbital ray-conditioned 3D foundation models for satellite multi-view reconstruction,” arXiv preprint arXiv:2607.00417 , 2026. [26] H. Hirschm¨ uller, “Stereo processing by semiglobal matching and mutual information,” IEEE Trans. Pattern Anal. Mach. Intell. , vol. 30, no. 2, pp. 328–341, 2008. [27] G. Facciolo, C. de Franchis, and E. Meinhardt, “MGM: A significantly more global matching for stereovision,” in Proc. Brit. Mach. Vis. Conf. (BMVC) , 2015. [28] J. L. Sch¨ onberger and J.-M. Frahm, “Structure-from-motion revisited,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2016, pp. 4104–4113. [29] K. Zhang, J. Sun, and N. Snavely, “Leveraging vision reconstruction pipelines for satellite imagery,” in Proc. IEEE/CVF Int. Conf. Comput. Vis. Workshops (ICCVW) , 2019, pp. 2139–2148. [30] Y. Yao, Z. Luo, S. Li, T. Fang, and L. Quan, “MVSNet: Depth inference for unstructured multi-view stereo,” in Proc. Eur. Conf. Comput. Vis. (ECCV) , 2018, pp. 767–783. [31] X. Gu, Z. Fan, S. Zhu, Z. Dai, F. Tan, and P. Tan, “Cascade cost volume for high-resolution multi-view stereo and stereo matching,” in 
+
+Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2020, pp. 2495–2504. [32] J. Gao, J. Liu, and S. Ji, “A general deep learning based framework for 3D reconstruction from multi-view stereo satellite images,” ISPRS J. Photogramm. Remote Sens. , vol. 195, pp. 446–461, 2023. [33] D. Derksen and D. Izzo, “Shadow neural radiance fields for multi-view satellite photogrammetry,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. Workshops (CVPRW) , 2021, pp. 1152–1161. [34] R. Mar´ ı, G. Facciolo, and T. Ehret, “Multi-date earth observation NeRF: The detail is in the shadows,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. Workshops (CVPRW) , 2023, pp. 2034–2044. [35] T. M¨ uller, A. Evans, C. Schied, and A. Keller, “Instant neural graphics primitives with a multiresolution hash encoding,” ACM Trans. Graph. ,vol. 41, no. 4, pp. 102:1–102:15, 2022. [36] P. Bournez, L. Savant Aira, T. Ehret, and G. Facciolo, “EOGS++: Earth observation gaussian splatting with internal camera refinement and direct panchromatic rendering,” arXiv preprint arXiv:2511.16542 , 2025. [37] B. Kerbl, G. Kopanas, T. Leimk¨ uhler, and G. Drettakis, “3D gaussian splatting for real-time radiance field rendering,” ACM Trans. Graph. ,vol. 42, no. 4, pp. 139:1–139:14, 2023. [38] S. Song, J. Kim, and R. Qin, “SatSplat: Geometrically-accurate gaussian splatting for satellite imagery,” arXiv preprint arXiv:2606.28581 , 2026. [39] V. Wagner, S. Bullinger, C. Bodensteiner, and M. Arens, “RPC-GS: Gaussian splatting with native RPC rendering for satellite imagery,” 
+
+arXiv preprint arXiv:2606.06690 , 2026. [40] D. Charatan, S. L. Li, A. Tagliasacchi, and V. Sitzmann, “pixelSplat: 3D gaussian splats from image pairs for scalable generalizable 3D re-construction,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2024, pp. 19 457–19 467. [41] Y. Chen, H. Xu, C. Zheng, B. Zhuang, M. Pollefeys, A. Geiger, T.-J. Cham, and J. Cai, “MVSplat: Efficient 3D gaussian splatting from sparse multi-view images,” in Proc. Eur. Conf. Comput. Vis. (ECCV) , 2024, pp. 370–386. [42] H. Xu, S. Peng, F. Wang, H. Blum, D. Barath, A. Geiger, and M. Polle-feys, “DepthSplat: Connecting gaussian splatting and depth,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2025, pp. 16 453–16 463. 17 
+
+[43] S. Tang, W. Ye, P. Ye, W. Lin, Y. Zhou, T. Chen, and W. Ouyang, “HiSplat: Hierarchical 3D gaussian splatting for generalizable sparse-view reconstruction,” in Proc. Int. Conf. Learn. Represent. (ICLR) , 2025. [44] C. Zhang, Y. Zou, Z. Li, M. Yi, and H. Wang, “TranSplat: Generalizable 3D gaussian splatting from sparse multi-view images with transformers,” in Proc. AAAI Conf. Artif. Intell. , 2025, pp. 9869–9877. [45] L. Jiang, Y. Mao, L. Xu, T. Lu, K. Ren, Y. Jin, X. Xu, M. Yu, J. Pang, F. Zhao, D. Lin, and B. Dai, “AnySplat: Feed-forward 3D gaussian splatting from unconstrained views,” ACM Trans. Graph. , vol. 44, no. 6, pp. 257:1–257:14, 2025. [46] M. Chen, W. Guo, B. Wang, W. Li, T. Fang, J. Zhang, J. Zhao, H. Kuang, H. Hu, X. Ge, Q. Zhu, and B. Xu, “SatSurfGS: Generalizable 2D gaussian splatting for sparse-view satellite surface reconstruction,” arXiv preprint arXiv:2605.07181 , 2026. [47] A. Kendall and Y. Gal, “What uncertainties do we need in bayesian deep learning for computer vision?” in Adv. Neural Inf. Process. Syst. (NeurIPS) , 2017. [48] B. Lakshminarayanan, A. Pritzel, and C. Blundell, “Simple and scalable predictive uncertainty estimation using deep ensembles,” in Adv. Neural Inf. Process. Syst. (NeurIPS) , 2017. [49] C. Guo, G. Pleiss, Y. Sun, and K. Q. Weinberger, “On calibration of modern neural networks,” in Proc. Int. Conf. Mach. Learn. (ICML) ,2017, pp. 1321–1330. [50] E. J. Hu, Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, L. Wang, and W. Chen, “LoRA: Low-rank adaptation of large language models,” in Proc. Int. Conf. Learn. Represent. (ICLR) , 2022. [51] A. Kendall, H. Martirosyan, S. Dasgupta, P. Henry, R. Kennedy, A. Bachrach, and A. Bry, “End-to-end learning of geometry and context for deep stereo regression,” in Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV) , 2017, pp. 66–75. [52] M. Bosch, K. Foster, G. Christie, S. Wang, G. D. Hager, and M. Brown, “Semantic stereo for incidental satellite images,” in Proc. IEEE Winter Conf. Appl. Comput. Vis. (WACV) , 2019, pp. 1524–1532. [53] M. Bosch, Z. Kurtz, S. Hagstrom, and M. Brown, “A multiple view stereo benchmark for satellite imagery,” in Proc. IEEE Appl. Imagery Pattern Recognit. Workshop (AIPR) , 2016, pp. 1–9. [54] N. Weir, D. Lindenbaum, A. Bastidas, A. V. Etten, S. McPherson, J. Shermeyer, V. Kumar, and H. Tang, “SpaceNet MVOI: A multi-view overhead imagery dataset,” in Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV) , 2019. [55] G. Christie, R. R. R. M. Abujder, K. Foster, S. Hagstrom, G. D. Hager, and M. Z. Brown, “Learning geocentric object pose in oblique monoc-ular images,” in Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR) , 2020. [56] B. Le Saux, N. Yokoya, R. H¨ ansch, M. Brown, and G. Hager, “2019 data fusion contest [technical committees],” IEEE Geosci. Remote Sens. Mag. , vol. 7, no. 1, pp. 103–105, 2019. [57] E. Ilg, ¨O. C ¸ ic ¸ek, S. Galesso, A. Klein, O. Makansi, F. Hutter, and T. Brox, “Uncertainty estimates and multi-hypothesis networks for op-tical flow,” in Proc. Eur. Conf. Comput. Vis. (ECCV) , 2018. [58] B. Mildenhall, P. P. Srinivasan, M. Tancik, J. T. Barron, R. Ramamoorthi, and R. Ng, “NeRF: Representing scenes as neural radiance fields for view synthesis,” in Proc. Eur. Conf. Comput. Vis. (ECCV) , 2020, pp. 405–421. [59] T. Gneiting, F. Balabdaoui, and A. E. Raftery, “Probabilistic forecasts, calibration and sharpness,” J. R. Stat. Soc. Ser. B Stat. Methodol. , vol. 69, no. 2, pp. 243–268, 2007. [60] V. Kuleshov, N. Fenner, and S. Ermon, “Accurate uncertainties for deep learning using calibrated regression,” in Proc. Int. Conf. Mach. Learn. (ICML) , ser. Proc. Mach. Learn. Res., vol. 80, 2018, pp. 2796–2804.

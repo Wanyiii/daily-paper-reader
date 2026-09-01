@@ -1,0 +1,896 @@
+Title: SGPDFuse: Semantically-Guided Physics-Disentanglement General Multi-Modal Image Fusion
+
+URL Source: https://arxiv.org/pdf/2608.29220v1
+
+Published Time: Tue, 01 Sep 2026 00:41:56 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# SGPDFuse: Semantically-Guided Physics-Disentanglement General Multi-Modal Image Fusion 
+
+## Haozhen Wei 
+
+Dalian University of Technology Dalian, Liaoning, China wellwhz@163.com 
+
+## Chengjun Jiang 
+
+Dalian University of Technology Dalian, Liaoning, China 20232241166@mail.dlut.edu.cn 
+
+## Yutong Guo 
+
+Dalian University of Technology Dalian, Liaoning, China yutongguo@mail.dlut.edu.cn 
+
+## Xinrui Ju 
+
+City University of Hong Kong Hong Kong, China juxinrui1021@163.com 
+
+## Xingyuan Li 
+
+Zhejiang University Hangzhou, Zhejiang, China xingyuan_lxy@163.com 
+
+## Xiang Chen 
+
+Zhejiang University Hangzhou, Zhejiang, China wasdnsxchen@gmail.com 
+
+## Jinyuan Liu ∗
+
+Dalian University of Technology Dalian, Liaoning, China atlantis918@hotmail.com DINOv3 + LoRA                     
+
+> (c) Our Physics-Disentanglement Paradigm (b) Visual Comparison on Fused Image
+> (a) Traditional Encoder-Fusion-Decoder Paradigm
+> Input A Input B SwinFusion Ours DCEvo
+> Encoder
+> Decoder
+> Fusion
+> Network
+> 𝑰 𝒊𝒋 𝒎 =൰൬𝚽 𝒊𝒋 𝒎 , ; 𝚿 𝒊𝒋 𝒎
+> IVIF 𝜺𝑩(𝑻) + (𝟏 − 𝜺)𝑳 𝒆𝒏𝒗
+> MEF 𝑹 ·𝑳
+> MFF 𝑺 ⊗𝑲
+> Entangled ϕ,ψ
+> 𝑰 𝑨
+> 𝑰 𝑩
+> Encoder
+> Decoder
+> Intrinsic-Variation
+> Disentanglement
+> Detail
+> (High-Freq)
+> Base
+> (Low-Freq)
+> Physics-Guided Fusion
+> Detail
+> (L1-Activity )
+> Base
+> (SE-Attn)
+> SPPB
+> Guided
+> DINOv3
+> Encoder LoRA +
+
+Figure 1: Paradigm shift in multi-modal fusion. (a) Traditional methods conflate intrinsic scene content with variation factors. (b) Our method recovers sharper detail. (c) SPPB predicts a variation map W from DINOv3 features, separating Φ from Ψ.
+
+Abstract 
+
+Multimodal image fusion (MMIF) aims to integrate complementary sensor data into a single representation that preserves intrinsic scene reality while eliminating environmental interferences . Most existing approaches rely on blind feature aggregation , which ex-cels at signal accumulation but fails to distinguish essential con-tent from physical degradations. We propose SGPDFuse , which bridges this gap by mapping inputs into a physics-disentangled structural representation via a Semantic-Physical Parametric Bridge 
+
+(SPPB) built on pretrained vision foundation models, utilizing the Intrinsic-Variation principle to decouple invariant scene attributes from transient environmental factors. To guide this decomposi-tion, we introduce a Semantic Alignment mechanism: we explicitly 
+
+> ∗
+
+Corresponding author. 
+
+This work is licensed under a Creative Commons Attribution 4.0 International License. 
+
+MM ’26, Rio de Janeiro, Brazil. 
+
+© 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2213-4/2026/11 https://doi.org/10.1145/3767308.3835409 
+
+anchor the fused representation to salient semantic features in the same foundation model feature space via cosine similarity to preserve critical targets, while enforcing physical texture fidelity through Gram-matrix regularization to strictly eliminate unnatu-ral artifacts. Extensive experiments demonstrate that SGPDFuse achieves state-of-the-art performance across infrared-visible, multi-focus, and multi-exposure benchmarks using a single architecture. 
+
+CCS Concepts 
+
+• Computing methodologies → Computer vision problems .
+
+Keywords 
+
+Image Fusion, Low Level Vision 
+
+ACM Reference Format: 
+
+Haozhen Wei, Chengjun Jiang, Yutong Guo, Xinrui Ju, Xingyuan Li, Xiang Chen, and Jinyuan Liu. 2026. SGPDFuse: Semantically-Guided Physics-Disentanglement General Multi-Modal Image Fusion. In Proceedings of the 35th ACM International Conference on Multimedia (MM ’26), November 10–14, 2026, Rio de Janeiro, Brazil. ACM, New York, NY, USA, 9 pages. https://doi.org/10.1145/3767308.3835409 arXiv:2608.29220v1 [cs.CV] 29 Aug 2026 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Haozhen Wei et al. 
+
+1 Introduction 
+
+Multimodal Image Fusion (MMIF) aims to integrate complemen-tary information from different sensors into a single output that preserves essential scene content while suppressing sensor-specific degradations [11–15]. Taking infrared-visible fusion as a represen-tative example, the fused result is expected to highlight thermally salient targets while retaining the rich textures and semantic read-ability of visible images, thereby alleviating challenges such as low illumination, noise contamination, and sensor-specific artifacts. Meanwhile, fused images often serve as intermediate representa-tions for downstream perception tasks, and their quality directly affects the robustness of subsequent systems such as object detec-tion and segmentation. Most existing deep fusion methods treat fusion as a signal ag-gregation problem: given source images {𝐼 𝐴 , 𝐼 𝐵 }, the objective is to learn a mapping that maximizes information preservation through weighted summation or feature concatenation. We argue that this formulation suffers from an inherent limitation: it fundamentally conflates two distinct signal components—the intrinsic physical properties of the scene (true temperature, surface reflectance, sharp texture) and the variation factors introduced by environmental conditions (thermal reflections, illumination changes, optical blur). This conflation manifests as persistent artifacts: ghost thermal tar-gets on reflective surfaces, color distortions from exposure imbal-ance, or texture loss in defocused regions. Consequently, exist-ing methods struggle to simultaneously preserve essential content while suppressing environmental interference. To address this, we propose a physics-disentanglement perspec-tive by revisiting the fusion objective itself. We draw inspiration from established physical imaging models: in infrared imaging, the observed radiance 𝐿 𝑜𝑏𝑠 = 𝜖𝐵 (𝑇 ) + ( 1 − 𝜖 )𝐿 𝑒𝑛𝑣 comprises thermal emission and environmental reflection [1]; in photography, the Retinex model 𝐼 = 𝑅 · 𝐿 separates reflectance from illumination [8]; in optics, the defocus model 𝐼 = 𝑆 ⊗ 𝐾 distinguishes sharp con-tent from blur [24, 26]. These diverse physical processes share a unified structure: 𝐼 = G( Intrinsic , Variation ). This suggests that fusion should not blindly aggregate signals, but rather disentangle intrinsic content from variation factors before merging. Motivated by this insight, we propose SGPDFuse (Semantically-Guided Physics-Disentanglement Multi-Modal Image Fusion), a unified framework that bridges high-level semantics with low-level physics. Our key observation is that semantic features from vision foundation models—particularly DINOv3 [25]—encode material properties and object identities that are invariant to physical varia-tions, making them ideal for predicting the variation parameters ( 𝜖 ,illumination quality, focus measure) needed for disentanglement. We instantiate this via a Semantic-Physical Parametric Bridge (SPPB) that uses LoRA-adapted [7] DINOv3 features to predict the variation confidence map W, which drives Intrinsic-Variation disentangle-ment of both base (low-frequency) and detail (high-frequency) fea-tures. To guide the decomposition, we further introduce a Semantic Alignment mechanism that explicitly anchors the fused representa-tion to salient semantic features via cosine similarity, while enforc-ing physical texture fidelity through Gram-matrix regularization to eliminate unnatural artifacts. By coupling semantic understanding with physical priors, SGPDFuse enables adaptive physics-guided Source A                
+
+> Source B
+> Fused Image
+> RecA
+> Loss
+> Pixel Level
+> Feature Level
+> Source A Source B Fused Image
+> 𝑮(·) Style Anchoring (Gram)
+> 𝑮 −𝟏 𝟐 (𝑮 + 𝑮 )
+> 𝑭 𝟐
+> 𝟏 − 𝟏
+> 𝟐 𝐜𝐨𝐬( ,+𝒄𝒐𝒔( ,))
+
+Figure 2: Illustration of our Reconstruction Alignment (RecA) loss for multi-modal image fusion. 
+
+decomposition across infrared-visible, multi-exposure, and multi-focus fusion tasks within a single architecture. Specifically, our contributions are: 
+
+• We present a new perspective on MMIF by reformulating fu-sion from blind feature aggregation to physics-disentanglement under the unified Intrinsic-Variation principle, providing a framework to separate essential scene content from environ-mental interference across diverse fusion tasks. 
+
+• We design a Semantic-Physical Parametric Bridge (SPPB) that leverages DINOv3 features with LoRA adaptation to predict task-specific variation parameters, enabling unified physics-guided decomposition. 
+
+• We introduce a Semantic Alignment mechanism combin-ing cosine-similarity-based salient feature preservation with Gram-matrix texture regularization, providing dual supervi-sion that ensures both semantic fidelity and physical consis-tency of the fused output. 
+
+• Extensive experiments demonstrate that SGPDFuse achieves state-of-the-art performance across infrared-visible, multi-focus, and multi-exposure benchmarks using a single archi-tecture, with consistent improvements in artifact suppres-sion, detail preservation, and downstream task robustness. 
+
+2 Related Work 2.1 Task-Specific Multi-Modal Image Fusion 
+
+Deep learning has driven remarkable progress in task-specific im-age fusion. Early CNN-based methods such as DenseFuse [9] and U2Fusion [34] established encoder-decoder paradigms for feature aggregation, while RFN-Nest [10] introduced residual feedback mechanisms. Subsequent methods further specialized their designs for distinct fusion scenarios: IVIF approaches [16, 22, 41] incorpo-rate detection networks and adversarial training to preserve ther-mal saliency, MEF and MFF techniques [38, 39] leverage exposure-specific brightness decomposition and focus-map guidance, and PIAFusion [27] exploits illumination-aware progressive training. Transformer architectures have further extended modeling capacity, with SwinFusion [21] capturing cross-modal long-range dependen-cies and CDDFuse [42] decomposing features into base and detail branches via transformer blocks. More recently, Text-IF [36], TC-MoA [47], RFfusion [31], diffusion-based [44], and task-driven [20] approaches further push the frontier via text conditioning, adapter mixtures, iterative denoising, and detection-aware strategies. SGPDFuse: Semantically-Guided Physics-Disentanglement General Multi-Modal Image Fusion MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+Despite their diversity, all these methods aggregate features from raw source signals, treating intrinsic scene content and extrinsic environmental factors as equally valid fusion targets. This leads to artifacts when environmental interference is present, such as ghost thermal targets on reflective surfaces, texture loss in defocused regions, or unnatural halos under extreme exposure conditions. 
+
+2.2 Physics-Informed and Disentanglement-Based Vision 
+
+Explicit physical modeling has proven effective within individual imaging domains. HADAR [1] leverages the Stefan–Boltzmann radiation law 𝐿 = 𝜖𝐵 (𝑇 ) + ( 1 − 𝜖 )𝐿 env to disentangle thermal emis-sion from environmental reflection in longwave infrared imaging. Algorithm-unrolling methods [45] also exploit physical models to drive network architecture design. Retinex theory [8] decomposes images as 𝐼 = 𝑅 · 𝐿 (reflectance times illumination), spawning a family of deep enhancement methods [32] for low-light and ex-posure correction. Depth-from-Defocus [26] and learning-based defocus deblurring [24] model the blurred image as 𝐼 = 𝑆 ⊗ 𝐾 ,recovering the all-in-focus image 𝑆 by estimating the blur kernel 
+
+𝐾 . In representation learning, disentangled generative models [2] aim to separate content from style, but these are trained for single-modality synthesis rather than cross-modal fusion. These approaches share a common mathematical structure: the observed signal is a composite of intrinsic scene properties and extrinsic variation factors. While each of these approaches demon-strates the power of physical priors, they remain confined to single tasks, require domain-specific supervision (hyperspectral emissiv-ity measurements, paired exposure data, depth ground truth). Crit-ically, the challenge of estimating physical variation parameters from entangled multi-modal observations—without any explicit physical measurements—remains entirely unaddressed.. 
+
+Our Perspective. We observe that vision foundation models bridge this gap : DINO [4, 23, 25] semantic features encode material properties and structural priors invariant to the physical varia-tions governing each imaging modality, enabling unified Intrinsic-Variation decomposition across diverse fusion tasks without explicit physical supervision. 
+
+3 Intrinsic-Variation Structure in Multi-Modal Imaging 
+
+A fundamental but underappreciated property of multi-modal imag-ing is that every observed modality is a composite signal—it mixes the stable physical properties of the scene with transient, sensor-specific interference. Existing fusion methods operate directly on these composite observations, implicitly assuming that sophisti-cated feature aggregation can filter out the undesired components. We establish the theoretical foundation for SGPDFuse by formaliz-ing a structural property that is universally present in multi-modal imaging yet has been overlooked in existing fusion methods. 
+
+3.1 Latent-Factor Formulation of Image Formation 
+
+Let 𝐼 (𝑚 ) ∈ R𝐻 ×𝑊 denote an observed image from modality 𝑚 .We model image formation at spatial location (𝑖, 𝑗 ) as a two-factor composition :
+
+𝐼 (𝑚 ) 
+
+> 𝑖 𝑗
+
+= G
+
+
+
+Φ(𝑚 ) 
+
+> 𝑖 𝑗
+
+, Ψ(𝑚 )
+
+> 𝑖 𝑗
+
+
+
+, (1) where Φ(𝑚 ) 
+
+> 𝑖 𝑗
+
+is the Intrinsic component—the modality-invariant, scene-specific property that any high-fidelity fusion must preserve— 
+
+Ψ(𝑚 ) 
+
+> 𝑖 𝑗
+
+is the Variation component—the environmental or sensor-induced factor that fusion must suppress—and G encodes the modality-specific physical mixing process. Critically, both Φ and Ψ are latent: the observation 𝐼 (𝑚 ) is an entangled composite in which neither factor is directly accessible. 
+
+Why aggregation cannot resolve this entanglement. Consider the additive case G( Φ, Ψ) = Φ+ Ψ and any spatially-adaptive fusion weight w ∈ [ 0, 1]𝐻 ×𝑊 . The aggregated output is: ˆ𝐼 = w ⊙ 𝐼 (𝐴 ) + ( 1−w) ⊙ 𝐼 (𝐵 ) = Φ + w ⊙ Ψ(𝐴 ) + ( 1−w) ⊙ Ψ(𝐵 ) . (2) Since physical variation fields are non-negative, the residual ˆ Ψ ≥ 0is strictly positive at every pixel carrying variation—regardless of 
+
+w. This irreducibility holds for any fusion method that combines entangled signals before separating Φ from Ψ, implying that artifact-free fusion requires explicit Φ estimation and Ψ suppression. 
+
+3.2 Physical Instantiation Across Fusion Tasks 
+
+Eq. (1) is not an abstract construction—it is grounded in established physical imaging models across all three canonical fusion tasks. In 
+
+IVIF , 𝐿 = 𝜖𝐵 (𝑇 ) + ( 1−𝜖 )𝐿 env [1]: true thermal emission Φ = 𝜖𝐵 (𝑇 )
+
+mixes with environmental reflection Ψ = (1−𝜖 )𝐿 env , producing ghost artifacts on low-emissivity surfaces. In MEF , 𝐼 (𝑘 ) = 𝑅 ·𝐿 (𝑘 ) [8]: reflectance Φ = 𝑅 is entangled with exposure illumination Ψ = 𝐿 (𝑘 ) ,causing color distortions when fused without isolation. In MFF ,
+
+𝐼 (𝑘 ) = 𝑆 ⊗ 𝐾 (𝜎 𝑘 ) [26]: the all-in-focus image Φ = 𝑆 is convolved with blur kernel Ψ = 𝐾 (𝜎 𝑘 ), producing mixed-gradient artifacts without kernel estimation. Despite entirely different physical mech-anisms, all three tasks instantiate the same abstract form Eq. (1) with a common Intrinsic-Variation structure, making a task-unified 
+
+disentanglement architecture both principled and achievable. 
+
+3.3 Scale-Aligned Factorization 
+
+Eq. (2) establishes that Ψ must be estimated; the key question is how .A structural observation makes this tractable: across all three tasks, the Variation and Intrinsic components predominantly occupy dis-tinct frequency bands— Ψ concentrates at low frequencies (smooth thermal gradients in IVIF, spatially slow illumination in MEF, low-pass blur attenuation in MFF), while Φ is most discriminable at high frequencies (edges, texture boundaries, sharp focus energy). This 
+
+approximate spectral alignment is a statistical tendency grounded in physics, not an absolute partition. It motivates a two-axis factor-ization that combines the Intrinsic-Variation decomposition with a Base-Detail signal decomposition: 
+
+𝐼 (𝑚 ) = Gb (Φb, Ψb) + G d (Φd, Ψd) , (3) where each frequency band independently undergoes Intrinsic-Variation disentanglement. This yields a four-stage pipeline: (i) decompose each source into base/detail; (ii) estimate W via a semantically-grounded bridge; (iii) disentangle Φ from Ψ at each scale; (iv) fuse only {Φb, Φd }, with variation eliminated by construction. MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Haozhen Wei et al. Physics-Guided 
+
+Fusion & Decoder 
+
+Dual-Branch 
+
+Unified Encoder 𝑬 𝜽 
+
+DINOv3 + LoRA Semantic Backbone 
+
+𝑰 𝑨 
+
+𝑰 𝑩 
+
+𝒁 𝒔𝒆𝒎 𝑨  𝒁 𝒔𝒆𝒎 𝑩 
+
+Semantic-Physical 
+
+Parametric Bridge    
+
+> ×2 (for 𝑰 𝑨 ,𝑰 𝑩 )
+
+SPPB   
+
+> Base (Low-Freq)
+> NNN
+
+𝑭 𝒃𝒂𝒔𝒆 𝒎   
+
+> Detail (High-Freq)
+> NNN
+
+𝑭 𝒅𝒆𝒕𝒂𝒊𝒍 
+
+> 𝒎
+
+Intrinsic-Variation 
+
+Disentanglement 
+
+𝑰 𝒇 
+
+𝑹𝒆𝒄𝑨 (Reconstruction Alignment) 
+
+𝒄𝒐𝒏𝒕𝒆𝒏𝒕 + 𝒔𝒕𝒚𝒍𝒆 
+
+> [;]
+> [;]
+> | |
+> [;]
+> [;]
+
+w
+
+> 𝑪𝒐𝒏𝒗 𝒅𝒆𝒕𝒂𝒊𝒍
+> 𝑪𝒐𝒏𝒗 𝒃𝒂𝒔𝒆
+> 𝑭 𝒃𝒂𝒔𝒆
+> 𝑩
+> 𝑭 𝒃𝒂𝒔𝒆
+> 𝑨
+> 𝑭 𝒅𝒆𝒕𝒂𝒊𝒍 𝑩
+> 𝑭 𝒅𝒆𝒕𝒂𝒊𝒍 𝑨
+
+𝝈    
+
+> Source A side
+> 𝑾 𝑨 = 𝑾
+> Source B side
+> 𝑾 𝑩 = 𝟏 − 𝑾
+> Base Fusion
+
+Decoder 
+
+𝑫 𝝋  
+
+> 𝑪 𝒃 ,𝑪 𝒓
+> from ref
+> 𝒀 𝒇
+> 𝑭 𝒃𝒂𝒔𝒆
+> 𝑩
+> 𝑭 𝒃𝒂𝒔𝒆
+> 𝑨
+> 𝑭 𝒅𝒆𝒕𝒂𝒊𝒍
+> 𝑩
+> 𝑭 𝒅𝒆𝒕𝒂𝒊𝒍 𝑨
+> · 𝐬 + 𝐛
+> (Init from
+> 𝜺 𝒓𝒂𝒏𝒈𝒆 )
+
+Consistency: 𝑭 𝝓 + 𝑭 𝝍 ≈ 𝑭  (SE-Attn)  
+
+> 𝑭 𝒃𝒂𝒔𝒆 𝒇
+> +N
+> 𝓡 𝝓
+> 𝓡 𝝍
+> +
+> ·
+> ·
+> +
+> 𝑭 𝒅𝒆𝒕𝒂𝒊𝒍,𝝓 𝑨
+> 𝑭 𝒅𝒆𝒕𝒂𝒊𝒍,𝝍 𝑨
+
+× 
+
+> discard
+> →fusion
+> √
+> 𝓡 𝝓
+> 𝓡 𝝍
+> +
+> ·
+> ·
+> +
+> 𝑭 𝒃𝒂𝒔𝒆,𝝓 𝑨
+> 𝑭 𝒃𝒂𝒔𝒆,𝝍
+> 𝑨
+
+× 
+
+> discard
+> →fusion
+> √
+> 𝓡 𝝓
+> 𝓡 𝝍
+> +
+> ·
+> ·
+> +
+> 𝑭 𝒅𝒆𝒕𝒂𝒊𝒍,𝝓 𝑩
+> 𝑭 𝒅𝒆𝒕𝒂𝒊𝒍,𝝍 𝑩
+
+× 
+
+> discard
+> →fusion
+> √
+> 𝓡 𝝓
+> 𝓡 𝝍
+> +
+> ·
+> ·
+> +
+> 𝑭 𝒃𝒂𝒔𝒆,𝝓 𝑩
+> 𝑭 𝒃𝒂𝒔𝒆,𝝍
+> 𝑩
+
+× 
+
+> discard
+> →fusion
+> √
+> 𝒘 𝑨
+> 𝟏 − 𝒘 𝑨
+> 𝒘 𝑨
+> 𝟏 − 𝒘 𝑨
+> 𝒘 𝑩
+> 𝟏 − 𝒘 𝑩
+> 𝒘 𝑩
+> 𝟏 − 𝒘 𝑩
+> Detail Fusion
+> (L1-Activity)
+> 𝑭 𝒃𝒂𝒔𝒆,𝝓 𝑩
+> 𝑭 𝒃𝒂𝒔𝒆,𝝓 𝑨
+> SE
+> 𝑭 𝒅𝒆𝒕𝒂𝒊𝒍,𝝓 𝑩
+> 𝑭 𝒅𝒆𝒕𝒂𝒊𝒍,𝝓 𝑨
+> 𝒘 𝑩
+> 𝒘 𝑨
+> 𝑭 𝒅𝒆𝒕𝒂𝒊𝒍 𝒇
+> +
+> 𝒘 𝑩
+> 𝒘 𝑨
+> Refine
+
+× + ∆𝑾 
+
+B A Frozen 𝑾 𝟎 + ∆𝑾 
+
+𝑾 𝟎 
+
+LoRA 
+
+DINOv3 
+
+Encoder           
+
+> NNAF Block Conv2d Cross Attention [;] Concatenation SE Self Attention Trainable Frozen ·Hadamard Product +Element-wise Addition
+
+Figure 3: Overview of SGPDFuse. A dual-branch encoder extracts base and detail features from 𝐼 𝐴 , 𝐼 𝐵 ; detail features are augmented with DINOv3-LoRA. The SPPB predicts a variation map W, guiding disentanglement into intrinsic ( Φ) and variation (Ψ) components. Only Φ enters fusion; Ψ is discarded. A semantic alignment loss Lsem supervises in DINO feature space. 
+
+4 Methodology 
+
+We present SGPDFuse, illustrated in Fig. 3. Grounded in the two-axis factorization of Eq. (3), the framework processes each source pair through a shared dual-branch encoder that extracts base and detail features, predicts the physical variation confidence map W
+
+via the Semantic-Physical Parametric Bridge (SPPB), disentangles intrinsic components Φ from variation components Ψ at each fre-quency scale, and fuses only Φ through physics-guided aggregation. Training follows a two-stage curriculum: encoder–decoder recon-struction pre-training to establish a stable feature space, followed by end-to-end fusion fine-tuning with the full loss. 
+
+4.1 Dual-Branch Feature Extraction 
+
+Given two source images 𝐼 𝐴 ∈ R𝐶 𝐴 ×𝐻 ×𝑊 and 𝐼 𝐵 ∈ R𝐶 𝐵 ×𝐻 ×𝑊 , a shared UnifiedEncoder 𝐸 𝜃 maps each input into base and detail feature representations aligned with the factorization of Eq. (3): 
+
+F𝑚 
+
+base , F𝑚 
+
+detail = 𝐸 𝜃 (𝐼 𝑚 , 𝑍 𝑚 
+
+sem ), 𝑚 ∈ { 𝐴, 𝐵 }, (4) where F𝑚 
+
+base ∈ R𝑑 × 𝐻  
+
+> 4
+
+× 𝑊  
+
+> 4
+
+captures low-frequency energy where Variation operates, and F𝑚 
+
+detail ∈ R𝑑 ×𝐻 ×𝑊 captures high-frequency content where Intrinsic is most prominent, with 𝑑 = 64. The encoder adopts NAFNet blocks [5] for efficient local feature extraction. DINOv3 semantic tokens 𝑍 𝑚 
+
+sem are injected into the 
+
+detail branch only via cross-attention after the second NAFNet block: detail features serve as queries, DINOv3 patch tokens as keys and values. This semantically grounds the high-frequency features while keeping the base branch purely convolutional. The semantic tokens are also passed separately to the SPPB for variation parameter estimation. 
+
+4.2 Semantic-Physical Parametric Bridge 
+
+The core innovation of SGPDFuse is the Semantic-Physical Para-metric Bridge (SPPB), which translates high-level semantic under-standing into low-level physical parameters—emissivity 𝜖 in IVIF, exposure optimality in MEF, in-focus probability in MFF. These quantities are notoriously difficult to measure directly, yet DINOv3 patch tokens encode them implicitly: activations for metallic sur-faces differ systematically from those for vegetation, reflecting distinct physical material properties. The SPPB makes this corre-spondence explicit through a physics-grounded projection. 
+
+Semantic Feature Extraction. We employ DINOv3 [25] as the semantic backbone, adapted via LoRA [7] to be task-aware. For each source 𝐼 (𝑚 ) , the adapted backbone extracts spatial semantic to-kens 𝑍 (𝑚 ) ∈ R𝑑 dino ×ℎ×𝑤 , encoding material identity and structural context invariant to the physical variations being estimated. 
+
+Material-Library Variation Estimation. Let M = {( 𝜑 𝑘 , e𝑘 )} 𝐾 𝑘 =1 be a task-specific material library with measured physical values 𝜑 𝑘 
+
+(emissivity [1] for IVIF; exposure optimality for MEF; focus proba-bility for MFF) and DINOv3 prototype embeddings e𝑘 . The SPPB retrieves a per-pixel anchor via soft nearest-neighbor regression and combines it with encoder features: ˆ𝜑 𝑖 𝑗 = Í𝑘 softmax 𝑘 
+
+ −∥ 𝑍 𝑖 𝑗 −e𝑘 ∥/ 𝜏  𝜑 𝑘 , (5) 
+
+W𝑖 𝑗 = 𝜎  𝑓 𝜃 (F𝐴 , F𝐵 ) + 𝑔 ( ˆ𝜑 𝑖 𝑗 ), (6) where ˆ 𝜑 𝑖 𝑗 is the per-pixel material anchor retrieved from M, 𝜏 is a temperature controlling retrieval sharpness, 𝑓 𝜃 aggregates encoder features, and 𝑔 is a learnable scalar projection. SGPDFuse: Semantically-Guided Physics-Disentanglement General Multi-Modal Image Fusion MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+Algorithm 1 SGPDFuse Inference Pipeline 
+
+Require: Source images 𝐼 𝐴 , 𝐼 𝐵 ; trained SGPDFuse model 
+
+Ensure: Fused image 𝐼 𝑓  
+
+> 1:
+
+// Step 1: Semantic Feature Extraction  
+
+> 2:
+
+𝑍 𝐴 
+
+> sem
+
+, 𝑍 𝐵  
+
+> sem
+
+← DINOv3 LoRA (𝐼 𝐴 ), DINOv3 LoRA (𝐼 𝐵 ) 
+
+> 3:
+
+// Step 2: Dual-Branch Encoding  
+
+> 4:
+
+F𝑚 
+
+> base
+
+, F𝑚  
+
+> detail
+
+← 𝐸 𝜃 (𝐼 𝑚 , 𝑍 𝑚 
+
+> sem
+
+) for 𝑚 ∈ { 𝐴, 𝐵 } 
+
+> 5:
+
+// Step 3: Physical Parameter Prediction (SPPB)  
+
+> 6:
+
+W ← 𝜑 min + ( 𝜑 max − 𝜑 min ) · 𝜎  𝑓 𝜃 (F𝐴 , F𝐵 ) 
+
+> 7:
+
+W𝐴 ← W , W𝐵 ← 1 − W  
+
+> 8:
+
+// Step 4: Intrinsic-Variation Disentanglement  
+
+> 9:
+
+for 𝑚 ∈ { 𝐴, 𝐵 }, ℓ ∈ { base , detail } do  
+
+> 10:
+
+F𝑚 ℓ, Φ ← R Φ (W 𝑚 ⊙ F𝑚 ℓ ) + W 𝑚 ⊙ F𝑚 ℓ 
+
+> 11:
+
+F𝑚 ℓ, Ψ ← R Ψ (( 1−W 𝑚 ) ⊙ F𝑚 ℓ ) + ( 1−W 𝑚 ) ⊙ F𝑚 ℓ 
+
+> 12:
+
+end for  
+
+> 13:
+
+// Step 5: Physics-Guided Fusion (Intrinsic Only)  
+
+> 14:
+
+F𝑓  
+
+> base
+
+← BaseFuse (F𝐴 
+
+> base ,Φ
+
+, F𝐵 
+
+> base ,Φ
+
+, W)  
+
+> 15:
+
+F𝑓  
+
+> detail
+
+← DetailFuse (F𝐴 
+
+> det ,Φ
+
+, F𝐵 
+
+> det ,Φ
+
+, W)  
+
+> 16:
+
+// Step 6: Color-Preserving Decoding  
+
+> 17:
+
+𝑌 𝑓 ← 𝐷 𝜙 (F𝑓 
+
+> base
+
+, F𝑓 
+
+> detail
+
+) 
+
+> 18:
+
+𝐼 𝑓 ← YCbCr2RGB (𝑌 𝑓 , 𝐶𝑏 ref , 𝐶𝑟 ref ) 
+
+> 19:
+
+return 𝐼 𝑓 
+
+4.3 Intrinsic-Variation Disentanglement 
+
+Given the SPPB output W ∈ [ 0, 1]𝐻 ×𝑊 , we perform a W-weighted projection that separates Φ from Ψ in feature space. Formally, 
+
+W𝑚 (𝑖, 𝑗 ) approximates the intrinsic fraction ∥Φ𝑚 ∥/(∥ Φ𝑚 ∥ + ∥ Ψ𝑚 ∥) 
+
+at each location, so W𝑚 ⊙ F𝑚 retains intrinsic content while sup-pressing variation. Learnable residual networks RΦ, RΨ correct for non-orthogonality between the two components: 
+
+F𝑚  
+
+> Φ
+
+= W𝑚 ⊙ F𝑚 + R Φ (W 𝑚 ⊙ F𝑚 ), (7) 
+
+F𝑚  
+
+> Ψ
+
+= (1−W 𝑚 ) ⊙ F𝑚 + R Ψ (( 1−W 𝑚 ) ⊙ F𝑚 ). (8) A structural consistency constraint F𝑚  
+
+> Φ
+
++ F𝑚  
+
+> Ψ
+
+≈ F𝑚 ensures that no information is lost or duplicated during decomposition, reg-ularizing RΦ and RΨ to act as complementary correctors rather than independent feature extractors. This constraint is explicitly enforced via a reconstruction penalty Lcons = ∥F𝑚  
+
+> Φ
+
++ F𝑚  
+
+> Ψ
+
+− F𝑚 ∥22,included in Ldecomp (Eq. (14)) alongside the cross-correlation terms, which together prevent the residual networks from bypassing the disentanglement logic. 
+
+Complementary Source Assignment. We assign W𝐴 = W and 
+
+W𝐵 = 1−W , encoding a physically motivated complementarity derived from the image formation models. In IVIF, the radiation law 𝐿 = 𝜖𝐵 (𝑇 ) + ( 1−𝜖 )𝐿 env directly induces this duality: at a pixel where emissivity 𝜖 is high, the IR channel is dominated by genuine emission ( Φ for source 𝐴 ), while the visible channel captures mostly reflected illumination ( Ψ for source 𝐵 ); at low-𝜖 surfaces, the roles reverse. In MEF and MFF, the complementarity follows from en-ergy conservation across exposure pairs and from focus-defocus duality, respectively. We acknowledge this is an approximation; at pixels where both modalities carry distinct intrinsic information, the learnable residual correctors RΦ, RΨ adaptively refine the de-composition where the hard assignment is insufficient. At both base and detail scales, Ψ components are discarded before fusion, eliminating variation by construction. 
+
+4.4 Physics-Guided Fusion 
+
+Only the intrinsic components {F𝑚  
+
+> Φ
+
+} enter the fusion stage, by construction free of variation residual. The fusion strategy differs by frequency scale, reflecting the distinct physical nature of intrinsic content at each level. The base layer captures low-frequency structure where com-plementary information should be weighted by relative physical confidence. We apply squeeze-and-excitation (SE) channel atten-tion biased by W, so that the higher-confidence source governs base-level fusion: 
+
+[𝑤 𝐴 , 𝑤 𝐵 ] = Softmax  SE ([ F𝐴 
+
+> base ,Φ
+
+; F𝐵 
+
+> base ,Φ
+
+]) , (9) 
+
+F𝑓  
+
+> base
+
+= NAF  Í 𝑚 𝑤 𝑚 ⊙ F𝑚 
+
+> base ,Φ
+
+.
+
+The detail layer carries high-frequency content where the pri-mary criterion is local sharpness. We adopt ℓ1-norm activity weight-ing as a proxy for signal energy, selecting the sharper modality at each location: 
+
+𝑤 d 
+
+> 𝑚
+
+= ∥F𝑚  
+
+> detail ,Φ
+
+∥1
+
+Í𝑚 ∥F𝑚  
+
+> detail ,Φ
+
+∥1
+
+, F𝑓  
+
+> detail
+
+= Refine  Í 𝑚 𝑤 d 
+
+> 𝑚
+
+⊙ F𝑚 
+
+> detail ,Φ
+
+. (10) This asymmetric design—confidence weighting at base level, activity-based selection at detail level—directly follows from the Intrinsic-Variation factorization: with variation removed, fusion reduces to combining clean intrinsic signals according to their frequency-domain properties. 
+
+4.5 Loss Function 
+
+Stage 1 pre-trains the encoder–decoder via Lrec :
+
+Lrec =∑︁  
+
+> 𝑚 ∈ { 𝐴,𝐵 }
+
+ ∥ ˆ𝐼 𝑚 − 𝐼 𝑚 ∥1 + 0.5 LSSIM ( ˆ𝐼 𝑚 , 𝐼 𝑚 ). (11) Stage 2 trains the full pipeline end-to-end with: 
+
+Ltotal = LIG + 𝜆 decomp Ldecomp + 𝜆 RecA LRecA + 𝜆 tv Ltv , (12) where LIG , Ldecomp , and Ltv are formulated as: 
+
+LIG = ∥𝐼 𝑓 − max (𝐼 𝐴 , 𝐼 𝐵 )∥ 1 + 𝜆 𝑔 ∥∇ 𝐼 𝑓 − max (∇ 𝐼 𝐴 , ∇𝐼 𝐵 )∥ 1, (13) 
+
+Ldecomp = cc (F𝐴  
+
+> d
+
+, F𝐵  
+
+> d
+
+)2
+
+1 + cc (F𝐴  
+
+> b
+
+, F𝐵  
+
+> b
+
+) +∑︁ 
+
+> 𝑚
+
+∥F𝑚  
+
+> Φ
+
++F𝑚  
+
+> Ψ
+
+−F𝑚 ∥22, (14) 
+
+Ltv =∑︁ 
+
+> 𝑖,𝑗
+
+ |W 𝑖 +1,𝑗 − W 𝑖,𝑗 | + |W 𝑖,𝑗 +1 − W 𝑖,𝑗 |, (15) where 𝐼 𝑓 is the fused output, ∇ denotes spatial gradients computed by finite differences, cc (· , ·) is the Pearson cross-correlation with subscripts b/d denoting base/detail, and W is the variation confi-dence map from the SPPB. The intensity-gradient loss enforces pixel and gradient fidelity to the source maximum; the decomposition loss encourages correlated base and complementary detail features while constraining RΦ, RΨ as correctors; and the total-variation regularizer promotes spatial smoothness in W.MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Haozhen Wei et al. Input 
+
+> Ours(Full Size)
+> MFIF
+> Ours
+> GIFNet
+> DiFuse
+> EMMA
+> Text-IF
+> SHIP
+> SIBA
+> CCF
+> SwinFusion
+> Input
+> MEFB
+> Ours
+> GIFNet
+> DiFuse
+> EMMA
+> Text-IF
+> SHIP
+> SIBA
+> CCF
+> SwinFusion
+> Input
+> Ours
+> GIFNet
+> CoCoNet
+> EMMA
+> Text-IF
+> SHIP
+> SIBA
+> CCF
+> SwinFusion Ours(Full Size)
+> Ours(Full Size)
+> TNO
+> Ours
+> GIFNet
+> DiFuse
+> EMMA
+> Text-IF
+> SHIP
+> SIBA
+> CCF
+> SwinFusion Ours(Full Size)
+> Input
+> M3FD
+
+Figure 4: Qualitative comparison of fusion quality with other state-of-the-art methods on diverse multimodal fusion tasks. Magnified views demonstrate that SGPDFuse consistently achieves superior visual quality with enhanced detail preservation. 
+
+Reconstruction Alignment Loss. Illustrated in Fig. 2, LRecA an-chors the fused output in DINOv3 feature space via cosine content alignment and Gram-matrix style regularization. Let 𝑍 𝑓 , 𝑍 𝐴 , 𝑍 𝐵 
+
+denote the DINOv3 features of the fused and source images: 
+
+LRecA = 𝛼 Lcontent + 𝛽 Lstyle , (16) 
+
+Lcontent = 1 − 12
+
+ cos (𝑍 𝑓 , 𝑍 𝐴 ) + cos (𝑍 𝑓 , 𝑍 𝐵 ), (17) 
+
+Lstyle = 𝐺 (𝑍 𝑓 ) − 12
+
+ 𝐺 (𝑍 𝐴 ) + 𝐺 (𝑍 𝐵 ) 2 
+
+> 𝐹
+
+, (18) where cos (· , ·) is cosine similarity and 𝐺 (·) is the Gram matrix. 
+
+5 Experiments 5.1 Experimental Setup 
+
+Experiment datasets. To evaluate the performance of our method, we conduct experiments on three representative image fusion tasks: infrared and visible image fusion (IVIF), multi-exposure image fu-sion (MEF) and multi-focus image fusion (MFF). For IVIF, we use three widely adopted benchmarks: M 3FD [16], RoadScene [35], and TNO [28]. For MEF and MFF, we utilize the MEFB [39] and MFIF [40] datasets. For downstream evaluation on IVIF, we use M 3FD [16] for object detection and FMB [17] for semantic segmentation. 
+
+Implementation Details. Input images are resized to the nearest 16 × multiple of their original resolution; test images are evaluated at full resolution without any post-processing. The shared encoder uses 𝑑 =64 feature channels with 𝑁 =4 NAFNet blocks; the SPPB uses 32 hidden channels per branch. We adopt DINOv3 ViT-S/16 (𝑑 dino =384) fine-tuned via LoRA with rank 𝑟 =32 and 𝛼 =64. Both stages use AdamW (weight decay 1 ×10 −4) with cosine annealing (𝜂 min =10 −6) and batch size 2. Stage 1 (reconstruction pre-training): 50 epochs, lr =1×10 −4, ℓ1+SSIM loss. Stage 2 (end-to-end fusion): 100 epochs, lr =5×10 −5; loss coefficients 𝜆 decomp =2.0, 𝜆 tv =5.0, 𝜆 𝑔 =10 .0, 
+
+𝜆 RecA =0.1. For IVIF, the SPPB scale and bias are initialized from the emissivity database derived from HADAR [1]. All experiments are conducted on 8 NVIDIA RTX3090 (24GB) GPUs using PyTorch. 
+
+Evaluation Metrics. We adopt four complementary metrics from IVIF-ZOO [18]: Correlation Coefficient (CC), Peak Signal-to-Noise Ratio (PSNR), Transfer Entropy (TE), and Multi-Scale Structural Similarity (MS-SSIM, reported as SSIM in Table 1). For downstream tasks, we use YOLOv8s [29] with mAP 50:95 for object detection and SegFormer-B1 [33] with mIoU for semantic segmentation. For downstream IVIF application, input images are resized to 256 × 256. 
+
+5.2 Experiments on Multi-Task 
+
+5.2.1 Qualitative Comparison. Figure 4 presents visual compar-isons across all four benchmarks. For IVIF, our method produces sharper vehicle outlines and headlight structures on M 3FD and SGPDFuse: Semantically-Guided Physics-Disentanglement General Multi-Modal Image Fusion MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+Table 1: Quantitative comparisons of fusion metrics with other SOTA fusion methods on M 3FD, TNO & RoadScene, MFIF and MEFB datasets.Boldface denotes the best while underline denotes the second best results. Methods M3FD Dataset T & R Dataset MFIF Dataset MEFB Dataset 
+
+CC ↑ PSNR ↑ TE ↑ SSIM ↑ CC ↑ PSNR ↑ TE ↑ SSIM ↑ CC ↑ PSNR ↑ TE ↑ SSIM ↑ CC ↑ PSNR ↑ TE ↑ SSIM ↑
+
+SwinFusion [21] 0.52 62.65 7.10 0.44 0.61 61.41 7.16 0.54 0.97 75.73 7.29 0.91 0.89 59.05 4.90 0.80 TC-MoA [47] 0.48 61.92 6.93 0.49 0.58 62.89 6.86 0.52 0.97 74.87 7.29 0.90 0.86 58.92 4.88 0.80 GIFNet [6] 0.58 63.36 6.74 0.51 0.64 63.06 6.87 0.54 0.95 68.17 7.14 0.83 0.89 58.12 4.90 0.56 CCF [3] 0.53 63.27 6.89 0.69 0.57 63.43 6.94 0.59 0.90 68.81 7.13 0.73 0.85 58.65 4.55 0.50 EMMA [43] 0.51 61.76 6.83 0.51 0.61 62.21 6.73 0.53 0.97 70.69 7.14 0.88 0.85 56.64 5.23 0.57 DCEvo [19] 0.50 61.35 6.90 0.51 0.59 61.98 7.00 0.53 0.97 71.92 7.16 0.89 0.84 56.32 5.23 0.58 SIBA [30] 0.53 61.55 6.83 0.52 0.60 62.35 6.91 0.52 0.97 71.51 7.24 0.89 0.85 56.30 5.67 0.65 Text-DiFuse [37] 0.41 60.02 6.70 0.23 0.50 60.51 7.05 0.26 0.88 67.04 7.13 0.68 0.80 56.86 4.95 0.40 SHIP [46] 0.47 61.24 6.93 0.49 0.57 61.97 7.03 0.50 0.92 69.19 7.30 0.84 0.89 56.19 5.47 0.60 Text-IF [36] 0.50 62.10 6.82 0.50 0.60 62.77 6.80 0.51 0.97 71.45 7.15 0.86 0.86 56.39 5.44 0.76 
+
+Ours 0.56 63.57 7.16 0.76 0.64 64.05 7.23 0.68 0.98 77.17 7.35 0.96 0.90 58.94 5.88 0.82 Table 2: Quantitative comparisons of downstream task performance with other existing fusion methods for object detection on M3FD and semantic segmentation on FMB dataset. Boldface denotes the best while underline denotes the second best results. 
+
+Methods M3FD Dataset FMB Dataset 
+
+People Car Bus Light Moto Trunk mAP Car Trunk T-Light T-Sign Motor Pole mIoU SwinFusion [21] 0.283 0.495 0.624 0.107 0.178 0.400 0.348 0.821 0.505 0.268 0.568 0.684 0.403 0.665 TC-MoA [47] 0.288 0.501 0.624 0.122 0.155 0.405 0.349 0.830 0.490 0.366 0.703 0.644 0.415 0.687 GIFNet [6] 0.280 0.496 0.610 0.106 0.141 0.429 0.344 0.834 0.579 0.327 0.687 0.690 0.419 0.695 CCF [3] 0.257 0.481 0.608 0.105 0.106 0.405 0.327 0.813 0.464 0.317 0.694 0.663 0.416 0.678 EMMA [43] 0.276 0.496 0.624 0.118 0.147 0.398 0.343 0.834 0.549 0.343 0.668 0.676 0.417 0.691 DCEvo [19] 0.289 0.498 0.618 0.117 0.147 0.398 0.344 0.829 0.518 0.349 0.654 0.686 0.421 0.687 SIBA [30] 0.291 0.496 0.633 0.109 0.103 0.399 0.338 0.831 0.484 0.337 0.666 0.650 0.420 0.680 Text-DiFuse [37] 0.263 0.480 0.602 0.082 0.127 0.423 0.329 0.822 0.521 0.316 0.687 0.682 0.413 0.684 SHIP [46] 0.285 0.491 0.634 0.117 0.185 0.402 0.352 0.825 0.479 0.357 0.676 0.696 0.431 0.688 Text-IF [36] 0.287 0.501 0.624 0.121 0.170 0.416 0.353 0.831 0.503 0.318 0.680 0.675 0.424 0.684 
+
+Ours 0.297 0.532 0.564 0.102 0.205 0.440 0.357 0.833 0.601 0.358 0.703 0.701 0.431 0.698 
+
+retains fine-grained branch and ground textures on TNO, where competing methods exhibit blurring or halo artifacts due to unre-solved thermal emissivity variation. For MFF, our results achieve the clearest focus transitions, with well-defined stained glass pat-terns that competitors render with ringing or local blur. For MEF, our method jointly recovers detail from over-exposed and under-exposed regions, yielding naturally balanced luminance free of tone-mapping artifacts. These consistent gains across tasks validate that SPPB-guided intrinsic–variation disentanglement effectively suppresses modality-specific artifacts. 
+
+5.2.2 Quantitative Comparison. Table 1 presents quantitative com-parisons across four benchmarks spanning IVIF (M 3FD, T&R), MFF (MFIF), and MEF (MEFB). Our method achieves the best or second-best on all datasets and metrics, with particularly decisive gains in MS-SSIM: +0.07 on M 3FD, +0.09 on T&R, +0.05 on MFIF, and +0.02 on MEFB over the respective runners-up. Consistent TE and PSNR gains across all benchmarks confirm that the physics-calibrated confidence maps enable complete intrinsic transfer while suppress-ing cross-modal noise, with improvements spanning three tasks under distinct physical priors—validating the generalizability of the architecture. 
+
+5.3 Downstream Application on IVIF 
+
+To further validate the practical utility of our fused images, we eval-uate downstream performance on object detection and semantic MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. Haozhen Wei et al. Background  Car  Road  Tree  Truck  Person  Sky Building  Bus  Pole  Sidewalk        
+
+> Ours
+> GT
+> Error Detection
+> Visible
+> Error Detection Error Detection Error Detection
+> Low Confidence
+> Infrared
+> Detected
+> Ours
+> Low Confidence
+> Text-DiFuse
+> Error Detection
+> Visible DCEvo
+> (a)
+> (b)
+> SHIP SIBA Text-IF
+> Text-DiFuse
+> Visible SHIP Text-IF SIBA
+> Infrared Text-DiFuse DCEvo
+> GT
+
+Figure 5: (a)Qualitative comparisons of object detection performance in smoke scene. (b)Qualitative comparisons of semantic segmentation performance in nighttime scene. Table 3: Ablation study on M 3FD. Bold denotes the best result. Variant CC ↑ PSNR ↑ TE ↑ SSIM ↑
+
+Study on SPPB (A) Full model 0.56 63.57 7.16 0.76 
+
+(B) w/o SPPB ( W = 0.5) 0.52 61.38 7.10 0.72 
+
+(C) w/o IV Disentanglement 0.53 61.45 7.10 0.73 
+
+(D) w/o LoRA (frozen DINOv3) 0.50 60.22 6.47 0.69 
+
+Study on RecA Loss (A) Full model 0.56 63.57 7.16 0.76 
+
+(E) w/o LRecA 0.53 60.95 6.55 0.70 
+
+(F) w/o Lcontent 0.55 61.97 7.02 0.72 
+
+(G) w/o Lstyle 0.54 62.34 6.78 0.73 segmentation. As shown in Table 2, our method achieves the highest mAP 50:95 on M 3FD and the best mIoU on FMB among all competing methods. The gains on thermally distinctive categories (Car, Mo-torcycle, Trunk) demonstrate that SPPB-calibrated intrinsic fusion preserves object signatures more faithfully, while mIoU improve-ments on FMB confirm that Intrinsic-Variation disentanglement maintains semantic boundaries essential for recognition. 
+
+5.4 Ablation Studies 
+
+5.4.1 Study on SPPB. As shown in Table 3, we ablate three aspects of the SPPB design. Replacing the physics-grounded confidence map with a uniform weight ( W ≡ 0.5, variant B) leads to consis-tent degradation across all metrics, confirming that fixed isotropic weighting fails to distinguish intrinsic from variation content. Re-moving the Intrinsic-Variation disentanglement entirely (variant C) causes further drops, demonstrating that the W-weighted projec-tion is essential for suppressing modality-specific artifacts before fusion. Freezing DINOv3 without LoRA adaptation (variant D) also hurts performance, indicating that task-aware fine-tuning is neces-sary for material-sensitive emissivity estimation. 
+
+5.4.2 Study on RecA Loss. We further ablate the components of 
+
+LRecA in Table 3. Removing LRecA entirely (variant E) degrades structural fidelity, confirming that DINOv3 feature-space align-ment provides an essential semantic anchor during fusion training. Ablating only Lcontent (variant F) causes semantic drift toward a single modality, while removing only Lstyle (variant G) introduces texture incoherence in the fused output. These results validate that content and style alignment are complementary and jointly necessary for producing perceptually consistent fusion results. 
+
+6 Conclusion 
+
+We propose SGPDFuse, which replaces blind feature aggregation 
+
+with physics-disentangled representations via a Semantic-Physical Parametric Bridge, separating invariant scene attributes from tran-sient environmental factors under the Intrinsic-Variation principle. Building on this decomposition, the physics-guided fusion oper-ates exclusively on intrinsic components, with Semantic Alignment via cosine similarity and Gram-matrix regularization providing self-consistent supervision in the DINOv3 feature space. Extensive experiments demonstrate consistent state-of-the-art performance within a single unified architecture. SGPDFuse: Semantically-Guided Physics-Disentanglement General Multi-Modal Image Fusion MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil. 
+
+References 
+
+[1] Fanglin Bao, Xueji Wang, Shree Hari Sureshbabu, Gautam Sreekumar, Liping Yang, Vaneet Aggarwal, Vishnu N Boddeti, and Zubin Jacob. 2023. Heat-assisted detection and ranging. Nature 619, 7971 (2023), 743–748. [2] Christopher P Burgess, Irina Higgins, Arka Pal, Loic Matthey, Nick Watters, Guil-laume Desjardins, and Alexander Lerchner. 2018. Understanding disentangling in 𝛽 -VAE. arXiv preprint arXiv:1804.03599 (2018). [3] Bing Cao, Xingxin Xu, Pengfei Zhu, Qilong Wang, and Qinghua Hu. 2024. Con-ditional controllable image fusion. Advances in Neural Information Processing Systems 37 (2024), 120311–120335. [4] Mathilde Caron, Hugo Touvron, Ishan Misra, Hervé Jégou, Julien Mairal, Piotr Bojanowski, and Armand Joulin. 2021. Emerging properties in self-supervised vision transformers. In Proceedings of the IEEE/CVF international conference on computer vision . 9650–9660. [5] Liangyu Chen, Xiaojie Chu, Xiangyu Zhang, and Jian Sun. 2022. Simple baselines for image restoration. In European conference on computer vision . Springer, 17–33. [6] Chunyang Cheng, Tianyang Xu, Zhenhua Feng, Xiaojun Wu, Zhangyong Tang, Hui Li, Zeyang Zhang, Sara Atito, Muhammad Awais, and Josef Kittler. 2025. One model for all: Low-level task interaction is a key to task-agnostic image fusion. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 28102–28112. [7] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, Weizhu Chen, et al. 2022. Lora: Low-rank adaptation of large language models. ICLR 1, 2 (2022), 3. [8] Edwin H Land. 1977. The retinex theory of color vision. Scientific american 237, 6 (1977), 108–129. [9] Hui Li and Xiao-Jun Wu. 2018. DenseFuse: A fusion approach to infrared and visible images. IEEE Transactions on Image Processing 28, 5 (2018), 2614–2623. [10] Hui Li, Xiao-Jun Wu, and Josef Kittler. 2021. RFN-Nest: An end-to-end residual fusion network for infrared and visible images. Information Fusion 73 (2021), 72–86. [11] Xingyuan Li, Songcheng Du, Yang Zou, HaoYuan Xu, Zhiying Jiang, and Jinyuan Liu. 2026. Unifusion: A unified image fusion framework with robust representa-tion and source-aware preservation. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 33869–33880. [12] Xingyuan Li, Jinyuan Liu, Zhixin Chen, Yang Zou, Long Ma, Xin Fan, and Risheng Liu. 2024. Contourlet residual for prompt learning enhanced infrared image super-resolution. In European Conference on Computer Vision . Springer, 270–288. [13] Xingyuan Li, Zirui Wang, Yang Zou, Zhixin Chen, Jun Ma, Zhiying Jiang, Long Ma, and Jinyuan Liu. 2025. Difiisr: A diffusion model with gradient guidance for infrared image super-resolution. In Proceedings of the Computer Vision and Pattern Recognition Conference . 7534–7544. [14] Xingyuan Li, Haoyuan Xu, Shulin Li, Xiang Chen, Zhiying Jiang, and Jinyuan Liu. 2026. DRFusion: Drift-Resilient Temporally Consistent Infrared-Visible Video Fusion. arXiv preprint arXiv:2605.25775 (2026). [15] Xingyuan Li, Haoyuan Xu, Xingyue Zhu, Jun Ma, Yang Zou, Zhiying Jiang, and Jinyuan Liu. 2026. Uncertainty-aware Spatial-Frequency Registration and Fusion for Infrared and Visible Images. arXiv preprint arXiv:2605.13049 (2026). [16] Jinyuan Liu, Xin Fan, Zhanbo Huang, Guanyao Wu, Risheng Liu, Wei Zhong, and Zhongxuan Luo. 2022. Target-aware dual adversarial learning and a multi-scenario multi-modality benchmark to fuse infrared and visible for object detec-tion. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 5802–5811. [17] Jinyuan Liu, Zhu Liu, Guanyao Wu, Long Ma, Risheng Liu, Wei Zhong, Zhongx-uan Luo, and Xin Fan. 2023. Multi-interactive feature learning and a full-time multi-modality benchmark for image fusion and segmentation. In Proceedings of the IEEE/CVF international conference on computer vision . 8115–8124. [18] Jinyuan Liu, Guanyao Wu, Zhu Liu, Di Wang, Zhiying Jiang, Long Ma, Wei Zhong, Xin Fan, and Risheng Liu. 2024. Infrared and visible image fusion: From data compatibility to task adaption. IEEE Transactions on Pattern Analysis and Machine Intelligence 47, 4 (2024), 2349–2369. [19] Jinyuan Liu, Bowei Zhang, Qingyun Mei, Xingyuan Li, Yang Zou, Zhiying Jiang, Long Ma, Risheng Liu, and Xin Fan. 2025. DCEvo: Discriminative Cross-Dimensional Evolutionary Learning for Infrared and Visible Image Fusion. In 
+
+Proceedings of the Computer Vision and Pattern Recognition Conference . 2226–2235. [20] Risheng Liu, Zhu Liu, Jinyuan Liu, Xin Fan, and Zhongxuan Luo. 2024. A task-guided, implicitly-searched and meta-initialized deep model for image fusion. 
+
+IEEE Transactions on Pattern Analysis and Machine Intelligence 46, 10 (2024), 6594–6609. [21] Jiayi Ma, Linfeng Tang, Fan Fan, Jun Huang, Xiaoguang Mei, and Yong Ma. 2022. SwinFusion: Cross-domain long-range learning for general image fusion via swin transformer. IEEE/CAA Journal of Automatica Sinica 9, 7 (2022), 1200–1217. [22] Jiayi Ma, Wei Yu, Pengwei Liang, Chang Li, and Junjun Jiang. 2019. FusionGAN: A generative adversarial network for infrared and visible image fusion. Information fusion 48 (2019), 11–26. [23] Maxime Oquab, Timothée Darcet, Théo Moutakanni, Huy Vo, Marc Szafraniec, Vasil Khalidov, Pierre Fernandez, Daniel Haziza, Francisco Massa, Alaaeldin El-Nouby, et al. 2023. Dinov2: Learning robust visual features without supervision. 
+
+arXiv preprint arXiv:2304.07193 (2023). [24] Lingyan Ruan, Bin Chen, Jizhou Li, and Miuling Lam. 2022. Learning to deblur using light field generated and real defocus images. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 16304–16313. [25] Oriane Siméoni, Huy V Vo, Maximilian Seitzer, Federico Baldassarre, Maxime Oquab, Cijo Jose, Vasil Khalidov, Marc Szafraniec, Seungeun Yi, Michaël Rama-monjisoa, et al. 2025. Dinov3. arXiv preprint arXiv:2508.10104 (2025). [26] Murali Subbarao and Gopal Surya. 1994. Depth from defocus: A spatial domain approach. International Journal of computer vision 13, 3 (1994), 271–294. [27] Linfeng Tang, Jiteng Yuan, Hao Zhang, Xingyu Jiang, and Jiayi Ma. 2022. PI-AFusion: A progressive infrared and visible image fusion network based on illumination aware. Information Fusion 83 (2022), 79–92. [28] Alexander Toet. 2017. The TNO multiband image data collection. Data in brief 
+
+15 (2017), 249. [29] Rejin Varghese and M Sambath. 2024. Yolov8: A novel object detection algorithm with enhanced performance and robustness. In 2024 International conference on advances in data engineering and intelligent computing systems . IEEE, 1–6. [30] Song Wang, Xie Han, Liqun Kuang, Boying Wang, Zhongyu Chen, Zherui Qiao, Fan Yang, Xiaoxia Liu, Bingyu Zhang, and Zhixun Wang. 2025. The Source Image is the Best Attention for Infrared and Visible Image Fusion. In Proceedings of the IEEE/CVF International Conference on Computer Vision . 13513–13522. [31] Zirui Wang, Jiayi Zhang, Tianwei Guan, Yuhan Zhou, Xingyuan Li, Minjing Dong, and Jinyuan Liu. 2025. Efficient Rectified Flow for Image Fusion. Advances in Neural Information Processing Systems (2025). [32] Chen Wei, Wenjing Wang, Wenhan Yang, and Jiaying Liu. 2018. Deep retinex decomposition for low-light enhancement. arXiv preprint arXiv:1808.04560 (2018). [33] Enze Xie, Wenhai Wang, Zhiding Yu, Anima Anandkumar, Jose M Alvarez, and Ping Luo. 2021. SegFormer: Simple and efficient design for semantic segmentation with transformers. Advances in neural information processing systems 34 (2021), 12077–12090. [34] Han Xu, Jiayi Ma, Junjun Jiang, Xiaojie Guo, and Haibin Ling. 2020. U2Fusion: A unified unsupervised image fusion network. IEEE transactions on pattern analysis and machine intelligence 44, 1 (2020), 502–518. [35] Han Xu, Jiayi Ma, Zhuliang Le, Junjun Jiang, and Xiaojie Guo. 2020. Fusiondn: A unified densely connected network for image fusion. In Proceedings of the AAAI conference on artificial intelligence , Vol. 34. 12484–12491. [36] Xunpeng Yi, Han Xu, Hao Zhang, Linfeng Tang, and Jiayi Ma. 2024. Text-if: Leveraging semantic text guidance for degradation-aware and interactive image fusion. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 27026–27035. [37] Hao Zhang, Lei Cao, and Jiayi Ma. 2024. Text-difuse: An interactive multi-modal image fusion framework based on text-modulated diffusion model. Advances in Neural Information Processing Systems 37 (2024), 39552–39572. [38] Hao Zhang, Zhuliang Le, Zhenfeng Shao, Han Xu, and Jiayi Ma. 2021. MFF-GAN: An unsupervised generative adversarial network with adaptive and gradient joint constraints for multi-focus image fusion. Information Fusion 66 (2021), 40–53. [39] Xingchen Zhang. 2021. Benchmarking and comparing multi-exposure image fusion algorithms. Information Fusion 74 (2021), 111–131. [40] Xingchen Zhang. 2021. Deep learning-based multi-focus image fusion: A survey and a comparative study. IEEE Transactions on Pattern Analysis and Machine Intelligence 44, 9 (2021), 4819–4838. [41] Wenda Zhao, Shigeng Xie, Fan Zhao, You He, and Huchuan Lu. 2023. Metafusion: Infrared and visible image fusion via meta-feature embedding from object detec-tion. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 13955–13965. [42] Zixiang Zhao, Haowen Bai, Jiangshe Zhang, Yulun Zhang, Shuang Xu, Zudi Lin, Radu Timofte, and Luc Van Gool. 2023. Cddfuse: Correlation-driven dual-branch feature decomposition for multi-modality image fusion. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 5906–5916. [43] Zixiang Zhao, Haowen Bai, Jiangshe Zhang, Yulun Zhang, Kai Zhang, Shuang Xu, Dongdong Chen, Radu Timofte, and Luc Van Gool. 2024. Equivariant multi-modality image fusion. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 25912–25921. [44] Zixiang Zhao, Haowen Bai, Yuanzhi Zhu, Jiangshe Zhang, Shuang Xu, Yulun Zhang, Kai Zhang, Deyu Meng, Radu Timofte, and Luc Van Gool. 2023. DDFM: denoising diffusion model for multi-modality image fusion. In Proceedings of the IEEE/CVF international conference on computer vision . 8082–8093. [45] Zixiang Zhao, Shuang Xu, Jiangshe Zhang, Chengyang Liang, Chunxia Zhang, and Junmin Liu. 2021. Efficient and model-based infrared and visible image fusion via algorithm unrolling. IEEE Transactions on Circuits and Systems for Video Technology 32, 3 (2021), 1186–1196. [46] Naishan Zheng, Man Zhou, Jie Huang, Junming Hou, Haoying Li, Yuan Xu, and Feng Zhao. 2024. Probing synergistic high-order interaction in infrared and visible image fusion. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 26384–26395. [47] Pengfei Zhu, Yang Sun, Bing Cao, and Qinghua Hu. 2024. Task-customized mixture of adapters for general image fusion. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 7099–7108.
