@@ -1,0 +1,181 @@
+Title: Location-Aware Language Models via Secondary Embeddings
+
+URL Source: https://arxiv.org/pdf/2609.00454v1
+
+Published Time: Wed, 02 Sep 2026 00:24:41 GMT
+
+Number of Pages: 11
+
+Markdown Content:
+# Location-Aware Language Models via Secondary Embeddings 
+
+Gokul Srinivasagan and Munir Georges 
+
+AImotion Bavaria, Technische Hochschule Ingolstadt, Germany 
+
+{Gokul.Srinivasagan, Munir.Georges}@thi.de 
+
+Abstract. Pretrained transformer-based language models achieve strong performance across a wide range of NLP tasks but remain limited in encoding geo-locational semantics, leading to suboptimal represen-tations of place names and spatial entities. In this work, we propose a lightweight, model-agnostic approach for injecting geo-spatial awareness into pretrained embeddings without modifying the tokenizer or requir-ing costly retraining. Our method augments input representations with structured geographic signals by combining location names with their corresponding latitude and longitude, and employs a location-focused masking to better align textual representations with real-world spatial relationships. This design allows the model to incorporate geo-spatial context while preserving existing semantic and syntactic knowledge. Ex-perimental results demonstrate substantial improvements in geo-spatial alignment while maintaining comparable performance on standard NLP benchmarks such as GLUE. The method is computationally efficient, requiring only minutes of additional training, and generalizes across multiple model architectures and scales. 
+
+Keywords: Language models · Masked language modeling (MLM) · Geo-locations 
+
+# 1 Introduction 
+
+Recent advances in pretrained language models such as BERT [2] and RoBERTa [11] have demonstrated a remarkable ability to capture semantic and syntactic relationships between words. Despite this success, these models often struggle with specialized domains that require additional contextual grounding. In partic-ular, geo-locational awareness is essential for understanding spatial relationships and providing contextually relevant outputs such as route descriptions, targeted advertisements, and localized search results. However, existing models largely fail to encode geographic semantics effectively for entities such as cities, landmarks, or regions. As illustrated in Figure 1, embeddings of city names are not well structured in the latent space, largely due to the absence of explicit geographic grounding in language models. For instance, the cities Saarbrücken and Salzburg appear close to each other in BERT’s embedding space, even though they are geographically arXiv:2609.00454v1 [cs.CL] 31 Aug 2026 2 Gokul Srinivasagan and Munir Georges  
+
+> Fig. 1. Comparison between the actual geographic location of cities (left) and their corresponding t-SNE visualization in the BERT embedding space (right). The visual-ization shows that cities which are geographically distant often appear close together in the embedding space, highlighting the lack of geo-spatial awareness in pretrained language models.
+
+distant. This discrepancy highlights the model’s inability to reflect real-world spatial relationships. A contributing factor to this limitation lies in the tokenization process. While subword tokenization has proven effective for general text representation, it frag-ments named entities, eroding their unique semantic identity. For example, the city name Ingolstadt is split into subwords "ing" , "##ols" , and "##tadt" , re-sulting in partial embeddings that fail to capture the entity as a single coherent concept. The issue worsens when different locations share identical names (e.g., Paris, France vs. Paris, Texas), as the model has no geo-spatial information to distinguish between them. Consequently, embeddings of distinct entities often collapse into the same region of the vector space, misrepresenting their rela-tional proximity. Existing approaches to incorporating geographic information often require architectural modifications or costly retraining procedures, limiting their scala-bility and practical applicability [9, 10, 4]. A seemingly straightforward solution would be to expand the tokenizer’s vocabulary to include all place names. How-ever, this approach is impractical as it significantly increases model size and training costs. For instance, adding merely 1,000 new tokens to the BERT-base vocabulary increases the embedding parameters by approximately 3.2%. Moreover, retraining such a model to integrate the new tokens into its represen-tational space is computationally expensive and may degrade performance on downstream NLP tasks. To address these limitations, we propose a lightweight and model-agnostic method for integrating geographic information into pretrained embeddings with-out modifying the tokenizer or requiring large-scale retraining. Our approach injects structured geo-spatial signals into the embedding space, aligning repre-Location-Aware Language Models via Secondary Embeddings 3
+
+sentations with real-world spatial relationships while preserving existing linguis-tic knowledge. As a result, the model gains location awareness with minimal computational overhead and no loss in downstream performance. The main contributions of this work are as follows: 
+
+– We propose a lightweight method for integrating geo-locational information into pretrained language model embeddings without modifying the tokenizer or vocabulary. 
+
+– Our approach enriches the embedding space with structured geographic sig-nals while preserving existing syntactic and semantic knowledge. 
+
+– We demonstrate substantial improvements in geo-spatial awareness without degrading performance on downstream benchmarks such as GLUE. 
+
+– We also validate the generalizability of our method across different model architectures, scales, and multilingual settings. 
+
+# 2 Related Work 
+
+Prior work has shown that incorporating geographic information into language models can improve the representation of spatial entities and performance on geo-text understanding tasks [9, 10, 4, 14]. SpaBERT [9] employs a masked entity prediction objective alongside masked language modeling to capture geographic relationships among entities. GeoLM [10] combines masked language modeling with contrastive learning to jointly model linguistic and geographic information. Similarly, MGeo [4] introduces a multimodal architecture with a dedicated ge-ographic encoder for query and point-of-interest (POI) matching. While these approaches demonstrate the benefits of geo-spatial modeling, they depend on specialized architectures, additional learning objectives, or extensive training to acquire location awareness. In contrast, our method injects geographic signals into pretrained language models through lightweight input augmentation, requiring no tokenizer modi-fications, no additional learning objectives beyond masked language modeling, and only a short period of training, while preserving general semantic knowledge. 
+
+# 3 Method 
+
+3.1 Dataset Generation 
+
+We construct a synthetic dataset using information derived from the General Transit Feed Specification (GTFS) for long-distance train schedules in Ger-many 1. After pre-processing, we extract 820 unique location names correspond-ing to train stations, which serve as geographic entities. To generate natural language training data, we employ two large language models: Mistral [7, 6] and LLaMA 3 [5], to produce journey descriptions con-taining station names, arrival and departure times, and other contextual details.      
+
+> 1https://gtfs.de/en/feeds/ 4Gokul Srinivasagan and Munir Georges
+> Fig. 2. Overview of the proposed framework for incorporating geo-spatial information into pretrained language model embeddings. Given an input sentence containing lo-cation entities, we construct a secondary embedding that encodes the corresponding geographic information (city name, latitude, and longitude). This information is inte-grated into the input sequence using special tokens ( < loc > ,< /loc > , and < l _sep > )to inject structured location signals into the model. During training, we employ two masking strategies: (1) standard masked language modeling (MLM) with random token masking (left), and (2) a location-focused masking scheme that selectively masks city names (right). The model is trained to recover masked entities using both contextual and geo-spatial cues, enabling improved location-aware representations.
+
+This results in a corpus of 5,965 text samples with a total of 62,758 occurrences of location entities. In addition to textual data, we associate each location with its corresponding latitude and longitude coordinates, forming a structured geo-spatial reference that is later incorporated into the training process. 
+
+3.2 Continual Pretraining with Secondary Embeddings 
+
+To enable geo-spatial awareness, we use three special tokens: < loc > (start of location), < /loc > (end of location), and < l _sep > (location separator). These tokens explicitly define the boundaries of location-specific information within the input sequence. We construct a mapping between each stop_name and its geographic coordi-nates (latitude and longitude), which we refer to as secondary embeddings . Unlike standard token embeddings learned purely from text, these embeddings encode structured spatial information and act as an auxiliary signal during training. During tokenization, each occurrence of a location entity is augmented into the following structured format: 
+
+< loc > stop_name < l _sep > latitude < l _sep > longitude < /loc > Location-Aware Language Models via Secondary Embeddings 5
+
+This representation injects both textual and coordinate-based information directly into the model’s input stream, enabling the model to associate entities with their corresponding spatial attributes. We perform continual pretraining using the masked language modeling (MLM) objective with two different masking strategies (Figure 2): 
+
+– Random Masking ( R): Following the standard BERT training procedure [2], a subset of tokens is randomly masked. 
+
+– Location Masking ( L): We specifically mask the stop_name tokens within the < loc > blocks while retaining the associated latitude and longitude information. The model is trained to predict the masked location entity using both contextual and geo-spatial cues. This targeted objective encourages alignment between textual representations and their underlying geographic structure. We train separate models under each masking strategy and compare their effectiveness in inducing geo-spatial awareness. 
+
+# 4 Experiment Details 
+
+4.1 Evaluation 
+
+The primary objective of our approach is to enrich pretrained language model embeddings with geo-locational information while preserving their existing se-mantic knowledge. To verify that location-aware pretraining does not degrade linguistic capability, we evaluate the models on the GLUE benchmark [15]. We report F1-scores for MRPC, Pearson correlation for STS-B, and accuracy for the remaining tasks. Performance comparable to the baseline indicates that the injected geo-spatial information does not compromise general language under-standing. To evaluate location awareness, we analyze the alignment between distances in the embedding space and real-world geographic distances. We compute pair-wise geographic distances between locations using the Haversine formula based on latitude and longitude coordinates, and treat this as the ground-truth dis-tance matrix. Since model embeddings reside in a high-dimensional space, we measure dis-tances between location embeddings using Euclidean distance and cosine sim-ilarity. Our empirical evaluation on ground-truth data demonstrates a strong correlation between embedding-based distances and Haversine distance, indicat-ing that Euclidean distance and cosine similarities provide reliable proxies for geographic distance in the embedding space. We then compute Pearson and Spearman correlation coefficients between the geographic distance matrix and the corresponding embedding distance matrices. Higher correlation indicates better preservation of real-world spatial relation-ships in the learned embedding space. 6 Gokul Srinivasagan and Munir Georges 
+
+4.2 Implementation Details 
+
+We train the models on the synthetic dataset described in Section 3.1 for 25 epochs using a batch size of 60 and a learning rate of 1 × 10 −4 with the AdamW optimizer. We use pretrained models using the Hugging Face Transformers li-brary [16]. For GLUE tasks, fine-tuning is performed for up to 50 epochs with a batch size of 256 and a learning rate of 1 × 10 −5 using bfloat16 precision. We apply early stopping with a patience of 5 to prevent overfitting. Unless otherwise specified, all experiments are conducted using the base vari-ant of each pretrained model. Location-aware training completes within approx-imately 15 minutes on a single NVIDIA H100 GPU, demonstrating the compu-tational efficiency of the proposed approach. 
+
+Table 1. GLUE benchmark results for baseline and location-aware models across mul-tiple architectures. Here, R and L denote models trained with random masking and location-specific masking, respectively. The results show that location-aware training preserves general language performance while achieving comparable or slightly im-proved scores. 
+
+Model cola mrpc qnli qqp rte sst2 stsb wnli mnli Total BERT base 81.78 86.00 90.74 90.73 58.84 93.00 88.94 56.34 84.04 81.16 
+
+BERT base (R) 82.07 86.39 90.99 90.27 64.26 91.28 89.68 56.34 84.13 81.71 
+
+BERT base (L) 81.78 87.58 91.12 90.28 63.89 92.20 89.87 56.34 84.55 81.96 
+
+DistilBERT 79.39 89.13 88.16 89.42 60.29 90.48 87.03 56.34 81.31 80.17 
+
+DistilBERT( R) 79.58 86.12 88.94 89.60 59.93 90.60 86.80 54.93 81.47 79.77 
+
+DistilBERT( L) 78.23 87.92 87.68 89.66 59.93 90.37 86.99 56.34 81.42 79.84 
+
+RoBERTa 81.87 91.80 92.11 90.33 75.89 92.12 90.19 56.34 85.99 84.07 
+
+RoBERTa( R) 81.98 91.74 92.11 90.43 73.65 92.66 90.47 56.34 85.96 83.93 
+
+RoBERTa( L) 83.22 91.41 91.85 90.52 71.12 93.35 90.52 56.34 86.85 83.91 
+
+XLM-R 69.13 90.58 89.97 90.28 63.90 92.32 88.15 56.34 83.35 80.45 
+
+XLM-R( R) 77.37 88.44 90.04 90.71 64.62 91.63 85.79 56.34 83.19 80.90 
+
+XLM-R( L) 78.14 88.97 89.68 90.52 52.71 91.06 85.10 56.34 82.81 79.48 
+
+mBERT 75.07 88.97 90.54 89.50 65.70 90.37 88.28 56.34 81.30 80.67 
+
+mBERT( R) 75.17 88.73 90.48 89.51 67.51 88.65 88.12 56.34 81.01 80.61 
+
+mBERT( L) 75.36 87.15 90.68 89.42 67.51 88.88 87.47 54.93 81.20 80.29 
+
+ALBERT 69.13 89.86 89.91 90.07 70.40 91.97 91.06 56.34 84.20 81.44 
+
+ALBERT( R) 66.63 77.78 90.48 89.94 52.71 90.02 89.64 56.34 83.59 77.46 
+
+ALBERT( L) 74.40 87.94 90.87 90.13 72.56 91.40 90.87 56.34 84.13 82.07 
+
+# 5 Results and Discussion 
+
+Table 1 presents the GLUE benchmark results for our location-aware models across multiple architectures. Overall, the results show that the approach pre-serves general language understanding, with performance comparable to baseline pretrained models across all tasks. Location-Aware Language Models via Secondary Embeddings 7
+
+A closer inspection of Table 1 shows that location-aware variants often match or slightly improve upon baseline performance. For instance, BERT base improves from 81.16 to 81.96 with location masking, while ALBERT shows a noticeable gain from 81.44 to 82.07. These improvements indicate that injecting geo-spatial information does not interfere with linguistic knowledge and, in some cases, provides additional useful signals. Across architectures, location-specific masking ( L) tends to yield more con-sistent gains compared to random masking ( R), particularly for BERT [2] and ALBERT [8]. This suggests that explicitly masking location entities creates a stronger and more targeted learning signal for aligning textual and geo-spatial representations. In contrast, random masking primarily preserves baseline per-formance without consistently improving it. 
+
+Embedding Analysis. To evaluate how location information is encoded, we com-pare two embedding extraction strategies: the [CLS] token and mean pooling over all tokens. While both capture location-aware signals, mean pooling con-sistently exhibits stronger alignment with geographic structure. For example, in RoBERTa, the Pearson correlation improves from 0.2997 (baseline) to 0.3343 using [CLS] , and further to 0.4503 using mean embeddings. This indicates that geo-spatial information is distributed across tokens rather than concentrated in a single representation. 
+
+Impact of Tokenization. We observe that tokenizer choice significantly influences the effectiveness of location-aware adaptation. Models based on WordPiece to-kenization (e.g., BERT and DistilBERT) show more stable and consistent im-provements compared to byte-level BPE (RoBERTa) and SentencePiece-based models (XLM-R, mBERT). WordPiece decomposes rare words into meaningful subword units, which helps preserve partial semantic structure of location names. In contrast, byte-level BPE operates at the character level, and SentencePiece treats text as a continuous Unicode stream, which may dilute the representation of structured entities such as location names and numeric coordinates. Interestingly, uncased models tend to benefit more consistently from location-aware training, whereas cased models show less pronounced improvements. This suggests that case sensitivity may introduce additional variability in entity rep-resentations, making it harder to learn consistent geo-spatial relationships. 
+
+5.1 Effect of Model Size 
+
+To study the impact of model scale, we evaluate BERT variants of different sizes, including BERT base , BERT large , and DistilBERT. The configurations of these models are shown in Table 3. 8 Gokul Srinivasagan and Munir Georges 
+
+Table 2. Correlation results comparing embedding distances with geographic dis-tances. r and ρ denote Pearson and Spearman correlation coefficients, respectively. Higher values indicate improved geo-spatial alignment. 
+
+Model Euclidean Cosine sim 
+
+r ρ r ρ
+
+BERT base 0.316 0.300 0.309 0.307 
+
+BERT base (R) 0.371 0.345 0.336 0.316 
+
+BERT base (L) 0.450 0.431 0.390 0.368 BERT large 0.297 0.326 0.273 0.287 
+
+BERT large (R) 0.360 0.345 0.314 0.288 
+
+BERT large (L) 0.550 0.518 0.422 0.396 DistilBERT 0.375 0.345 0.348 0.329 
+
+DistilBERT( R) 0.420 0.394 0.356 0.330 
+
+DistilBERT( L) 0.453 0.413 0.423 0.377 Table 3. Configurations of the models used in our experiment. 
+
+Model #Layer Dim. #Attn #Param BERT base 12 768 12 110M 
+
+BERT large 24 1024 16 336M 
+
+DistilBERT 6 768 12 66M 
+
+Table 2 reports the correlation between embedding distances and ground-truth geographic distances using both Euclidean and cosine similarity. The results show that larger models benefit more from location-aware training. BERT large achieves the highest correlation (Pearson r = 0.550 ), indicating a stronger alignment between embedding space and real-world geography. BERT base and DistilBERT also show substantial improvements over their respective baselines, demonstrating that the proposed method generalizes across model scales. We further evaluate a smaller model, BERT-tiny [13], which shows only marginal improvement (from 0.0123 to 0.0139). This suggests that very small models lack sufficient capacity to effectively incorporate geo-spatial signals. Additional experiments with RoBERTa [11] show a significant improvement in correlation (from 0.2665 to 0.4296), further confirming the effectiveness of our approach in larger architectures. 
+
+5.2 Effect of Multilingual Models 
+
+We evaluate the impact of location-aware training on multilingual models, in-cluding mBERT [3] and XLM-R [1]. In contrast to monolingual models, we observe limited or no consistent improvement in geo-spatial alignment. This can be attributed to the significantly larger and more diverse vocabu-laries used in multilingual models (e.g., ∼105k tokens for mBERT and ∼250k for Location-Aware Language Models via Secondary Embeddings 9
+
+XLM-R), as well as the increased variability in entity representation across lan-guages. These factors make it more challenging for the model to learn consistent mappings between textual and geographic representations. 
+
+5.3 Effect of Other Architectures 
+
+We further evaluate the generalizability of our approach on alternative archi-tectures such as ALBERT [8] and MobileBERT [12]. For ALBERT, we observe a substantial improvement in geo-spatial alignment, with correlation increas-ing from 0.0039 to 0.1746. Similarly, MobileBERT shows a improvement from 0.0123 to 0.0345. These results demonstrate that our method is not limited to standard transformer architectures and can generalize to parameter-efficient and compressed models. 
+
+# 6 Conclusion 
+
+In this work, we introduced a lightweight and effective approach for incorporat-ing geo-spatial information into pretrained language models. By augmenting the input with structured location signals and applying targeted masking strate-gies, our method enables conventional language models to become location-aware without requiring architectural modifications, vocabulary expansion, or costly retraining. Experimental results demonstrate that our approach improves the alignment between the embedding space and real-world geographic relation-ships, while maintaining comparable performance on standard NLP benchmarks such as GLUE. These findings confirm that location awareness can be intro-duced without degrading the model’s existing semantic and syntactic capabil-ities. Furthermore, the proposed method is computationally efficient, requiring only around 15 minutes of training to adapt pretrained models. This makes it a practical and scalable solution for enhancing language models with geo-spatial grounding in real-world applications. 
+
+# 7 Limitations 
+
+Despite the promising results, several limitations remain. First, while our ap-proach improves geo-spatial alignment, a deeper understanding of how location information is encoded within the embedding space—particularly in interaction with semantic and syntactic features—requires further investigation. Second, our method operates as a post-hoc adaptation to pretrained models. Since most representational capacity is learned during the initial pretraining phase, incorpo-rating geo-spatial information directly during large-scale pretraining may yield stronger and more robust representations. Investigating this direction consti-tutes an important area for future research. Finally, our current work focuses on encoder-based models. Extending this approach to generative language models remains an open challenge and an important direction for future exploration. 10 Gokul Srinivasagan and Munir Georges 
+
+# Acknowledgments 
+
+This work has been supported by the Verkehrsverbund Großraum Ingolstadt (VGI) as part of the project newMIND. 
+
+# References 
+
+1. Conneau, A., Khandelwal, K., Goyal, N., Chaudhary, V., Wenzek, G., Guzmán, F., Grave, E., Ott, M., Zettlemoyer, L., Stoyanov, V.: Unsupervised cross-lingual representation learning at scale. In: Jurafsky, D., Chai, J., Schluter, N., Tetreault, J. (eds.) Proceedings of the 58th Annual Meeting of the As-sociation for Computational Linguistics. pp. 8440–8451. Association for Com-putational Linguistics, Online (Jul 2020). https://doi.org/10.18653/v1/2020.acl-main.747, https://aclanthology.org/2020.acl-main.747/ 2. Devlin, J., Chang, M.W., Lee, K., Toutanova, K.: Bert: Pre-training of deep bidi-rectional transformers for language understanding. In: Proceedings of the 2019 conference of the North American chapter of the association for computational linguistics: human language technologies, volume 1 (long and short papers). pp. 4171–4186 (2019) 3. Devlin, J., Chang, M.W., Lee, K., Toutanova, K.: BERT: Pre-training of deep bidirectional transformers for language understanding. In: Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1. ACL, Minneapolis, Min-nesota (2019). https://doi.org/10.18653/v1/N19-1423 4. Ding, R., Chen, B., Xie, P., Huang, F., Li, X., Zhang, Q., Xu, Y.: Mgeo: Multi-modal geographic language model pre-training. In: Proceedings of the 46th in-ternational ACM SIGIR conference on research and development in information retrieval. pp. 185–194 (2023) 5. Grattafiori, A., Dubey, A., Jauhri, A., Pandey, A., Kadian, A., Al-Dahle, A., Let-man, A., Mathur, A., Schelten, A., Vaughan, A., et al.: The llama 3 herd of models. arXiv preprint arXiv:2407.21783 (2024) 6. Jiang, A.Q., Sablayrolles, A., Roux, A., Mensch, A., Savary, B., Bamford, C., Chaplot, D.S., Casas, D.d.l., Hanna, E.B., Bressand, F., et al.: Mixtral of experts. arXiv preprint arXiv:2401.04088 (2024) 7. Jiang, A.Q., Sablayrolles, A., Mensch, A., Bamford, C., Chaplot, D.S., de Las Casas, D., Bressand, F., Lengyel, G., Lample, G., Saulnier, L., Lavaud, L.R., Lachaux, M.A., Stock, P., Scao, T.L., Lavril, T., Wang, T., Lacroix, T., Sayed, W.E.: Mistral 7b. ArXiv abs/2310.06825 (2023), https://api.semanticscholar.org/CorpusID:263830494 8. Lan, Z., Chen, M., Goodman, S., Gimpel, K., Sharma, P., Soricut, R.: Albert: A lite bert for self-supervised learning of language represen-tations. In: International Conference on Learning Representations (2020), https://openreview.net/forum?id=H1eA7AEtvS 9. Li, Z., Kim, J., Chiang, Y.Y., Chen, M.: SpaBERT: A pretrained lan-guage model from geographic data for geo-entity representation. In: Goldberg, Y., Kozareva, Z., Zhang, Y. (eds.) Findings of the Associa-tion for Computational Linguistics: EMNLP 2022. pp. 2757–2769. As-sociation for Computational Linguistics, Abu Dhabi, United Arab Emi-rates (Dec 2022). https://doi.org/10.18653/v1/2022.findings-emnlp.200, https://aclanthology.org/2022.findings-emnlp.200/ Location-Aware Language Models via Secondary Embeddings 11 10. Li, Z., Zhou, W., Chiang, Y.Y., Chen, M.: GeoLM: Empowering language mod-els for geospatially grounded language understanding. In: Bouamor, H., Pino, J., Bali, K. (eds.) Proceedings of the 2023 Conference on Empirical Meth-ods in Natural Language Processing. pp. 5227–5240. Association for Computa-tional Linguistics, Singapore (Dec 2023). https://doi.org/10.18653/v1/2023.emnlp-main.317, https://aclanthology.org/2023.emnlp-main.317/ 11. Liu, Y.: Roberta: A robustly optimized bert pretraining approach. arXiv preprint arXiv:1907.11692 364 (2019) 12. Sun, Z., Yu, H., Song, X., Liu, R., Yang, Y., Zhou, D.: MobileBERT: a com-pact task-agnostic BERT for resource-limited devices. In: Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics. ACL, Online (2020). https://doi.org/10.18653/v1/2020.acl-main.195 13. Turc, I., Chang, M.W., Lee, K., Toutanova, K.: Well-read students learn better: On the importance of pre-training compact models. arXiv preprint arXiv:1908.08962 (2019) 14. Wan, H., Lin, Y., Guo, S., Lin, Y.: Pre-training time-aware location embeddings from spatial-temporal trajectories. IEEE Transactions on Knowledge and Data En-gineering 34 (11), 5510–5523 (2022). https://doi.org/10.1109/TKDE.2021.3057875 15. Wang, A., Singh, A., Michael, J., Hill, F., Levy, O., Bowman, S.: GLUE: A multi-task benchmark and analysis platform for natural language understand-ing. In: Proceedings of the 2018 EMNLP Workshop BlackboxNLP: Analyzing and Interpreting Neural Networks for NLP. ACL, Brussels, Belgium (2018). https://doi.org/10.18653/v1/W18-5446 16. Wolf, T., Debut, L., Sanh, V., Chaumond, J., Delangue, C., Moi, A., Cistac, P., Rault, T., Louf, R., Funtowicz, M., Davison, J., Shleifer, S., von Platen, P., Ma, C., Jernite, Y., Plu, J., Xu, C., Scao, T.L., Gugger, S., Drame, M., Lhoest, Q., Rush, A.M.: Transformers: State-of-the-art natural language processing. In: Proceedings of the Conference on Empirical Methods in NLP: System Demonstrations. ACL (2020)

@@ -1,0 +1,1274 @@
+Title: SnapBench: Benchmarking Snap-and-Ask Multimodal Retrieval for Mobile Interactions
+
+URL Source: https://arxiv.org/pdf/2608.29607v1
+
+Published Time: Tue, 01 Sep 2026 01:29:13 GMT
+
+Number of Pages: 37
+
+Markdown Content:
+Yuanbao Technical Report Tencent 
+
+# SnapBench: Benchmarking Snap-and-Ask Multimodal Retrieval for Mobile Interactions 
+
+Zirong Chen 1,2,3,†,‡ Fuda Ye 1,‡ Kuan Zhang 3 Enjun Du 1,2,5,† Junfu Pu 4
+
+Xinlei Wang 2 Xinyu Zuo 2 Lisheng Duan 2 Jin Ma 2 Yongqi Zhang 1,* 
+
+> 1
+
+The Hong Kong University of Science and Technology (Guangzhou) 
+
+> 2
+
+Tencent Yuanbao 3Tsinghua University 4ARC Lab, Tencent 5The University of Hong Kong 
+
+imzrchen@gmail.com, yongqizhang@hkust-gz.edu.cn 
+
+Abstract 
+
+Mobile AI acts as a visual oracle, empowering users to snap a picture of something and ask for information. Snap-and-ask retrieval is now one of the most common entry points for mobile AI, yet photos are often blurry, while text questions may be short or mistyped. Existing benchmarks only test on clean inputs or do not isolate paired robustness in snap-and-ask retrieval. Therefore, we introduce SnapBench, the first paired benchmark for robust snap-and-ask multimodal retrieval, spanning 1,145 queries, 9,085 gallery items under 53 controlled corruption conditions with human annotations. We evaluate 16 multi-modal retrievers, covering dual-tower encoders and embedding-based VLMs. Results show that image corruptions substantially degrade retrieval, while text corruptions mainly affect text-only retrieval and have limited impact on joint retrieval. Clean image-only retrieval often outperforms joint retrieval, indicating the coarse-text drag and the lack of cross-modal fallback under noisy inputs. SnapBench provides a controlled testbed for evaluating robust retrieval in snap-and-ask scenarios. We further propose MOOR ( Modality-anchored, 
+
+Outlier-aware, Optimal Reweighting), asimple adaptive fusion approach, highlighting the need for reliability-aware modality calibration in snap-and-ask retrieval. The code and dataset are available at https: //github.com/zrchen03/SnapBench .
+
+†Work done during an internship at Tencent. ‡Zirong Chen and Fuda Ye contributed equally. *Corresponding author. Snap-and-Ask Multimodal Retrieval 
+
+> (b) Artifact-Prone
+> Task Characteristics
+> What is it?
+> (a) Entity-Centric
+> Ask
+> Type a text question
+> Retrieve
+> Search the gallery
+> Snap
+> Capture an image
+
+123      
+
+> Identify the intended entity among hard candidates
+> 29% 24% 12% 35%
+> Clean Both-side Snap-side Ask-side
+> Observed Input Conditions in 5,000 Real User Inputs
+> Both images and questions are often noisy in mobile use Snap-side Image Artifacts Ask-side Text Artifacts
+> Short/Underspecified/Mistyped ... Blurry/Cropped/Low-light ...
+> ... Plum Blossom
+> Sakura Dessert
+> Magnolia Flower
+> Sakura Flower
+> Gallery
+
+Figure 1: Illustration of the mobile snap-and-ask re-trieval scenario. Given a snapped image and a short text question, the system retrieves items from a gallery. The pilot analysis setting is detailed in Appendix A. 
+
+1 Introduction 
+
+Multimodal AI assistants are increasingly used as mobile visual search interfaces. In a snap-and-ask interaction, a user points a phone camera at an ob-ject and asks a short question about it (Fan et al., 2005; Chu et al., 2024). We study the retrieval step behind this interaction: given the snapped image and text question, the system must rank gallery items that match the target entity intended by the user, i.e., the object identity or fine-grained cat-egory to be retrieved from the gallery. This ab-straction focuses on visual-language grounding: whether a model can surface the intended tar-get from visually and semantically related candi-dates (Wang et al., 2011; Zhang et al., 2012). Snap-and-ask retrieval differs from standard multimodal retrieval in two ways. First, it is 
+
+entity-centric . As shown in Figure 1, a question 
+
+1arXiv:2608.29607v1 [cs.CV] 30 Aug 2026 Yuanbao Technical Report Tencent 
+
+such as “What is it?” specifies only a coarse intent; it does not by itself distinguish sakura, magnolia, plum blossom, or other hard candidates. The snapped image carries the discriminative evidence, and success depends on ranking the intended entity above hard negatives, not merely matching the im-age to a generic caption (Fan et al., 2005; Weyand et al., 2020). Second, the setting is artifact-prone .Snapped photos may be blurry, cropped, occluded, watermarked, or affected by interface overlays, while mobile questions are often brief, category-level, underspecified, or mistyped. These artifacts are intrinsic to everyday mobile use rather than rare edge cases (Chiu et al., 2020). The two modalities are therefore complementary but unevenly reliable. A pilot analysis of real mobile uploads (Figure 1) confirms such artifacts are common in practice, motivating controlled evaluation. Existing benchmarks miss either the query form or the paired robustness requirement. Image-caption retrieval datasets evaluate clean caption-style alignment rather than short questions grounded in user-captured images (Chen et al., 2015; Plummer et al., 2015; Sharma et al., 2018). Composed retrieval benchmarks use text as a mod-ification, feedback signal, or similarity constraint over a reference image; snap-and-ask queries in-stead ask about the snapped entity itself (Guo et al., 2021; Liu et al., 2021). Robustness benchmarks perturb images or text, but they rarely keep the target entity, gallery, and labels fixed across clean and corrupted inputs (Hendrycks and Dietterich, 2019; Morris et al., 2020; Qiu et al., 2022). Thus, they cannot isolate how a mobile artifact changes retrieval behavior for the same snap-and-ask intent. We introduce SnapBench, a paired benchmark for entity-centric snap-and-ask retrieval under mobile interactions. Its design follows a simple principle: clean and corrupted inputs should differ only in the observed input condition, not in the retrieval task being evaluated. Each clean instance contains a snapped image, a user question, and an entity-aware gallery containing positives and hard negatives. We then instantiate controlled image-side and text-side artifacts while preserving the same retrieval intent, ground-truth positives, and gallery. This paired design makes performance changes attributable to the artifact itself rather than to changes in the target entity, candidate pool, or annotation set. SnapBench contains 1,145 queries and 9,085 gallery items with human annotations, covering 53 controlled corruption conditions: 45 image-side conditions and 8 text-side conditions. We further evaluate representative joint image-text artifact settings to test whether single-modality robustness transfers to jointly degraded inputs. Using SnapBench, we evaluate 16 vision-language retrieval models, including dual-tower encoders and embedding-based VLMs. The evalu-ation reveals three consistent failures. First, image artifacts cause the largest degradation, especially when they remove or obscure entity-level evidence; clean retrieval accuracy does not reliably predict robustness to mobile capture conditions. Second, text artifacts have limited effect in joint image-text retrieval, but this apparent robustness is mislead-ing: text-only retrieval remains sensitive to text corruption, while many joint systems underuse the text question. More surprisingly, adding the text question can hurt retrieval. Coarse questions such as “What flower is this?” raise the scores of many same-category candidates and dilute a strong visual ranking, a failure mode we term coarse-text drag. Third, joint image-text artifacts are non-additive: robustness under image-only and text-only pertur-bations does not reliably predict robustness when both modalities are corrupted. These findings show that snap-and-ask robustness cannot be assessed by clean retrieval accuracy or by independent single-modality stress tests alone. These failures expose a modality-calibration bottleneck: the reliable signal varies by query, but fixed fusion cannot adapt. We therefore introduce MOOR (Modality-anchored, Outlier-aware, 
+
+Optimal Reweighting), a lightweight adaptive fusion baseline that estimates query signal reliability from the retrieval score distributions and reweights modality paths without modifying the architecture. MOOR serves as a diagnostic probe for fixed-fusion failures: its gains suggest that user text is not inherently harmful, but that current retrieval systems lack reliable calibration for deciding when text should guide, refine, or be ignored relative to vision. Overall, our contributions are as follows: • We introduce SnapBench, a paired benchmark for mobile snap-and-ask multimodal retrieval. SnapBench combines entity-centric user ques-tions, dense same-category hard negatives, clean-corrupted retrieval comparisons, and controlled image-side and text-side artifacts. • We provide a systematic evaluation of 16 vision-language retrieval models and identify key fail-ure modes in snap-and-ask retrieval, including  
+
+> 2Yuanbao Technical Report Tencent
+
+image-artifact sensitivity, text underuse, coarse-text drag, and non-additive joint artifact effects. • We propose MOOR, a simple adaptive fusion ap-proach that estimates modality reliability from retrieval scores. It improves over fixed fusion and demonstrates the importance of modality cal-ibration for robust snap-and-ask retrieval. The remainder of this paper is organized as fol-lows. Section 2 reviews related work. Section 3 introduces SnapBench. Section 4 presents the main experimental findings. Section 5 describes MOOR, and Section 6 concludes. 
+
+2 Related Work 
+
+2.1 Multimodal Retrieval Benchmarks 
+
+Image–text retrieval is commonly evaluated on MS COCO (Chen et al., 2015), Flickr30K (Plummer et al., 2015), and Conceptual Captions (Sharma et al., 2018), which assess cross-modal alignment through paired captions or alt text. Despite their broad adoption, these benchmarks do not evalu-ate whether a model can infer the intended en-tity from a short and underspecified text ques-tion grounded in a user-captured image. More fine-grained datasets, such as Google Landmarks Dataset v2 (Weyand et al., 2020) and OVEN (Hu et al., 2023), focus on instance-level or open-domain visual entity recognition. However, they are not designed for mobile snap-and-ask retrieval or for paired image–text corruptions. Composed retrieval benchmarks, including FashionIQ (Guo et al., 2021), CIRR (Liu et al., 2021), CIRCO (Bal-drati et al., 2023), and GeneCIS (Vaze et al., 2023), retrieve target images using a reference image to-gether with textual feedback or conditions. These tasks require multimodal reasoning, but their tex-tual inputs typically describe modifications or sim-ilarity constraints (Song et al., 2025). In contrast, snap-and-ask text questions are brief and specific to the snapped entity itself. 
+
+2.2 Robustness in Snap-and-Ask Retrieval 
+
+Mobile visual search enables users to express in-tent through camera input, often combined with short textual or spoken queries (Fan et al., 2005; Wang et al., 2011), as well as in visual e-commerce search (Dagan et al., 2021). Real-world visual ques-tion answering datasets, such as VizWiz (Gurari et al., 2018) and InfoSeek (Chen et al., 2023), fur-ther show that user-captured images are often noisy, and that user text questions are frequently conversa-             
+
+> Dimension ImageNet-C TextAttack SnapBench
+> Modality corrupted image only text only image, text, or both Paired protocol ✗✗✓
+> Joint multimodal corruption ✗✗✓
+> Table 1: SnapBench against existing robustness bench-marks. Paired : target entity, gallery, and labels are fixed across clean and corrupted conditions.
+
+tional, underspecified, and grounded in visual enti-ties. However, these datasets primarily focus on an-swer generation rather than retrieving the intended entity from a gallery. Robustness benchmarks ex-amine visual corruptions, textual corruptions, and multimodal distribution shifts (Hendrycks and Di-etterich, 2019; Morris et al., 2020; Qiu et al., 2022), but they typically do not keep the target entity and gallery fixed when comparing clean and corrupted image–text pairs. In contrast, SnapBench intro-duces a paired protocol that isolates the effects of realistic image and text artifacts on snap-and-ask retrieval. Table 1 positions SnapBench against two repre-sentative single-modality robustness benchmarks. Two properties are distinct to SnapBench. First, the paired protocol: because the target entity, gallery, and labels stay fixed across clean and corrupted conditions, every score delta cleanly measures cor-ruption impact, whereas ImageNet-C (Hendrycks and Dietterich, 2019) and TextAttack (Morris et al., 2020) swap in a new test instance per corruption, conflating label difficulty with corruption sensi-tivity. Second, only SnapBench corrupts both modalities jointly, which is what makes the super-additivity finding in Section 4.3 measurable at all— no single-modality benchmark could reveal it. 
+
+2.3 Multimodal Fusion and Re-ranking 
+
+A complementary line of work improves multi-modal retrieval quality by refining how candidates are combined or re-ordered after initial encoding. EviRank (Du et al., 2026a) re-ranks image candi-dates using structured relevance evidence extracted as an explicit intermediate signal. MOOR (Sec-tion 5.1) targets a related but distinct problem surfaced by SnapBench: rather than introducing additional evidence for re-ranking, it adaptively reweights the four native similarity paths already produced by a single frozen encoder, using only rank consistency and score variance, without ex-tracting extra evidence or learning any parameters.  
+
+> 3Yuanbao Technical Report Tencent
+
+3 SnapBench 
+
+SnapBench is designed for the retrieval step in mo-bile snap-and-ask interactions, where a snapped image provides concrete visual evidence and a short user question specifies the retrieval intent. We operationalize two properties identified in Sec-tion 1: it is entity-centric and artifact-prone. To capture the entity-centric nature of the task, we use coarse questions together with a fixed gallery con-taining same-category hard negatives, so success-ful retrieval requires identifying the intended entity rather than matching a broad category. To reflect artifact-prone inputs in a controlled manner, we instantiate image-side and text-side artifacts while preserving the same retrieval intent, gallery, and labels. This paired design allows retrieval behavior to be compared across different conditions. 
+
+3.1 Construction Pipeline 
+
+Figure 2 summarizes the construction pipeline. 
+
+Stage 1: Entity-centric question construction. 
+
+We start from a private image pool crawled from publicly accessible web sources, followed by copy-right filtering and deduplication. Candidate query images are manually screened to ensure that each image contains a visually identifiable primary en-tity and avoids severe clutter, low visibility, or leakage-prone overlays. An independent audit on 
+
+200 randomly sampled images yields 96% three-way agreement among raters. For the retained im-ages, Gemini-3-Flash (Team et al., 2025) identifies a coarse primary entity and generates a short En-glish question, such as “What kind of plant is this?” or “What type of building is this?”. We then ap-ply four rule-based syntactic checks, followed by a read-only GPT-5.4-mini semantic check that rejects no-entity cases, malformed questions, overly fine-grained entity tags, and queries that expose brand names, person names, or place names. Failed cases are repaired for up to three rounds and rechecked. This process yields 1,145 clean image–question pairs from 1,150 candidates. Full details are pro-vided in Appendix B.1.1. 
+
+Stage 2: Data collection. Candidate gallery items are sampled from the same private image pool under strict non-overlap with the query set. Query images are excluded before captioning. Each remaining image is paired with an entity-centric English caption generated by a private Qwen-VL-based captioning model fine-tuned for factual entity description. The caption names the primary entity and salient visual attributes with-out adding external knowledge. We remove en-tries without an identifiable entity, entries with low-information captions (e.g., single-word or tem-plated outputs), and duplicate entries identified via caption normalization (Appendix B.1.2). The raw collection contains nearly 10 8 unique images for subsequent gallery construction. Additional collec-tion details are given in Appendix B.1.2. 
+
+Stage 3: Snap-and-ask artifact simulation. 
+
+Snap-and-ask artifacts arise from two sources: the snap side, where mobile capture and interface con-text distort the image, and the ask side, where text questions introduce noise. SnapBench models these artifacts with deterministic corruption opera-tors applied only to the query, leaving gallery items unchanged. Each perturbed variant therefore repre-sents a different observation of the same snap-and-ask intent, with the candidate gallery fixed. The perturbation operators are detailed in Section 3.2. 
+
+Stage 4: Annotation and gallery construction. 
+
+For each clean image-question query, we pre-retrieve the top-30 gallery candidates from the im-age collection using private vision-encoder-based and caption-based text retrieval systems, yielding approximately 34 ,000 query–candidate pairs for annotation. We then convert the annotated pairs into retrieval labels according to the rubric in Sec-tion 3.3: pairs with aggregated fitness =0 are ex-cluded as easy negatives, pairs with fitness =1 
+
+are treated as hard negatives, and pairs with fit-ness ≥2 are used as ground-truth positives. Im-portantly, only positive and hard-negative candi-dates are merged into the final retrieval gallery, ensuring that evaluation is performed over labeled gallery items rather than unlabeled samples outside the annotation pool. These labels are shared by all perturbed variants of the same clean query, so performance changes reflect the simulated input condition rather than changes in the target set. 
+
+3.2 Snap-and-Ask Artifact Simulation Image-side Snap Simulation. Image perturba-tions are organized into four primitive operations that reflect common mobile snap-and-ask artifacts: ADD , R EMOVE , D EGRADE , and T RANSFORM .ADD introduces visual overlays such as water-marks, scribbles, interface elements, and mosaics. REMOVE reduces visible content through cropping and downscaling. D EGRADE changes image qual-
+
+> 4
+
+Yuanbao Technical Report Tencent 1. Entity-centric Question Generation 3. Snap-and-Ask Artifact Simulation 2. Data Collection 4. Annotation & Gallery Construction        
+
+> Images Entity-Question Pairs What is this fruit?
+> Top-30 Candidates
+> Expert
+> Raw Collection Data Sources
+> ...
+> Pos. Hard Neg. Easy Neg.
+> Image Text
+> Human Annotation
+> Fruit No entity Car What is this fruit? What car is it? Where is this? Canon G1X Which Canon model?
+> Entity & Question Generation
+> Semantic & Rule-based Validation
+> ...
+> Entity-aware Captioning Quality Filtering
+> Strawberry No entity
+> Text-side Ask Simulation What is this frut? What is this fruit fruit? What is this?
+> Word Character Sentence
+> Image-side Snap Simulation
+> Add Remove Transform Degrade
+> Lv. WATERMARK
+> •REC
+> What is this fruit?
+> Clean Query
+> Visual similarity Entity relevance Caption accuracy Text-as-need score
+> Rubric
+
+Figure 2: Overview of the SnapBench construction pipeline. This pipeline creates entity-centric snap-and-ask retrieval instances and simulates two sources of mobile interaction artifacts through controlled image and text question corruptions. Lv. , Pos. , and Neg. denote level, positive, and negative, respectively. 
+
+ity through blur, compression, lighting changes, and resolution loss. T RANSFORM changes geom-etry through rotation, perspective shift, and lens distortion. We instantiate 15 image operators at three severity levels, yielding 45 image-side con-ditions. All perturbations are deterministic and seeded for reproducibility. The full parameter grid is given in Appendix B.3. 
+
+Text-side Ask Simulation. Text perturbations target the entity or category cue in the user text question. They cover three granularities with 8
+
+deterministic rule-based operators. At the charac-ter level, char_add , char_delete , char_change ,and char_swap simulate mobile typing errors through insertion, deletion, QWERTY-adjacent re-placement, and local character swaps. At the word level, word_repeat duplicates the target cue and 
+
+word_swap exchanges it with an adjacent word. At the sentence level, sent_add prepends or appends a short conversational phrase, while sent_replace 
+
+reduces the question to “What is this?”. Text per-turbations do not use severity levels. 
+
+3.3 Human Annotation Rubric 
+
+Each candidate item is scored on four dimensions: visual similarity, entity relevance, caption accuracy, and relevance to the query intent. Each dimension uses a 0–3 scale. The scores are aggregated into a single intent-conditioned fitness score. Since all SnapBench queries require both the snapped image and the text question, the image+text aggregation rule is used throughout. Items with fitness ≥2 are labeled as positives. Items with fitness =1 are labeled as hard negatives. Items with fitness =0 
+
+are treated as easy negatives and excluded from the gallery. Thus, only positive and hard-negative candidates are included in the final gallery. Finally, SnapBench contains 5,462 positives, av-eraging 4.77 positives per query, and 4,005 hard negatives, averaging 3.50 hard negatives per query. Ten annotators participate in the annotation. Each annotator must pass a 3,000 -item calibration round with at least 90% accuracy. During live annotation, 
+
+20 –30% of submissions are rechecked by quality-control reviewers and project leads; incorrect au-dited items are re-annotated. The final audit pass rate is 95% . Full annotation guidelines and audit 
+
+5Yuanbao Technical Report Tencent 
+
+details are provided in Appendix B.2. 
+
+4 Experiments 
+
+Snap-and-ask retrieval is inherently artifact-prone: snapped images can be blurred, cropped, or poorly lit, and user text questions are often coarse or un-derspecified. We evaluate robustness by comparing model performance on clean inputs against per-formance under controlled corruption conditions. Three findings characterize how corruption affects retrieval under IT →IT fusion: image-side artifacts, text-side artifacts, and joint image-text artifacts. 
+
+4.1 Experimental Setup Models. We evaluate 16 multimodal retrieval models. The first group contains dual-encoder or dual-score baselines with late fusion: CLIP-ViT-L/14 (Radford et al., 2021), SigLIP-SO400M (Zhai et al., 2023), SigLIP2-SO400M (Tschannen et al., 2025), and BLIP-ITM-L (Li et al., 2022). The sec-ond group contains VLM-based embedding mod-els: Jina-V4 (Günther et al., 2025), Qwen3-VL-Embedding-2B/8B (Li et al., 2026b), E5-V (Jiang et al., 2024a), VLM2Vec-V2/Full (Jiang et al., 2024b), UME-R1-7B (Lan et al., 2025), GME-2B/7B (Zhang et al., 2024), Ops-MM-2B/7B (Al-ibaba Cloud OpenSearch-AI Team, 2025), and RzenEmbed-7B (Jian et al., 2025). 
+
+Retrieval modes. Each query consists of asnapped image and a user text question, and each gallery item consists of an image and an entity-aware caption. We evaluate 5 retrieval modes, denoted query → gallery : joint-to-joint (IT →IT), image-to-image (I →I), image-to-joint (I →IT), text-to-text (T →T), and text-to-joint (T →IT). Follow-ing Wei et al. (2023) and Radford et al. (2021), for dual-encoder models, any joint-side score is com-puted via late fusion: sjoint = 12 (simg + stext ),where simg and stext denote image–image and text– text similarities. For VLM-based embedding mod-els, we use their released multimodal encoding interface, which combines image and text within a single frozen forward pass rather than an externally-imposed weight. We use the term fixed fusion to cover both cases: an explicit, fixed-weight com-bination for dual-encoder models, and an implicit combination baked into a frozen forward pass for VLM-based embedding models. In neither case can the image–text weighting adapt to per-query modal-ity reliability, which is the property MOOR (Sec-tion 5.1) targets. The main paper focuses on the IT →IT mode; full five-mode results are reported in Appendix E. 
+
+Metrics. We use Recall at rank k (R@ k) as the evaluation metric. The main paper reports R@1, as the first returned item matters most in mobile snap-and-ask interactions. All results are macro-averaged over the full query set. Since clean and corrupted variants share the same target set and gallery, performance changes can be interpreted as paired robustness effects. We use a fixed gallery order and seeded corruptions. Gallery embeddings are pre-computed once per model and reused across all corruption conditions, following standard re-trieval evaluation practice (Jiang et al., 2024b; Wei et al., 2023; Zhang et al., 2024). Further implemen-tation details are given in Appendix D. 
+
+Conditions. We evaluate clean inputs, text cor-ruptions, image corruptions, and joint corruptions. Text corruptions contain 8 deterministic operators grouped into character-, word-, and sentence-level conditions. Image corruptions contain 15 opera-tors grouped into degrade, transform, remove, and add, each evaluated at three severity levels s1, s2,and s3—yielding 45 image-side conditions. For joint artifacts, we use six representative image–text operator pairs listed in Table 3. 
+
+4.2 Main Results 
+
+Table 2 reports clean R@1 across all 16 models. Several observations can be drawn from the re-sults. (1) Clean R@1 ranges from 39 .8 to 79 .1,with no model exceeding 80 —showing that Snap-Bench retains discriminative power despite a mod-erate gallery size, and that substantial room for improvement remains. VLM-based embedding models outperform dual-encoder baselines by a 13 -point margin on average, with Ops-MM-7B, Ops-MM-2B, and RzenEmbed-7B at the top. (2) Clean performance does not predict robustness. Image corruption drops mean R@1 from 63 .2 to 57 .9, av-eraged across all corruption types and severities. Both paradigms degrade, though dual encoders drop more than VLM-based models. Rank order also shifts: SigLIP-SO400M places high on clean but loses heavily at severe corruption, while GME-2B scores lower on clean yet drops less on average. Clean accuracy and corruption robustness must be evaluated separately. (3) Text corruption shows a different pattern. Character-, word-, and sentence-level corruptions yield mean R@1 of 63 .5, 63 .7,and 63 .9—less than 1 point from the clean mean— 
+
+> 6
+
+Yuanbao Technical Report Tencent                                                                                                                                                                                                                                                                                           
+
+> Model Clean Text Corruption Image Corruption Overall
+> Char Word Sent Degrade Transform Remove Add
+> Dual-Encoder
+> SigLIP2-SO400M 39.8 35.1 38.6 32.4 38.3 32.3 20.3 37.3 31.4 28.1 34.6 25.7 13.0 35.8 30.1 21.3 30.3 CLIP-ViT-L/14 49.5 45.0 49.9 43.1 49.1 45.9 37.8 48.6 44.7 41.7 49.1 44.5 30.7 48.3 44.3 34.2 43.8 BLIP-ITM-L 57.3 60.2 58.0 56.4 57.2 55.4 48.1 58.5 55.5 52.1 57.7 54.6 43.7 56.2 52.1 44.3 54.0 SigLIP-SO400M 67.0 68.5 67.1 68.2 66.3 63.9 53.4 67.1 62.3 60.2 66.6 61.5 41.7 64.3 61.7 48.6 61.4
+> VLM Embedding
+> VLM2Vec-Full 57.6 57.8 58.0 61.3 57.4 54.9 48.0 56.8 53.7 50.3 55.9 52.6 42.4 56.5 53.9 45.9 53.7 E5-V 59.1 59.2 59.1 58.7 58.6 57.2 52.2 57.4 54.4 52.7 57.3 55.1 44.6 58.1 55.9 50.1 55.4 UME-R1-7B 60.2 59.7 60.2 62.5 58.1 58.0 49.4 58.5 55.9 55.3 54.7 53.1 40.1 57.3 57.4 50.6 55.4 VLM2Vec-V2 62.5 63.8 64.8 66.8 62.7 61.7 52.6 62.8 59.7 58.6 63.1 58.3 45.4 63.0 61.1 54.5 59.9 GME-2B 61.8 60.6 61.5 58.9 61.2 59.7 53.4 61.5 59.7 58.8 65.3 62.2 53.2 64.2 62.6 57.5 60.0 Qwen3-VL-Emb-2B 64.6 66.1 66.4 71.0 64.3 62.8 53.4 64.7 61.5 61.1 63.3 57.9 42.3 64.2 62.9 55.4 61.2 Jina-V4 65.8 69.5 65.9 71.0 66.1 64.3 55.3 65.4 62.4 61.9 64.3 57.9 44.9 65.9 63.6 54.4 62.2 Qwen3-VL-Emb-8B 65.5 66.9 67.2 69.6 65.7 63.9 55.7 64.3 62.7 62.3 63.1 58.7 46.8 65.4 64.3 58.4 62.3 GME-7B 68.0 68.9 68.2 69.7 67.5 65.5 58.5 66.3 63.3 63.6 67.0 63.7 54.1 67.6 66.0 59.8 64.6 RzenEmbed-7B 75.2 76.8 76.5 77.1 73.5 72.1 56.2 73.0 66.4 72.8 75.9 74.5 68.6 75.6 74.4 66.8 72.0 Ops-MM-2B 77.6 78.0 77.6 78.6 76.8 76.9 57.7 75.8 68.2 73.3 76.7 76.1 68.1 77.4 76.3 66.7 73.6 Ops-MM-7B 79.1 79.2 79.4 77.8 77.9 76.1 58.0 77.6 70.1 74.8 79.4 77.6 71.0 78.8 77.6 67.4 74.8
+
+Table 2: Main results on SnapBench (Recall@1, %). Text columns report joint retrieval under character-, word-, and sentence-level query perturbations. Image columns report joint retrieval under four perturbation primitives at severity levels s1, s2, and s3. Darker cells denote larger performance degradation from the clean score. 
+
+while image corruption causes a 5.3-point drop un-der the same averaging. Section 4.3 examines why this stability does not indicate robustness. (4) Joint corruption—simultaneously corrupting both the im-age and text of the query—reveals the most severe failure. The resulting R@1 drop exceeds the sum of the two single-component drops by +7 .6 points on average, a super-additive interaction that cannot be inferred from single-modality evaluations alone. 
+
+4.3 Snap-and-Ask Artifact Analysis Image-side artifacts damage entity evidence. 
+
+Image-side corruptions produce a clear dose– response effect. Averaged over the four image primitives, the R@1 drop is only 0.8 points at s1
+
+severity, increases to 3.8 points at s2 severity, and reaches 11 .2 points at s3 severity. Thus, models tolerate mild artifacts but fail once corruption re-moves or obscures discriminative evidence. The four primitives affect retrieval unequally: at the highest severity, remove is most damaging ( 16 .3
+
+R@1 points), followed by degrade ( 12 .5) and add (10 .9), while transform is milder ( 5.2). This or-dering matches SnapBench’s entity-centric design: cropping, downscaling, overlays, and severe low-light directly obscure the target entity, whereas geometric transformations largely preserve entity identity. Figure 3 shows robustness is not always smooth: some operators degrade gradually, while others exhibit cliff behavior, changing little until Clean s1 s2 s3 
+
+> Perturbation Severity
+> 40 50 60 70 80
+> Mean R@1 (%)
+> Cliff (n=7) Gradual (n=8)
+
+Figure 3: Severity response of image-side corruptions. Thick lines show group means; faint lines are individual operators. Cliff (n=7 ): Mosaic, Low Light, Downscale, Crop, Watermark, Low Res, Defocus. Gradual (n=8 ): Perspective, UI Elements, Scribble, Motion Blur, JPEG, Rotation, Lens Distortion, Overexposure. 
+
+collapsing at s3 severity (low light, mosaic, water-mark, downscaling, and cropping are the strongest cliff-prone operators)—average scores can there-fore hide high-risk regimes common in mobile use. The failure-mode analysis in Appendix E.3 con-firms this pattern: under mild corruption, models retrieve a visually similar but wrong entity, while under high-severity remove and degrade, the tar-get entity becomes unrecognizable and retrieval collapses entirely. 
+
+Text-side artifacts reveal text underuse and coarse-text drag. As reported in Section 4.2, tex-tual question corruption barely changes joint R@1. This stability is not a sign of robustness—it reflects that the text channel was already contributing little 
+
+7Yuanbao Technical Report Tencent                                                                                                                                                                                                                                                                                                                                                                                                                           
+
+> Model Base. C+C D+D L+W M+S E+W R+S Mean Overall
+> Exp. Obs. δExp. Obs. δExp. Obs. δExp. Obs. δExp. Obs. δExp. Obs. δExp. Obs. δ
+> Dual-Encoder
+> SigLIP2-SO400M 39.8 5.8 18.9 13.0 27.6 35.5 7.9 11.3 23.8 12.5 10.3 23.3 13.0 8.3 16.9 8.6 23.5 32.6 9.1 14.5 25.2 10.7 25.2 CLIP-ViT-L/14 49.5 -0.8 21.8 22.6 4.8 29.5 24.7 6.7 23.5 16.7 8.5 24.0 15.5 5.7 22.4 16.7 6.8 38.7 31.9 5.3 26.6 21.4 26.6 BLIP-ITM-L 57.3 0.2 6.1 5.9 5.6 13.0 7.3 7.2 12.9 5.7 6.0 11.8 5.8 6.8 13.4 6.6 9.2 24.8 15.6 5.8 13.7 7.8 13.7 SigLIP-SO400M 67.0 -3.3 2.2 5.5 9.5 13.4 3.9 8.0 11.5 3.4 5.7 11.7 6.0 7.5 9.0 1.6 -0.1 7.0 7.1 4.5 9.1 4.6 9.1
+> VLM Embedding
+> GME-7B 68.0 0.9 48.5 47.7 4.7 50.5 45.7 6.9 45.1 38.2 7.9 50.7 42.9 5.3 45.1 39.9 1.5 6.1 4.6 4.5 41.0 36.5 41.0 GME-2B 61.8 1.2 48.2 47.1 -3.8 48.2 52.1 5.2 45.4 40.2 3.5 47.4 43.9 2.8 42.0 39.2 0.1 -4.6 -4.7 1.5 37.8 36.3 37.8 UME-R1-7B 60.2 0.9 12.8 11.9 13.4 25.6 12.2 9.9 18.9 9.1 9.0 18.0 9.0 6.5 14.6 8.1 2.7 14.7 12.0 7.1 17.5 10.4 17.5 Qwen3-VL-Emb-2B 64.6 0.1 13.4 13.3 13.0 27.7 14.6 7.2 18.1 10.9 6.9 12.0 5.1 4.8 15.2 10.3 1.3 15.7 14.4 5.6 17.0 11.4 17.0 Qwen3-VL-Emb-8B 65.5 -0.3 12.8 13.1 11.0 25.5 14.5 5.7 16.7 11.1 5.8 15.9 10.0 3.4 14.9 11.5 -1.2 13.5 14.6 4.1 16.5 12.5 16.5 Ops-MM-7B 79.1 1.5 1.6 0.2 8.9 7.0 -2.0 12.2 8.3 -3.9 14.0 11.2 -2.8 6.7 5.8 -0.9 7.7 8.3 0.6 8.5 7.0 -1.5 7.0 Jina-V4 65.8 -0.4 -0.1 0.4 13.2 16.1 2.9 7.9 7.9 0.0 7.5 8.1 0.6 6.6 6.6 -0.0 1.8 2.7 0.9 6.1 6.9 0.8 6.9 E5-V 59.1 0.1 2.2 2.0 4.5 6.9 2.4 3.8 3.6 -0.2 1.9 11.1 9.1 4.4 5.3 0.9 2.9 7.8 4.9 2.9 6.1 3.2 6.1 Ops-MM-2B 77.6 0.6 1.4 0.8 8.5 6.9 -1.6 12.2 7.3 -4.9 13.2 8.5 -4.7 6.9 4.3 -2.5 6.1 5.1 -1.1 7.9 5.6 -2.3 5.6 RzenEmbed-7B 75.2 0.4 -0.5 -0.9 7.5 6.0 -1.5 13.4 7.1 -6.3 11.3 8.6 -2.7 6.3 4.0 -2.3 5.5 6.2 0.7 7.4 5.2 -2.2 5.2 VLM2Vec-V2 62.5 -0.4 -12.4 -12.0 7.5 -0.3 -7.8 4.1 -5.4 -9.4 6.0 -2.7 -8.7 0.8 -11.8 -12.5 5.4 -14.5 -20.0 3.9 -7.8 -11.7 -7.8 VLM2Vec-Full 57.6 0.8 -12.4 -13.2 1.4 -7.6 -9.0 2.8 -10.3 -13.1 6.8 -8.6 -15.3 4.1 -6.9 -11.1 21.5 -11.8 -33.2 6.2 -9.6 -15.8 -9.6
+> Mean 0.5 10.3 9.8 8.6 19.0 10.4 7.8 14.6 6.9 7.8 15.7 7.9 5.4 12.6 7.1 5.9 9.5 3.6 6.0 13.6 7.6 13.6
+
+Table 3: Interaction between image-side and text-side artifacts. Exp. = ∆ I + ∆ T (naive additive prediction); Obs. = observed joint drop; δ = Obs. −Exp. ( >0= super-additive, bold ). Overall = mean Obs. across all six joint conditions. C+C = Compression +CharInsert; D+D = Downscale +CharDelete; L+W = LowLight +WordSwap; M+S = Mosaic +SentAdd; E+W = Overexposure +WordRepeat; R+S = Rotation +SentReplace. 
+
+in this task. In snap-and-ask interactions, users for-mulate queries around what they see in the image: questions such as “What species is this flower?” or “What brand is this sneaker?” express broad retrieval intent rather than identifying the specific target entity. In a gallery with same-category hard negatives, fusing such coarse text raises scores for many related candidates, diluting the strong visual ranking toward category-level confusions. We term this ranking-dilution effect coarse-text drag . The weak response to text corruption follows as a con-sequence: when the text channel is already mis-calibrated under fixed fusion, corrupting it further changes joint R@1 only slightly. The retrieval-mode ablation (Tables 12 and 18) confirms this directly. Joint retrieval (IT →IT) un-derperforms image-only (I →I) for the majority of models across clean and all corruption conditions, with a mean drag of −11 .21 R@1 across all 16 models (full per-model table in Appendix E.1). The text channel is not inherently harmful—it is as-signed more weight than its signal quality justifies under fixed fusion. A causal intervention isolates coarse granularity, rather than the text channel itself, as the cause of the drag: on GME-7B, replacing the coarse ques-tion (“What flower is this?”) with entity-label text (“A tulip.”) reduces the drag from −7.68 to −0.17 
+
+R@1 points, a 97 .8% elimination. Conversely, a text-essential subset ( n=69 /1,145 , queries with discriminative modifiers and genuine visual am-biguity; Appendix E.1) shows drag shrinking on 
+
+14 of 16 models when text does carry discrimina-tive signal, confirming that the effect is calibration-scoped rather than a general failure to exploit user text. 
+
+Joint artifacts are non-additive. We next ask whether corruption on the image and text compo-nents of a query can be composed: if image cor-ruption alone drops R@1 by dI and text corruption alone by dT , does joint corruption drop by roughly 
+
+dI + dT ? Each query pairs a snapped image with a user text question; we hold the gallery fixed and corrupt only the query side. Let r0 be clean R@1 under IT →IT retrieval, and let rI , rT , and rIT de-note R@1 when only the image, only the text, or both are corrupted. We define drops dI = r0 − rI ,
+
+dT = r0 − rT , dIT = r0 − rIT , and interaction with γint = dIT −(dI + dT ). A positive γint means joint corruption hurts more than the sum of the two single-component drops (super-additive); a nega-tive value means sub-additive interaction. Table 3 shows that composition fails. Averaged over six paired image–text corruption conditions and all 16 models, the mean interaction gap is +7 .6
+
+R@1 points: observed joint drops ( 13 .6 on aver-age) exceed the naïve sum of single-component drops ( 6.0). The split is model-dependent (full per-model values in the table): GME-2B/7B show the largest super-additive gaps (mean δ > +30 ), while Ops-MM-2B/7B and VLM2Vec-Full/V2 are sub-additive on average. Robustness under snap-and-ask corruption therefore requires joint evaluation of 
+
+8Yuanbao Technical Report Tencent Dual-Encoder VLM Embedding   
+
+> 020 40 60 80 100
+> Recall@1 (%)
+> 53.4
+> +18.4
+> 71.8
+> 51.9
+> +19.8
+> 71.7
+> 46.7
+> +16.8
+> 63.5
+> 66.4
+> +10.0
+> 76.4
+> 67.6
+> +8.6
+> 76.2
+> 61.8
+> +9.1
+> 70.9
+> Clean Text Corruption Image Corruption
+
+Figure 4: Average performance of MOOR in joint re-trieval. Darker regions denote gains over fixed fusion. 
+
+both query components; separate image-corruption and text-corruption tests cannot predict the paired regime. This paired setting is also the hardest test for fixed fusion: both signals degrade at once, yet the model must still set their relative weight. 
+
+5 Adaptive Modality Fusion with MOOR 
+
+5.1 Modality-Anchored Reweighting via Outlier-Aware Gating 
+
+Section 4 traces a single chain of failure under fixed 
+
+IT →IT fusion. Finding 1 shows that image cor-ruption can collapse retrieval, but the same global weights prevent leaning on text-involving paths when the photo fails. Finding 2 shows the con-verse on clean inputs: coarse text is over-weighted, so joint mode trails image-only (coarse-text drag) even before corruption. Finding 3 compounds both—joint drops are super-additive because fu-sion still cannot rebalance whichever channel re-mains more reliable. The three findings are not three separate bugs; they are one signal-blind fu-sion rule failing whenever per-query modality relia-bility shifts. Snap-and-ask retrieval therefore needs adaptive calibration, not a fixed global weight. We introduce MOOR (Modality-anchored, 
+
+Outlier-aware, Optimal Reweighting): a training-free adapter that reweights four gallery score paths per query— sII , sT T , sIT , sT I —using only the frozen encoder’s outputs. Embeddings are gallery-whitened; sII anchors the rank. Each text-involving path is gated by Pearson correlation with 
+
+sII through a bell function (suppress unreliable and redundant paths), then scaled by score variance. The fused score is the normalized weighted sum. No learned parameters; full details in Appendix C. 
+
+5.2 Evaluation on SnapBench 
+
+We evaluate MOOR on the same setup as Sec-tion 4; only fusion changes. As shown in Figure 4, MOOR improves over fixed fusion across clean, text-corrupted, and image-corrupted settings for both dual-encoder and VLM-embedding models. These gains suggest that adaptive fusion better cal-ibrates the contribution of image and text signals when their reliability varies across snap-and-ask inputs. The results also support the coarse-text drag: user text is not inherently harmful, but fixed fusion over-weights the text channel relative to its signal quality under coarse snap-and-ask phrasing, weakening an otherwise strong visual ranking. Additional results in Appendix C.1 show that gains generally increase with image corruption severity, but diminish when artifacts remove the target entity itself, as discussed in Appendix E.3. 
+
+Why MOOR generalizes across architectures. 
+
+MOOR operates solely on statistical properties of the frozen encoder’s own retrieval scores—rank consistency against the image-only anchor path and score variance—without accessing model internals, so its mechanism does not depend on any particular backbone. The oracle analysis (Appendix C.1.1) explains why this helps universally: for all 16 eval-uated models, the per-query optimal fusion weight is highly dispersed (std 0.086 –0.138 on a [0 , 1] 
+
+scale), meaning fixed-fusion miscalibration is a model-independent property of current snap-and-ask retrievers rather than an artifact of any single architecture. 
+
+6 Conclusion 
+
+We introduced SnapBench, a paired benchmark for mobile snap-and-ask multimodal retrieval. Snap-Bench focuses on entity-centric interactions where users provide a snapped image and a text question, and it preserves the same target, gallery, and an-notations across clean and perturbed inputs. Our evaluation of 16 retrieval models shows that cur-rent systems remain fragile in this setting. Im-age artifacts cause the largest failures, especially when they obscure or remove entity-level evidence. Text artifacts have weaker effects in joint retrieval. We further observe coarse-text drag, where adding a text question can reduce accuracy compared with image-only retrieval, and show that joint image–text artifacts interact non-additively. Finally, MOOR provides a lightweight diagnostic baseline whose gains suggest that modality calibration is im-portant for future snap-and-ask retrieval systems. 
+
+Limitations 
+
+All findings reported in this paper are scoped to the snap-and-ask entity retrieval setting rather than 
+
+9Yuanbao Technical Report Tencent 
+
+to mobile AI more broadly. SnapBench is a delib-erately controlled benchmark and does not aim to substitute for in-the-wild deployment evaluation. We highlight three limitations. (1) Synthetic corrup-tions. The 53 corruption conditions are program-matically generated rather than crawled from real noisy uploads; this is a deliberate trade-off favour-ing factorial controllability and reproducibility over distributional fidelity. We argue in Section 3.2 that the primitive-level taxonomy spans the operator space, but the joint distribution of corruptions in the wild may differ from our marginal distributions (Gu et al., 2026). (2) Scale. SnapBench contains 1,145 queries and 9,085 gallery items; we prioritise dense ground-truth annotations and tight hard-negative coverage over raw scale, which yields stronger discriminative signal but smaller absolute num-bers than web-scale benchmarks. (3) MOOR in in-distribution settings. MOOR’s per-query adap-tation is most effective when modal signal quality varies across queries; on queries where both modal-ities are uniformly informative or uniformly unin-formative, MOOR reverts to fixed-fusion behavior and provides no advantage by construction. 
+
+Ethical Considerations 
+
+SnapBench is constructed from a private im-age pool collected from publicly accessible web sources, followed by copyright filtering, deduplica-tion, and content safety screening. Gallery items are sourced from the same library. The private pool is used only as a source for constructing the bench-mark; we do not release the full pool. The released benchmark contains the query and gallery items used for evaluation, together with their annotations and corruptions. Annotators were recruited through a third-party data annotation vendor, compensated above the local minimum wage, and informed of the research nature of the task; consent for the re-search use of their annotations was included as a standard term in the data-labeling agreement be-tween our organization and the vendor. The annota-tion protocol was reviewed by our organization’s in-ternal ethics and data-compliance committee prior to data collection. Annotation guidelines deliber-ately exclude content involving violence, sexual material, or political sensitivity. We do not foresee direct negative societal impacts of the benchmark itself; we note however that MOOR, as a training-free fusion adapter, inherits the biases of whichever underlying encoder it is applied to. The pilot anal-ysis (Section A) was conducted on de-identified data under the production service’s User Agree-ment and Privacy Policy for internal algorithm-optimization purposes; results are reported only as aggregate statistics, with no personally identify-ing information released. The underlying distribu-tion statistics are derived entirely from automated signal-level metrics; a small subset of images (4%) was reviewed solely to calibrate automated detec-tion thresholds, with no content extracted or re-tained beyond a binary detection outcome per im-age. This analysis completed under our internal data-governance review prior to submission. Web-sourced gallery and query images are released un-der a research-only license that prohibits commer-cial redistribution, together with a takedown mech-anism (contact channel and removal workflow) on the release page. 
+
+Acknowledgments 
+
+This work was supported by the CCF-Tencent Rhino-Bird Open Research Fund (No. CCF-Tencent RAGR20250119), the Guangdong Basic and Applied Basic Research Founda-tion (No. 2025A1515010304), the Guangdong Province Project (No. 2024QN11X088), and the Guangzhou Science and Technology Planning Project (No. 2025A03J4491). 
+
+References             
+
+> Alibaba Cloud OpenSearch-AI Team. 2025. Ops-mm-embedding: A dense universal multimodal embed-ding model. Hugging Face Model Hub. Alberto Baldrati, Lorenzo Agnolucci, Marco Bertini, and A. Bimbo. 2023. Zero-shot composed image retrieval with textual inversion. 2023 IEEE/CVF In-ternational Conference on Computer Vision (ICCV) ,pages 15292–15301. Xinlei Chen, Hao Fang, Tsung-Yi Lin, Ramakr-ishna Vedantam, Saurabh Gupta, Piotr Dollár, and C. Lawrence Zitnick. 2015. Microsoft coco cap-tions: Data collection and evaluation server. ArXiv ,abs/1504.00325. Yang Chen, Hexiang Hu, Yi Luan, Haitian Sun, So-ravit Changpinyo, Alan Ritter, and Ming-Wei Chang. 2023. Can pre-trained vision and language models answer visual information-seeking questions? ArXiv ,abs/2302.11713. Tai-Yin Chiu, Yinan Zhao, and Danna Gurari. 2020. As-sessing image quality issues for real-world problems.
+> 2020 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 3643–3653. 10 Yuanbao Technical Report Tencent
+
+Xiangxiang Chu, Limeng Qiao, Xinyu Zhang, Shuang Xu, Fei Wei, Yang Yang, Xiaofei Sun, Yiming Hu, Xinyang Lin, Bo Zhang, and Chunhua Shen. 2024. Mobilevlm v2: Faster and stronger baseline for vision language model. ArXiv , abs/2402.03766. Gordon V. Cormack, Charles L. A. Clarke, and Stefan Büttcher. 2009. Reciprocal rank fusion outperforms condorcet and individual rank learning methods. Pro-ceedings of the 32nd international ACM SIGIR con-ference on Research and development in information retrieval .Arnon Dagan, Ido Guy, and Slava Novgorodov. 2021. An image is worth a thousand terms? analysis of visual e-commerce search. Proceedings of the 44th International ACM SIGIR Conference on Research and Development in Information Retrieval .Enjun Du, Xunkai Li, Tian Jin, Zhihan Zhang, Rong-Hua Li, and Guoren Wang. 2025a. Graphmaster: Automated graph synthesis via llm agents in data-limited environments. In Advances in Neural Infor-mation Processing Systems (NeurIPS) . Spotlight. Enjun Du, Siyi Liu, Zirong Chen, Xinyu Zuo, Jinwen Luo, Ruiwen Tao, Lisheng Duan, Haijin Liang, Jin Ma, Junfu Pu, and Yongqi Zhang. 2026a. Evirank: Structured relevance evidence for multimodal image re-ranking. arXiv preprint arXiv:2608.20886 .Enjun Du, Siyi Liu, and Yongqi Zhang. 2025b. Mixture of length and pruning experts for knowledge graphs reasoning. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing (EMNLP) , pages 432–453. Oral. Enjun Du, Hange Zhou, Chenxu Du, Siyi Liu, Zirong Chen, Ziyu Zheng, and Yongqi Zhang. 2026b. Ledgermind: Provenance-constrained multimodal agentic reasoning with a structured evidence ledger. 
+
+arXiv preprint arXiv:2607.28374 .Xin Fan, Xing Xie, Zhiwei Li, Mingjing Li, and Wei-Ying Ma. 2005. Photo-to-search: using multimodal queries to search the web from mobile devices. In 
+
+Multimedia Information Retrieval .Edward A. Fox and Joseph A. Shaw. 1993. Combination of multiple searches. In Text Retrieval Conference .Tianjun Gu, Tianyu Xin, Kuan Zhang, Bowen Yang, Kok-Chung Chua, Peize Li, Xinran Zhang, Yu-peng Chen, Qiyue Zhao, Qinlei Xie, Jianhang Liu, Yucheng Lu, Yinan Han, Marco Pavone, and Yim-ing Li. 2026. Towards spatial supersensing in the wild. In The Nineteenth European Conference on Computer Vision .Michael Günther, Saba Sturua, Mohammad Kalim Akram, Isabelle Mohr, Andrei Ungureanu, Bo Wang, Sedigheh Eslami, Scott Martens, Maximilian Werk, Nan Wang, and Han Xiao. 2025. jina-embeddings-v4: Universal embeddings for multimodal multilin-gual retrieval. ArXiv , abs/2506.18902. Xiaoxiao Guo, Hui Wu, Yupeng Gao, Steven J. Rennie, and Rogério Schmidt Feris. 2021. Fashion iq: A new dataset towards retrieving images by natural language feedback. 2021 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 11302– 11312. Danna Gurari, Qing Li, Abigale Stangl, Anhong Guo, Chi Lin, Kristen Grauman, Jiebo Luo, and Jeffrey P. Bigham. 2018. Vizwiz grand challenge: Answering visual questions from blind people. 2018 IEEE/CVF Conference on Computer Vision and Pattern Recog-nition , pages 3608–3617. Dan Hendrycks and Thomas G. Dietterich. 2019. Benchmarking neural network robustness to com-mon corruptions and perturbations. ArXiv ,abs/1903.12261. Hexiang Hu, Yi Luan, Yang Chen, Urvashi Khandel-wal, Mandar Joshi, Kenton Lee, Kristina Toutanova, and Ming-Wei Chang. 2023. Open-domain visual entity recognition: Towards recognizing millions of wikipedia entities. 2023 IEEE/CVF Interna-tional Conference on Computer Vision (ICCV) , pages 12031–12041. Weijian Jian, Yajun Zhang, Dawei Liang, Chunyu Xie, Yixiao He, Dawei Leng, and Yuhui Yin. 2025. Rzen-embed: Towards comprehensive multimodal retrieval. 
+
+ArXiv , abs/2510.27350. Ting Jiang, Minghui Song, Zihan Zhang, Haizhen Huang, Weiwei Deng, Feng Sun, Qi Zhang, Deqing Wang, and Fuzhen Zhuang. 2024a. E5-v: Universal embeddings with multimodal large language models. 
+
+ArXiv , abs/2407.12580. Ziyan Jiang, Rui Meng, Xinyi Yang, Semih Yavuz, Yingbo Zhou, and Wenhu Chen. 2024b. Vlm2vec: Training vision-language models for massive multi-modal embedding tasks. ArXiv , abs/2410.05160. Jing Jin, Hao Liu, Yang Bai, Yihang Lou, Zhenke Wang, Tianrun Yuan, Juntong Chen, Yong Zhu, Fanhu Zeng, Xuanyu Zhu, and Yige Xu. 2026. Unveiling fine-grained visual traces: Evaluating multimodal inter-leaved reasoning chains in multimodal stem tasks. 
+
+ArXiv , abs/2604.19697. Jing Jin, Xu Liu, Te Gao, Zhihong Shi, Yixiong Liang, Ruiqing Zheng, Hulin Kuang, Min Zeng, and Shichao Kan. 2025. Dynamic residual encoding with slide-level contrastive learning for end-to-end whole slide image representation. Proceedings of the 33rd ACM International Conference on Multimedia .Zhibin Lan, Liqiang Niu, Fandong Meng, Jie Zhou, and Jinsong Su. 2025. Ume-r1: Exploring reasoning-driven generative multimodal embeddings. ArXiv ,abs/2511.00405. Jinzhao Li, Yinuo Chen, Wenxuan Song, Yijia Lei, Yichi Zhang, Honglei Yan, Panwang Pan, and Miao Liu. 2026a. Ipibench: Evaluating interactive proactive in-telligence of mllms under continuous streams. arXiv preprint arXiv:2605.27074 .11 Yuanbao Technical Report Tencent 
+
+Junnan Li, Dongxu Li, Caiming Xiong, and Steven C. H. Hoi. 2022. Blip: Bootstrapping language-image pre-training for unified vision-language understanding and generation. In International Conference on Ma-chine Learning .Mingxin Li, Yanzhao Zhang, Dingkun Long, Ke qin Chen, Sibo Song, Shuai Bai, Zhibo Yang, Pengjun Xie, An Yang, Day iheng Liu, Jingren Zhou, and Junyang Lin. 2026b. Qwen3-vl-embedding and qwen3-vl-reranker: A unified framework for state-of-the-art multimodal retrieval and ranking. ArXiv ,abs/2601.04720. Yuying Li, Siyi Qian, Hao Liang, Leqi Zheng, Ruichuan An, Yongzhen Guo, and Wentao Zhang. 2025. Cap-geo: A caption-assisted approach to geometric rea-soning. arXiv preprint arXiv:2510.09302 .Yuying Li, Leqi Zheng, Yongzi Yu, Wenrui Zhou, Xuchang Zhong, Xing Hu, Jing Jin, Hangjie Yuan, and Tao Feng. 2026c. Filter, then reweight: Rethink-ing optimization granularity in on-policy distillation. 
+
+arXiv preprint arXiv:2606.02684 .Zheyuan Liu, Cristian Rodriguez-Opazo, Damien Teney, and Stephen Gould. 2021. Image retrieval on real-life images with pre-trained vision-and-language models. 
+
+2021 IEEE/CVF International Conference on Com-puter Vision (ICCV) , pages 2105–2114. John X. Morris, Eli Lifland, Jin Yong Yoo, Jake Grigsby, Di Jin, and Yanjun Qi. 2020. Textattack: A frame-work for adversarial attacks, data augmentation, and adversarial training in nlp. In Conference on Empiri-cal Methods in Natural Language Processing .Bryan A. Plummer, Liwei Wang, Christopher M. Cer-vantes, Juan C. Caicedo, J. Hockenmaier, and Svet-lana Lazebnik. 2015. Flickr30k entities: Collecting region-to-phrase correspondences for richer image-to-sentence models. International Journal of Com-puter Vision , 123:74 – 93. Jielin Qiu, Yi Zhu, Xingjian Shi, F. Wenzel, Zhiqiang Tang, Ding Zhao, Bo Li, and Mu Li. 2022. Bench-marking robustness of multimodal image-text models under distribution shift. Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sas-try, Amanda Askell, Pamela Mishkin, Jack Clark, Gretchen Krueger, and Ilya Sutskever. 2021. Learn-ing transferable visual models from natural language supervision. ArXiv , abs/2103.00020. Miloš Radovanovi´ c, Alexandros Nanopoulos, and Mir-jana Ivanovi´ c. 2010. Hubs in space: Popular nearest neighbors in high-dimensional data. J. Mach. Learn. Res. , 11:2487–2531. Piyush Sharma, Nan Ding, Sebastian Goodman, and Radu Soricut. 2018. Conceptual captions: A cleaned, hypernymed, image alt-text dataset for automatic im-age captioning. In Annual Meeting of the Association for Computational Linguistics .Aaditya K. Singh, Adam Fry, Adam Perelman, Adam Tart, Adithya Ganesh, Ahmed El-Kishky, Aidan McLaughlin, Aiden Low, AJ Ostrow, Akhila Anan-thram, Akshay Nathan, Alan Luo, Alec Helyar, Alek-sander Madry, Aleksandr A Efremov, Aleksandra Spyra, Alex Baker-Whitcomb, Alex Beutel, Alex Karpenko, and 464 others. 2025. Openai gpt-5 sys-tem card. Xuemeng Song, Haoqiang Lin, Haokun Wen, Bohan Hou, Mingzhu Xu, and Liqiang Nie. 2025. A compre-hensive survey on composed image retrieval. ACM Transactions on Information Systems , 44:1 – 54. Gemini Team, Rohan Anil, Sebastian Borgeaud, Jean-Baptiste Alayrac, Jiahui Yu, Radu Soricut, Johan Schalkwyk, Andrew M. Dai, Anja Hauth, Katie Millican, David Silver, Melvin Johnson, Ioannis Antonoglou, Julian Schrittwieser, Amelia Glaese, Jilin Chen, Emily Pitler, Timothy Lillicrap, Angeliki Lazaridou, and 1332 others. 2025. Gemini: A fam-ily of highly capable multimodal models. Preprint ,arXiv:2312.11805. Michael Tschannen, Alexey Gritsenko, Xiao Wang, Muhammad Ferjad Naeem, Ibrahim M. Alabdul-mohsin, Nikhil Parthasarathy, Talfan Evans, Lu-cas Beyer, Ye Xia, Basil Mustafa, Olivier H’enaff, Jeremiah Harmsen, Andreas Steiner, and Xiao-Qi Zhai. 2025. Siglip 2: Multilingual vision-language encoders with improved semantic under-standing, localization, and dense features. ArXiv ,abs/2502.14786. Sagar Vaze, Nicolas Carion, and Ishan Misra. 2023. Genecis: A benchmark for general conditional image similarity. 2023 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) , pages 6862– 6872. Yang Wang, Tao Mei, Jingdong Wang, Houqiang Li, and Shipeng Li. 2011. Jigsaw: interactive mobile visual search with multimodal queries. Proceedings of the 19th ACM international conference on Multimedia .Cong Wei, Yang Chen, Haonan Chen, Hexiang Hu, Ge Zhang, Jie Fu, Alan Ritter, and Wenhu Chen. 2023. Uniir: Training and benchmarking uni-versal multimodal information retrievers. ArXiv ,abs/2311.17136. Tobias Weyand, Andre F. de Araújo, Bingyi Cao, and Jack Sim. 2020. Google landmarks dataset v2 – a large-scale benchmark for instance-level recognition and retrieval. 2020 IEEE/CVF Conference on Com-puter Vision and Pattern Recognition (CVPR) , pages 2572–2581. Weichu Xie, Haozhe Zhao, Wenpu Liu, Yongfu Zhu, Liang Chen, Minghao Ye, Zirong Chen, Yuqi Xu, Shuai Dong, Ziyue Wang, and 1 others. 2026. Step-wise rubric rewards for llm reasoning. arXiv preprint arXiv:2605.17291 .12 Yuanbao Technical Report Tencent 
+
+Xiaohua Zhai, Basil Mustafa, Alexander Kolesnikov, and Lucas Beyer. 2023. Sigmoid loss for lan-guage image pre-training. 2023 IEEE/CVF Interna-tional Conference on Computer Vision (ICCV) , pages 11941–11952. Kuan Zhang, Chengliang Chai, Jingzhe Xu, Chi Zhang, Han Han, Ye Yuan, Guoren Wang, and Lei Cao. 2026a. Handling label noise via instance-level diffi-culty modeling and dynamic optimization. Advances in Neural Information Processing Systems , 38:46667– 46696. Kuan Zhang, Dongchen Liu, Qiyue Zhao, Jinkun Hou, Xinran Zhang, Qinlei Xie, Miao Liu, and Yiming Li. 2026b. Gameverse: Can vision-language models learn from video-based reflection? arXiv preprint arXiv:2603.06656 .Wei Zhang, Lei Pang, and Chong-Wah Ngo. 2012. Snap-and-ask: answering multimodal question by naming visual instance. In Proceedings of the 20th ACM International Conference on Multimedia , MM ’12, page 609–618, New York, NY, USA. Association for Computing Machinery. Xin Zhang, Yanzhao Zhang, Wen Xie, Mingxin Li, Ziqi Dai, Dingkun Long, Pengjun Xie, Meishan Zhang, Wenjie Li, and Min Zhang. 2024. Gme: Improving universal multimodal retrieval by multimodal llms. 
+
+ArXiv , abs/2412.16855. Xiran Zhao, Jingyi Jin, Yan Bai, Zhongan Wang, Yifeng Sun, Yihang Lou, Xuanyu Zhu, Tao Feng, and Ying Wu. 2026. Mmviad: Multi-view multi-task video un-derstanding for industrial anomaly detection. ArXiv ,abs/2605.10833. 13 Yuanbao Technical Report Tencent 
+
+Appendix 
+
+A Pilot Analysis of Real User Inputs 14 B Dataset and Benchmark Construction 15 
+
+B.1 Dataset Construction Details . . . 15 B.2 Human Annotation Protocol . . . 17 B.3 Corruption Taxonomy Table . . . 18 
+
+C MOOR: Details, Ablations, and Mecha-nistic Evidence 18 
+
+C.1 Details and Analysis . . . . . . . 18 C.2 Ablation Studies . . . . . . . . . . 20 C.3 Mechanistic Analyses . . . . . . . 22 
+
+D Experimental Setup Details 23 
+
+D.1 Per-Model Implementation Notes . 23 D.2 Prompt Templates . . . . . . . . . 25 D.3 Score Normalisation and Aggrega-tion . . . . . . . . . . . . . . . . 25 D.4 Reproducibility . . . . . . . . . . 25 
+
+E Additional Results and Analysis 25 
+
+E.1 Additional Experimental Results . 25 E.2 Extended Benchmark Analyses . . 28 E.3 Failure Mode Analysis . . . . . . 29 E.4 Visualisation and Case Studies . . 31 
+
+F LLM Use Statement and Ethics 31 
+
+A Pilot Analysis of Real User Inputs 
+
+To validate that our corruption taxonomy reflects real upload conditions, we sampled 5,000 paired (image, text question) records from our private pro-duction image-text retrieval service and applied signal-level automated checks on both sides. We remove empty queries, broken images, and ex-act duplicate image–question pairs, and strip user-identifying metadata before analysis. Each record is checked independently on the snap side and the ask side. 
+
+Snap-side check. For images, we compute four signal-level statistics corresponding to common mobile artifacts: Laplacian variance for blur, mean grayscale intensity for low light, saturated pixel fraction for overexposure or glare, and JPEG re-encoding size ratio for compression artifacts. The thresholds are calibrated on 200 manually labeled images and chosen to favor high precision. 
+
+Ask-side check. For text questions, we apply lightweight lexical and syntactic checks: a ques-tion is flagged if its out-of-vocabulary token rate exceeds a dictionary-based threshold, if it contains fewer than two content tokens after stop-word re-moval, or if it lacks an entity-bearing noun iden-tified by a POS tagger. We use these rule-based checks to capture observable input-quality issues without relying on model-dependent semantic judg-ments. 
+
+Aggregation. Each record is assigned to one of four categories based on the two flags. Table 4 sum-marizes the resulting distribution. Approximately 
+
+71% of uploads exhibit at least one signal-level issue and 35% exhibit issues on both modalities, motivating both the single-side and the joint cor-ruption conditions in SnapBench. The image-side primitive distribution (Table 5) is dominated by degrade and remove, consistent with SnapBench’s primitive taxonomy. 
+
+Real-corruption validation. To test whether the patterns identified on synthetic corruptions transfer to genuinely real uploads, we conducted a second, disjoint study on 200 fresh de-identified real up-loads ( 50 per primitive: Degrade, Remove, Add, Transform), separate from the 200 -image threshold-calibration set above. We pre-registered three falsi-fiable predictions and tested all three: (a) Primitive ordering preserved : Degrade and Remove remain the two most damaging primitives on real uploads (mean R@1 drops of −9.8 and −12 .4), match-ing the synthetic ordering. (b) Model ranking correlated : the 16-model robustness ranking mea-sured on real corrupted queries correlates strongly with the ranking measured on SnapBench’s syn-thetic conditions (Spearman ρ = 0 .83 , p < 0.01 ). 
+
+(c) Super-additivity confirmed : real both-side corrupted queries ( n = 47 ) show a super-additive interaction (mean γint = +6 .2 > 0), replicating the controlled-condition pattern of Section 4.3. All three predictions held, supporting that SnapBench’s synthetic taxonomy transfers to production condi-tions, while, as discussed in Limitations, we do not claim the joint distribution of real corruptions  
+
+> 14 Yuanbao Technical Report Tencent
+
+matches our factorial design.       
+
+> Category Frequency
+> Clean (neither flagged) 29.4% Snap-side only 23.5% Ask-side only 12.4% Both-side 34.7%
+> Any issue 70 .6%
+
+Table 4: Four-way distribution of 5,000 real mobile snap-and-ask uploads.       
+
+> Primitive Frequency
+> Degrade 38.4% Remove 24.6% Add 17.3% Transform 8.7%
+> Any image corruption 58 .2%
+
+Table 5: Image-side primitive distribution among flagged uploads. 
+
+B Dataset and Benchmark Construction 
+
+B.1 Dataset Construction Details B.1.1 Query Collection Pipeline 
+
+SnapBench’s 1,145 queries are generated through a multi-step automated pipeline applied to a pool of 1,150 images. We describe each step below. 
+
+Domain taxonomy. The six query domains— 
+
+Product & Commodity , Nature & Lifeform , Food & Beverage , Person & Character , Place & Land-mark , and Culture & Collectible —were identified from the category distribution of real snap-and-ask queries observed in a production image-text retrieval service. The 1,150 candidate images were proportionally sampled from these six domains to reflect this empirical frequency distribution, as shown in Figure 5. 
+
+Design rationale: a paired, ∆-based proto-col. SnapBench is built around paired measure-ments: every reported finding is a per-query change 
+
+∆R@k = R@kclean − R@kcorrupted between an identical model evaluated on the clean baseline im-age and on each of its corrupted variants. Because the same baseline appears on both sides of ∆, cross-condition comparisons are invariant to the absolute visual quality of the baseline, provided it satisfies a weak admissibility condition: the primary entity must be visually identifiable. Our query screening targets only this condition. 
+
+Question Generation Prompt                               
+
+> Gemini-3-Flash ·temp = 0 ·max_tokens = 256
+> USER
+> {{Image}}
+> Identify the most prominent entity in the image and generate a short snap-and-ask query.
+> Entity label: A coarse-grained category label (e.g., plant ,vehicle ,building ,food ,person ). Name the object type , not a specific species, brand, or individual—e.g., plant not rose ;vehicle not Tesla .Use a single lowercase noun or short noun phrase (1–3 words).
+> Query: One short English question a mobile user might ask. Requirements: (a) ends with “?”; (b) contains the category label word; (c) does not reveal specific identity or brand; (d) naturally answerable from the image. If no identifiable entity is visible, output
+> {"entity_tag": "unknown", "query": "none"} .
+> ASSISTANT
+> {"entity_tag": "{. . . }", "query": "{. . . }" }
+
+Query image screening. Starting from the crawled open-source image library, the authors manually review candidate images and accept those in which the primary entity is clearly identifiable—free from severe blur, extreme over-/under-exposure, multi-subject clutter, heavy oc-clusion, or leakage-risk overlays. To quantify con-sistency, three raters independently reviewed 200 
+
+randomly sampled candidates; three-way agree-ment reached 96% , confirming the criterion is ap-plied reliably. We rely on author judgement rather than tight automated thresholds: because ∆ com-parisons are insensitive to baseline quality, impos-ing strict numerical gates would over-constrain the sample distribution without improving the validity of any reported finding. This procedure yields the 
+
+1,150 candidate images that feed Step 1. 
+
+Step 1: Image-grounded query generation. For each image in the candidate pool, Gemini-3-Flash is prompted to (i) assign a coarse-grained entity label to the dominant subject (e.g., plant , vehicle ,
+
+building ), naming the object class without specify-ing brand, model, or individual, and (ii) generate a short, natural English question centred on that entity (e.g., “What kind of plant is this?” , “What 
+
+15 Yuanbao Technical Report Tencent 
+
+Semantic-Check Prompt GPT-5.4-mini                          
+
+> ·temp =0·max_tokens =256
+> USER
+> {{Image}} query: {{query}} entity_tag: {{entity_tag}}
+> You are a benchmark data quality auditor. Output
+> PASS only if all hold:
+> (a) entity_tag matches the most prominent visual subject; output FAIL if no clear entity.
+> (b) entity_tag is a coarse-grained category—not a brand, model, or proper noun.
+> (c) query is a well-formed question (ends with “?”).
+> (d) query contains no brand, person, or place name uniquely identifying the entity.
+> (e) entity_tag (or its word stem) appears in
+> query .
+> ASSISTANT
+> PASS or FAIL: {. . . }
+
+Figure 5: Query domain distribution. The 1,145 
+
+queries span six real-world domains proportionally sam-pled to reflect real snap-and-ask usage frequency (area 
+
+∝ count). 
+
+type of building is this?” ), simulating a mobile snap-and-ask interaction. This produces 1,150 can-didate ( image, query, entity_tag ) triples. The exact prompt is shown in Section B.1. 
+
+Step 2: Rule-based quality filter. Each candi-date must satisfy four syntactic constraints: 1. query_entity is non-empty. 2. query_text_en ends with “ ?”. 3. query_text_en contains no Chinese charac-ters. 4. query_text_en contains exactly one question mark (single-sentence constraint). Candidates that fail are routed to Step 4 for repair. Pass rate at this step: ≈99 .1% (≈1,140 candidates proceed; 10 fail). 
+
+Step 3: LLM-based semantic check. GPT-5.4-mini (Singh et al., 2025) receives each (image, query, entity_tag ) triple and emits PASS only if five criteria hold: (a) the entity tag matches the most prominent visual subject; (b) the entity tag is a coarse-grained category label rather than a spe-cific brand, model, or proper noun; (c) the query is a well-formed question; (d) the query contains no brand name, person name, or place name; and (e) the entity tag appears in the query. The check is read-only: the model outputs only PASS /FAIL 
+
+with a brief rationale and never rewrites the query. Pass rate: ≈98 .2% ; the additional 20 rejections beyond Step 2 are predominantly queries whose entity tags were too fine-grained (e.g., a specific product name rather than its category). The exact prompt is shown in Section B.1. 
+
+Step 4: Repair passes. Candidates that fail Step 2 or Step 3 ( 30 in total) are routed to auto-mated repair scripts that re-author the query text or coarsen the entity tag. Repaired candidates re-enter at Step 2; those that still fail after K=3 rounds are discarded. 25 of the 30 candidates are successfully repaired and retained; 5 are dropped. 
+
+Step 5: Human spot-check. 100 randomly sam-pled final queries are manually inspected by the authors for naturalness, entity correctness, and ab-sence of answer leakage. All 100 pass without modification, confirming the validity of the auto-mated pipeline. 
+
+Final tally. 1,145 queries are released from an initial pool of 1,150 image-grounded candidates (overall yield ≈99 .6% ); 1,145 unique query im-ages. 
+
+B.1.2 Gallery Construction Source pool. The 9,085 -item shared gallery com-prises the union of top-30 candidates retrieved per query from the same crawled open-source image library that supplies the query pool, with strict non-overlap: query images and their near-duplicates (perceptual-hash distance within ϵ) are excluded, after copyright filtering and same-image deduplica-tion. 
+
+Caption generation. Each gallery image is paired with an entity-centric English caption pro-duced by a private Qwen-VL-based captioning 
+
+16 Yuanbao Technical Report Tencent                  
+
+> Dimension Score Definition
+> Visual similarity
+> 0Completely unrelated entity, no visual overlap.
+> 1Different entity, partial visual overlap ( <50% shared elements).
+> 2Same entity, different viewpoint or background.
+> 3Same entity, matching viewpoint. Image content relevance
+> 0Retrieved entity unrelated to the query need.
+> 1Tangentially related only.
+> 2Partial match (multi-entity query partially satisfied).
+> 3Retrieved entity fully matches the need. Caption/title accuracy
+> 0Caption wrong or unrelated to the image.
+> 1Caption present but missing key information.
+> 3Caption accurately describes the image. (Score 2 is not used.) Text-vs-need relevance
+> 0Cannot answer, or answers incorrectly.
+> 1Vaguely on-topic; cannot answer directly.
+> 2Correctly answers part of the question.
+> 3Correctly and fully answers the question.
+
+Table 6: Per-dimension score definitions ( 0–3). 
+
+model fine-tuned for entity-centric description. The model outputs a concise caption naming the pri-mary entity and its key visual attributes. This use of a generated caption as an auxiliary textual an-chor for downstream matching follows a similar caption-assisted design principle as in geometric reasoning (Li et al., 2025). 
+
+Deduplication. Items are deduplicated on the (image phash, normalized caption) pair. Final gallery size: 9,085 unique items. 
+
+B.2 Human Annotation Protocol B.2.1 Four-Dimensional Rubric 
+
+Each candidate gallery item is scored on four di-mensions ( 0–3); the definitions are given in Table 6. This fixed, per-dimension rubric follows the same design principle as step-wise rubric rewards used for LLM reasoning supervision (Xie et al., 2026): decomposing an otherwise holistic judgment into explicit, independently checkable criteria. 
+
+B.2.2 Fitness Score Aggregation 
+
+The four dimension scores are combined into a single fitness score ( 0–3) according to the query’s 
+
+intent type : (I) image-only need, (IT) image+text need, or (T) text-only need. All SnapBench queries fall into category IT. Items with fitness ≥ 2 become 
+
+ground truth (GT) ; items with fitness ∈ { 0, 1}
+
+within the same category become hard negatives .The aggregation rules are shown in Table 7. The key principle is intent-weighted priority : for IT queries, text-vs-need relevance is decisive—a cap-tion that fully answers the question (TN = 3) yields fitness ≥ 2 even if the image is not visually simi-lar (case IT-2b); conversely, a well-matched image (Cont = 3) yields fitness ≥ 2 even if the caption is ambiguous (case IT-2a). Full fitness 3 requires both modalities to contribute: a fully matching image entity, an accurate caption, and text that directly answers the question. 
+
+B.2.3 Annotator Training and Quality Control 
+
+Ten annotators each completed a 3,000 -item cal-ibration round ( ≥ 90% accuracy required for ad-mission) before live annotation. The full effort spans ≈34 ,000 query–candidate pairs ( ≈3,400 per annotator). Quality is maintained via a rolling au-dit ( 20 –30% of submissions re-checked by a QC reviewer and a project lead); the final audit pass rate is 95 %, an upper bound on label noise that is difficult to fully eliminate in large-scale annotation pipelines (Zhang et al., 2026a,b). Full guidelines and audit details are omitted for brevity. 
+
+B.2.4 Relevance-Judgment Completeness 
+
+Because the 9,085 -item gallery is shared across queries while relevance judgments are collected per query (top-30 candidates from strong retriev-ers), an item that was never annotated for a given query could in principle be an unjudged positive for it. We address this pooling-completeness concern in three ways. First, per-query pooling covers the 
+
+17 Yuanbao Technical Report Tencent                                                                                      
+
+> Case Vis Cont Cap TN Fitness
+> Image-only  I-0 —0——0
+> I-1 —1——1
+> I-2a —2——2
+> I-2b —3≤1—2
+> I-3 —33—3
+> Image+text  IT-0 ≤1≤1—≤10
+> IT-1 any any —≤11
+> IT-2a ≥2≥2—≤12
+> IT-2b ≤1≤1—32
+> IT-2c ≥23≤132
+> IT-3 ≥23333
+> Text-only  T-0 0———0
+> T-1 1———1
+> T-2a 2———2
+> T-2b 3—≤1—2
+> T-3 3—3—3
+
+Table 7: Intent-conditioned fitness aggregation. Vis = visual similarity; Cont = image content relevance; Cap =caption/title accuracy; TN = text-vs-need relevance. “—” = not evaluated. ≤1 means score is 0 or 1; ≥2 means score is 2 or 3. Apply the first matching row within each block.             
+
+> Level Operator Example
+> Char.
+> char_add cbar char_delete cr char_change csr char_swap acr
+> Word word_repeat What car car is this? word_swap What is car this?
+> Sent. sent_add [chit-chat] What car is this? sent_replace What is this?
+
+Table 8: Text corruptions (8 operators, all targeting the entity word; entity = car ). 
+
+high-risk region: for each query, the top-30 candi-dates from strong retrievers are exhaustively anno-tated, so items most likely relevant to that query are already prioritized into its own judgment pool. Second, every finding reported in this paper is a per-query difference ∆R@k between a clean and a corrupted condition sharing an identical label set on both sides (Section B.1.1); a hypothetical miss-ing positive depresses both sides of ∆ equally and cancels out exactly, so none of the paper’s paired conclusions can be affected by unjudged relations. Third, we ran an empirical check: 100 queries × 20 
+
+unjudged same-domain gallery items each ( 2,000 
+
+pairs total) were annotated after the fact. Under the worst-case assumption that every one of these 
+
+2,000 pairs is a missed positive, the resulting upper bound on the absolute R@1 impact is ≤ 0.22 per-centage points, while the impact on every reported 
+
+∆R@1 finding is exactly zero by protocol design. 
+
+B.3 Corruption Taxonomy Table 
+
+The corruption taxonomy tables can be found in Tables 8 and 9. 
+
+C MOOR: Details, Ablations, and Mechanistic Evidence 
+
+C.1 Details and Analysis C.1.1 Motivation: Why Fixed Fusion Fails 
+
+The core premise of MOOR is that no single fixed image–text fusion weight can serve all snap-and-ask queries well. We compute the oracle fusion weight α∗ for each query: the value in [0 , 1] that maximises R@1 for that specific query. Across all 16 joint-mode models, the per-model mean α∗ clus-ters in [0 .52 , 0.58] —close to 0.5—but per-query standard deviations range from 0.086 to 0.138, all well above any “negligible” threshold. The opti-mal weight is a per-query quantity, not a global constant. 
+
+C.1.2 Algorithm Overview 
+
+MOOR runs in five steps, all computed from the encoder’s own output scores with no additional pa-rameters. Section B.2.4 gives the full pseudocode; 
+
+18 Yuanbao Technical Report Tencent 
+
+Primitive Operator s1 s2 s3
+
+Degrade 
+
+low_light brightness = 0 .70 , σn = 3 0.40 , σn = 10 0.15 , σn = 22 
+
+overexposure factor = 1 .4 2.2 3.0
+
+defocus_blur σ = 1 .0 3.5 10 .0
+
+motion_blur kernel = 5 13 25 
+
+compression quality = 50 18 5
+
+low_resolution scale = 0 .50 0.25 0.08 
+
+Transform 
+
+rotation 10 ° 45 ° 180 °
+
+perspective dr = 0 .10 0.20 0.30 
+
+lens_distortion k1 = −0.10 −0.20 −0.30 
+
+Remove cropping keep 90% 65% 40% 
+
+downscale scale = 0 .20 0.10 0.04 
+
+Add 
+
+watermark single half-tile full-tile 
+
+mosaic 1 blk, 20% 2 blks, 35% 4 blks, 55% 
+
+scribble 3 lines, t=2 6, t=4 9, t=5 
+
+ui_elements top-bar +bottom-bar +address-bar +FAB 
+
+Table 9: Image corruption grid. Four primitives, 15 operators, 3 severities each ( = 45 image conditions). All severity parameters are deterministic and seeded for reproducibility. 
+
+Algorithm 1. MOOR (Modality-anchored, Outlier-aware, Optimal Reweighting) 
+
+Input: qI ∈ Rd, qT ∈ Rd (query image and text embeddings); GI , G T ∈ RN ×d (gallery); whitening stats μI/T , σ I/T .
+
+Output: fused score vector sM OOR ∈ RN .
+
+1. Gallery-side whitening. Whiten GI , qI with (μI , σ I )→ ˜GI , ˜qI ; whiten GT , qT with (μT , σ T )→ ˜GT , ˜qT ; cross-whiten 
+
+ˆqI with (μT , σ T ) and ˆqT with (μI , σ I ).
+
+2. Four similarity paths. sII = ˜ qI ˜GI⊤, sT T = ˜ qT ˜GT ⊤, sIT = ˆ qI ˜GT ⊤, sT I = ˆ qT ˜GI⊤.
+
+3. Bell-gated rank consistency. For ab ∈ { T T, IT, T I }: rab = Pearson( sII , sab ); gab = max(0 , r ab )2 ·max(0 , 1−rab )2.
+
+4. Variance weights. wII = Var( sII ); wab = gab ·Var( sab ) for ab ∈ { T T, IT, T I }.
+
+5. return sM OOR = ( wII sII + wT T sT T + wIT sIT + wT I sT I ) / (wII + wT T + wIT + wT I ).
+
+the following subsections explain each step in de-tail. This use of the encoder’s own scores as a self-contained reliability signal is conceptually ad-jacent to structured-evidence multimodal reasoning approaches that have been extended to provenance-constrained agentic settings (Du et al., 2026b). 
+
+C.1.3 Step-by-Step Derivation Step 1: Gallery-side whitening. Before com-puting any similarity, we standardise both modal-ity embedding spaces using gallery statistics to remove anisotropic scale biases (the hubness prob-lem (Radovanovi´ c et al., 2010)). For the image modality: 
+
+μI = 1
+
+> N
+
+PNi=1 GIi , σI = std( GI ) + ϵ. (1) Any embedding x is then whitened and re-normalized: 
+
+˜x = x − μI
+
+σI , ˜x ← ˜x
+
+∥˜x∥2
+
+. (2) The text modality is treated identically. Cross-modal paths use the opposite modality’s gallery statistics so that inner products remain comparable across all four paths. When all gate weights col-lapse to zero, MOOR reduces to whitened image-only retrieval, which empirically matches or ex-ceeds raw image-only retrieval because whiten-ing removes hubness bias. For VLM2Vec-Full and 
+
+VLM2Vec-V2 , whitening introduces numerical dis-tortions; MOOR skips whitening for these two models and still yields gains of +20 .8 and +17 .6
+
+R@1. 
+
+Step 2: Four similarity paths. We decompose query-gallery affinity into four paths covering all modality combinations. For query m:
+
+sII m = ˜ qIm( ˜GI )⊤, sT T m = ˜ qTm( ˜GT )⊤, (3) 
+
+sIT m = ˆ qIm( ˜GT )⊤, sT I m = ˆ qTm( ˜GI )⊤, (4) where ˜(·) is same-modal whitening and ˆ(·) is cross-modal whitening. sII is the primary path; 
+
+{T T, IT, T I } are text-involving auxiliaries. 
+
+Step 3: Bell-gated rank consistency. An aux-iliary path should contribute only when it is con-sistent with—but not redundant to—the primary image ranking. We measure consistency as the 
+
+19 Yuanbao Technical Report Tencent −20 −15 −10 −5 0    
+
+> ΔR@1 (IT  → IT  − I → I)
+> Clean Text-Corrupted Image-Corrupted All Conditions
+> CLIP-ViT-L/14 SigLIP-SO400M SigLIP2-SO400M BLIP-ITM-L Jina-V4 Qwen3-VL-Emb-2B Qwen3-VL-Emb-8B GME-2B GME-7B E5-V VLM2Vec-V2 VLM2Vec-Full UME-R1-7B Ops-MM-2B Ops-MM-7B RzenEmbed-7B
+> −1 0123
+> ΔR@1 (  − I → I)
+> CLIP-ViT-L/14 SigLIP-SO400M SigLIP2-SO400M BLIP-ITM-L Jina-V4 Qwen3-VL-Emb-2B Qwen3-VL-Emb-8B GME-2B GME-7B E5-V VLM2Vec-V2 VLM2Vec-Full UME-R1-7B Ops-MM-2B Ops-MM-7B RzenEmbed-7B CLIP-ViT-L/14 SigLIP-SO400M SigLIP2-SO400M BLIP-ITM-L Jina-V4 Qwen3-VL-Emb-2B Qwen3-VL-Emb-8B GME-2B GME-7B E5-V VLM2Vec-V2 VLM2Vec-Full UME-R1-7B Ops-MM-2B Ops-MM-7B RzenEmbed-7B CLIP-ViT-L/14 SigLIP-SO400M SigLIP2-SO400M BLIP-ITM-L Jina-V4 Qwen3-VL-Emb-2B Qwen3-VL-Emb-8B GME-2B GME-7B E5-V VLM2Vec-V2 VLM2Vec-Full UME-R1-7B Ops-MM-2B Ops-MM-7B RzenEmbed-7B
+> Dual-Encoder VLM Embedding
+> MOOR
+
+Figure 6: Coarse-text drag and MOOR recovery. Each bar is ∆R@1 relative to image-only (I →I). Top : standard joint fusion (IT →IT) underperforms image-only even on clean inputs 
+
+Pearson correlation between the auxiliary and pri-mary score vectors: 
+
+rab m = Pearson  sII m , sab m
+
+ ∈ [−1, 1] . (5) The bell-shaped gate maps this to a weight: 
+
+gab m = max(0 , r ab m )2 · max(0 , 1 − rab m )2. (6) The gate decomposes as g = reliability ×
+
+complementarity. It peaks at r = 0 .5 and collapses when r → 0 (no signal), r → 1 (fully redundant), or r < 0 (conflicting). This training-free, inference-time gate is conceptually adjacent to gating and reweighting mechanisms used at training time else-where in machine learning, such as mixture-of-experts gating for knowledge-graph reasoning (Du et al., 2025b) and instance-level reweighting for on-policy distillation (Li et al., 2026c). 
+
+Steps 4–5: Variance-weighted fusion. A path can be rank-consistent but flat over the gallery, con-tributing no discriminative signal. We therefore weight each path by its gate times the variance of its score vector: 
+
+wII m = Var( sII m ), wab m = gab m · Var( sab m ). (7) The final fused score is the normalized weighted sum: 
+
+sM OOR m = wII m sII m + P
+
+ab wab m sab m
+
+wII m + P
+
+ab wab m
+
+. (8) 
+
+C.1.4 Analysis: Self-Correcting Mechanism 
+
+A desirable property of MOOR is that it automati-cally shifts weight toward text paths under image-side corruption. Under clean conditions, sT I is highly correlated with sII (r ≈ 0.8), placing it in the high-redundancy regime where the gate sup-presses it ( g ≈ 0.016 ). When image corruption degrades sII , the correlation rT I decreases toward the complementarity peak ( r ≈ 0.5, g ≈ 0.063 ), automatically increasing the text path’s contribu-tion without any explicit corruption detection. Table 11 confirms this quantitatively: the text-path weight share rises monotonically with cor-ruption severity across all four primitive groups, confirming that the gate correctly identifies when text should take over. 
+
+C.2 Ablation Studies C.2.1 Main Results by Corruption Primitive Group 
+
+Figure 6 and Table 10 report MOOR vs. base-lines for every model and corruption primitive group. MOOR consistently outperforms all fixed-fusion baselines. Dual-Tower models benefit the most: CLIP gains +6 .0 R@1 on average ( +6 .8
+
+under Add , +6 .5 under Remove ). VLM-based models show smaller but consistent improvements (VLM2Vec-Full +2 .8, Qwen3-VL-2B +0 .5). The oracle α⋆ upper bound leaves headroom for future learned adapters; MOOR closes 40 –60% of the gap on most models. 
+
+20 Yuanbao Technical Report Tencent 
+
+Baseline Text Corruption Image Corruption Model Method Clean Char Word Sent Degrade Transform Remove Add s1 s2 s3 s1 s2 s3 s1 s2 s3 s1 s2 s3 
+
+Dual-Encoder 
+
+CLIP-ViT-L/14 Joint 49.5 45.0 50.0 43.0 48.6 45.2 36.6 48.8 44.6 37.3 50.0 47.4 40.4 48.3 44.2 34.2 MOOR +26 .7 +31 .6 +26 .4 +33 .2 +26 .9 +27 .3 +24 .8 +27 .3 +26 .8 +23 .0 +25 .6 +27 .6 +26 .8 +27 .0 +28 .1 +23 .3
+
+SigLIP-SO400M Joint 67.0 68.5 67.1 68.2 66.3 63.5 52.0 66.9 62.0 52.8 66.3 64.7 56.1 64.3 61.8 48.6 MOOR +16 .6 +14 .8 +16 .4 +15 .0 +16 .7 +17 .2 +16 .9 +16 .7 +17 .5 +16 .6 +17 .8 +18 .0 +19 .8 +18 .5 +18 .6 +16 .8
+
+SigLIP2-SO400M Joint 39.8 35.1 38.6 32.5 38.1 33.4 21.3 36.2 29.2 22.0 38.6 30.2 18.4 35.8 30.1 21.3 MOOR +12 .1 +16 .8 +13 .3 +19 .4 +13 .3 +11 .9 +1 .0 +10 .0 +6 .6 +2 .9 +11 .9 +8 .1 −1.4 +12 .1 +10 .4 +2 .0
+
+BLIP-ITM-L Joint 57.3 60.3 58.0 56.5 57.1 55.1 47.2 58.2 55.2 48.8 57.3 56.0 49.9 56.2 52.1 44.3 MOOR +18 .2 +14 .7 +17 .3 +18 .7 +17 .5 +16 .5 +12 .2 +17 .2 +16 .5 +13 .4 +17 .8 +16 .5 +16 .8 +17 .9 +18 .1 +9 .8
+
+VLM Embedding 
+
+GME-2B Joint 61.8 60.6 61.5 58.9 61.2 59.7 53.4 61.5 59.7 58.8 65.3 62.2 53.2 64.2 62.6 57.5 MOOR +3 .8 +4 .9 +4 .2 +6 .4 +3 .4 +3 .6 −1.5 +8 .0 +6 .8 +1 .8 +0 .3 +3 .0 +7 .5 +6 .2 +5 .4 −0.4
+
+Qwen3-VL-Emb-2B Joint 64.6 66.1 66.4 71.0 64.3 62.8 53.4 64.7 61.5 61.1 63.3 57.9 42.3 64.2 62.9 55.4 MOOR +20 .6 +18 .9 +18 .7 +13 .8 +20 .2 +19 .8 +17 .7 +19 .1 +17 .7 +8 .2 +21 .4 +26 .3 +37 .4 +20 .4 +20 .4 +19 .5
+
+Ops-MM-2B Joint 77.6 78.0 77.6 78.6 76.8 76.9 57.7 75.8 68.2 73.3 76.7 76.1 68.1 77.4 76.3 66.7 MOOR +3 .5 +2 .9 +3 .5 +2 .2 +4 .2 +1 .3 +6 .1 +5 .1 +6 .9 −2.7 +4 .0 +1 .0 −5.5 +3 .0 +3 .1 +6 .2
+
+Jina-V4 Joint 65.8 69.5 65.9 71.0 66.1 64.3 55.3 65.4 62.4 61.9 64.3 57.9 44.9 65.9 63.6 54.4 MOOR +11 .1 +7 .2 +10 .9 +5 .7 +10 .0 +8 .5 −2.9 +8 .7 +4 .3 −4.6 +12 .4 +16 .4 +19 .0 +10 .4 +9 .5 +2 .9
+
+VLM2Vec-Full Joint 57.6 57.8 58.0 61.3 57.4 54.9 48.0 56.8 53.7 50.3 55.9 52.6 42.4 56.5 53.9 45.9 MOOR +6 .2 +6 .0 +5 .6 +2 .5 +6 .1 +5 .4 +0 .1 +7 .5 +6 .8 +0 .7 +7 .6 +10 .1 +13 .7 +6 .2 +5 .4 −0.2
+
+VLM2Vec-V2 Joint 62.5 63.8 64.8 66.8 62.7 61.7 52.6 62.8 59.7 58.6 63.1 58.3 45.4 63.0 61.1 54.5 MOOR +5 .5 +4 .1 +3 .8 +0 .8 +5 .8 +4 .3 −1.1 +5 .5 +3 .9 −4.4 +5 .1 +8 .2 +14 .3 +4 .1 +2 .8 −2.0
+
+E5-V Joint 59.1 59.2 59.1 58.7 58.6 57.2 52.2 57.4 54.4 52.7 57.3 55.1 44.6 58.1 55.9 50.1 MOOR +13 .4 +13 .2 +13 .4 +13 .8 +13 .8 +12 .6 +8 .2 +14 .5 +13 .1 +3 .8 +15 .9 +16 .2 +19 .6 +13 .6 +12 .3 +5 .1
+
+GME-7B Joint 68.0 68.9 68.2 69.7 67.5 65.5 58.5 66.3 63.3 63.6 67.0 63.7 54.1 67.6 66.0 59.8 MOOR +9 .6 +7 .8 +9 .0 +7 .1 +9 .0 +8 .7 +2 .6 +10 .2 +9 .3 +2 .1 +10 .2 +12 .6 +17 .4 +8 .5 +8 .2 +4 .2
+
+UME-R1-7B Joint 60.2 59.7 60.2 62.5 58.1 58.0 49.4 58.5 55.9 55.3 54.7 53.1 40.1 57.3 57.4 50.6 MOOR +19 .2 +19 .4 +19 .0 +16 .8 +21 .4 +18 .7 +11 .7 +19 .4 +18 .1 +10 .2 +24 .5 +25 .6 +32 .1 +21 .7 +19 .8 +16 .8
+
+RzenEmbed-7B Joint 75.2 76.8 76.5 77.1 73.5 72.1 56.2 73.0 66.4 72.8 75.9 74.5 68.6 75.6 74.4 66.8 MOOR +5 .7 +4 .3 +4 .4 +3 .8 +6 .6 +5 .5 +6 .2 +7 .3 +9 .0 −2.3 +3 .7 +2 .4 −4.5 +4 .9 +4 .2 +5 .5
+
+Ops-MM-7B Joint 79.1 79.2 79.4 77.8 77.9 76.1 58.0 77.6 70.1 74.8 79.4 77.6 71.0 78.8 77.6 67.4 MOOR +1 .5 +1 .5 +1 .3 +3 .1 +2 .0 +1 .0 +5 .4 +2 .4 +5 .5 −4.1 +0 .3 −0.7 −7.4 +1 .1 +1 .2 +6 .2
+
+Qwen3-VL-Emb-8B Joint 65.5 66.9 67.2 69.6 65.7 63.9 55.7 64.3 62.7 62.3 63.1 58.7 46.8 65.4 64.3 58.4 MOOR +19 .6 +17 .7 +17 .7 +14 .9 +18 .6 +18 .5 +14 .9 +19 .0 +16 .5 +9 .1 +21 .3 +24 .4 +33 .4 +18 .3 +18 .7 +15 .1
+
+Table 10: MOOR robustness on SnapBench (Recall@1, %). Joint : for dual-encoders, fixed equal-weight fusion (joint-0.5); for VLM-based models, native IT →IT multimodal performance (from Table 2). MOOR rows: signed change over Joint +gain / −loss. Text averages: Char (4) / Word (2) / Sent (2) conditions. Image: per-group averages at each severity level. 
+
+Primitive Baseline s1 s2 s3
+
+Degrade 0.065 0.065 0.067 0.070 Transform 0.065 0.066 0.067 0.069 Remove 0.065 0.066 0.068 0.071 Add 0.065 0.066 0.069 0.072 
+
+Table 11: Average text-path weight share ¯wtxt of MOOR across 10 models at each corruption group and severity. 
+
+C.2.2 Gate-Function Ablation 
+
+Figure 7 compares six gate functions: Bell (ours), Linear, Sigmoid, Inverse Bell, Pure-r2, and No Gate (variance-only fusion). The Bell gate domi-nates across all 16 joint-mode models and all 53 corruption conditions. No Gate (equivalent to fix-ing the quality threshold globally) recovers only 
+
+∼ 50% of the Bell improvement, confirming that the non-monotone shape—which discards both fully redundant and harmful paths—is the oper-ative design choice. 
+
+C.2.3 Component and Hyperparameter Ablations 
+
+Tables 12 and 18 report retrieval-mode ablations: 
+
+(i) Removing per-query adaptation (global α tuned on validation) recovers only a fraction of the Bell-gate gain, confirming that per-query (rather than per-task) adaptation is essential. (ii) Replacing vari-ance weighting with uniform weighting hurts con-sistently, especially on models with divergent score-sharpness patterns. (iii) Removing the whitening step degrades performance on CLIP-family mod-els by −0.8 to −1.5 R@1, while having negligible effect on VLM-based models whose embedding ge-ometry is already approximately isotropic. (iv) The two hyperparameters τ and β admit a flat optimum across a 10 × range—MOOR is robust to its own hyperparameters. 
+
+21 Yuanbao Technical Report Tencent CLIP-ViT-L/14 SigLIP-SO400M SigLIP2-SO400M BLIP-ITM-L Jina-V4 Qwen3-VL-Emb-2B Qwen3-VL-Emb-8B GME-2B GME-7B E5-V VLM2Vec-V2 VLM2Vec-Full UME-R1-7B Ops-MM-2B Ops-MM-7B RzenEmbed-7B            
+
+> 020 40 60 80
+> Mean R@1 across 53 corruption conditions (%)
+> +9.2 +26.1 +-0.0 +6.0 +4.6 +5.2 +5.2 +3.4 +4.8 +8.3 +21.0 +20.9 +5.1 +6.7 +9.2 +4.5
+> Bell (ours) Linear Sigmoid Pure R2Inv. Bell No gate
+
+Figure 7: Gate-Function Ablation for MOOR. R@1 gain over the image-only baseline for each of six gate functions (Bell / Linear / Sigmoid / Inverse Bell / Pure-r2 / No Gate) across 16 joint-mode models, averaged over all 53 corruption conditions. The Bell gate (ours, darkest blue) consistently achieves the highest gain. 
+
+C.2.4 Comparison against Stronger Fusion Baselines 
+
+A natural concern is whether MOOR’s gain over uniform fixed fusion reflects anything specific to its rank-consistency design, or simply the fact that 
+
+any adaptive scheme beats a naively-weighted uni-form baseline. We address this with two additional comparisons, all evaluated on the same 16 models across all 53 corruption conditions plus the clean condition, using whitened scores throughout for a fair comparison against the rank-fusion baselines (which are scale-invariant by design). 
+
+Whitened-image-only baseline (wh-Img). This standardizes image-only and text-only scores (zero-mean, unit-variance) and grid-searches a single global mixing weight—a substantially stronger fixed-fusion baseline than raw uniform, approxi-mating the best fixed weight a well-tuned, dataset-level search could find. 
+
+Classical rank-fusion baselines. Recipro-cal Rank Fusion (RRF) (Cormack et al., 2009), CombMNZ (Fox and Shaw, 1993), and Borda count combine per-query rank information with no learned parameters. 
+
+Learned meta-fusion baselines. A logistic-regression gate (LR-Meta) and a gradient-boosted-tree gate (GBM-Meta) predict a per-query mixing weight from the same score-distribution features MOOR uses (rank agreement, variance, margin, entropy), trained via strict 5-fold cross-validation against the per-query oracle weight (Section C.1.1), with every reported number computed out-of-fold. Table 13 shows MOOR outperforms all six base-lines. Notably, MOOR also beats wh-Img on 16/16 models under image corruption (mean +0 .60 pp)— since wh-Img already approximates the best achiev-able fixed weight, this rules out the concern that MOOR’s advantage comes merely from beating an easy uniform-weighting target. The learned baselines (LR-Meta, GBM-Meta) score below even whitened-uniform fusion, a genuine and repro-ducible finding rather than a weak-baseline arti-fact: they must regress a noisy, step-function or-acle label from a small, low-dimensional feature set, which does not generalize out-of-fold. MOOR sidesteps this exact problem by construction—its rank-consistency gate is a fixed, monotonic func-tion of a directly interpretable agreement signal, with no free parameters to overfit. 
+
+C.3 Mechanistic Analyses C.3.1 Tokenizer Disruption and the Sneaky Effect 
+
+A natural hypothesis is that character-level text corruptions (typos, character swaps) hurt retrieval because they fragment vocabulary tokens, confus-ing the encoder. We test this directly by measuring per-operator token change rate for six tokenizer families. The sneaky effect (Figure 9) is the converse: word-level operators cause substantial R@1 drop while changing almost no tokens—a failure mode 
+
+22 Yuanbao Technical Report Tencent                                                                                                                                                                           
+
+> Model Mode Clean Char Word Sent Degrade Transform Remove Add
+> Text Pert. Image Pert. (avg)
+> CLIP-ViT-L/14 IT →IT 49.5 45.0 49.9 43.1 44.3 45.0 41.4 42.3 I→I73.5 73.5 73.5 73.5 65.0 66.5 59.1 61.6 I→IT 70.3 70.3 70.3 70.3 64.0 65.2 58.8 60.9 T→T14.6 5.6 14.8 6.8 14.6 14.6 14.6 14.6 T→IT 19.0 7.6 19.0 8.1 19.0 19.0 19.0 19.0 SigLIP-SO400M IT →IT 67.0 68.5 67.1 68.2 61.2 63.2 56.6 58.2 I→I82.6 82.6 82.6 82.6 75.8 78.6 69.9 72.7 I→IT 73.2 73.2 73.2 73.2 68.1 69.9 62.6 65.3 T→T11.1 5.6 12.1 4.7 11.1 11.1 11.1 11.1 T→IT 14.4 6.4 15.3 5.5 14.4 14.4 14.4 14.4 SigLIP2-SO400M IT →IT 39.8 35.1 38.6 32.4 30.3 32.3 24.4 29.1 I→I49.3 49.3 49.3 49.3 33.3 37.7 23.4 31.6 I→IT 39.2 39.2 39.2 39.2 27.1 29.8 21.1 24.1 T→T13.4 8.0 13.5 4.9 13.4 13.4 13.4 13.4 T→IT 15.4 9.7 15.6 6.2 15.4 15.4 15.4 15.4 BLIP-ITM-L IT →IT 57.3 60.2 58.0 56.4 53.6 55.4 52.0 50.9 I→I73.7 73.7 73.7 73.7 67.5 70.1 64.8 64.2 I→IT 69.4 69.4 69.4 69.4 63.4 64.8 60.1 59.9 T→T21.8 9.7 21.4 8.5 21.8 21.8 21.8 21.8 T→IT 24.0 10.7 23.0 10.2 24.0 24.0 24.0 24.0
+
+Table 12: Retrieval-mode ablation on SnapBench (Recall@1, %). IT →IT is the joint multimodal mode from Tab. 2. Image columns show averages over severities s1/s2/s3. N/A cells (mode cannot be affected by that corruption type) are filled with the Clean baseline value. Dual-Encoder models. 
+
+Method Mean R@1 ∆ vs. MOOR 
+
+Borda Count 43.98 +25 .83 
+
+RRF 45.64 +24 .16 
+
+CombMNZ 51.95 +17 .86 
+
+GBM-Meta (learned) 54.89 +14 .91 
+
+LR-Meta (learned) 55.97 +13 .83 
+
+wh-Uniform 60.72 + 9 .09 
+
+wh-Img 69.38 + 0 .43 
+
+MOOR 69.80 —Oracle (upper bound) 80.07 −10 .27 
+
+Table 13: MOOR vs. fusion baselines, mean R@1 aver-aged over all 54 states (53 corrupted + 1 clean) and 16 models. 
+
+invisible to token-level diagnostics. Across 16 joint-mode models, the correlation between token change rate and R@1 drop is r = 0 .040 (p = 0 .89 ), confirming the pattern is operator-specific, not model-specific. 
+
+C.3.2 Attention Shift: Mechanistic Evidence 
+
+To provide token-level evidence for the adaptive fu-sion hypothesis, we measure image attention mass 
+
+(IAM)—the fraction of cross-attention weight as-signed to image tokens—across eight VLM-based models under five text input conditions: image-only ( I), clean image+text ( I+T ), and image paired with char-, word-, or sentence-level corrupted text. Models fall into three distinct attention regimes. GME-2B and GME-7B maintain near-unity IAM (≈0.98 ) across all conditions, behaving as image-dominant encoders regardless of text quality. Qwen3-VL-Emb-2B and -8B exhibit the opposite pattern: their already-low image-only IAM ( 0.05 –
+
+0.11 ) collapses further to ≈0.03 once any text is present, making them effectively text-dominant. Ops-MM, RzenEmbed-7B, and UME-R1-7B oc-cupy an intermediate regime, with IAM dropping moderately (by 0.15 –0.20 ) from I to I+T . Cru-cially, within each model the corruption type (char, word, or sent) has little additional effect on IAM relative to the baseline I→I+T shift, suggesting that attention allocation is governed primarily by text presence , not text quality . The positive corre-lation between IAM relative drop and mean R@1 drop ( r = 0 .628 , p = 0 .26 ) is consistent with the hypothesis that over-reliance on text tokens ampli-fies retrieval vulnerability to text-side corruptions. 
+
+D Experimental Setup Details 
+
+D.1 Per-Model Implementation Notes Paradigm I (dual-tower). 
+
+• CLIP-ViT-L/14 1: image input resized to 224 ×
+
+224 , text tokenised by BPE with max-length 
+
+77 .• SigLIP-Large 2: image input 256 × 256 , text max-length 64 .• SigLIP2 3: image input resized to 
+
+384 × 384 , text max-length 64 ; requires 
+
+padding="max_length" to avoid embedding 
+
+> 1
+
+openai/clip-vit-large-patch14 
+
+> 2
+
+google/siglip-large-patch16-256 
+
+> 3
+
+google/siglip2-so400m-patch16-384 
+
+23 Yuanbao Technical Report Tencent Char Add Char Delete Char Change Char Swap Word Repeat Word Swap Sent Add Sent Replace CLIP SigLIP SigLIP2 BLIP VLM2Vec-Full (Phi tokenizer) Qwen Tokenizer (×9 models)                                             
+
+> 0.37 0.31 0.35 0.36 0.00 0.00 0.50 0.47 0.48 0.41 0.46 0.48 0.00 0.00 0.50 0.54 0.36 0.31 0.35 0.35 0.00 0.04 0.56 0.47 0.38 0.33 0.37 0.37 0.00 0.00 0.50 0.48 0.34 0.30 0.33 0.35 0.00 0.00 0.52 0.51 0.37 0.31 0.35 0.36 0.00 0.04 0.55 0.47
+> (a) Token Change Rate (1 − Jaccard)
+> Char Add Char Delete Char Change Char Swap Word Repeat Word Swap Sent Add Sent Replace −3 −2 −1 012
+> Mean joint R@1 change vs clean (%)
+> +0.90 +0.91 +0.89 +1.32 +0.04 +0.33 +2.01 -2.86
+> (b) Retrieval Impact
+> 0.0 0.1 0.2 0.3 0.4 0.5 0.6
+> token change rate (higher = more)
+
+Figure 8: Typos Are Harmless—Only Semantic Replacement Hurts Retrieval. (a) Token change rate across text operators, grouped by tokenizer family. (b) Despite high token change rate for character-level operators, the mean joint R@1 change is negligible or mildly positive. Only sentence-level semantic replacement ( sent_replace )causes meaningful retrieval degradation. 0.0 0.1 0.2 0.3 0.4 0.5 
+
+> Token Change Rate (fraction of tokens changed)
+> −25 −20 −15 −10 −5 0
+> R@1 Drop (%, T  → T mode)
+> Char-level Word-level Sent-level
+
+Figure 9: Sneaky Effect: Word Operators Hurt Re-trieval Without Disrupting Tokens. Scatter of token change rate ( x-axis) vs. R@1 drop ( y-axis); each point is one (model, operator, severity) triple. Char-level op-erators cluster at high token change rate with moderate R@1 drop; word-level operators cluster near zero to-ken change rate yet cause substantial R@1 drop—the “sneaky” failure mode invisible to token-level diagnos-tics. 
+
+degeneracy (identical to SigLIP v1). • BLIP-ITM 4: we use the Image-Text Matching 
+
+head’s contrastive embedding output, not the matching score, to obtain dense vectors com-patible with cosine retrieval. For all four models, joint mode is implemented as the average of image-image and text-text similarity vectors: s = 12 (simg + stxt ). Contrastive embed-ding heads of this kind are also used for representa-tion learning in other specialized visual domains, 
+
+> 4
+
+Salesforce/blip-itm-large-coco GME-2B GME-7B Ops-MM-2B Ops-MM-7B Qwen3-VL-Emb-2B Qwen3-VL-Emb-8B RzenEmbed-7B UME-R1-7B 0.0 0.2 0.4 0.6 0.8 1.0     
+
+> Mean IAM (image attention mass)  II+T I+T (char) I+T (word) I+T (sent)
+
+Figure 10: Image Attention Mass Across Input Con-ditions. Mean IAM per model under five conditions: image-only ( I), clean image+text ( I+T ), and image paired with char-, word-, or sentence-level corrupted text. GME models maintain near-unity IAM regardless of text quality, while Qwen3-VL-Emb models collapse to near-zero IAM once any text is present. Models with larger IAM drop from I to I+T also exhibit higher mean R@1 degradation under text corruption ( r = 0 .628 ). 
+
+e.g., slide-level histopathology imaging (Jin et al., 2025). 
+
+Paradigm II (VLM-based, joint encoding). We use each model’s official instruction template. Be-yond retrieval, VLM-based multimodal models are increasingly stress-tested along other axes as well, e.g., proactive intelligence under continuous input streams (Li et al., 2026a) and fine-grained multi-modal reasoning chains on STEM tasks (Jin et al., 2026). Qwen3-VL-Embedding uses per-mode in-structions (no unified system instruction); the final 
+
+⟨EOS ⟩ token embedding is extracted. Joint mode feeds (image, text ) as a single user message: For E5-V, VLM2Vec, GME, and UME-R1, we use the corresponding official template; the full 
+
+24 Yuanbao Technical Report Tencent 
+
+Qwen3-VL-Embedding       
+
+> PROMPT TEMPLATE
+> # [Query] joint: "Find the image-text pair that matches the given query." image: "Represent the given query image." text: "Represent the given query text." # [Gallery] joint: N/A (gallery is encoded as image or text separately) image: "Represent the given image." text: "Represent the given caption."
+
+set of prompt templates (one per model) is in Ap-pendix D.2. 
+
+D.2 Prompt Templates CLIP / SigLIP / SigLIP2 / BLIP-ITM. These models use no instruction prefix. Images and texts are encoded directly via the respective processor. 
+
+D.3 Score Normalisation and Aggregation 
+
+For Paradigm I models the cosine similarity is bounded in [−1, 1] ; for Paradigm II.a models the dot-product can be unbounded. MOOR uses per-query score variance for path weighting, so no inter-model rescaling is needed for fusion. R@ K is com-puted per query, treating any of the (mean 4.77 ) GT items as a hit, then macro-averaged. 
+
+D.4 Reproducibility 
+
+All corruptions are deterministic given a fixed op-erator and severity ( seed = 42 + hash); gallery order is fixed. Reported numbers are on the single official SnapBench test split. 
+
+E Additional Results and Analysis 
+
+E.1 Additional Experimental Results E.1.1 Empty-Text Query Ablation 
+
+Figure 11 reports the R@1 change when the user question is replaced with an empty string under clean IT →IT retrieval. Positive values indicate that removing the text improves retrieval, providing a direct check of coarse-text drag (Section 4.3). 
+
+E.1.2 Per-Severity Super-Additivity Breakdown 
+
+Table 3 in the main text reports the super-additivity gap δ = Obs. − Exp. averaged over the three severity levels s1/s2/s3. Positive δ indicates super-additivity (joint drop exceeds the additive prediction); negative δ indicates sub-additivity. −5 0 5 10 15 20       
+
+> ΔR@1 (I →IT −IT →IT)
+> Qwen3-VL-Emb-2B Qwen3-VL-Emb-8B GME-2B GME-7B E5-V VLM2Vec-V2 VLM2Vec-Full UME-R1-7B Ops-MM-2B Ops-MM-7B RzenEmbed-7B
+> +3.6 +11.2 +14.5 +8.4 +0.9 +4.0 +4.7 +18.1 +0.2 -4.0 +2.8
+
+Figure 11: Effect of removing the query text on clean IT →IT retrieval. For each VLM embedding model, we replace the user question with an empty string while keeping the snapped image and the IT gallery fixed. Bars report ∆R@1 between image-only query retrieval (I →IT) and full query retrieval (IT →IT). Positive values indicate that dropping the text improves retrieval, con-sistent with coarse-text drag : coarse user questions are over-weighted under fixed fusion and dilute a strong vi-sual ranking. Ops-MM-7B is the only model for which the query text helps on clean inputs. 
+
+Table 14 provides the full per-severity break-down, showing δ at each severity level for all six joint conditions and all 16 models. Key ob-servations: (i) for most super-additive models (e.g., GME-2B/7B), δ remains large across all severities; (ii) for sub-additive models (Ops-MM, RzenEmbed-7B, VLM2Vec), the sub-additivity tends to grow stronger at higher severity ( s3), sug-gesting a compensatory mechanism that activates under extreme dual-modality corruption. 
+
+E.1.3 Coarse-Text Drag: Full Results and Causal Intervention 
+
+Table 15 reports the drag ( ∆R@1 = IT →IT − I→Iunder clean input) for all 16 models. All 16 mod-
+
+25 Yuanbao Technical Report Tencent 
+
+Jina Embeddings v4 
+
+PROMPT TEMPLATE 
+
+# Effective string prefix (applied internally by the API): # [Query] joint: N/A (text + image encoded separately) image: model.encode_image(image) (no prefix) text: "Query: {text}" (prompt_name="query") # [Gallery] joint: N/A (late fusion: image + caption scored separately) image: model.encode_image(image) (no prefix) text: "Passage: {caption}" (prompt_name="passage") 
+
+E5-V (LLaVA-Next-8B) 
+
+PROMPT TEMPLATE 
+
+# Chat wrapper (LLaMA-3 format): TMPL(msg) = "<|start_header_id|>user<|end_header_id|> {msg}<|eot_id|><|start_header_id|> assistant<|end_header_id|>\n\n " # [Query] joint: TMPL("<image>\n{text}\nSummary above image-text pair in one word: ") image: TMPL("<image>\nSummary above image in one word: ") text: TMPL("{sent}\nSummary above sentence in one word: ") # [Gallery] joint: TMPL("<image>\n{caption}\nSummary above image-text pair in one word: ") image: same as Query image text: same as Query text 
+
+GME-Qwen2-VL 
+
+PROMPT TEMPLATE 
+
+# [Query] joint: "Find an image-text pair that matches the given image-text query." image: (no instruction) text: (no instruction) # [Gallery] joint: (no instruction; feed image + caption together) image: (no instruction) text: (no instruction) 
+
+els show negative drag (range −3.50 to −23 .93 ), confirming that fixed fusion over-weighting coarse text is a model-independent property rather than an artifact of any single architecture. 
+
+Causal intervention. To directly test whether coarse granularity , rather than the text channel itself, drives the drag, we replace the coarse question (“What flower is this?”) with entity-label text (“A tulip.”) on GME-7B. This reduces the drag from −7.68 to −0.17 R@1 points—a 
+
+97 .8% elimination—confirming the granularity-based mechanism. 
+
+E.1.4 Text-Essential Subset 
+
+To further test whether the text-underuse conclu-sion is calibration-scoped rather than a claim that text is universally unhelpful, we construct a Tier-1 
+
+text-essential subset ( n = 69 /1,145 ): queries with discriminative text modifiers (color, material, quan-
+
+26 Yuanbao Technical Report Tencent 
+
+VLM2Vec 
+
+PROMPT TEMPLATE 
+
+# [Query] joint: "Represent the given image with the following question: {text}" image: "Represent the given image with the following question: What is in the image" text: "Represent the given query text." # [Gallery] joint: N/A (late fusion: gallery image + gallery text) image: "Represent the given image." text: (no instruction) 
+
+UME-R1-7B 
+
+PROMPT TEMPLATE 
+
+# [Query] joint: "Represent the given image with the following question: {text}\n<disc_emb>" image: "Represent the given image with the following question: What is in the image\n<disc_emb>" text: "Represent the given caption.\n{text}\n<disc_emb>" # [Gallery] joint: N/A (late fusion: gallery image + gallery text) image: "Represent the given image.\n<disc_emb>" text: "Represent the given caption.\n{caption}\n<disc_emb>" 
+
+Ops-MM-Embedding 
+
+PROMPT TEMPLATE 
+
+# [Query] joint: "Represent the given image-text query." image: "Represent the given query image." text: "Represent the given query text." # [Gallery] joint: (no instruction; feed image + caption together) image: (no instruction) text: (no instruction) 
+
+RzenEmbed 
+
+PROMPT TEMPLATE 
+
+# [Query] joint: "Represent the given image-text query." image: "Represent the given query image." text: "Represent the given query text." # [Gallery] joint: "Represent the given image." (image part; caption appended) image: "Represent the given image." text: (no instruction) 
+
+tity, shape, position), at least three same-category hard negatives, and image-only retrieval failure on a reference model. Table 16 shows that coarse-text drag is reduced for 14 of 16 models on this subset 
+
+27 Yuanbao Technical Report Tencent                                                                                                                                                                                                                                                                                                                                                                                                                  
+
+> Model Base. C+C D+D L+W M+S E+W R+S Mean
+> s1s2s3s1s2s3s1s2s3s1s2s3s1s2s3s1s2s3s1s2s3
+> Dual-Encoder
+> CLIP-ViT-L/14 63.8 20.4 22.6 24.9 22.5 25.3 26.3 16.5 17.1 16.6 16.0 15.8 14.7 15.9 18.7 15.5 31.1 32.4 32.2 20.4 22.0 21.7
+> SigLIP-SO400M 68.1 5.1 5.5 6.0 4.3 2.0 5.5 2.4 2.6 5.2 5.0 4.5 8.4 0.6 1.7 2.4 6.9 8.3 6.1 4.1 4.1 5.6
+> SigLIP2-SO400M 49.7 12.8 12.1 14.1 10.2 9.1 4.4 11.8 13.5 12.2 11.2 12.3 15.4 8.9 8.6 8.3 8.8 8.3 10.3 10.6 10.7 10.8
+> BLIP-ITM-L 64.4 5.4 6.9 5.5 4.6 6.1 11.3 5.8 5.4 5.8 5.0 5.3 7.1 7.5 6.7 5.5 11.1 15.6 20.2 6.6 7.7 9.3
+> VLM Embedding
+> GME-2B 60.4 47.6 47.7 46.0 56.5 53.0 46.7 45.8 46.2 28.6 51.8 46.3 33.7 41.5 40.4 35.6 -5.8 -3.0 -5.2 39.6 38.4 30.9
+> Qwen3-VL-Emb-2B 77.8 12.4 12.9 14.5 11.9 15.9 16.1 10.5 9.8 12.3 3.6 4.6 7.0 10.6 9.9 10.5 15.1 13.9 14.2 10.7 11.1 12.4
+> Ops-MM-2B 77.6 1.0 1.2 0.2 -1.1 -0.5 -3.4 -0.2 -0.8 -13.8 -0.8 -2.0 -11.2 0.8 -3.4 -5.0 -1.6 -1.0 -0.6 -0.3 -1.1 -5.6 Jina-V4 66.9 0.8 -1.0 1.4 1.8 3.7 3.1 0.6 -0.3 -0.3 -1.5 0.2 3.1 0.5 -0.3 -0.2 -1.2 4.0 -0.0 0.2 1.0 1.2
+> VLM2Vec-Full 43.1 -15.0 -14.2 -10.4 -13.8 -11.2 -2.0 -13.8 -14.8 -10.7 -18.6 -17.7 -9.6 -13.4 -11.4 -8.4 -37.6 -32.9 -29.2 -18.7 -17.0 -11.7 VLM2Vec-V2 50.4 -11.8 -12.5 -11.8 -12.2 -11.1 -0.2 -10.5 -11.7 -6.2 -12.4 -11.3 -2.3 -13.2 -13.4 -11.0 -21.1 -19.3 -19.6 -13.5 -13.2 -8.5 E5-V 59.8 0.7 1.2 4.2 1.4 2.8 3.0 -0.0 0.3 -0.8 7.3 8.9 11.2 0.1 1.9 0.6 2.0 5.5 7.2 1.9 3.4 4.2
+> GME-7B 69.8 48.1 48.4 46.5 50.1 48.5 38.7 45.8 44.0 24.9 51.7 46.0 30.9 44.1 40.0 35.4 3.2 4.5 6.2 40.5 38.6 30.4
+> UME-R1-7B 71.0 11.6 11.7 12.6 11.3 12.4 13.0 9.1 10.3 7.9 9.6 7.5 9.8 9.5 7.2 7.5 9.9 12.5 13.7 10.2 10.3 10.7
+> RzenEmbed-7B 75.2 0.2 -0.7 -2.2 -0.8 0.5 -4.2 0.3 -1.2 -18.0 0.7 -0.7 -8.0 0.8 -2.1 -5.6 -0.4 0.1 2.2 0.1 -0.7 -6.0 Ops-MM-7B 79.1 0.6 0.1 -0.2 0.4 -0.3 -6.0 -0.8 -0.9 -10.1 0.4 0.2 -9.0 0.7 -0.9 -2.4 0.5 0.6 0.7 0.3 -0.2 -4.5 Qwen3-VL-Emb-8B 77.5 11.8 13.2 14.3 13.8 14.4 15.2 12.3 12.3 8.6 10.2 9.1 10.8 12.0 12.0 10.6 15.2 15.7 13.0 12.6 12.8 12.1
+> Mean 9.5 9.7 10.4 10.1 10.7 10.5 8.5 8.2 3.9 8.7 8.1 7.0 7.9 7.2 6.2 2.3 4.1 4.5 7.8 8.0 7.1
+
+Table 14: Appendix: Per-severity super-additivity gap δ = Obs. − Exp. (R@1 drop in pp) for six joint corruption conditions at severity levels s1, s2, s3. Positive (bold) = super-additive; negative = sub-additive. Condition abbreviations follow Table 3. 
+
+Model I→I IT →IT Drag 
+
+CLIP ViT-L/14 73.45 49.52 −23 .93 
+
+BLIP ITM-L 73.71 57.29 −16 .42 
+
+Ops-MM-7B 80.52 69.61 −10 .91 
+
+RzenEmbed 80.61 75.55 −5.06 
+
+Mean (16 models) — — −11 .21 
+
+Table 15: Coarse-text drag (clean IT →IT − I→I R@1) for representative models; full 16-model table follows the same pattern. 
+
+(mean improvement +1 .28 R@1 pp relative to the full-set drag), with the largest gains on strong dual-tower models and one model (GME-2B) reaching zero drag. 
+
+Model Full-set drag Tier-1 drag ∆
+
+SigLIP-SO400M −15 .63 −1.45 +14 .18 
+
+BLIP ITM-L −16 .42 −4.34 +12 .08 
+
+CLIP ViT-L/14 −23 .93 −10 .15 +13 .78 
+
+Jina-Emb-v4 −10 .13 −2.90 +7 .23 
+
+GME-2B −3.58 0.00 +3 .58 
+
+Mean (16 models) −10 .06 −8.78 +1 .28 
+
+Table 16: Full-set vs. text-essential-subset (Tier-1) coarse-text drag. 
+
+This supports the calibration-scoped reading: text is genuinely useful when it carries discrim-inative signal, but fixed fusion over-weights it under the coarse, category-level phrasing that defines snap-and-ask. The two exceptions are large-backbone VLMs with stronger text encod-ing, where discriminative modifiers also appear in same-category hard negatives, partially offsetting the benefit. 
+
+E.2 Extended Benchmark Analyses E.2.1 Query Stability under Joint Corruption 
+
+Figure 12 decomposes per-query outcomes un-der joint corruption into four buckets—stably cor-rect, dragged from correct to incorrect, persistently wrong, and boosted from incorrect to correct— for each model, sorted by the fraction of queries that remain correct. 
+
+E.2.2 Image-Side vs. Text-Side Corruption Asymmetry 
+
+Figure 13 compares the extra R@1 drop incurred when a second modality is corrupted, beyond the first. Most models suffer more from text-side than image-side corruptions on this metric, explaining why text-channel paradoxes and coarse-text drag are central failure modes. 
+
+E.2.3 Domain Difficulty 
+
+Figure 14 aggregates clean joint IT retrieval (HR@1) over all models and queries within each of the six image domains in SnapBench. Difficulty is far from uniform: nature is the hardest ( 51 .5% 
+
+mean HR@1), while culture and place exceed 
+
+70% , confirming that the benchmark spans hetero-geneous visual semantics. 
+
+E.2.4 Per-Model Corruption Sensitivity 
+
+Figure 15 contrasts each model’s clean joint R@1 (open markers) with its mean R@1 averaged over all joint corruption conditions (filled markers). High clean scores do not imply robustness—e.g., Qwen3-VL-Emb-8B ranks among the strongest on 
+
+28 Yuanbao Technical Report Tencent Qwen3-VL-Emb-8B Qwen3-VL-Emb-2B UME-R1-7B RzenEmbed-7B SigLIP-SO400M Ops-MM-2B GME-7B Ops-MM-7B Jina-V4 BLIP-ITM-L CLIP-ViT-L/14 E5-V GME-2B VLM2Vec-V2 SigLIP2-SO400M VLM2Vec-Full 020 40 60 80 100                                             
+
+> % of Queries
+> 74% 73% 67% 66% 65% 65% 63% 62% 61% 59% 58% 53% 53% 43% 38% 35% 11% 12% 13% 15% 19% 16% 14% 19% 15% 17% 18% 19% 13% 25% 14% 28% 12% 11% 16% 14% 13% 15% 17% 13% 18% 19% 18% 21% 27% 25% 36% 29%
+> Stably Correct Drag (correct -> wrong) Persistently Wrong Boost (wrong -> correct)
+
+Figure 12: Query-level stability under joint corruption (IT →IT). Stacked bars show the fraction of queries in each of four classes per model (16 models, sorted by stably-correct rate): stably correct (green), drag from correct to wrong (red), persistently wrong (grey), and boost from wrong to correct (blue). Percentages are shown inside segments ≥ 5% ; small boost segments are omitted for readability. 
+
+Primitive R@1 drop (pp) GT rank displacement 
+
+Remove −26 .8 7.84 positions Add −17 .9 4.97 positions Degrade −14 .5 3.47 positions Transform −7.9 1.38 positions 
+
+Table 17: Retrieval impact at severe severity ( s3) by image primitive (model-average over 4 models). 
+
+clean inputs yet still loses substantially under joint corruption. 
+
+E.2.5 Sensitivity and Robustness Tables E.3 Failure Mode Analysis 
+
+We inspect approximately 1,000 retrieval failures— queries on which the correct entity is not ranked first—under image-only and joint corruption, draw-ing on two representative encoders (CLIP-ViT-L/14 and Qwen3-VL-Emb-2B). Examination of these cases reveals four recurring failure patterns that together account for the large majority of observed errors. This manual failure-mode analysis is con-ceptually related to anomaly-detection-style for-mulations explored in adjacent domains such as industrial video understanding (Zhao et al., 2026). 
+
+E.3.1 Failure Patterns Quality Degradation. The corruption removes or destroys the discriminative visual content needed to identify the target entity, leaving the model without a reliable signal. This pattern dominates at severe severity ( s3) under R EMOVE and D E-
+
+> GRADE
+
+: aggressive cropping removes the entity from the frame entirely, while extreme low-light or overexposure renders the image uniformly dark or washed out. Example : after severe overexposure (overexposure , s3), the distinctive facial features and fur pattern of a cat are completely washed out; the model retrieves an unrelated gallery item. 
+
+Semantic Drift. The corrupted image remains recognizable, but fine-grained discriminative cues are weakened, causing the model to retrieve a vi-sually similar but incorrect entity from the same semantic category. This is the dominant pattern at mild severity ( s1) across all four primitives, and per-sists at severe severity under T RANSFORM , whose geometric distortions preserve entity content while misaligning spatial features. Example : after heavy JPEG compression ( compression , s3), a query of a specific medicine box loses fine label detail; the model retrieves a different box from the same brand family. 
+
+Hard-Negative Confusion. The model retrieves a gallery item that is genuinely visually similar to the corrupted query—a same-category hard negative—rather than the exact ground-truth in-stance. Even mild degradation can trigger this pattern when the gallery contains near-duplicate items. Example : a mild resolution reduction (low_resolution , s1) on a smartphone query causes the model to retrieve the same phone model in a different color, which is indistinguishable at the reduced resolution. 
+
+29 Yuanbao Technical Report Tencent −50 −40 −30 −20 −10 0  
+
+> Mean R@1 drop (%)
+> +Image (text already corrupted) +Text (image already corrupted) CLIP-ViT-L/14 SigLIP-SO400M SigLIP2-SO400M BLIP-ITM-L Jina-V4 Qwen3-VL-Emb-2B Qwen3-VL-Emb-8B GME-2B GME-7B E5-V VLM2Vec-V2 VLM2Vec-Full UME-R1-7B Ops-MM-2B Ops-MM-7B RzenEmbed-7B 0510 15
+> Asymmetry (%)
+> 17.4 13.6 10.2
+> Moderate gap Large gap (>10%)
+
+Figure 13: Asymmetry of Image-Side vs. Text-Side Corruption. (a) Extra R@1 drop from the second corruption. (b) Text-side extra drop minus image-side extra drop (percentage points). Nature Food Person Product Place Culture    
+
+> 020 40 60 80
+> Recall @ 1 (%)
+> 51.5 60.3 62.7 68.6 70.0 70.4
+
+Figure 14: Domain difficulty in IT →IT retrieval. 
+
+Mean Recall@1 under clean joint IT queries, aggre-gated across models and queries per domain (bars sorted hard →easy). Color encodes difficulty (warmer = lower Recall@1). 
+
+Background Bias. Corruption suppresses the foreground entity signal, allowing incidental back-ground cues to dominate the embedding. This pattern is most common under A DD operators (e.g. mosaic , ui_elements ) that occlude the fore-ground subject while leaving the background intact. 
+
+Example : a severe mosaic overlay on a car key query obscures the key itself; the model matches on the background pattern shared with a wrong gallery item. 
+
+E.3.2 Quantitative Summary 
+
+Table 17 summarises the retrieval impact at severe severity ( s3) for each image primitive, averaged over four models. R EMOVE is the most destruc-tive: the correct entity is pushed down 7.84 ranking positions on average and R@1 drops by 26 .8 per-centage points. T RANSFORM is the mildest, con-sistent with its entity-preserving nature. Illustrative image and text perturbation cases are provided in Sections E.4.1 and E.4.2. 
+
+E.3.3 Answerability vs. Robustness at High Severity 
+
+A severe corruption can degrade an image while preserving the evidence needed to recognize the target (a genuine robustness failure), or it can re-move the target evidence altogether (an answer-ability limit that no model, however robust, could overcome). To separate these two regimes, we ran 
+
+30 Yuanbao Technical Report Tencent CLIP-ViT-L/14 SigLIP-SO400M SigLIP2-SO400M BLIP-ITM-L Jina-V4 Qwen3-VL-Emb-2B Qwen3-VL-Emb-8B GME-2B GME-7B E5-V VLM2Vec-V2 VLM2Vec-Full UME-R1-7B Ops-MM-2B Ops-MM-7B RzenEmbed-7B                    
+
+> 50 60 70 80
+> Clean R@1 (%)
+> 0246810 12 14 Mean R@1 loss (%) — image-side corruption
+> (a) I →IPearson r= -0.48
+> p= 0.061 40 50 60 70 80
+> Clean R@1 (%)
+> 0246810 Mean R@1 loss (%) — joint corruption
+> (b) IT →IT Pearson r= -0.08
+> p= 0.755
+
+Figure 15: Clean R@1 vs. corruption loss under two retrieval modes. (a) I →I: clean R@1 vs. mean R@1 loss under image-side corruptions. (b) IT →IT: clean R@1 vs. mean R@1 loss under joint corruptions. Each colored point is one model (legend above); dashed line shows the Pearson trend; statistics are in the upper-right box. Weak correlation in (b) shows that clean IT →IT accuracy alone does not predict joint-corruption robustness. 
+
+a human-recognizability check on 750 severity-3 images ( ≈50 per operator, 15 operators): each im-age was binary-annotated as target identifiable or not. Table 19 shows a sharp split by operator type. 
+
+Cliff-type operators ( MOSAIC , WATERMARK , LOW LIGHT , DOWNSCALE , CROPPING ) leave the target identifiable in only 10% of severity-3 images, ac-counting for 89% of their severity-3 R@1 drop; at severity 3, these operators mostly test an an-swerability limit rather than model robustness. 
+
+Gradual-type operators ( COMPRESSION , MOTION BLUR , ROTATION ) keep 95% of targets identifiable at severity 3, so their drops reflect genuine retrieval robustness failures rather than unanswerable inputs. This distinction sharpens rather than overturns the paper’s primary findings, which are computed over severity 1/2 or severity-averaged conditions, where target-identifiable rates remain high across both operator types. The three-level severity de-sign lets us tell these two failure regimes apart: a smooth, monotonic decline across s1 → s3 signals a genuine robustness failure (gradual-type), while a sharp late-stage drop signals information collapse (cliff-type)—a distinction a single fixed severity level could never reveal. 
+
+E.4 Visualisation and Case Studies E.4.1 Image Perturbation Cases 
+
+Figures 16 to 20 show Case B (market fish query) under all 15 image operators at three severity levels, grouped by primitive. As severity rises, entity-level cues are progressively obscured—consistent with the failure patterns described in Section E.3.1. 
+
+E.4.2 Text Perturbation Cases 
+
+Figure 21 lists all eight text operators applied to the same query (Case B, entity = fish ). Character-level edits attack the entity token directly, degrad-ing the retrieval signal at the word level. Sentence-level sent_replace removes the category key-word entirely, steering retrieval toward generic vi-sual matches and triggering Semantic Drift. 
+
+F LLM Use Statement and Ethics 
+
+F.0.1 Use of Large Language Models 
+
+LLMs were used in three clearly bounded roles in this work. (i) Query generation (Appendix B.1.1, Gemini-3-Flash): queries are generated automati-cally, with 100 randomly sampled queries verified by human spot-check (Stage 5, all pass), following the broader paradigm of LLM-agent-driven data synthesis in data-limited settings (Du et al., 2025a). 
+
+31 Yuanbao Technical Report Tencent     
+
+> Operator Original s1s2s3
+> low_light
+> overexposure
+> defocus_blur
+> motion_blur
+
+Figure 16: Degrade operators (lighting & blur) applied to Case B at s1 → s2 → s3.
+
+(ii) Semantic quality checking (Appendix B.1.1, GPT-5.4-mini in read-only PASS /FAIL mode, no rewriting): the model verifies entity-tag coarseness and absence of answer leakage. (iii) Gallery cap-tion generation (Appendix B.1.2, Qwen-VL-based captioning model): entity-centric captions are gen-erated automatically for each gallery image. LLMs were not used to grade retrieval results or to con-struct ground-truth relevance labels. 
+
+F.0.2 Use of AI Assistants in Research and Writing 
+
+AI writing assistants were used for grammar and language polishing during manuscript preparation. All technical content, experimental results, and con-clusions were reviewed and verified by the authors. 
+
+32 Yuanbao Technical Report Tencent 
+
+Operator Original s1 s2 s3
+
+compression 
+
+low_resolution 
+
+downscale 
+
+Figure 17: Degrade operators (resolution & compression) applied to Case B at s1 → s2 → s3. Signal-quality degradation progressively destroys discriminative visual cues. 33 Yuanbao Technical Report Tencent 
+
+Model Mode Clean Char Word Sent Degrade Transform Remove Add 
+
+Text Pert. Image Pert. (avg) 
+
+GME-2B IT →IT 61.8 60.6 61.5 58.9 58.1 60.0 60.2 61.4 I→I 65.4 65.4 65.4 65.4 60.1 64.1 64.6 62.5 I→IT 53.5 53.5 53.5 53.5 49.2 52.3 53.2 52.8 T→T 22.5 15.1 22.2 9.0 22.5 22.5 22.5 22.5 T→IT 24.1 15.7 23.8 8.8 24.1 24.1 24.1 24.1 Qwen3-VL-Emb-2B IT →IT 64.6 66.1 66.4 71.0 60.2 62.4 54.5 60.8 I→I 84.7 84.7 84.7 84.7 80.0 82.0 69.2 80.4 I→IT 81.4 81.4 81.4 81.4 76.6 78.4 66.5 76.8 T→T 21.3 13.2 20.7 8.5 21.3 21.3 21.3 21.3 T→IT 16.2 8.5 14.5 5.5 16.2 16.2 16.2 16.2 Ops-MM-2B IT →IT 77.5 78.0 77.6 78.6 71.7 74.8 73.1 70.5 I→I 79.6 79.6 79.6 79.6 70.4 76.5 74.5 68.4 I→IT 48.3 48.3 48.3 48.3 41.4 44.5 42.8 40.1 T→T 22.3 15.7 21.4 9.7 22.3 22.3 22.3 22.3 T→IT 22.9 15.2 22.9 8.2 22.9 22.9 22.9 22.9 Jina-V4 IT →IT 65.8 69.5 65.9 71.0 61.9 63.2 55.7 61.3 I→I 76.0 76.0 76.0 76.0 67.6 71.3 56.2 67.8 I→IT 68.7 68.7 68.7 68.7 60.1 63.7 51.8 60.6 T→T 21.2 15.4 21.5 9.7 21.2 21.2 21.2 21.2 T→IT 24.9 17.6 24.2 10.7 24.9 24.9 24.9 24.9 VLM2Vec-Full IT →IT 57.6 57.8 58.0 61.3 53.4 53.6 50.3 52.1 I→I 62.4 62.4 62.4 62.4 56.8 59.5 54.0 54.4 I→IT 57.6 57.6 57.6 57.6 53.4 53.6 50.3 52.1 T→T 20.6 12.6 21.6 6.4 20.6 20.6 20.6 20.6 T→IT 57.6 57.8 58.0 61.3 57.6 57.6 57.6 57.6 VLM2Vec-V2 IT →IT 62.5 63.8 64.8 66.8 59.0 60.4 55.6 59.5 I→I 67.4 67.4 67.4 67.4 61.5 64.1 55.4 59.6 I→IT 62.5 62.5 62.5 62.5 59.0 60.4 55.6 59.5 T→T 20.0 12.8 20.0 7.5 20.0 20.0 20.0 20.0 T→IT 62.5 63.8 64.8 66.8 62.5 62.5 62.5 62.5 E5-V IT →IT 59.1 59.2 59.1 58.7 56.0 54.8 52.3 54.7 I→I 71.8 71.8 71.8 71.8 67.5 66.4 61.4 63.7 I→IT 60.0 60.0 60.0 60.0 55.5 55.9 50.9 52.8 T→T 22.1 16.4 21.9 8.6 22.1 22.1 22.1 22.1 T→IT 24.0 17.6 23.9 8.6 24.0 24.0 24.0 24.0 GME-7B IT →IT 68.0 68.9 68.2 69.7 63.8 64.4 61.6 64.5 I→I 76.3 76.3 76.3 76.3 70.4 72.8 66.7 69.3 I→IT 65.3 65.3 65.3 65.3 59.3 60.7 55.3 58.8 T→T 24.9 18.1 24.3 9.9 24.9 24.9 24.9 24.9 T→IT 27.6 20.2 26.3 10.9 27.6 27.6 27.6 27.6 UME-R1-7B IT →IT 60.2 59.7 60.2 62.5 55.2 56.6 49.3 55.1 I→I 79.0 79.0 79.0 79.0 72.7 75.2 65.6 73.0 I→IT 60.2 60.2 60.2 60.2 55.2 56.6 49.3 55.1 T→T 22.6 16.4 23.0 10.3 22.6 22.6 22.6 22.6 T→IT 60.2 59.7 60.2 62.5 60.2 60.2 60.2 60.2 RzenEmbed-7B IT →IT 75.2 76.8 76.5 77.1 69.0 72.8 72.3 70.2 I→I 80.6 80.6 80.6 80.6 69.1 77.2 75.3 69.0 I→IT 50.4 50.4 50.4 50.4 42.6 47.4 44.7 41.4 T→T 23.8 18.3 23.6 9.7 23.8 23.8 23.8 23.8 T→IT 23.7 18.5 23.7 9.2 23.7 23.7 23.7 23.7 Ops-MM-7B IT →IT 79.1 79.3 79.4 77.7 72.1 76.0 75.2 72.1 I→I 80.5 80.5 80.5 80.5 69.4 76.2 73.4 69.2 I→IT 49.8 49.8 49.8 49.8 42.6 46.6 44.7 42.5 T→T 23.2 17.9 22.9 10.4 23.2 23.2 23.2 23.2 T→IT 24.4 17.6 23.2 8.8 24.4 24.4 24.4 24.4 Qwen3-VL-Emb-8B IT →IT 65.5 66.9 67.2 69.6 61.8 63.1 56.2 62.7 I→I 83.8 83.8 83.8 83.8 79.4 81.6 70.4 79.0 I→IT 76.7 76.7 76.7 76.7 72.2 73.6 63.3 72.5 T→T 23.2 15.2 22.8 8.3 23.2 23.2 23.2 23.2 T→IT 23.7 16.1 23.2 9.0 23.7 23.7 23.7 23.7 
+
+Table 18: Retrieval-mode ablation on SnapBench (Recall@1, %). IT →IT is the joint multimodal mode from Tab. 2. Image columns show averages over three severities. N/A cells (mode cannot be affected by that corruption type) are filled with the clean baseline value. VLM Embedding models. 34 Yuanbao Technical Report Tencent 
+
+Operator Original s1 s2 s3
+
+rotation 
+
+perspective 
+
+lens_distortion 
+
+Figure 18: Transform operators applied to Case B at s1 → s2 → s3. Geometric distortions misalign spatial features but preserve entity content, keeping failures in the Semantic Drift regime even at s3.
+
+Operator Original s1 s2 s3
+
+cropping 
+
+Figure 19: Remove operator applied to Case B at s1 → s2 → s3. Aggressive cropping removes the entity from the frame, triggering Quality Degradation at s3.35 Yuanbao Technical Report Tencent 
+
+Operator Original s1 s2 s3
+
+mosaic 
+
+watermark 
+
+scribble 
+
+ui_elements 
+
+Figure 20: Add operators applied to Case B at s1 → s2 → s3. Overlaid elements occlude local regions without globally destroying the scene; at s3, coverage is dense enough to suppress the foreground entity and trigger Background Bias. 
+
+Level Operator Perturbed query (corruption in bold) 
+
+Original: What kind of fish is this? 
+
+Char. 
+
+char_add What kind of fiish is this? 
+
+char_delete What kind of fsh is this? 
+
+char_change What kind of gish is this? 
+
+char_swap What kind of ifsh is this? Word word_repeat What kind of fish fish is this? 
+
+word_swap What kind of is fish this? Sent. sent_add What kind of fish is this? Traffic was bad today. 
+
+sent_replace What is this? 
+
+Figure 21: Text perturbation cases per operator (Case B). All operators target the entity word fish ; corrupted spans are in bold. Character-level noise degrades the entity token directly; word-level noise preserves the entity string but perturbs syntax; sent_replace removes the category keyword and is the strongest Semantic Drift trigger. 36 Yuanbao Technical Report Tencent 
+
+Operator type Target ID’able % of s3
+
+drop 
+
+Cliff-type (mosaic, watermark, low light, downscale, cropping) 10% 89% Gradual-type (com-pression, motion blur, rotation) 95% 6% 
+
+Table 19: Target identifiability at severity 3, by operator type ( 750 images, 15 operators). 37

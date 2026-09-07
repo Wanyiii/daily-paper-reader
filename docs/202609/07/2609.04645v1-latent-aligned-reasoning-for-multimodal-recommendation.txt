@@ -1,0 +1,1008 @@
+Title: Latent-Aligned Reasoning for Multimodal Recommendation
+
+URL Source: https://arxiv.org/pdf/2609.04645v1
+
+Published Time: Mon, 07 Sep 2026 00:24:26 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# Latent-Aligned Reasoning for Multimodal Recommendation 
+
+# Jiarui Jin 
+
+Xiaohongshu Inc. jinjiarui@xiaohongshu.com 
+
+# Anyang Ji ∗
+
+Nanjing University jiay@lamda.nju.edu.cn 
+
+## ABSTRACT 
+
+Multimodal Vision-Language Models (VLMs) have demonstrated remarkable capabilities in cross-modal understanding, yet a funda-mental challenge persists when applying them to recommendation: as representations propagate through multi-step reasoning, both visual and textual signals progressively attenuate — a phenomenon we term cross-modal dilution . To address this, we propose LARK 
+
+(Latent-Aligned Reasoning framewor K), a two-stage latent rea-soning framework with complementary alignment mechanisms within a single VLM. In the first stage, learnable latent tokens are interleaved with multi-step chain-of-thought (CoT) reasoning and explicitly aligned with a frozen vision encoder, serving as visual checkpoints that preserve perceptual details throughout the rea-soning chain. In the second stage, the latent representations are projected via a bridge MLP and trained with item-to-item con-trastive learning; to prevent the reasoning semantics from fading, intermediate features are aligned with the CoT hidden states from the first stage, anchoring the final embeddings to the model’s own reasoning output. Experiments on three public benchmarks and one industrial dataset show that LARK achieves state-of-the-art performance across multiple recommendation architectures, with controlled ablations confirming the distinct contribution of each component. 
+
+## 1 INTRODUCTION 
+
+Multimodal recommendations [21, 35–37] have emerged as an in-dispensable component of modern recommender systems, enabling personalized item suggestions by capturing users’ preferences over rich visual and textual content. Existing approaches typically ex-tract multimodal information into dense embeddings [40] or sparse IDs via lookup tables [23], relying on modality-specific encoders that process each signal in isolation. Many efforts have been de-voted to enhancing multimodal representations for recommenda-tion by leveraging the cross-modal understanding capabilities of Vision-Language Models (VLMs) [1, 20], which have demonstrated remarkable proficiency in tasks such as image captioning [2, 42] and visual question answering [13, 24], suggesting a promising paradigm for jointly modeling visual and textual features within a unified architecture. 
+
+> ∗Work done during internship at Xiaohongshu Inc. Permission to make digital or hard copies of all or part of this work for personal or classroom use is granted without fee provided that copies are not made or distributed for profit or commercial advantage and that copies bear this notice and the full citation on the first page. Copyrights for components of this work owned by others than ACM must be honored. Abstracting with credit is permitted. To copy otherwise, or republish, to post on servers or to redistribute to lists, requires prior specific permission and/or a fee. Request permissions from permissions@acm.org.
+> Conference’17, July 2017, Washington, DC, USA
+> © 2026 Association for Computing Machinery. ACM ISBN 978-x-xxxx-xxxx-x/YY/MM. . . $15.00 https://doi.org/10.1145/nnnnnnn.nnnnnnn
+
+In parallel, Chain-of-Thought (CoT) reasoning [33] has become a cornerstone technique for enhancing the reasoning capabilities of large language models, enabling them to decompose complex tasks into interpretable intermediate steps. Recent studies [19, 32, 44] have extended CoT from LLMs to VLMs. However, in contrast to LLMs [29] where longer reasoning chains yield consistent gains, VLMs frequently struggle with long-context reasoning due to the progressive attenuation of both visual and textual signals as the generated sequence lengthens — a phenomenon we term cross-modal dilution . As recently demonstrated by Jeon et al. [14] and Zhang et al. [41] in the context of visual representations, attention to visual tokens decays substantially as the reasoning chain grows; we observe the same effect extends to textual tokens and is particularly acute in recommendation settings, where VLMs must ultimately produce dense embeddings for downstream models, leaving no opportunity for the auto-regressive process to refresh the fading multimodal signals (see attention analysis in §4.5). Recent work on latent reasoning [6, 8, 18, 31] offers a compelling alternative: instead of decoding intermediate thoughts into discrete tokens, the model reasons in continuous hidden space, bypassing the lossy argmax bottleneck. However, existing latent reasoning methods target text-generation tasks and have not been explored for recommendation, where the output is a dense embedding rather than a token sequence, and where both visual and textual signals — not vision alone — must be preserved. Building on these advances, we propose LARK (Latent-Aligned 
+
+Reasoning framewor K), which reformulates multimodal recom-mendation as multi-stage latent reasoning within a single VLM. LARK operates as a two-stage architecture with complementary alignment mechanisms designed to counteract cross-modal dilution at each stage. In the first stage, learnable latent tokens are inter-leaved with multi-step CoT reasoning following a fixed template: before each reasoning step, a group of latent tokens is generated in continuous hidden space and aligned with a frozen vision encoder, serving as visual checkpoints that preserve perceptual information. In the second stage, the latent representations are projected through a bridge MLP and trained with item-to-item contrastive learning; to prevent the reasoning semantics from fading, intermediate fea-tures are aligned with the CoT hidden states from the first stage, anchoring the embeddings to the model’s own reasoning output. We evaluate LARK on three public subsets of the Amazon Re-views 2023 benchmark [12] and one proprietary dataset from a social media platform serving over 100 million monthly active users. LARK consistently outperforms all baselines and generalizes across multiple downstream architectures (DeepFM [5], LightGCN [11], and SASRec [16]). Controlled ablations isolate the contribution of each component, and attention analyses confirm that cross-modal dilution is effectively mitigated by LARK’s dual alignment mecha-nisms. arXiv:2609.04645v1 [cs.IR] 4 Sep 2026 Conference’17, July 2017, Washington, DC, USA Jiarui Jin et al. Input Image 
+
+> Fluffy white-gray cat
+> wearing round
+> gold-framed sunglasses
+> with blue-tinted lenses,
+> posing against a light
+> background with a grid
+> overlay
+
+Mask 
+
+Vision 
+
+Encoder 
+
+Input T ext 
+
+> Analyze: visual,
+> function,
+> audience,
+> distinguishing
+> features
+
+Input Prompt 
+
+Transformer Block 
+
+... 
+
+> ...
+
+Transformer Block  ...  
+
+> ...
+> Latest Hidden
+> States of LLM
+> Compress this item
+> into one word
+
+Input Prompt 
+
+Projection Head 
+
+Vision 
+
+Encoder 
+
+> Vision
+> Alignment
+> Loss
+
+Upsample 
+
+MLP 
+
+> Contrastive
+> Loss
+> Positive
+> Negative
+> ? a?
+> ? b?
+
+...  ... 
+
+Bridge MLP 
+
+> Visual: Gold-framed round sunglasses with blue-tinted UV lenses. Function: Decorative pet
+> eyewear for photos and outdoor use. Audience: Pet owners seeking stylish accessories for small
+> animals. Distinguishing: Retro round frame with compact nose bridge fit for pets.
+
+... 
+
+Large Language Model  LLM Head 
+
+> Text
+> Alignment
+> Loss
+
+MLP 
+
+stop gradient 
+
+> ? c?
+> ? d?
+
+Figure 1: Overview of LARK. Stage 1 interleaves latent tokens with multi-step CoT reasoning; latent groups are aligned patch-wise with a frozen vision encoder (d, Lvision ), while CoT text is supervised by Lcot (a). Stage 2 projects H(1) via a Bridge MLP into the same backbone for contrastive training (b, Li2i ); intermediate features are anchored to the stop-gradient CoT hidden states 
+
+H(1) 
+
+> lang
+
+(c, Ltext ). 
+
+## 2 PRELIMINARIES 2.1 Problem Formulation 
+
+Let U and I denote the sets of users and items, respectively. Each item 𝑖 ∈ I is associated with an image I𝑖 and a textual description 
+
+T𝑖 = (𝑡 1, 𝑡 2, . . . , 𝑡 |T𝑖 | ). User-item interactions are represented by a binary matrix R𝑢𝑖 ∈ { 0, 1}| U | × | I | , where 𝑟 𝑢𝑖 = 1 indicates that user 
+
+𝑢 has interacted with item 𝑖 .The goal of multimodal recommendation is to learn a scoring function Fscore : U × I → R that predicts user preferences over items by jointly leveraging visual and textual content. Specifically, we aim to learn an item representation function Fitem : (I𝑖 , T𝑖 ) → 
+
+e𝑖 ∈ R𝐷 that maps multimodal item content into a dense embedding, and a user representation function Fuser : 𝑢 → e𝑢 ∈ R𝐷 , such that the recommendation score Fscore (𝑢, 𝑖 ) = e⊤ 
+
+> 𝑢
+
+e𝑖 reflects the likelihood of user 𝑢 interacting with item 𝑖 .Following the Bayesian Personalized Ranking (BPR) [28] para-digm, we optimize the pairwise ranking objective: 
+
+LBPR = −∑︁  
+
+> (𝑢,𝑖,𝑗 ) ∈ D
+
+log 𝜎  e⊤ 
+
+> 𝑢
+
+e𝑖 − e⊤ 
+
+> 𝑢
+
+e𝑗 
+
+ , (1) where (𝑢, 𝑖, 𝑗 ) denotes a training triple with 𝑟 𝑢𝑖 = 1 and 𝑟 𝑢 𝑗 = 0, and 𝜎 (·) is the sigmoid function. Beyond user-item interactions, item-item co-occurrence patterns provide an important source of collaborative signal. We adopt the Swing algorithm [38] to mine item-to-item relevance from user behavior. For two items 𝑖 and 𝑗 , let U𝑖 𝑗 = {𝑢 ∈ U | 𝑟 𝑢𝑖 = 1∧𝑟 𝑢 𝑗 = 1}
+
+denote the set of users who have interacted with both. The Swing similarity is defined as: 
+
+Fswing (𝑖, 𝑗 ) =∑︁  
+
+> 𝑢 ∈ U 𝑖 𝑗
+
+∑︁ 𝑣 ∈ U 𝑖 𝑗 ,𝑣 ≠𝑢 
+
+1
+
+𝛼 + |I 𝑢 ∩ I 𝑣 | , (2) where I𝑢 denotes the set of items interacted by user 𝑢 , and 𝛼 is a smoothing constant (set to 1 in implementation). Intuitively, Swing down-weights co-occurrences contributed by user pairs with highly overlapping histories, which are more likely to reflect popularity bias rather than genuine item-relatedness. For each item 𝑖 , we retain the top-𝐾 items by Swing similarity as its positive item set N + 
+
+> 𝑖
+
+,which serves as the supervision signal for item-to-item contrastive learning in § 3.4. Conference’17, July 2017, Washington, DC, USA 
+
+## 2.2 Related Work 
+
+Multi-modal Recommendations. Multimodal recommendation leverages visual and textual content to enrich item representa-tions beyond collaborative signals. Early approaches [35, 43] in-tegrate pre-extracted multimodal features (e.g., from ResNet [7] or BERT [3]) into graph-based collaborative filtering frameworks such as LightGCN [11]. LATTICE [43] constructs modality-specific item-item graphs to capture latent structures, while BM3 [45] in-troduces self-supervised multimodal alignment through bootstrap contrastive learning. More recently, AlignRec [22] proposes a three-level alignment framework that decomposes the recommendation objective into inter-content, content-category, and user-item align-ments. With the rise of LLMs, several studies [34, 41] have be-gun exploring VLMs for item representation learning, demonstrat-ing that unified vision-language architectures can capture richer cross-modal semantics than modality-specific encoders. Meanwhile, Jin et al. [15] propose a multiple-round recommender system that jointly optimizes queries and items, highlighting the importance of iterative reasoning in recommendation. However, these approaches typically treat VLMs as static feature extractors or fine-tune them with standard next-token prediction objectives, without incorporat-ing chain-of-thought reasoning to enable progressive multimodal understanding. As a result, they fail to address the cross-modal dilution problem, where both visual and textual signals attenuate through multi-step reasoning. 
+
+Chain-of-Thought and Latent Reasoning. Chain-of-Thought (CoT) prompting [33] has proven effective in improving the rea-soning capabilities of LLMs by decomposing complex problems into intermediate textual steps. Subsequent work has extended CoT to multimodal settings [19, 32, 44], enabling VLMs to reason over visual inputs. However, standard CoT reasoning in VLMs suffers from the progressive attenuation of visual signals as the reason-ing chain lengthens [29], since the auto-regressive process only refreshes textual tokens while visual information fades. To address this, latent reasoning approaches such as Coconut [6] propose rea-soning entirely in continuous hidden space, bypassing the lossy argmax decoding at each step. VaLR [14] extends this idea to mul-timodal models by interleaving vision-aligned latent tokens with CoT reasoning steps, where each group of latent tokens is explicitly grounded in external vision encoder features via representation alignment (REPA) [39].. In contrast, multimodal recommendation requires preserving both visual and textual signals, since the output is a dense embedding where neither modality is self-refreshing. LARK bridges this gap by introducing complementary alignment mechanisms: vision alignment in the first reasoning stage to pre-serve perceptual details, and reasoning-text alignment in the second stage to retain semantic understanding from the CoT process. 
+
+## 3 LARK 3.1 Architecture of LARK 
+
+We propose LARK, a framework that enables multimodal recom-mendation to conduct latent reasoning before producing the final item representation. As illustrated in Figure 1, LARK operates as a two-stage architecture with complementary alignment mechanisms within a single VLM, connected by a Bridge MLP that projects latent representations across reasoning stages. The autoregressive generation process operates in two modes: 
+
+latent mode and language mode . In latent mode, the model’s hidden state is directly fed back as the input embedding for the next posi-tion, enabling reasoning in continuous space without discretization. In language mode, the model generates text tokens through the LLM head, producing interpretable chain-of-thought reasoning steps. To delineate these two modes, we introduce special <latent> and 
+
+</latent> tokens into the vocabulary. During training, latent and language segments are arranged according to a fixed template: be-fore each CoT reasoning step, 𝐾 latent tokens are inserted, yielding an interleaved sequence of the form 
+
+ℓ1, . . . , ℓ 𝐾 
+
+| {z }
+
+> latent
+
+, 𝑟 (1) 
+
+> 1
+
+, . . . , 𝑟 (1)
+
+> 𝑛 1
+
+| {z }
+
+> CoT step 1
+
+, ℓ 1, . . . , ℓ 𝐾 
+
+| {z }
+
+> latent
+
+, 𝑟 (2) 
+
+> 1
+
+, . . . , 𝑟 (2)
+
+> 𝑛 2
+
+| {z }
+
+> CoT step 2
+
+, . . . (3) where each latent segment uses hidden-state feedback (latent mode) and each CoT segment uses standard token embeddings (language mode), supervised by teacher-generated multi-step reasoning an-notations (§3.4). This design enables two complementary alignment mechanisms to counteract cross-modal dilution at each stage: (i) Vision-Language Reasoning Stage. Each group of latent tokens in the first stage is aligned with a frozen vision encoder, preserving perceptual details throughout the reasoning chain. (ii) Item-Item Alignment Stage. 
+
+The second stage’s intermediate features are aligned with the CoT hidden states from Stage 1, anchoring the item embeddings to the model’s own reasoning output. LARK serves as an offline multimodal item encoder: item em-beddings are precomputed and stored in a vector index before deployment. The downstream recommendation model (e.g., Light-GCN [11], SASRec [16]) consumes these frozen item embeddings to learn user representations and is updated independently during online serving. This decoupled design allows LARK to scale to large item catalogs without introducing latency at serving time. 
+
+## 3.2 Vision-Language Reasoning Stage 
+
+The first stage fuses visual and textual information into a unified la-tent representation through interleaved latent-language reasoning. Given the 𝑖 -th item with input image I𝑖 and textual description 
+
+T𝑖 , we construct token-level embeddings. A masking strategy ran-domly masks a fraction 𝜌 of the image patches before encoding (where 𝜌 is set to 50% in implementation); the trainable vision en-coder then processes the remaining visible patches to yield vision tokens V𝑖 = (v1, v2, . . . , v𝑉 ). The text is tokenized and embedded as W𝑖 = (w1, w2, . . . , w𝑇 ). A task-specific prompt is appended with token embeddings P(1) = (p(1) 
+
+> 1
+
+, p(1) 
+
+> 2
+
+, . . . , p(1) 
+
+> 𝑃
+
+). The complete input sequence E(1) for the first stage is: 
+
+E(1) = [v1, . . . , v𝑉 ; w1, . . . , w𝑇 ; p(1) 
+
+> 1
+
+, . . . , p(1) 
+
+> 𝑃
+
+], (4) where [ · ; · ] denotes concatenation. After processing E(1) , the transformer conducts autoregressive reasoning by interleaving 𝑁 groups of 𝐾 latent steps with 𝑁 multi-step CoT reasoning segments, as described in Eq. (3). The total number of latent tokens is 𝐾 𝑙 = 𝑁 × 𝐾 . Let S0 = E(1) denote the initial context. At each step 𝑡 , the transformer produces a hidden Conference’17, July 2017, Washington, DC, USA Jiarui Jin et al. 
+
+state h𝑡 :
+
+h𝑡 = Ftransformer (S𝑡 ) [− 1, :], (5) and the context is extended as S𝑡 +1 = [S𝑡 ; e𝑡 +1], where e𝑡 +1 depends on whether position 𝑡 + 1 falls in a latent or language segment according to the fixed template: 
+
+e𝑡 +1 =
+
+(
+
+h𝑡 if 𝑡 + 1 ∈ T latent (latent mode ),
+
+Fembed (c∗
+
+> 𝑡 +1
+
+) if 𝑡 + 1 ∈ T lang (language mode ), (6) where Tlatent and Tlang denote the sets of latent and language po-sitions defined by the template, and c∗ 
+
+> 𝑡 +1
+
+is the ground-truth CoT token at position 𝑡 + 1 (teacher forcing during training). In latent mode, the hidden state is directly recycled as the next input, pre-serving the continuous representation without discretization. In language mode, the generated tokens form multi-step CoT rea-soning about the item (e.g., visual attributes, functional analysis, target audience, and distinguishing features), supervised by cross-entropy loss during training (Eq. (13) in §3.4). Thanks to causal attention, each latent token can attend to the entire preceding con-text — including input tokens and previously generated CoT tokens — enabling effective compression of multimodal information. 
+
+Vision Alignment. To counteract cross-modal dilution across rea-soning stages, we apply representation alignment to the first stage’s intermediate features. Let F(1) = (f (1) 
+
+> 1
+
+, f (1) 
+
+> 2
+
+, . . . , f (1) 
+
+> 𝐾 𝑙
+
+) denote the in-termediate representations at layer 𝑚 = ⌊2𝐿 /3⌋ of the transformer, where 𝐿 is the total number of layers. A frozen copy of the VLM’s own vision encoder processes the unmasked input image to produce patch-wise features F𝜙 = Ffrozen (I𝑖 ) ∈ R𝑁 𝑝 ×𝐷 𝜙 , serving as the align-ment target. The intermediate features are upsampled and projected through a learnable MLP F vis MLP : ˆ F(1) = F vis MLP (Upsample (F(1) )) .The alignment loss is designed to maximize the patch-wise cosine similarity between the projected features and the frozen encoder’s output: 
+
+Lvision = − 1
+
+𝑁 𝑝 𝑁 𝑝 ∑︁ 
+
+> 𝑗 =1
+
+cos 
+
+ˆf (1) 
+
+> 𝑗
+
+, f𝜙,𝑗 
+
+
+
+, (7) where cos (· , ·) denotes cosine similarity, and f𝜙,𝑗 = F𝜙 [ 𝑗, :]. This alignment anchors the first stage’s latent representations to a se-mantically rich visual space, preventing them from drifting as they propagate through the reasoning chain. 
+
+Hidden State Collection. The first stage collects the last-layer hidden states at all 𝐾 𝑙 latent token positions, re-indexed as 𝑘 =
+
+1, . . . , 𝐾 𝑙 : H(1) = (h1, h2, . . . , h𝐾 𝑙 ), which encodes a vision-language fused representation of the item. It also collects the hidden states at language positions as the CoT representation: H(1) 
+
+> lang
+
+= (h𝑡 )𝑡 ∈ T lang ,which is used as the alignment target in the second stage (§3.3). Both 
+
+H(1) and H(1) 
+
+> lang
+
+are collected from the first stage; H(1) is forwarded via the Bridge MLP to the second stage, while H(1) 
+
+> lang
+
+serves as the alignment target (with stop-gradient) in §3.3. 
+
+## 3.3 Item-Item Alignment Stage 
+
+The second stage derives compact item embeddings suitable for recommendation by grounding the latent representations in item-level relational structure. The hidden states H(1) from the first stage reside in the trans-former’s hidden-state space, which differs distributionally from the embedding space expected by the transformer’s first layer. To bridge this gap, we project H(1) through a learnable Bridge MLP: ˜H(1) = FBridgeMLP (H(1) ), (8) where FBridgeMLP (·) maps from the hidden-state space to the em-bedding space, enabling seamless integration with the second-stage input. The second-stage input is constructed by concatenat-ing the bridged representations with a task prompt encoded as 
+
+P(2) = (p(2) 
+
+> 1
+
+, p(2) 
+
+> 2
+
+, . . . , p(2) 
+
+> 𝑄
+
+):
+
+E(2) = [ ˜h1, . . . , ˜h𝐾 𝑙 ; p(2) 
+
+> 1
+
+, . . . , p(2) 
+
+> 𝑄
+
+]. (9) Since ˜hs consist of continuous vectors rather than discrete tokens, the second stage operates entirely in the embedding space, bypass-ing tokenization. 
+
+Reasoning-Text Alignment. To prevent the reasoning semantics captured in the first stage from fading during the second stage, we align the second stage’s intermediate features with the CoT hidden states produced by the first stage. Let F(2) = (f (2) 
+
+> 1
+
+, f (2) 
+
+> 2
+
+, . . . , f (2) 
+
+> 𝐾 𝑙
+
+)
+
+denote the intermediate representations at layer 𝑚 = ⌊2𝐿 /3⌋ of the transformer, where 𝐿 is the total number of layers. The align-ment target is the mean-pooled CoT representation from Stage 1: ¯r = 1 
+
+> | T lang |
+
+Í𝑡 ∈ T lang h𝑡 , computed from the language-position hidden states H(1) 
+
+> lang
+
+collected in §3.2. A stop-gradient operator is applied to ¯r to prevent the alignment loss from back-propagating into Stage 1’s language generation. The reasoning-text alignment loss is: 
+
+Ltext = − 1
+
+𝐾 𝑙 𝐾 𝑙 ∑︁ 
+
+> 𝑗 =1
+
+cos 
+
+
+
+F text MLP (f (2) 
+
+> 𝑗
+
+), sg (¯r)
+
+
+
+, (10) where F text MLP is a learnable projection and sg (·) denotes stop-gradient. This alignment anchors the second stage to the semantic under-standing produced by the first stage’s reasoning process, ensuring that the reasoning conclusions are preserved in the final item em-beddings. Note that while all latent positions are aligned to the same pooled target ¯ r, token-level diversity is maintained by two mechanisms: (i) the contrastive loss Li2i (as later formulated in Eq. (12)) requires the final embeddings to discriminate between items, which propagates discriminative gradients back through 
+
+F(2) ; (ii) causal attention ensures that each latent position attends to a different prefix of the input, producing naturally heterogeneous intermediate features. The transformer processes E(2) to produce the final hidden states 
+
+H(2) . The item embedding is obtained through a projection head, denoted as FProjectionHead :
+
+e𝑖 = FProjectionHead (H(2) ), (11) where FProjectionHead (·) is a learnable MLP that mean-pools the hid-den states and maps them to a 𝐷 -dimensional embedding e𝑖 ∈ R𝐷 .The item embeddings are trained with an InfoNCE contrastive loss [30] using item-to-item collaborative signals derived from Swing similarity (§2.1). For each item 𝑖 , we sample a positive item 
+
+𝑗 ∈ N + 
+
+> 𝑖
+
+(top-𝐾 Swing neighbors, as derived in §2.1) and treat other Conference’17, July 2017, Washington, DC, USA 
+
+in-batch items as negatives: 
+
+Li2i = − log exp (cos (e𝑖 , e𝑗 )/ 𝜏 )
+
+Í𝐵 𝑘 =1 exp (cos (e𝑖 , e𝑘 )/ 𝜏 ) , (12) where 𝜏 is the temperature hyperparameter and 𝐵 is the batch size. 
+
+## 3.4 Training and Inference 
+
+LARK is trained end-to-end with four complementary objectives: 
+
+CoT Generation Loss. In the first stage, the language-mode out-puts are supervised by cross-entropy loss against multi-step reason-ing annotations c∗ 
+
+> 𝑖
+
+, which are generated offline by a teacher VLM (Gemini-2.5-Flash [4] in our experiments): 
+
+Lcot = −∑︁  
+
+> 𝑡 ∈ T lang
+
+log 𝑃 (c∗ 
+
+> 𝑡
+
+| E<𝑡 ), (13) where Tlang denotes the set of language-mode positions. 
+
+Vision Alignment Loss. The vision alignment loss Lvision (Eq. (7)) aligns the first stage’s latent representations with the frozen vision encoder, preserving visual fidelity across reasoning steps. 
+
+Reasoning-Text Alignment Loss. The reasoning-text alignment loss Ltext (Eq. (10)) aligns the second stage’s intermediate features with the stop-gradient CoT hidden states from the first stage, an-choring the item embeddings to the reasoning semantics. 
+
+Contrastive Loss. The contrastive loss Li2i (Eq. (12)) trains item embeddings using Swing-derived collaborative signals. The overall training objective is: 
+
+L = Li2i + 𝜆 cot Lcot + 𝜆 align (L vision + L text ), (14) where 𝜆 cot and 𝜆 align are balancing hyperparameters. 
+
+Plug-into Recommendation Models. As illustrated in Figure 2, LARK serves as a general-purpose item encoder that plugs into arbitrary downstream recommendation models. For each item 𝑖 ,the precomputed embedding e𝑖 is concatenated with categorical features (e.g., price, brand) to form the item representation. Given a user 𝑢 with browsing history (𝑖 1, 𝑖 2, . . . , 𝑖 𝑛 ), the downstream model 
+
+FRecommendationModel aggregates historical item representations into a user embedding e𝑢 = FRecommendationModel (e𝑖 1 , e𝑖 2 , . . . , e𝑖 𝑛 ) and scores candidate items via inner product ˆ 𝑦 𝑢𝑖 = e⊤ 
+
+> 𝑢
+
+e𝑖 . The recom-mendation model is trained with the BPR loss [27]: 
+
+Lrec = −∑︁  
+
+> (𝑢,𝑖,𝑗 ) ∈ O
+
+log 𝜎 ( ˆ𝑦 𝑢𝑖 − ˆ𝑦 𝑢 𝑗 ), (15) where O = {( 𝑢, 𝑖, 𝑗 ) | 𝑖 ∈ I + 
+
+> 𝑢
+
+, 𝑗 ∉ I+ 
+
+> 𝑢
+
+} denotes the set of pair-wise training triplets, I+ 
+
+> 𝑢
+
+is the set of items user 𝑢 has interacted with, and 𝜎 (·) is the sigmoid function. Since LARK embeddings are frozen during this stage, the design is agnostic to the choice of 
+
+FRecommendationModel – we validate with table-based (DeepFM [5]), graph-based (LightGCN [11]), and sequential (SASRec [16]) archi-tectures in our experiments. 
+
+Inference and Deployment. At inference, the first stage runs the complete latent-language interleaving, generating both latent tokens and CoT text autoregressively. The resulting H(1) is then passed through the Bridge MLP to the second stage, which produces the final item embedding e𝑖 .As depicted in Figure 2, all item embeddings can be precomputed offline and stored in a vector index. At serving time, the downstream recommendation model (e.g., DeepFM, LightGCN or SASRec) con-sumes these frozen item embeddings to learn and update user rep-resentations. This decoupled design ensures that LARK’s two-stage reasoning incurs no additional latency during online serving, while the downstream model can be updated independently as user be-havior evolves. 
+
+## 4 EXPERIMENTS 4.1 Experimental Setup 
+
+Dataset Description. We evaluate LARK on three public sub-sets of the Amazon Reviews benchmark [9] – Baby , Sports , and 
+
+Clothing – and one proprietary dataset ( In-House ) collected from a social media platform serving over 100 million monthly active users. For Amazon datasets, we apply 5-core filtering following prior work [43, 45]. Table 1 summarizes the dataset statistics. For all datasets, we follow the temporal leave-one-out protocol: for each user, the last interacted item is held out for testing, the second-to-last for validation, and the remaining for training. The Swing item-item co-occurrence graph used for contrastive supervision (§2.1) is constructed exclusively from training-set interactions, en-suring no test-set leakage into the positive neighbor sets N+ 
+
+> 𝑖
+
+.
+
+Baseline Description. We compare LARK with representative methods spanning three categories: (i) general collaborative fil-tering (BPR [27], DeepFM [5], LightGCN [11], SASRec [16]); (ii) LLM-augmented (LLMRec [34], RLMRec [26]); (iii) multi-modal (VBPR [10], MMGCN [35], LATTICE [43], BM3 [45], FREEDOM [46], AlignRec [22], NoteLLM-2 [41]). NoteLLM-2 is originally designed for item-to-item retrieval; for fair comparison, we feed its embed-dings into LightGCN following the same protocol as LARK. As described in §3.4, we further evaluate LARK by plugging its frozen item embeddings into three representative downstream models: LARK DeepFM , LARK LightGCN , and LARK SASRec , to verify that the learned representations generalize across different recommen-dation architectures. 
+
+Evaluation Metric. We adopt the all-ranking protocol and report Recall@ 𝐾 (R@ 𝐾 ) and NDCG@ 𝐾 (N@ 𝐾 ) with 𝐾 ∈ { 10 , 20 }. All results are averaged over five runs with different random seeds. 
+
+Implementation Details. LARK is instantiated with Qwen2.5-VL-3B [1] as the VLM backbone. We optimize with AdamW using a learning rate of 1 × 10 −4 and cosine annealing. The loss weights in Eq. (14) are set to 𝜆 cot = 𝜆 align = 0.1. The number of latent tokens per group is 𝐾 = 4 with 𝑁 = 4 reasoning steps, yielding a total of 𝐾 𝑙 = 𝑁 × 𝐾 = 16 latent tokens, and the masking ratio is 
+
+𝜌 = 0.5. For Swing-based neighbor mining, we set the smoothing constant 𝛼 = 1 with top-𝐾 = 10 neighbors, and the contrastive temperature 𝜏 = 0.07. We use Gemini-2.5-Flash [4] as the teacher VLM to generate multi-step reasoning annotations for all items offline as the CoT supervision. All codes and datasets would be public upon publication. Conference’17, July 2017, Washington, DC, USA Jiarui Jin et al. Input Image 
+
+> Fluffy white-gray cat
+> wearing round
+> gold-framed sunglasses
+> with blue-tinted lenses,
+> posing against a light
+> background with a grid
+> overlay
+> Input T ext
+
+Item B 
+
+> Small dog in orange
+> pom-pom knit hat, blue
+> aviator sunglasses,
+> checkered bow tie, and
+> brown corduroy romper,
+> outdoor lakeside setting.
+
+Item A 
+
+User? s Browsing History  
+
+> LARK Feature Categorical Features
+> (e.g. prices, brand)
+
+# ...  
+
+> Input Image Input T ext
+
+Target Item  
+
+> LARK Feature Categorical Features
+> (e.g. prices, brand)
+
+# ... 
+
+Recommendation Models 
+
+Figure 2: Deployment of LARK in a recommendation pipeline. LARK encodes each item’s image and text into a dense embedding offline (frozen; indicated by the snowflake icon). The precomputed LARK features are concatenated with categorical features (e.g. , price, brand; trainable, indicated by the flame icon) and fed into downstream recommendation models such as DeepFM or LightGCN, which are trained independently on user-item interactions. 5 10 15 20    
+
+> Generation Token Index
+> 0.00 0.01 0.02 0.03 0.04 0.05
+> Avg. Attention Weight  Step 1 Step 2 Step 3 Step 4
+
+Attention to Image Tokens       
+
+> w/o alignment w/ vision alignment
+> 510 15 20
+> Generation Token Index
+> Step 1 Step 2 Step 3 Step 4
+
+Attention to Text Tokens 
+
+> w/o alignment w/ text alignment
+
+Figure 3: Attention weight to image tokens (left) and text tokens (right) across reasoning steps in Stage 1 on the Baby dataset. Without alignment, attention to both modalities decays as reasoning progresses; LARK’s dual alignment sub-stantially mitigates this cross-modal dilution. Table 1: Dataset statistics. Amazon datasets are 5-core filtered. Dataset #Users #Items #Inter. Density 
+
+Baby 19,445 7,050 139,110 0.101% Sports 35,598 18,357 296,337 0.045% Clothing 39,387 23,033 278,677 0.031% In-House 856,214 432,671 12,384,529 0.003% 
+
+## 4.2 Performance Comparisons 
+
+Table 2 presents the overall performance comparison. We summa-rize our findings as follows: LARK consistently outperforms all baselines across four datasets and all metrics, regardless of the downstream recommendation model. On the large-scale In-House dataset, LARK LightGCN achieves R@20 of 0.0548, improving over AlignRec by 10.0%, demonstrat-ing its scalability to industrial settings. Note that LARK (3B) uses a smaller backbone than NoteLLM-2 [41] (7B), yet consistently outper-forms it, demonstrating that the two-stage latent reasoning design is more parameter-efficient than naive LLM-based approaches. Multi-modal methods substantially outperform pure collabora-tive filtering methods, confirming the value of incorporating visual and textual signals and the effectiveness of cross-modal alignment in capturing item semantics beyond interaction patterns alone. Among them, AlignRec achieves the best baseline performance on most datasets through explicit multi-level alignment, while NoteLLM-2 shows competitive or superior results on Sports by leveraging LLM-derived multimodal representations. Also, LLM-Rec, which augments collaborative filtering with LLM-generated text without directly utilizing visual features, performs below dedi-cated multi-modal methods, indicating that textual augmentation alone cannot substitute for explicit visual modeling. 
+
+## 4.3 Ablation Study and Analysis 
+
+Effect of CoT Supervision. Removing CoT supervision (w/o CoT) leads to a consistent degradation across all datasets (e.g., R@20: 
+
+−6.1% on Baby), confirming that intermediate language supervi-sion helps the latent tokens converge to semantically meaningful hidden states, even though the language head can be bypassed at inference. The Language Only variant, which replaces latent to-kens with discrete text generation, incurs a further drop ( −9.5% on Baby). The gap between w/o CoT and Language Only isolates the benefit of continuous representations: even without CoT guid-ance, latent tokens outperform discrete tokens because they bypass the vocabulary bottleneck and retain fine-grained information that quantization to a finite token set would destroy. 
+
+Effect of Dual Alignment. We ablate the two alignment losses independently. Removing the vision alignment Lvision causes a moderate drop (e.g., R@20: −5.5% on Baby), indicating that an-choring latent representations to the frozen vision encoder during Conference’17, July 2017, Washington, DC, USA 
+
+Table 2: Overall performance comparison. Best in bold, second-best underlined. ∗ indicates statistically significant improvement over the best baseline (paired 𝑡 -test, 𝑝 < 0.05 ). Some baseline results are taken from Zhou et al. [46] and Liu et al. [22] where available, and reproduced using official implementations otherwise. Method Baby Sports Clothing In-House 
+
+R@10 R@20 N@10 N@20 R@10 R@20 N@10 N@20 R@10 R@20 N@10 N@20 R@10 R@20 N@10 N@20 
+
+General Collaborative Filtering 
+
+BPR .0357 .0575 .0192 .0249 .0432 .0653 .0241 .0298 .0206 .0303 .0114 .0138 .0187 .0312 .0098 .0131 DeepFM .0438 .0685 .0235 .0301 .0512 .0781 .0281 .0351 .0318 .0482 .0172 .0214 .0205 .0342 .0109 .0145 LightGCN .0479 .0754 .0257 .0328 .0569 .0864 .0311 .0387 .0361 .0544 .0197 .0243 .0221 .0365 .0118 .0155 SASRec .0465 .0732 .0248 .0318 .0582 .0885 .0318 .0396 .0348 .0528 .0189 .0235 .0228 .0378 .0122 .0160 
+
+LLM-based Recommendation 
+
+LLMRec .0538 .0841 .0288 .0367 .0625 .0948 .0339 .0422 .0498 .0741 .0271 .0334 .0255 .0413 .0137 .0178 RLMRec .0552 .0862 .0295 .0377 .0638 .0968 .0346 .0431 .0508 .0758 .0276 .0342 .0260 .0421 .0140 .0182 
+
+Multi-Modal Recommendation 
+
+VBPR .0385 .0594 .0201 .0258 .0438 .0668 .0237 .0298 .0218 .0336 .0117 .0148 .0198 .0335 .0105 .0141 MMGCN .0421 .0660 .0220 .0282 .0401 .0636 .0209 .0270 .0227 .0361 .0120 .0154 .0235 .0382 .0126 .0164 LATTICE .0547 .0850 .0292 .0370 .0620 .0953 .0335 .0421 .0492 .0733 .0268 .0330 .0258 .0415 .0139 .0180 BM3 .0564 .0883 .0301 .0383 .0656 .0980 .0355 .0438 .0577 .0845 .0316 .0387 .0271 .0438 .0147 .0190 FREEDOM .0627 .0992 .0330 .0424 .0717 .1089 .0385 .0481 .0629 .0941 .0341 .0420 .0288 .0462 .0158 .0203 AlignRec .0674 .1046 .0363 .0458 .0758 .1160 .0414 .0517 .0668 .1002 .0362 .0447 .0312 .0498 .0171 .0219 NoteLLM-2 .0661 .1028 .0355 .0448 .0771 .1175 .0421 .0526 .0652 .0972 .0354 .0435 .0298 .0478 .0163 .0210 
+
+LARK DeepFM .0712 .1098 .0383 .0479 .0813 .1232 .0441 .0548 .0695 .1031 .0374 .0459 .0328 .0519 .0179 .0230 
+
+LARK LightGCN .0741 ∗ .1148 ∗ .0402 ∗ .0506 ∗ .0842 ∗ .1285 ∗ .0462 ∗ .0576 ∗ .0738 ∗ .1108 ∗ .0403 ∗ .0498 ∗ .0352 ∗ .0548 ∗ .0194 ∗ .0248 ∗
+
+LARK SASRec .0729 .1131 .0396 .0498 .0825 .1256 .0451 .0563 .0721 .1079 .0393 .0484 .0341 .0535 .0187 .0240 
+
+Table 3: Ablation study of LARK LightGCN across all datasets. Variant Baby Sports Clothing In-House 
+
+R@10 R@20 N@10 N@20 R@10 R@20 N@10 N@20 R@10 R@20 N@10 N@20 R@10 R@20 N@10 N@20 
+
+Effect of CoT Supervision 
+
+w/o CoT .0698 .1078 .0377 .0475 .0795 .1213 .0435 .0543 .0697 .1045 .0380 .0469 .0331 .0516 .0182 .0233 w/ Language Only .0621 .0957 .0335 .0421 .0712 .1081 .0389 .0484 .0618 .0925 .0337 .0414 .0293 .0458 .0161 .0206 
+
+Effect of Dual Alignment 
+
+w/o Lvision .0702 .1085 .0379 .0477 .0801 .1221 .0438 .0546 .0701 .1049 .0383 .0471 .0333 .0519 .0183 .0234 w/o Ltext .0684 .1051 .0369 .0464 .0778 .1186 .0425 .0530 .0682 .1019 .0372 .0457 .0324 .0503 .0178 .0227 w/o Both .0658 .1012 .0354 .0445 .0752 .1148 .0411 .0513 .0659 .0985 .0359 .0441 .0311 .0486 .0170 .0218 
+
+Choice of External Frozen Vision Encoder 
+
+w/ DINOv2 .0715 .1103 .0386 .0485 .0811 .1238 .0444 .0554 .0710 .1064 .0387 .0477 .0338 .0528 .0186 .0238 
+
+Effect of Latent Reasoning 
+
+w/o Latent Reasoning .0612 .0948 .0330 .0416 .0695 .1058 .0380 .0474 .0598 .0895 .0326 .0400 .0278 .0435 .0152 .0195 
+
+LARK .0741 .1148 .0402 .0506 .0842 .1285 .0462 .0576 .0738 .1108 .0403 .0498 .0352 .0548 .0194 .0248 
+
+Stage 1 helps preserve visual fidelity across reasoning steps. Remov-ing the reasoning-text alignment Ltext yields a larger degradation (e.g., R@20: −8.4% on Baby), confirming that grounding Stage 2 features to the CoT hidden states is essential for retaining the rea-soning semantics in the final item embeddings. When both losses are removed, performance degrades further (e.g., R@20: −11.8% on Baby), demonstrating that the two alignment objectives are comple-mentary: Lvision preserves visual information and Ltext preserves reasoning conclusions, jointly counteracting cross-modal dilution across the two stages. 
+
+Effect of Latent Reasoning. To disentangle the contribution of latent reasoning from the stronger VLM backbone, we remove all latent tokens and CoT supervision, directly pooling the VLM’s last hidden states for contrastive training (w/o Latent Reasoning). Results in Table 3 show that the VLM backbone alone already outperforms most baselines from Table 2, but still underperforms LARK by −17.4% R@20 on Baby, confirming that the interleaved latent reasoning mechanism is a substantial source of gains beyond the backbone itself. 
+
+## 4.4 Hyperparameter Sensitivity 
+
+Effect of Loss Weights. Figure 4 shows the effect of 𝜆 cot and 𝜆 align 
+
+on Recall@20 across Baby and Sports. Both exhibit an inverted-U shape peaking around 0.1, indicating that LARK is robust within a reasonable range. Excessively large weights ( ≥ 0.5) cause the auxiliary objectives to dominate the contrastive loss, degrading embedding quality. 
+
+Effect of Masked Vision Encoder. Figure 5 reports performance under different masking ratios 𝜌 ∈ { 0% , 25% , 50% , 75% } on Baby and Sports. A ratio of 50% yields the best results: without masking, the Conference’17, July 2017, Washington, DC, USA Jiarui Jin et al. 0.001 0.01 0.1 0.5 1.0       
+
+> cot
+> 0.10 0.11 0.12 0.13
+> Recall@20
+> Effect of cot
+> Baby Sports
+> 0.001 0.01 0.1 0.5 1.0
+> align
+> Effect of align
+> Baby Sports
+
+Figure 4: Effect of loss weights 𝜆 cot and 𝜆 align on Recall@20. 
+
+model tends to overfit to pixel-level details, while excessive masking discards too much visual information for coherent representations. 0% 25% 50% 75%    
+
+> Masking Ratio
+> 0.11 0.12 0.13 0.14
+> Recall@20
+> Baby Sports
+> 0% 25% 50% 75%
+> Masking Ratio
+> 0.045 0.050 0.055 0.060
+> NDCG@20
+> Baby Sports
+
+Figure 5: Effect of masking ratio 𝜌 on Recall@20 and NDCG@20. Effect of Reasoning Length. Figure 6 examines the effect of 
+
+𝐾 𝑙 ∈ { 4, 8, 12 , 16 , 24 , 32 } on Baby and Sports, where 𝐾 𝑙 = 𝑁 × 𝐾 
+
+is the total number of latent tokens. Performance improves from 
+
+𝐾 𝑙 = 4 to 𝐾 𝑙 = 16 and plateaus beyond 𝐾 𝑙 = 24. Increasing to 
+
+𝐾 𝑙 = 32 yields marginal gains while doubling the computational cost of the first stage, so we set 𝐾 𝑙 = 16 ( 𝑁 = 4, 𝐾 = 4) as the default. 2 4 6 8 16 32  
+
+> Number of Latent Tokens Kl
+> 0.10 0.11 0.12 0.13
+> Recall@20
+> Baby Sports
+
+Figure 6: Effect of total latent token count 𝐾 𝑙 = 𝑁 × 𝐾 on Recall@20. Choice of External Frozen Vision Encoder. We compare differ-ent choices for the frozen encoder used in the vision alignment loss. Using the VLM’s own ViT as the alignment target yields the best performance across all datasets, as it shares the same representation space as the trainable pathway, allowing the alignment signal to directly regularize the latent features without cross-architecture mismatch. Replacing it with DINOv2 [25], a strong self-supervised vision encoder, still improves over removing vision alignment en-tirely (cf. Table 3, w/o Lvision ), but underperforms the default setting by a consistent margin (e.g., R@20: −3.9% on Baby). This gap sug-gests that the distributional shift between DINOv2’s feature space and the VLM’s internal representations introduces a misalignment that partially offsets the regularization benefit. Notably, this design also simplifies deployment, as no additional external encoder needs to be loaded – the frozen copy is derived from the VLM itself. 
+
+## 4.5 Cross-Modal Attention Analysis 
+
+To empirically verify the cross-modal dilution phenomenon moti-vating our dual alignment design, we visualize how attention to image and text tokens evolves across reasoning steps. For each gen-eration step in Stage 1, we compute the average attention weight that the current token assigns to image tokens and text tokens, respectively, at the middle transformer layer. Figure 3 compares LARK (with dual alignment) against a variant without alignment losses. Without alignment, attention to both image and text tokens decays rapidly as reasoning progresses: image attention drops by 
+
+∼45% and text attention by ∼38% from the first to the last reasoning step, confirming that cross-modal signals attenuate during multi-step reasoning [14]. With LARK’s dual alignment, attention to both modalities remains substantially more stable (image attention drops by only ∼12%, text attention by ∼9%), demonstrating that the vi-sion alignment loss Lvision and reasoning-text alignment loss Ltext 
+
+effectively counteract this dilution. We further verify this at the representation level through CKA similarity analysis in §4.6, con-firming that cross-modal dilution manifests as genuine embedding drift, not merely an attention-level artifact. 
+
+## 4.6 In-depth Analysis 
+
+Item-to-Item Recommendations. Since NoteLLM-2 [41] is origi-nally designed for item-to-item (i2i) recommendation, we conduct a direct comparison on its native task using the Baby and Sports datasets. For each item, we construct ground-truth similar items from co-interaction patterns (item pairs sharing ≥ 5 common users) using held-out test-set interactions, which are disjoint from the training-set interactions used to build the Swing graph, ensuring no overlap between supervision and evaluation. Table 4 shows that LARK outperforms NoteLLM-2 by 4.7% and 4.3% on R@20 for Baby and Sports, respectively, even on the i2i recommendation task where NoteLLM-2 was originally designed. Notably, the performance gap is narrower compared to user-to-item recommendation (cf. Table 2), confirming NoteLLM-2’s i2i-native design advantage. Nevertheless, LARK’s two-stage latent reasoning captures richer item-level se-mantics that transfer well to direct item similarity computation, yielding consistent improvements across both datasets. 
+
+Feature Replacement Analysis. To further examine the quality of LARK’s learned representations, we replace the original visual and textual features used by existing multi-modal recommendation models with LARK’s pre-computed item embeddings, keeping all other model components unchanged. Table 5 reports R@20 and N@20 on Baby and Sports. All four models benefit from LARK em-beddings, with consistent improvements across both datasets. The Conference’17, July 2017, Washington, DC, USA 
+
+Table 4: Performance comparison of item-to-item recommen-dation task on Baby and Sports.                              
+
+> Method Baby Sports
+> R@10 R@20 R@10 R@20 LightGCN .0542 .0828 .0638 .0972 VBPR .0598 .0912 .0705 .1072 FREEDOM .0672 .1025 .0791 .1205 AlignRec .0715 .1088 .0842 .1278 NoteLLM-2 .0738 .1122 .0868 .1318 LARK .0772 .1175 .0905 .1375
+
+Table 5: Replacing original features with LARK embeddings.                                             
+
+> Method Baby Sports
+> R@20 N@20 R@20 N@20 Orig. +LARK Orig. +LARK Orig. +LARK Orig. +LARK MMGCN .0660 .0752 .0282 .0321 .0636 .0732 .0270 .0310 LATTICE .0850 .0935 .0370 .0405 .0953 .1045 .0421 .0460 BM3 .0883 .0958 .0383 .0415 .0980 .1068 .0438 .0476 FREEDOM .0992 .1048 .0424 .0448 .1089 .1152 .0481 .0510
+
+gains are inversely correlated with the original model’s strength: MMGCN, which relies on basic CNN features, sees the largest improvement (+13.9% R@20 on Baby, +15.1% on Sports), while FREEDOM, which already employs sophisticated feature refine-ment, improves by a smaller but still meaningful margin (+5.6% on Baby, +5.8% on Sports). This pattern suggests that LARK’s VLM-derived embeddings capture visual and semantic information that traditional feature extractors (e.g., ResNet, BERT) fail to encode, and that this information is complementary to the graph-based learning in downstream models. Notably, even FREEDOM – the strongest baseline in Table 2 – achieves R@20 of 0.1048 on Baby when equipped with LARK features, approaching LARK LightGCN ’s 0.1148, which demonstrates that the quality of item representations is the primary driver of recommendation performance. 
+
+Long-Tail Items Recommendations. A key challenge in multi-modal recommendation is handling long-tail items that have sparse interaction histories. Following AlignRec [22], we partition items into groups by interaction frequency and report Recall@20 per group on the Baby dataset. As shown in Figure 7, LARK achieves substantial improvements over baselines on the lowest-frequency group (items with fewer than 5 interactions), where collaborative signals are insufficient and the model must rely on multimodal content understanding. This validates that the multi-step latent reasoning captured by LARK’s dual alignment provides meaningful representations even for items with minimal behavioral data. 
+
+Embedding Drift Analysis. Beyond the attention-level analysis in §4.5, we directly measure how intermediate representations drift from the original multimodal features as reasoning progresses. For each reasoning step 𝑛 ∈ { 1, . . . , 𝑁 }, we extract the hidden states at the 𝑛 -th latent group and compute their centered kernel alignment (CKA) [17] with (i) the frozen vision encoder features F𝜙 and (ii) the input text token embeddings W𝑖 . We evaluate on 1,000 randomly sampled items from the Baby dataset and compare LARK (with dual alignment) against a variant without alignment losses. [5, 10) [10, 20) [20, 50) 50 
+
+> Item Interaction Frequency
+> 0.050 0.075 0.100 0.125 0.150 0.175
+> Recall@20
+
+Long-Tail Item Recommendation (Baby) 
+
+> BM3 FREEDOM AlignRec LARK
+
+Figure 7: Long-tail item recommendation on Baby. LARK shows the largest improvement on low-frequency items. Step 1 Step 2 Step 3 Step 4    
+
+> Reasoning Step
+> 0.4 0.5 0.6 0.7 0.8 0.9
+> CKA Similarity
+> 45%
+> 12%
+> Visual CKA (Latent vs. Vision Encoder)
+> w/ Dual Alignment w/o Alignment
+> Step 1 Step 2 Step 3 Step 4
+> Reasoning Step
+> 37%
+> 10%
+> Textual CKA (Latent vs. Text Embeddings)
+> w/ Dual Alignment w/o Alignment
+
+Figure 8: CKA similarity between latent representations and original multimodal features across reasoning steps on Baby. Left: visual CKA (latent vs. frozen vision encoder). Right: tex-tual CKA (latent vs. input text embeddings). Without align-ment, both modalities exhibit substantial representational drift; LARK’s dual alignment effectively preserves multi-modal grounding. 
+
+As shown in Figure 8, without alignment, both visual CKA and textual CKA decay monotonically across reasoning steps: visual CKA drops from 0.82 to 0.45 ( −45%) and textual CKA from 0.78 to 0.49 ( −37%) by the fourth step. This confirms that cross-modal dilution is not merely an attention-level artifact but manifests as genuine representational drift — the latent features progressively lose their grounding in the original multimodal inputs. With LARK’s dual alignment, visual CKA remains above 0.72 throughout (drop-ping only −12%), and textual CKA stays above 0.70 ( −10%), demon-strating that the alignment losses effectively anchor the represen-tations to their multimodal origins across reasoning stages. Notably, the textual CKA stabilization is primarily attributable to the reasoning-text alignment Ltext in Stage 2, which back-propagates semantic anchoring signals through the Bridge MLP into the first stage’s latent representations during training. 
+
+## 5 CONCLUSION AND FUTURE WORK 
+
+We present LARK, a latent-aligned reasoning framework that re-purposes a vision-language model as a multimodal item encoder for recommendation. LARK interleaves latent tokens with multi-step chain-of-thought reasoning in a fixed template, and applies dual alignment – vision alignment in Stage 1 and reasoning-text alignment in Stage 2 – to counteract cross-modal dilution across the reasoning pipeline. Experiments on three Amazon benchmarks Conference’17, July 2017, Washington, DC, USA Jiarui Jin et al. 
+
+and one industrial dataset demonstrate consistent improvements over state-of-the-art baselines, with up to 15.1% gains as drop-in feature replacements. As future work, we plan to deploy LARK in a production environment for online A/B evaluation and to extend the framework to user-side modeling by incorporating interaction history into the latent reasoning process. Conference’17, July 2017, Washington, DC, USA 
+
+## REFERENCES 
+
+[1] Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wenbin Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Tang, et al. 2025. Qwen2.5-VL Technical Report. arXiv preprint arXiv:2502.13923 (2025). [2] Kanzhi Cheng, Wenpo Song, Jiaxin Fan, Zheng Ma, Qiushi Sun, Fangzhi Xu, Chenyang Yan, Nuo Chen, Jianbing Zhang, and Jiajun Chen. 2025. CapArena: Benchmarking and Analyzing Detailed Image Captioning in the LLM Era. In 
+
+Findings of the Association for Computational Linguistics: ACL 2025 . Association for Computational Linguistics, Vienna, Austria, 14077–14094. https://doi.org/10. 18653/v1/2025.findings-acl.724 [3] Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. 2019. Bert: Pre-training of deep bidirectional transformers for language understanding. In 
+
+Proceedings of the 2019 conference of the North American chapter of the association for computational linguistics: human language technologies, volume 1 (long and short papers) . 4171–4186. [4] Gemini Team. 2025. Gemini 2.5: Pushing the Frontier with Advanced Reasoning. 
+
+Google DeepMind Blog (2025). https://blog.google/technology/google-deepmind/ gemini-model-thinking-updates-march-2025/ [5] Huifeng Guo, Ruiming Tang, Yunming Ye, Zhenguo Li, and Xiuqiang He. 2017. DeepFM: A Factorization-Machine based Neural Network for CTR Prediction. In Proceedings of the Twenty-Sixth International Joint Conference on Artificial Intelligence . 1725–1731. https://doi.org/10.24963/ijcai.2017/239 [6] Shibo Hao, Sainbayar Sukhbaatar, DiJia Su, Xian Li, Zhiting Hu, Jason Weston, and Yuandong Tian. 2024. Training large language models to reason in a continuous latent space. arXiv preprint arXiv:2412.06769 (2024). [7] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. 2016. Deep residual learning for image recognition. In Proceedings of the IEEE conference on computer vision and pattern recognition . 770–778. [8] Liqi He, Zuchao Li, Xiantao Cai, and Ping Wang. 2024. Multi-modal latent space learning for chain-of-thought reasoning in language models. In Proceedings of the AAAI conference on artificial intelligence , Vol. 38. 18180–18187. [9] Ruining He and Julian McAuley. 2016. Ups and Downs: Modeling the Vi-sual Evolution of Fashion Trends with One-Class Collaborative Filtering. In 
+
+Proceedings of the 25th International Conference on World Wide Web . 507–517. https://doi.org/10.1145/2872427.2883037 [10] Ruining He and Julian McAuley. 2016. VBPR: Visual Bayesian Personalized Rank-ing from Implicit Feedback. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 30. [11] Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, Yongdong Zhang, and Meng Wang. 2020. Lightgcn: Simplifying and powering graph convolution network for recommendation. In SIGIR .[12] Yupeng Hou, Jiacheng Li, Zhankui He, An Yan, Xiusi Chen, and Julian McAuley. 2024. Bridging Language and Items for Retrieval and Recommendation. arXiv preprint arXiv:2403.03952 (2024). [13] Ngoc Dung Huynh, Mohamed Reda Bouadjenek, Sunil Aryal, Imran Razzak, and Hakim Hacid. 2025. Visual question answering: from early develop-ments to recent advances – a survey. arXiv preprint arXiv:2501.03939 (2025). arXiv:cs.CV/2501.03939 [14] Byungwoo Jeon, Yoonwoo Jeong, Hyunseok Lee, Minsu Cho, and Jinwoo Shin. 2026. Vision-aligned Latent Reasoning for Multi-modal Large Language Model. 
+
+arXiv preprint arXiv:2602.04476 (2026). [15] Jiarui Jin, Xianyu Chen, Weinan Zhang, Yong Yu, and Jun Wang. 2025. Why Not Together? A Multiple-Round Recommender System for Queries and Items. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 1 . 601–612. [16] Wang-Cheng Kang and Julian McAuley. 2018. Self-Attentive Sequential Recom-mendation. In Proceedings of the IEEE International Conference on Data Mining (ICDM) . 197–206. [17] Simon Kornblith, Mohammad Norouzi, Honglak Lee, and Geoffrey Hinton. 2019. Similarity of Neural Network Representations Revisited. In Proceedings of the 36th International Conference on Machine Learning . 3519–3529. [18] Bangzheng Li, Ximeng Sun, Jiang Liu, Ze Wang, Jialian Wu, Xiaodong Yu, Hao Chen, Emad Barsoum, Muhao Chen, and Zicheng Liu. 2025. Latent visual rea-soning. arXiv preprint arXiv:2509.24251 (2025). [19] Chengzu Li, Wenshan Wu, Huanyu Zhang, Yan Xia, Shaoguang Mao, Li Dong, Ivan Vulić, and Furu Wei. 2025. Imagine while Reasoning in Space: Multimodal Visualization-of-Thought. In Proceedings of the 42nd International Conference on Machine Learning (ICML) . arXiv:2501.07542 [20] Haotian Liu, Chunyuan Li, Yuheng Li, and Yong Jae Lee. 2024. Improved Baselines with Visual Instruction Tuning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) .[21] Qidong Liu, Jiaxi Hu, Yutian Xiao, Xiangyu Zhao, Jingtong Gao, Wanyu Wang, Qing Li, and Jiliang Tang. 2024. Multimodal recommender systems: A survey. 
+
+Comput. Surveys 57, 2 (2024), 1–17. [22] Yifan Liu, Kangning Zhang, Xiangyuan Ren, Yanhua Huang, Jiarui Jin, Yingjie Qin, Ruilong Su, Ruiwen Xu, Yong Yu, and Weinan Zhang. 2024. Alignrec: Aligning and training in multimodal recommendations. In Proceedings of the 33rd ACM International Conference on Information and Knowledge Management . 1503–1512. [23] Xinchen Luo, Jiangxia Cao, Tianyu Sun, Jinkai Yu, Rui Huang, Wei Yuan, Hezheng Lin, Yichen Zheng, Shiyao Wang, Qigen Hu, et al. 2025. Qarm: Quantitative alignment multi-modal recommendation at kuaishou. In Proceedings of the 34th ACM International Conference on Information and Knowledge Management . 5915– 5922. [24] Sruthy Manmadhan and Binsu C. Kovoor. 2020. Visual question answering: a state-of-the-art review. Artificial Intelligence Review 53 (2020), 5705–5745. https://doi.org/10.1007/s10462-020-09832-7 [25] Maxime Oquab, Timothée Darcet, Théo Moutakanni, Huy Vo, Marc Szafraniec, Vasil Khalidov, Pierre Fernandez, Daniel Haziza, Francisco Massa, Alaaeldin El-Nouby, Mahmoud Assran, Nicolas Ballas, Wojciech Galuba, Russell Howes, Po-Yao Huang, Shang-Wen Li, Ishan Misra, Michael Rabbat, Vasu Sharma, Gabriel Synnaeve, Hu Xu, Hervé Jegou, Julien Mairal, Patrick Labatut, Armand Joulin, and Piotr Bojanowski. 2024. DINOv2: Learning Robust Visual Features without Supervision. Transactions on Machine Learning Research (2024). [26] Xubin Ren, Wei Wei, Lianghao Xia, Lixin Su, Suqi Cheng, Junfeng Wang, Dawei Yin, and Chao Huang. 2024. Representation Learning with Large Language Models for Recommendation. In Proceedings of the ACM Web Conference 2024 .3464–3475. https://doi.org/10.1145/3589334.3645458 [27] Steffen Rendle, Christoph Freudenthaler, Zeno Gantner, and Lars Schmidt-Thieme. 2009. BPR: Bayesian Personalized Ranking from Implicit Feedback. In Proceedings of the Twenty-Fifth Conference on Uncertainty in Artificial Intelligence . AUAI Press, 452–461. [28] Steffen Rendle, Christoph Freudenthaler, Zeno Gantner, and Lars Schmidt-Thieme. 2012. BPR: Bayesian personalized ranking from implicit feedback. arXiv preprint arXiv:1205.2618 (2012). [29] Charlie Snell, Jaehoon Lee, Kelvin Xu, and Aviral Kumar. 2024. Scaling llm test-time compute optimally can be more effective than scaling model parameters. 
+
+arXiv preprint arXiv:2408.03314 (2024). [30] Aäron van den Oord, Yazhe Li, and Oriol Vinyals. 2018. Representation Learning with Contrastive Predictive Coding. In Advances in Neural Information Processing Systems , Vol. 31. [31] Qixun Wang, Yang Shi, Yifei Wang, Yuanxing Zhang, Pengfei Wan, Kun Gai, Xianghua Ying, and Yisen Wang. 2026. Monet: Reasoning in latent visual space be-yond image and language. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 12030–12040. [32] Yaoting Wang, Shengqiong Wu, Yuecheng Zhang, Shuicheng Yan, Ziwei Liu, Jiebo Luo, and Hao Fei. 2025. Multimodal Chain-of-Thought Reasoning: A Compre-hensive Survey. arXiv preprint arXiv:2503.12605 (2025). arXiv:cs.CV/2503.12605 [33] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed H. Chi, Quoc V. Le, and Denny Zhou. 2022. Chain-of-Thought Prompting Elicits Reasoning in Large Language Models. In Advances in Neural Information Processing Systems , Vol. 35. [34] Wei Wei, Xubin Ren, Jiabin Tang, Qinyong Wang, Lixin Su, Suqi Cheng, Jun-feng Wang, Dawei Yin, and Chao Huang. 2024. Llmrec: Large language models with graph augmentation for recommendation. In Proceedings of the 17th ACM international conference on web search and data mining . 806–815. [35] Yinwei Wei, Xiang Wang, Liqiang Nie, Xiangnan He, Richang Hong, and Tat-Seng Chua. 2019. MMGCN: Multi-modal graph convolution network for personalized recommendation of micro-video. In Proceedings of the 27th ACM international conference on multimedia . 1437–1445. [36] Chuhan Wu, Fangzhao Wu, Tao Qi, Chao Zhang, Yongfeng Huang, and Tong Xu. 2022. Mm-rec: Visiolinguistic model empowered multimodal news recommenda-tion. In Proceedings of the 45th international ACM SIGIR conference on research and development in information retrieval . 2560–2564. [37] Jiahao Xun, Shengyu Zhang, Zhou Zhao, Jieming Zhu, Qi Zhang, Jingjie Li, Xiuqiang He, Xiaofei He, Tat-Seng Chua, and Fei Wu. 2021. Why do we click: visual impression-aware news recommendation. In Proceedings of the 29th ACM international conference on multimedia . 3881–3890. [38] Hang Yang, Yujing Zhao, Yiming Xiao, Zhining Wang, Shuguang Ji, Dawei Yin, and Hongbo Deng. 2020. Large Scale Product Graph Construction for Recom-mendation in E-commerce. In Proceedings of the 29th International Conference on World Wide Web (WWW), Workshop on Graph Neural Networks .[39] Sihyun Yu, Sangkyung Kwak, Huiwon Jang, Jongheon Jeong, Jonathan Huang, Jin-woo Shin, and Saining Xie. 2024. Representation alignment for generation: Train-ing diffusion transformers is easier than you think. arXiv preprint arXiv:2410.06940 
+
+(2024). [40] Chao Zhang, Zichao Yang, Xiaodong He, and Li Deng. 2020. Multimodal in-telligence: Representation learning, information fusion, and applications. IEEE Journal of Selected Topics in Signal Processing 14, 3 (2020), 478–493. [41] Chao Zhang, Haoxin Zhang, Shiwei Wu, Di Wu, Tong Xu, Xiangyu Zhao, Yan Gao, Yao Hu, and Enhong Chen. 2025. Notellm-2: Multimodal large representation models for recommendation. In Proceedings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 1 . 2815–2826. [42] Jiahao Zhang, Dehai Zhang, Xu He, Feng Gao, and Xiaohan Li. 2024. An Overview of Image Captioning Generation Based on Large Language Models. In Interna-tional Conference on Haptics and Virtual Reality . Springer, 50–56. Conference’17, July 2017, Washington, DC, USA Jiarui Jin et al. 
+
+[43] Jinghao Zhang, Yanqiao Zhu, Qiang Liu, Shu Wu, Shuhui Wang, and Liang Wang. 2021. Mining latent structures for multimedia recommendation. In Proceedings of the 29th ACM international conference on multimedia . 3872–3880. [44] Ziwei Zheng, Michael Yang, Jack Hong, Chenxiao Zhao, Guohai Xu, Le Yang, Chao Shen, and Xing Yu. 2025. DeepEyes: Incentivizing “Thinking with Im-ages” via Reinforcement Learning. arXiv preprint arXiv:2505.14362 (2025). arXiv:cs.CV/2505.14362 [45] Xin Zhou, Hongyu Zhou, Yong Liu, Zhiwei Zeng, Chunyan Miao, Pengwei Wang, Yuan You, and Feijun Jiang. 2023. Bootstrap latent representations for multi-modal recommendation. In Proceedings of the ACM web conference 2023 . 845–854. [46] Xin Zhou, Hongyu Zhou, Yong Liu, Zhiwei Zeng, Chunyan Miao, Pengwei Wang, Yuan You, and Feijun Jiang. 2023. A Tale of Two Graphs: Freezing and Denoising Graph Structures for Multimodal Recommendation. In Proceedings of the 31st ACM International Conference on Multimedia . 935–943. https://doi.org/10.1145/ 3581783.3612172 Conference’17, July 2017, Washington, DC, USA 
+
+## A OVERALL ALGORITHM 
+
+We summarize the complete training and inference procedures of LARK in Algorithm 1 and Algorithm 2, respectively. Training alternates between Stage 1 (interleaved latent-language reasoning with vision alignment) and Stage 2 (item-item contrastive learning with reasoning-text alignment). At inference, the same two-stage pipeline produces the final item embedding e𝑖 for each item. 
+
+Algorithm 1: Training of Lark 
+
+Input: Item set I with images {I𝑖 } and texts {T𝑖 }; Swing positive sets {N + 
+
+> 𝑖
+
+}; Multi-step CoT annotations {c∗ 
+
+> 𝑖
+
+}
+
+(𝑁 steps); VLM with vision encoder Fvision , frozen copy Ffrozen , transformer Ftransformer , Bridge MLP 
+
+FBridgeMLP , projection head FProjectionHead  
+
+> 1
+
+Initialize all parameters;  
+
+> 2
+
+repeat  
+
+> 3
+
+Sample a batch B from I; 
+
+> 4
+
+foreach item 𝑖 in B do 
+
+// Stage 1: Vision-Language Reasoning  
+
+> 5
+
+v𝑖 ← F vision (Mask (I𝑖 , 𝜌 )) ; 
+
+> 6
+
+S ← [ V𝑖 ; W𝑖 ; P(1) ]; 
+
+> 7
+
+for 𝑛 = 1 to 𝑁 do // 𝑁 groups  
+
+> 8
+
+for 𝑘 = 1 to 𝐾 do // 𝐾 latent tokens  
+
+> 9
+
+ℎ ← F transformer (S) [− 1, :]; S ← [ S; ℎ]; 
+
+> 10
+
+end  
+
+> 11
+
+for each 𝒄 ∗ 
+
+> 𝑡
+
+in step 𝑛 do // teacher-forced CoT  
+
+> 12
+
+S ← [ S; Fembed (𝒄 ∗ 
+
+> 𝑡
+
+)] ; 
+
+> 13
+
+end  
+
+> 14
+
+end  
+
+> 15
+
+Collect H(1) 
+
+> 𝑖
+
+from 𝐾 𝑙 =𝑁 ×𝐾 latent positions, H(1)
+
+> lang ,𝑖
+
+from language positions;  
+
+> 16
+
+ˆF ← F up (H(1) 
+
+> 𝑖
+
+);;  
+
+> 17
+
+F𝜙 ← F frozen (I𝑖 ) ; // for Lvision 
+
+// Stage 2: Item-Item Alignment  
+
+> 18
+
+˜H(1) 
+
+> 𝑖
+
+← F BridgeMLP (H(1) 
+
+> 𝑖
+
+); E(2) ← [ ˜H(1) 
+
+> 𝑖
+
+; p(2) ]; 
+
+> 19
+
+H(2) 
+
+> 𝑖
+
+← F transformer (E(2) );
+
+e𝑖 ← F ProjectionHead (H(2) 
+
+> 𝑖
+
+); 
+
+> 20
+
+Extract F(2) 
+
+> 𝑖
+
+at layer 𝑚 ;;  
+
+> 21
+
+¯r ← MeanPool (H(1) 
+
+> lang ,𝑖
+
+) ; // for Ltext  
+
+> 22
+
+end  
+
+> 23
+
+Update by L = Li2i + 𝜆 cot Lcot + 𝜆 align (L vision + L text ); 
+
+> 24
+
+until convergence ;
+
+## B PROMPTS 
+
+As introduced in §3.4, we use Gemini-2.5-Flash [4] as the teacher VLM to generate multi-step chain-of-thought (CoT) reasoning anno-tations for all items offline. For each item 𝑖 , we provide its product image I𝑖 and title text T𝑖 as input, and prompt the model to produce a structured four-step reasoning chain covering visual attributes, functional analysis, target audience, and distinguishing features. 
+
+Algorithm 2: Inference of Lark 
+
+Input: Item set I; trained VLM, Bridge MLP FBridgeMLP ,projection head FProjectionHead 
+
+Output: Item embeddings {e𝑖 }𝑖 ∈ I  
+
+> 1
+
+foreach item 𝑖 in I do  
+
+> 2
+
+S ← [ V𝑖 ; W𝑖 ; P(1) ]; 
+
+> 3
+
+for 𝑛 = 1 to 𝑁 do  
+
+> 4
+
+for 𝑘 = 1 to 𝐾 do  
+
+> 5
+
+ℎ ← F transformer (S) [− 1, :]; S ← [ S; ℎ]; 
+
+> 6
+
+end  
+
+> 7
+
+Autoregressively generate CoT tokens for step 𝑛 ;append to S; 
+
+> 8
+
+end  
+
+> 9
+
+Collect H(1) 
+
+> 𝑖
+
+from latent positions;  
+
+> 10
+
+e𝑖 ←FProjectionHead (F transformer ([F BridgeMLP (H(1) 
+
+> 𝑖
+
+); P(2) ])) ; 
+
+> 11
+
+end  
+
+> 12
+
+Store {e𝑖 } in vector index; train downstream recommendation model The generation is performed in a single pass over the entire item catalog before training begins. The prompt template used for CoT generation is shown below: 
+
+CoT Generation Prompt 
+
+You are a product understanding assistant. Given the product image and title, generate a structured analysis following these four steps: Step 1 - Visual Attributes: Describe the key visual properties (material, color, shape, texture). Step 2 - Functional Analysis: Identify the product’s primary function and usage scenario. Step 3 - Target Audience: Determine the intended user group based on visual and functional cues. Step 4 - Distinguishing Features: Highlight what makes this product unique compared to similar items. Keep each step to one sentence (under 15 words). Focus on the product itself. Title: {item_title} Analysis: 
+
+Table 6 provides representative examples of generated CoT rea-soning chains across different product categories. Table 7 summarizes the statistics of the generated CoT data. The average reasoning chain length is approximately 55 tokens (across four steps), consistent with our design goal of structured multi-step reasoning that provides rich supervision for latent token training. We apply the following post-processing steps to ensure data quality: (1) Step verification : Reasoning chains missing any of the four steps are re-generated; fewer than 1.2% of items require re-generation. (2) Length filtering : Individual steps exceeding 15 words are trun-cated at the last complete word. Conference’17, July 2017, Washington, DC, USA Jiarui Jin et al. 
+
+Table 6: Examples of multi-step CoT reasoning generated by Gemini-2.5-Flash. Category Title (Excerpt) Generated CoT Reasoning 
+
+Baby Infant Soft Cot-ton Romper 
+
+Visual: Pastel cotton romper with snap buttons. 
+
+Function: Easy-change infant daily wear. Audi-ence: Parents of newborns 0–12 months. Distin-guishing: Snap-button design for quick diaper access. Sports Adjustable Dumbbell Set 25lb 
+
+Visual: Black rubber-coated dumbbell with chrome handle. Function: Adjustable weight for home strength training. Audience: Home fit-ness enthusiasts at beginner-intermediate level. 
+
+Distinguishing: Quick-lock weight adjustment mechanism. Clothing Women’s Knit Cardigan 
+
+Visual: Cream lightweight knit with ribbed cuffs. 
+
+Function: Layering piece for casual or office set-tings. Audience: Women seeking versatile ev-eryday outerwear. Distinguishing: Open-front design with elongated silhouette. 
+
+Table 7: Statistics of generated CoT reasoning chains. Dataset #Items Avg. Len. Med. Len. Max Len. 
+
+Baby 7,050 53.2 54 72 Sports 18,357 56.8 56 75 Clothing 23,033 54.1 53 70 In-House 432,671 55.4 55 74 (3) Deduplication : Identical reasoning chains across different items are flagged; fewer than 0.3% of items produce duplicates. (4) Format normalization : All text is lowercased and stripped of trailing punctuation for consistency.

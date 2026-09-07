@@ -1,0 +1,356 @@
+Title: Spatial Matryoshka Training for Multi-Granularity Visual Document Retrieval
+
+URL Source: https://arxiv.org/pdf/2608.29951v1
+
+Published Time: Tue, 01 Sep 2026 01:36:42 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# ColSNAP : Spatial Matryoshka Training for Multi-Granularity Visual Document Retrieval 
+
+## Trishan Singha Roy 1∗, Arkadeep Acharya 2, Vishwajeet Kumar 2, Jaydeep Sen 2, Sachindra Joshi 2
+
+> 1
+
+IIT Delhi 
+
+> 2
+
+IBM ee1230783@iitd.ac.in, acharyarka17@ibm.com, vishk024@in.ibm.com, jaydesen@in.ibm.com, jsachind@in.ibm.com 
+
+Abstract 
+
+Multi-modal late-interaction retrievers achieve strong retrieval on visually rich documents by representing each page as per-patch embeddings and matching at the token level. However, this approach incurs high storage costs. Existing compression methods typically fix a single compression level at indexing time, limiting flexibility. We present ColSNAP (Spatial Nested Average Pooling) 1, a training method that generates a nested hierarchy of compression levels directly from a backbone’s patch grid. By spatially pooling patch embeddings into pro-gressively coarser tiers and training all tiers simultaneously, a single model learns to support retrieval at multiple compres-sion levels without architectural changes. Crucially, a single encoding pass yields every tier, enabling the accuracy-storage trade-off to be configured at indexing time to match avail-able storage budgets, rather than being fixed during training. We demonstrate that models trained using ColSNAP maintain near full-resolution retrieval performance under substantial compression and that ColSNAP transfers effectively across multiple late-interaction backbones, and achieves most of its improvements via a lightweight adaptation stage applied to a pre-trained retriever. 
+
+## 1 Introduction 
+
+Visual Document Retrieval (VDR) retrieves document pages relevant to a natural language query using both the visual lay-out and textual content of a page (Yan et al. 2026a; Faysse et al. 2025). Relevance cannot be determined from text alone: it depends on visual elements such as tables, charts, and figures, and on their spatial organization. Early approaches applied optical character recognition (OCR) (Hegghammer 2022; Zhang et al. 2025) to extract text for a conventional retriever, but such pipelines are brittle, as recognition er-rors propagate downstream and layout structure is lost when pages are verbalized. Vision-language models (VLMs) in-stead embed the rendered page image directly, eliminating the extraction stage. The emergence of multi-modal embedding models has led to two dominant approaches. 1) Single-vector meth-ods encode each page and query into one dense embedding, scored by cosine similarity (Ma et al. 2024; Meng et al. 
+
+> 1
+
+Code will be released upon publication. 
+
+> ∗
+
+Work done as an intern at IBM 
+
+2025). These are compact and support efficient approximate nearest-neighbour search, but compressing a page into one vector discards the fine-grained evidence that complex doc-uments require, where relevance may hinge on a single table row or figure annotation (Weller et al. 2026). 2) Multi-vector methods adopt the late-interaction paradigm of ColBERT (Khattab and Zaharia 2020), extending it to visual docu-ments. Systems such as ColQwen and ColPali (Faysse et al. 2025) represent a page as per-patch embeddings and score queries with a MaxSim operator that aligns each query to-ken to its most relevant page region, preserving the localized evidence that pooling discards. This has established multi-vector representations as the dominant paradigm in VDR (de Souza P. Moreira et al. 2026; Günther et al. 2025). The cost, however, is substantial: a single page yields hundreds to thousands of stored vectors, so index size and query-time scoring both scale with the number of patches per page, and higher-resolution inputs push this further, making storage a limiting factor in large-scale deployment. This cost–quality tradeoff motivates two research questions: 
+
+• RQ1: Can a method maintain the retrieval performance of an existing retriever while substantially reducing the number of vectors needed to encode each document page? 
+
+• RQ2: Does such a method generalize across retrievers of differing size and retrieval performance? We address these questions with ColSNAP (Spatial Nested Average Pooling), a training recipe that builds a nested hierarchy of compression levels directly from the back-bone’s patch grid. The key insight is that pretrained patch grids exhibit natural hierarchy-spatially adjacent patches are highly redundant, so averaging them yields meaning-ful coarser embeddings. In a single encoding pass, we spa-tially pool patch embeddings into a pyramid of granularities (1024 → 128 → 16 → 1), adding no tokens and no change to the encoder architecture. All tiers are trained jointly via Spatial Matryoshka learning with two distillation signals: (1) a frozen-teacher term anchoring all tiers to the original pretrained model, and (2) a cross-level term aligning coarse tiers to the live model’s finest tier. At indexing time, users select a tier matching their storage budget, achieving up to 
+
+∼ 70 × smaller storage footprint on Nemotron ColEmbed 4B (de Souza P. Moreira et al. 2026) and ∼ 130 × smaller on ColPali v1.3 (Faysse et al. 2025). arXiv:2608.29951v1 [cs.AI] 30 Aug 2026 query  
+
+> “How do Bank of America and Citigroup manage their credit risk differently?”
+> document page Vision– Language Encoder
+> query embeddings L0 · 1024 patch embeddings (document) L1 · 128 patch embeddings L2 · 16 patch embeddings L3 · 1 patch embedding
+> spatial avg-pool
+
+MaxSim                 
+
+> late interaction tiers vs. query
+> relevance scores for all tiers Training objective L=ΣℓLsp (ℓ) +λfΣℓLfrozen (ℓ) +λlΣℓ≥ 1Llive (ℓ)softplus, L0–L3 — contrastive retrieval loss frozen KL, L0–L3, λf — anchor every tier to the frozen pretrained model live KL, L1–L3, λl — pull coarse tiers to the model’s own L0 (stop-grad) KL terms: per-query z-score, softmax at τ= 1.5
+
+Figure 1: Overview of ColSNAP. A shared vision–language encoder maps a document page to a row of patch embeddings (blue), flanked by a few auxiliary template tokens (grey), and the query to a set of query embeddings (purple). Spatial average-pooling compresses the patch embeddings into a nested pyramid of tiers (L0–L3) while leaving the auxiliary tokens unchanged; any tier can then be scored against the query with late-interaction MaxSim. A single encoding pass produces every tier, so the compression level is selected at index time. We summarize our contributions as follows: 
+
+• We propose ColSNAP , a method that reduces storage costs of multi-vector retrievers by learning multiple com-pression levels from a single patch grid, without changing the encoder architecture. 
+
+• ColSNAP achieves up to ∼ 70 × compression while re-taining over 90% of full-resolution quality, with compres-sion levels configurable at indexing time. 
+
+• The method generalizes across retrievers of differing size and retrieval performance (demonstrated on Nemotron ColEmbed 4B (de Souza P. Moreira et al. 2026) and ColPaLI v1.3 (Faysse et al. 2025)) and requires only lightweight adaptation of pre-trained models. 
+
+• We evaluate on ViDoRe v1 (Faysse et al. 2025), v2 (Macé, Loison, and Faysse 2025), and the public splits of v3 (Loi-son et al. 2026) benchmarks and show that multi-vector retrieval is practical at scale with ColSNAP . The remainder of this paper is organized as follows. Sec-tion 2 reviews related work in neural retrieval and repre-sentation learning. Section 3 presents the ColSNAP method in detail. Section 4 describes our experimental setup and benchmarks. Section 5 presents results and analysis. Finally, Section 6 concludes the paper. 
+
+## 2 Related Work 
+
+Late-interaction retrieval, introduced by ColBERT (Khattab and Zaharia 2020), encodes queries and documents into se-quences of per-token embeddings and scores a pair with MaxSim, preserving fine-grained matching that a single pooled vector discards, at the cost of one vector per token. ColPali (Faysse et al. 2025) extended this to visually rich doc-uments by encoding rendered page images into multi-vector patch embeddings, sidestepping brittle OCR pipelines, and the same recipe has since carried over to stronger backbones such as Nemotron ColEmbed (de Souza P. Moreira et al. 2026). However, this accuracy comes at a cost: each page is stored as hundreds to thousands of patch vectors, so index size and retrieval latency grow with the number of tokens per page. A large body of work reduces this cost for text. ColBERTv2 (Santhanam et al. 2022b) quantizes embeddings against learned centroids, later pruned by PLAID (Santhanam et al. 2022a); other methods reduce the number of stored vec-tors directly, via token pooling (Clavié, Chaffin, and Adams 2024), learned token retention (Lee et al. 2024), clustering (Veneroso et al. 2025), or a single fixed-dimensional en-coding whose inner product approximates MaxSim (Dhuli-pala et al. 2026). Several of the strongest methods, such as CITADEL’s lexical-key routing (Li et al. 2023), exploit dis-crete, term-level structure that has no analogue for continuous image patches. Compression for visual document retrieval is more recent, from training-free pruning and merging of patch embed-dings (Yan et al. 2025; Liu et al. 2026; Yan et al. 2026c,b) to methods that finetune a module or the retriever itself (Ma et al. 2025; Cha et al. 2026; Park et al. 2026). Most of these commit to a single compression level fixed at indexing time. A few instead serve several levels from one model: MM-Matryoshka nests along embedding width and encoder depth (Xiang et al. 2026), MetaEmbed appends learnable Meta To-kens trained end to end in nested coarse-to-fine groups (Xiao et al. 2026), and jina-embeddings-v4 trains adapters to emit both a truncatable single vector and a multi-vector represen-tation (Günther et al. 2025). The spatial layout of the patch grid, the one form of structure visual tokens reliably possess, remains largely unused as an axis for such a hierarchy. Matryoshka Representation Learning (MRL) (Kusupati et al. 2024) encodes multiple granularities within a single vector by ordering dimensions by importance. This princi-ple has been extended from dimension to vector count:M3 (Cai et al. 2024) learns visual tokens for multimodal gen-eration, while MetaEmbed (Xiao et al. 2026) applies it to late-interaction retrieval via Meta Tokens. To the best of our knowledge, for visual document retrieval, ColSNAP is the first method to build a nested multi-vector hierarchy from the backbone’s patch grid. We spatially average-pool per-patch embeddings into a granularity pyramid, training each tier for retrieval. Since this spatial axis is orthogonal to em-bedding dimensionality, it composes with dimension-side compression without changing the encoder. 
+
+## 3 ColSNAP 
+
+3.1 Overview 
+
+ColSNAP addresses the storage challenge of multi-vector retrievers by constructing a nested hierarchy of token com-pression levels from a single forward pass. The core insight is simple: a pretrained 32 × 32 patch grid exhibits natural spa-tial hierarchy. Adjacent patches encode redundant informa-tion about the same document region, so spatially averaging them substantially reduces the vector count while retaining much of the retrieval quality. ColSNAP trains all compres-sion tiers jointly using a shared contrastive objective, together with two distillation signals. This lets the accuracy-storage trade-off be configured at indexing time rather than fixed during training. This allows a single model to serve diverse deployment scenarios without retraining. 
+
+3.2 Setting and Background 
+
+Problem: Given a textual query and a corpus of documents whose pages are represented as rendered images, Visual Doc-ument Retrieval ranks pages by their relevance to the query without OCR or layout parsing. 
+
+Encoding: A vision-language model encodes both sides into a shared d-dimensional space. The query is tok-enized and encoded into a set of query embeddings Q =
+
+{q1, . . . , q nq }, qt ∈ Rd. Each page image is processed by a vision encoder into a set of document embeddings. The encoder emits a 32 × 32 grid of patch embeddings, denoted by p1, . . . , p np where np = 1024 and pi ∈ Rd, as well as a small number of auxiliary tokens (e.g., special tokens before and after the patch grid), denoted a1, . . . , a k where aj ∈ Rd.The full document representation is: 
+
+D = {a1, . . . , a k, p 1, . . . , p np }. (1) 
+
+Late Interaction Scoring: Late-interaction retrieval (Khattab and Zaharia 2020) scores a query-document pair by summing, over each query embedding, its maximum sim-ilarity to any document embedding: 
+
+S(Q, D ) = 
+
+> nq
+
+X
+
+> t=1
+
+max  
+
+> v∈D
+
+⟨qt, v ⟩, (2) L0 · 1024 patch embeddings 1×1 blocks → 32×32 patches L1 · 128 patch embeddings 2×4 blocks → 16×8 patches L2 · 16 patch embeddings 8×8 blocks → 4×4 patches L3 · 1 patch embedding 32×32 block → 1×1 patches 
+
+Figure 2: Spatial pooling pyramid. The 32 × 32 patch grid is average-pooled over increasingly large windows to form four tiers: L0 ( 1 × 1 blocks, 1024 embeddings), L1 ( 2 × 4 blocks, 
+
+16 × 8 = 128 ), L2 ( 8 × 8 blocks, 4 × 4 = 16 ), and L3 (a single 32 × 32 block, 1). Each shaded block is averaged into one pooled embedding. where |D| = k + np. This preserves fine-grained detail by matching each query token to its most relevant document region. 
+
+3.3 Spatial Pooling Pyramid 
+
+ColSNAP builds a nested pyramid of coarser views of the 
+
+32 × 32 patch grid by spatially average-pooling patch em-beddings over progressively larger windows. Because each pooling window is nested inside the next, the resulting tiers are hierarchically consistent: every coarse embedding sum-marizes a contiguous spatial block of the finer embeddings beneath it. This construction produces four tiers, denoted 
+
+L0, L 1, L 2, L 3 (indexed by ℓ ∈ {0, 1, 2, 3}), where tier Lℓ contains nℓ patch embeddings arranged as a grid: 
+
+L0 : 32 × 32 = 1024 , L1 : 16 × 8 = 128 ,L2 : 4 × 4 = 16 , L3 : 1 × 1 = 1 . (3) Each tier is a complete, coarser summary of the same un-derlying patches. We denote the pooled patch embeddings at tier ℓ as p(ℓ)1 , . . . , p (ℓ) 
+
+> nℓ
+
+. Importantly, the coarser tiers intro-duce no additional parameters and reuse the same underlying embeddings; Figure 2 illustrates the construction. 
+
+3.4 Multi-Tier Scoring 
+
+ColSNAP scores identically across all tiers using the MaxSim operator. At tier Lℓ, we replace the np = 1024 patch embed-dings with their pooled counterparts p(ℓ)1 , . . . , p (ℓ) 
+
+> nℓ
+
+, while the auxiliary tokens a1, . . . , a k are carried over unchanged. The document representation at tier ℓ is: 
+
+D(ℓ) = {a1, . . . , a k, p (ℓ)1 , . . . , p (ℓ) 
+
+> nℓ
+
+}. (4) The relevance score at tier ℓ, written S(ℓ)(Q, D ), is then Eq. 2 with D replaced by D(ℓ), where |D(ℓ)| = k + nℓ. ℓ = 0 
+
+applies no pooling, so D(0) = D: the finest tier is identical to the original, unpooled retriever. We compress only the patch embeddings, whose count varies across tiers through 
+
+1024 , 128 , 16 , 1, leaving the auxiliary tokens untouched. 
+
+3.5 Joint Training via Spatial Matryoshka Learning 
+
+To optimize all tiers simultaneously without degrading the original model’s performance, we employ a joint training objective combining three loss terms. 
+
+Spatial Matryoshka Ranking Loss. Each tier is trained to rank matched documents above in-batch negatives. During training, each step samples a batch of B matched query– document pairs. For every tier Lℓ (where ℓ ∈ { 0, 1, 2, 3}), we compute MaxSim scores between all B queries and B
+
+documents, forming a score matrix: 
+
+S(ℓ) ∈ RB×B , S(ℓ) 
+
+> ij
+
+= S(ℓ)(Qi, D (ℓ) 
+
+> j
+
+), (5) where each entry is the MaxSim score of Eq. 2, evaluated for query i against document j at tier ℓ. The diagonal entries S(ℓ)
+
+> ii
+
+contain scores for matched (positive) pairs, and off-diagonal entries S(ℓ) 
+
+> ij
+
+(where i̸ = j) are in-batch negatives. For query i
+
+at tier ℓ, the positive score is the diagonal entry s(i,ℓ )+ = S(ℓ) 
+
+> ii
+
+,and the hardest negative is s(i,ℓ ) 
+
+> −
+
+= max j̸ =i S(ℓ) 
+
+> ij
+
+. A softplus penalty pushes the positive above this hardest negative, and the Spatial Matryoshka ranking loss sums this across all tiers: 
+
+LSMRL =
+
+> 3
+
+X
+
+> ℓ=0
+
+1
+
+B
+
+> B
+
+X
+
+> i=1
+
+log  1 + exp  s(i,ℓ ) 
+
+> −
+
+− s(i,ℓ )+
+
+ . (6) In order to preserve the performance of the model at its original resolution, we add a frozen-teacher term L(ℓ)
+
+> frozen
+
+,which matches the student’s distribution over the B in-batch documents to that of a frozen copy of the pretrained backbone through a temperature-scaled KL divergence. It is applied at every level, anchoring each tier to the original model at full resolution. Additionally, in order to align the coarser tiers with the model’s own finest tier, we introduce a live cross-tier term 
+
+L(ℓ)
+
+> live
+
+, which matches the student’s distribution at tier ℓ to its current L0 distribution, detached from the gradient, and applies at ℓ ∈ { 1, 2, 3}. In both terms the per-query scores are z-scored before the softmax, so that differences in score scale across tiers do not dominate the distributions being matched. Finally, we obtain the overall objective as 
+
+L = LSMRL + λf
+
+> 3
+
+X
+
+> ℓ=0
+
+L(ℓ) 
+
+> frozen
+
++ λl
+
+> 3
+
+X
+
+> ℓ=1
+
+L(ℓ)
+
+> live
+
+. (7) 
+
+3.6 Flexible Deployment via Granularity Selection 
+
+The nested design decouples the compression level from training. Because all tiers are optimized jointly and remain hierarchically consistent, a corpus encoded at L0 can be pooled down to any coarser tier on demand. At indexing time, each page is stored at the tier Lℓ that fits the avail-able storage budget. At query time, retrieval cost is bounded by that choice: MaxSim operates over k + nℓ embeddings, where the auxiliary count k is fixed and only nℓ varies. A sin-gle trained model therefore serves multiple operating points without retraining or maintaining separate checkpoints. 
+
+## 4 Experimental Setup 
+
+In this section we describe the backbone models adapted with ColSNAP , the datasets and training configurations used in our experiments, and the benchmarks and evaluation metrics used for evaluation. 
+
+4.1 Model Backbones 
+
+We apply ColSNAP to two late-interaction retrieval back-bones with different scales and pretraining. Our primary backbone is Nemotron ColEmbed VL 4B (de Souza P. Mor-eira et al. 2026), which produces 2560-dimensional embed-dings and ranks among the top models on the ViDoRe V3 leaderboard. We also apply ColSNAP to ColPali v1.3 (Faysse et al. 2025), built on PaliGemma-3B (Beyer et al. 2024), which produces 128-dimensional embeddings. As a smaller, widely used backbone, ColPali helps to assess the generaliz-ability of ColSNAP across model scales. For both backbones, input images are resized to produce a 
+
+32 ×32 grid of patch tokens, enabling the same pooling pyra-mid to be used without modification. In addition to the patch tokens, Nemotron and ColPali produce 14 and 7 auxiliary tokens respectively, which are preserved unchanged across all compression tiers. 
+
+4.2 Training Setup 
+
+Training data: We use the ColPali-Train dataset (Faysse et al. 2025) with 95:5 train:validation split. In our pri-mary experiments, each training step samples 128 matched query–document pairs (positives). To explore the effect of hard negatives, we additionally conduct experiments using mined hard negatives released by Nomic AI (Nomic AI 2025) 2, where each query is paired with one hard nega-tive sampled uniformly from its top-10 mined candidates. In this setting, the effective batch size is 128 documents (64 positives + 64 negatives). 
+
+Optimization and hyperparameters: We jointly opti-mize all the four tiers using the objective in Eq. 7 for 5 epochs, selecting the best checkpoint on the validation split. Training uses LoRA (Hu et al. 2021) ( rank = 32 , α = 32 )with AdamW (Loshchilov and Hutter 2019) and a linear warmup-decay schedule. Models are trained in bfloat16 with distributed data parallelism on four NVIDIA A100 GPUs using an effective batch size of 128. Unless otherwise stated, we set λf = 2 for Nemotron and λf = 0 .5 for ColPali, with 
+
+λl = 0 .3 and a distillation temperature of τ = 1 .5 for both backbones. 
+
+4.3 Evaluation Benchmarks and Metrics 
+
+Benchmarks. We evaluate the performance of models adapted using ColSNAP on ViDoRe v1 (Faysse et al. 2025), ViDoRe v2 (Macé, Loison, and Faysse 2025), and the public splits of ViDoRe V3 (Loison et al. 2026). ViDoRe V1 is an in-distribution benchmark, while ViDoRe v2 and v3 evaluate out-of-distribution across document types and domains. 
+
+> 2https://huggingface.co/datasets/nomic-ai/colpali-queries-mined-20250321-by-source
+
+Figure 3: Compression–quality tradeoff on Nemotron (Vi-DoRe V3, nDCG@10). Compression on a log scale; each marker is a tier (L0/L1/L2/L3 at 1×, 7.3×, 34 .6×, 69 .2×). Curves show the untrained baseline, a full-resolution-only control, ColSNAP, and ColSNAP with mined hard nega-tives. 
+
+Metrics. Following the official leaderboards, we report nDCG@5 on ViDoRe v1/v2 and nDCG@10 on ViDoRe v3. Each pyramid level (L0–L3) is evaluated independently using tiered MaxSim (Eq. 2) within the MTEB framework (Muennighoff et al. 2023; Enevoldsen et al. 2025). We also report retention , the ratio of a tier’s retrieval score to that of the corresponding backbone at full resolution (L0). 
+
+## 5 Results and Analysis 
+
+Our analysis proceeds by evaluating ColSNAP across two late-interaction backbones with different scales and archi-tectures: (i) Nemotron ColEmbed 4B and (ii) ColPali v1.3. We first discuss retrieval quality and compression behavior across both backbones, and then highlight gains ColSNAP delivers in training efficiency, storage requirements, and re-trieval cost. 
+
+5.1 Performance of ColSNAP on Nemotron ColEmbed backbone 
+
+We evaluate a model trained with ColSNAP on the Nemotron ColEmbed VL 4B backbone and report results in Table 1 alongside existing late-interaction baselines of similar pa-rameter size on ViDoRe v1, v2, and v3. In Figure 3, we further illustrate the compression–quality trade-off on this backbone, comparing four settings: (i) the untrained model with our pooling applied at inference time, (ii) the model finetuned with only the softplus loss at full resolution, (iii) the model trained with ColSNAP using our proposed objec-tive in Equation 7, and (iv) the model trained with ColSNAP using Equation 7 and data containing mined hard negatives. Based on these results, we highlight three key observations: 
+
+1) Retrieval quality degrades gracefully with compres-sion: Figure 3 shows that model trained with ColSNAP achieves a graceful compression–quality trade-off. On Vi-DoRe v3, retrieval quality decreases from 61.7 at full resolu-tion (L0) to 59.7, 57.4, and 56.7 for the L1, L2, and L3 tiers, respectively. Notably, the L1 tier stores roughly seven times fewer vectors while retaining over 96% of the full-resolution performance. In contrast, both the untrained baseline and the full-resolution control exhibit a much steeper degrada-tion from L0 to L3, highlighting that the proposed training objective in ColSNAP is key to learning compressed repre-sentations that retain retrieval quality across all the tiers. 
+
+2) Compressed tiers remain competitive with full-resolution retrievers. Table 1 shows that L1 tier surpasses several full-resolution retrievers on ViDoRe v3, including jina-embeddings-v4 (Günther et al. 2025) and colnomic-embed-multimodal-3b (Team 2025) across the ViDoRe benchmarks. This holds even for more compressed tiers: on ViDoRe v3, L2 (57.4) nearly matches jina-embeddings-v4 (57.5) and outperforms colnomic-embed-multimodal-3b (56.4). Even single patch-embedding L3 (56.7) stays competitive on this benchmark, beating colnomic-embed-multimodal-3b and trailing llama-nemoretriever-colembed-3b-v1 (57.1) by just 0.4 nDCG. A similar trend can be ob-served across ViDoRe V1 and ViDoRe V2, thus underscoring that ColSNAP achieves substantial compression with mini-mal quality loss versus strong full-resolution baselines. 
+
+3) Compression remains robust under distribution shift. 
+
+As shown by the retention values in Table 1, on the in-distribution ViDoRe v1 benchmark, even the single patch-embedding L3 tier retains 97.2% of the full-resolution performance. This retention remains high on the out-of-distribution ViDoRe v2 and v3 benchmarks, with L3 pre-serving 92.5% and 91.5% of full-resolution performance, respectively. Across all benchmarks, the L1 tier is particu-larly robust, retaining at least 95.4% of the full-resolution score. These results indicate that ColSNAP helps in learning compressed representations that generalize well beyond the training data distribution. Together, these observations address RQ1 : a retriever adapted with ColSNAP preserves over 91% of its full-resolution quality while storing up to 69 × fewer embeddings per page. 
+
+5.2 Transferability of ColSNAP to ColPali v1.3 backbone 
+
+We evaluate the model trained with ColSNAP on ColPali v1.3 to assess the transferability of the method to a smaller and structurally different backbone under the same experi-mental setting as described earlier for Nemotron ColEmbed backbone in subsection 5.1. The key metrics have been high-lighted in Table 2 and Figure 4. We make three key observa-tions: 
+
+1) ColSNAP transfers effectively to smaller back-bones. Similar to Nemotron, ColPali exhibits a graceful compression–quality trade-off under ColSNAP . The L1 tier reduces the number of embedding vectors by 7.6× while remaining nearly lossless, retaining 100 .2% , 98 .0% , and 
+
+99 .8% of the full-resolution quality on ViDoRe v1, v2, and v3, respectively. This demonstrates that ColSNAP general-izes across backbones and preserves retrieval quality under moderate compression. As on Nemotron, the full-resolution Model ViDoRe v1/v2 (nDCG@5, %) ViDoRe v3 public (nDCG@10, %) v1 v2 CS Ene FiEn FiFr HR Ind Pha Phy Mean ColQwen3.5-4.5B 91.5 64.3 78.7 68.0 64.1 48.6 62.1 55.2 65.6 50.3 61.6 jina-embeddings-v4 90.4 58.2 71.8 63.5 59.3 46.1 59.5 50.4 63.1 46.6 57.5 llama-nemoretriever-colembed-3b-v1 91.0 63.3 75.2 62.1 60.9 43.8 58.7 47.1 63.7 45.1 57.1 colnomic-embed-multimodal-3b 89.9 55.7 72.7 64.5 56.3 44.3 57.3 47.4 61.1 47.6 56.4 Nemotron ColEmbed 4B 91.7 (100 .0) 65.0 (100 .0) 78.6 68.4 65.9 49.5 62.8 54.6 66.6 49.2 62.0 (100 .0) 
+
+ColSNAP-Nemotron-ColEmbed-4B L0 91.7 (100 .0) 63.2 (97 .2) 79.0 67.6 65.0 49.4 62.9 53.9 66.0 49.5 61.7 (99 .6) 
+
+L1 90.5 (98 .7) 62.0 (95 .4) 77.8 66.2 60.9 48.0 60.2 50.8 64.6 49.4 59.7 (96 .4) 
+
+L2 89.7 (97 .8) 61.0 (93 .7) 76.7 64.4 58.5 45.3 56.6 47.0 63.1 48.0 57.4 (92 .7) 
+
+L3 89.1 (97 .2) 60.2 (92 .5) 75.6 63.3 57.7 44.8 56.0 46.1 62.0 48.1 56.7 (91 .5) 
+
+ColSNAP-Nemotron-ColEmbed-4B-hard-negs L0 91.9 (100 .2) 63.4 (97 .5) 78.5 68.2 64.0 49.3 62.8 53.8 65.7 50.2 61.6 (99 .4) 
+
+L1 91.2 (99 .4) 62.2 (95 .7) 77.7 66.8 61.2 47.7 60.4 51.2 65.0 50.3 60.0 (96 .9) 
+
+L2 90.4 (98 .6) 60.5 (93 .0) 77.0 65.0 57.0 44.5 57.9 48.0 62.8 49.2 57.7 (93 .1) 
+
+L3 90.1 (98 .3) 58.6 (90 .1) 76.1 64.2 55.9 43.6 57.6 47.1 62.3 49.4 57.0 (92 .0) 
+
+Table 1: Comparison across ViDoRe generations. Mean nDCG@5 on ViDoRe v1 and v2, and per-dataset nDCG@10 on the eight public ViDoRe v3 tasks (computer science, energy, finance-en, finance-fr, HR, industrial, pharmaceuticals, physics), with their mean. Parenthesised subscripts denote retention, computed relative to the untrained Nemotron ColEmbed 4B baseline. Top: representative models (retention not applicable). Bottom: the baseline backbone trained with ColSNAP at each tier (L0–L3), without and with mined hard negatives. 
+
+Figure 4: Compression–quality tradeoff on ColPali (ViDoRe V3, nDCG@10). Same axes and same four settings as Fig-ure 3 (tiers at 1×, 7.6×, 44 .8×, 128 .9×). control leaves the coarse tiers near their untrained values, in-dicating that the improvements at the compressed tiers like-wise come from the nested objective rather than additional training alone. 
+
+2) Extreme compression is limited by backbone capac-ity. At more aggressive compression levels, ColPali shows a larger degradation than Nemotron. Without hard negatives, the L2 and L3 tiers retain 88 .5% and 76 .2% of full-resolution performance on ViDoRe v3, compared to 92 .7% and 91 .5% 
+
+for Nemotron. We attribute this gap to ColPali’s lower-dimensional embeddings ( 128 dimensions versus 2560 for Nemotron), which provide less capacity to represent page-level information after heavy pooling. 
+
+3) Hard negatives improve robustness under aggres-sive compression. Training with mined hard negatives im-
+
+nDCG (%) Retention (%) Model Level v1@5 v2@5 v3@10 v1 v2 v3 ColPali v1.3 L0 84.0 54.5 44.6 100.0 100.0 100.0 ColSNAP-ColPali v1.3 L0 86.1 54.8 46.9 102.5 100.6 105.2 L1 84.1 53.5 44.5 100.2 98.0 99.8 L2 80.6 46.4 39.5 96.0 85.0 88.5 L3 74.7 37.5 34.0 89.0 68.8 76.2 ColSNAP-ColPali v1.3-hard negs L0 86.4 54.7 47.1 102.8 100.3 105.6 L1 84.7 52.8 44.7 100.9 96.9 100.1 L2 81.9 49.1 39.9 97.5 90.1 89.4 L3 77.3 45.4 36.0 92.0 83.4 80.7 
+
+Table 2: Performance of ColSNAP on ColPali v1.3 backbone on ViDoRe Benchmarks (V1/V2/V3). Per-tier retrieval qual-ity and retention (%), relative to the untrained baseline’s L0. ViDoRe v1 and v2 are reported as nDCG@5, and ViDoRe v3 as nDCG@10. The top row is the untrained ColPali v1.3 baseline’s full-resolution (L0) score. proves the compressed tiers, particularly at higher compres-sion levels. On ViDoRe v3, hard negatives improve L2 and L3 retention from 88 .5% to 89 .4% and from 76 .2% to 80 .7% ,respectively. The gains are greater in ViDoRe v2, where L3 retention improves from 68 .8% to 83 .4% . These results suggest that hard negatives help ColSNAP learn more dis-criminative compressed representations when the available representation capacity is limited. These observations address RQ2 : ColSNAP transfers to a smaller, lower-dimensional backbone, maintaining lossless performance up to 7.6 × compression despite the limited ca-pacity of its 128-dimensional embeddings. Figure 5: Per-tier nDCG@10 on ViDoRe V3 vs. epoch for both Nemotron ColEmbed 4B (a) and ColPali v1.3 (b). Step 
+
+0 is the untrained baseline. 
+
+5.3 ColSNAP Achieves Rapid Convergence 
+
+Figure 5 highlights the efficiency of ColSNAP as a post-training adaptation method. We plot per-tier nDCG@10 on ViDoRe v3 across training epochs for both backbones. The curves show that ColSNAP converges quickly across all four tiers, with most gains achieved within the first 1–3 epochs, indicating that the model rapidly learns effective representa-tions for coarse-grained retrieval. On applying ColSNAP on Nemotron ColEmbed 4B back-bone, most of the improvement at compressed tiers is ob-tained within the first half epoch where the L1 tier reaches 
+
+59 .36 , within 0.3 nDCG points of its final score ( 59 .66 ), while L2 and L3 achieve 83% and 80% of their total im-provement over the untrained baseline, respectively. Further training mainly improves the coarser tiers, reaching final (epoch 5) scores of 56 .94 and 56 .10 , while L0 remains stable throughout (varying by less than 0.5 nDCG points). ColSNAP on ColPali v1.3 backbone follows a similar trend, converging even faster at finer tiers. After one epoch, L1 and L2 already match their final five-epoch performance, while L3 reaches 33 .36 , within 0.8 nDCG points of its final score ( 34 .08 ). These results show that ColSNAP can effi-ciently adapt existing late-interaction retrievers into multi-granularity models with only a short post-training phase. 
+
+5.4 ColSNAP Reduces Storage and Retrieval Cost 
+
+Table 3 summarizes the storage, scoring cost, and retrieval quality trade-offs for each backbone and tier on a 1,000-page corpus from ViDoRe V3 with 309 queries from the 
+
+finance_en split of ViDoRe V3. On Nemotron, the L1 tier                             
+
+> Backbone Level MB/1k GFLOPs nDCG@10 ColSNAP-Nemotron ColEmbed 4B-hard negs L0 5314.56 187.07 61.6 L1 727.04 25.59 60.0 L2 153.60 5.41 57.7 L3 76.80 2.70 57.0 ColSNAP-ColPali v1.3-hard negs L0 263.94 8.89 47.1 L1 34.56 1.16 44.7 L2 5.89 0.20 39.9 L3 2.05 0.07 36.0
+
+Table 3: Index size (MB per 1,000 pages) and query-time scoring cost (GFLOPs per query) per tier, for each backbone trained with ColSNAP with mined hard negatives, alongside retrieval quality (nDCG@10, %) on ViDoRe v3. Documents are embedded in bf16 precision; GFLOPs assume a mean query length of 35 .2 tokens for Nemotron and 33 .7 for Col-Pali (ViDoRe v3 FinanceEn). provides the best balance, reducing index size and per-query scoring cost by 7.3× while retaining 96 .9% of full-resolution retrieval quality. The coarser tiers deliver further reductions in storage and scoring cost, with the most aggressive setting still retaining over 92% of full-resolution quality. ColPali exhibits a similar trend: the finer tiers achieve sub-stantial efficiency gains with negligible impact on retrieval quality, with both L0 and L1 exceeding the untrained base-line. Quality degradation emerges only at the most aggressive compression levels, reflecting the limited capacity of highly compressed representations. Overall, ColSNAP enables sig-nificant reductions in retrieval overhead while preserving strong retrieval performance across backbones. 
+
+## 6 Conclusion 
+
+We presented ColSNAP, a training recipe that turns a pre-trained late-interaction retrieval model’s own patch grid into a nested hierarchy of retrieval granularities, without adding tokens or changing the encoder architecture. It gives a single retriever a range of vector cardinalities to choose from at de-ployment time, letting users trade compression for accuracy on demand rather than committing to one fixed representa-tion. On a strong retrieval model, Nemotron ColEmbed 4B, we retained 96 .9% of full-resolution retrieval quality at a 7.3×
+
+reduction in stored embeddings, and still held 93 .1% and 
+
+92 .0% at the more extreme 34 .6× and 69 .2× reductions. On a smaller ColPali v1.3 model, the same recipe retained lossless performance at a 7.6× compression, while holding 89 .4% 
+
+and 80 .7% at 44 .8× and 128 .9×. In both cases, most of this benefit is available from a short, targeted training run, making ColSNAP a practical option as a lightweight adaptation step, one that, with minimal additional training, turns an existing late-interaction retriever into a multi-granularity one whose compression level is chosen at index time rather than fixed in advance. References 
+
+Beyer, L.; Steiner, A.; Pinto, A. S.; Kolesnikov, A.; Wang, X.; Salz, D.; Neumann, M.; Alabdulmohsin, I.; Tschannen, M.; Bugliarello, E.; Unterthiner, T.; Keysers, D.; Koppula, S.; Liu, F.; Grycner, A.; Gritsenko, A.; Houlsby, N.; Kumar, M.; Rong, K.; Eisenschlos, J.; Kabra, R.; Bauer, M.; Bošnjak, M.; Chen, X.; Minderer, M.; Voigtlaender, P.; Bica, I.; Balazevic, I.; Puigcerver, J.; Papalampidi, P.; Henaff, O.; Xiong, X.; Soricut, R.; Harmsen, J.; and Zhai, X. 2024. PaliGemma: A versatile 3B VLM for transfer. arXiv:2407.07726. Cai, M.; Yang, J.; Gao, J.; and Lee, Y. J. 2024. Matryoshka Multimodal Models. arXiv:2405.17430. Cha, S.; Kim, D.; Kim, M.; Han, Y.; Jeon, B.-K.; and Lee, S. 2026. ReinPool: Reinforcement Learning Pooling Multi-Vector Embeddings for Retrieval System. arXiv:2601.07125. Clavié, B.; Chaffin, A.; and Adams, G. 2024. Reducing the Footprint of Multi-Vector Retrieval with Minimal Perfor-mance Impact via Token Pooling. arXiv:2409.14683. de Souza P. Moreira, G.; Ak, R.; Xu, M.; Holworthy, O.; Schifferer, B.; Yu, Z.; Babakhin, Y.; Osmulski, R.; Cai, J.; Chesler, R.; Liu, B.; and Oldridge, E. 2026. Nemotron ColEmbed V2: Top-Performing Late Interaction Embedding Models for Visual Document Retrieval. arXiv:2602.03992. Dhulipala, L.; Hadian, M.; Jayaram, R.; Lee, J.; and Mir-rokni, V. 2026. MUVERA: Multi-Vector Retrieval via Fixed Dimensional Encodings. arXiv:2405.19504. Enevoldsen, K.; Chung, I.; Kerboua, I.; Kardos, M.; Mathur, A.; Stap, D.; Gala, J.; Siblini, W.; Krzemiński, D.; Winata, G. I.; Sturua, S.; Utpala, S.; Ciancone, M.; Schaeffer, M.; Se-queira, G.; Misra, D.; Dhakal, S.; Rystrøm, J.; Solomatin, R.; Ömer Çağatan; Kundu, A.; Bernstorff, M.; Xiao, S.; Sukhlecha, A.; Pahwa, B.; Poświata, R.; GV, K. K.; Ashraf, S.; Auras, D.; Plüster, B.; Harries, J. P.; Magne, L.; Mohr, I.; Hendriksen, M.; Zhu, D.; Gisserot-Boukhlef, H.; Aarsen, T.; Kostkan, J.; Wojtasik, K.; Lee, T.; Šuppa, M.; Zhang, C.; Rocca, R.; Hamdy, M.; Michail, A.; Yang, J.; Faysse, M.; Vatolin, A.; Thakur, N.; Dey, M.; Vasani, D.; Chitale, P.; Tedeschi, S.; Tai, N.; Snegirev, A.; Günther, M.; Xia, M.; Shi, W.; Lù, X. H.; Clive, J.; Krishnakumar, G.; Maksimova, A.; Wehrli, S.; Tikhonova, M.; Panchal, H.; Abramov, A.; Osten-dorff, M.; Liu, Z.; Clematide, S.; Miranda, L. J.; Fenogenova, A.; Song, G.; Safi, R. B.; Li, W.-D.; Borghini, A.; Cassano, F.; Su, H.; Lin, J.; Yen, H.; Hansen, L.; Hooker, S.; Xiao, C.; Adlakha, V.; Weller, O.; Reddy, S.; and Muennighoff, N. 2025. MMTEB: Massive Multilingual Text Embedding Benchmark. arXiv:2502.13595. Faysse, M.; Sibille, H.; Wu, T.; Omrani, B.; Viaud, G.; Hude-lot, C.; and Colombo, P. 2025. ColPali: Efficient Document Retrieval with Vision Language Models. arXiv:2407.01449. Günther, M.; Sturua, S.; Akram, M. K.; Mohr, I.; Ungure-anu, A.; Wang, B.; Eslami, S.; Martens, S.; Werk, M.; Wang, N.; and Xiao, H. 2025. jina-embeddings-v4: Uni-versal Embeddings for Multimodal Multilingual Retrieval. arXiv:2506.18902. Hegghammer, T. 2022. OCR with Tesseract, Amazon Tex-tract, and Google Document AI: a benchmarking experiment. 
+
+Journal of Computational Social Science , 5(1): 861–882. Hu, E. J.; Shen, Y.; Wallis, P.; Allen-Zhu, Z.; Li, Y.; Wang, S.; Wang, L.; and Chen, W. 2021. LoRA: Low-Rank Adaptation of Large Language Models. arXiv:2106.09685. Khattab, O.; and Zaharia, M. 2020. ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT. arXiv:2004.12832. Kusupati, A.; Bhatt, G.; Rege, A.; Wallingford, M.; Sinha, A.; Ramanujan, V.; Howard-Snyder, W.; Chen, K.; Kakade, S.; Jain, P.; and Farhadi, A. 2024. Matryoshka Representation Learning. arXiv:2205.13147. Lee, J.; Dai, Z.; Duddu, S. M. K.; Lei, T.; Naim, I.; Chang, M.-W.; and Zhao, V. Y. 2024. Rethinking the Role of Token Retrieval in Multi-Vector Retrieval. arXiv:2304.01982. Li, M.; Lin, S.-C.; Oguz, B.; Ghoshal, A.; Lin, J.; Mehdad, Y.; Yih, W.-t.; and Chen, X. 2023. CITADEL: Conditional Token Interaction via Dynamic Lexical Routing for Efficient and Effective Multi-Vector Retrieval. In Rogers, A.; Boyd-Graber, J.; and Okazaki, N., eds., Proceedings of the 61st Annual Meeting of the Association for Computational Lin-guistics (Volume 1: Long Papers) , 11891–11907. Toronto, Canada: Association for Computational Linguistics. Liu, Z.; Hu, Z.; Zhang, Y.; and Xiao, Y. 2026. Structural Anchor Pruning: Training-Free Multi-Vector Compression for Visual Document Retrieval. arXiv:2601.20107. Loison, A.; Macé, Q.; Edy, A.; Xing, V.; Balough, T.; Mor-eira, G.; Liu, B.; Faysse, M.; Hudelot, C.; and Viaud, G. 2026. ViDoRe V3: A Comprehensive Evaluation of Retrieval Augmented Generation in Complex Real-World Scenarios. arXiv:2601.08620. Loshchilov, I.; and Hutter, F. 2019. Decoupled Weight Decay Regularization. arXiv:1711.05101. Ma, X.; Lin, S.-C.; Li, M.; Chen, W.; and Lin, J. 2024. Unifying Multimodal Retrieval via Document Screenshot Embedding. arXiv:2406.11251. Ma, Y.; Li, J.; Zang, Y.; Wu, X.; Dong, X.; Zhang, P.; Cao, Y.; Duan, H.; Wang, J.; Cao, Y.; and Sun, A. 2025. Towards Storage-Efficient Visual Document Retrieval: An Empirical Study on Reducing Patch-Level Embeddings. arXiv:2506.04997. Macé, Q.; Loison, A.; and Faysse, M. 2025. ViDoRe Benchmark V2: Raising the Bar for Visual Retrieval. arXiv:2505.17166. Meng, R.; Jiang, Z.; Liu, Y.; Su, M.; Yang, X.; Fu, Y.; Qin, C.; Chen, Z.; Xu, R.; Xiong, C.; Zhou, Y.; Chen, W.; and Yavuz, S. 2025. VLM2Vec-V2: Advancing Mul-timodal Embedding for Videos, Images, and Visual Docu-ments. arXiv:2507.04590. Muennighoff, N.; Tazi, N.; Magne, L.; and Reimers, N. 2023. MTEB: Massive Text Embedding Benchmark. arXiv:2210.07316. Nomic AI. 2025. colpali-queries-mined-20250321-by-source. https://huggingface.co/datasets/nomic-ai/colpali-queries-mined-20250321-by-source. Dataset. Park, S.; Jung, J.; Park, J.; and Kang, J. 2026. Do All Visual Tokens Matter Equally? Object-Evidence Preserving Token Merging for Vision-Language Retrieval. arXiv:2607.04605. Santhanam, K.; Khattab, O.; Potts, C.; and Zaharia, M. 2022a. PLAID: An Efficient Engine for Late Interaction Retrieval. arXiv:2205.09707. Santhanam, K.; Khattab, O.; Saad-Falcon, J.; Potts, C.; and Zaharia, M. 2022b. ColBERTv2: Effective and Efficient Re-trieval via Lightweight Late Interaction. arXiv:2112.01488. Team, N. 2025. Nomic Embed Multimodal: Interleaved Text, Image, and Screenshots for Visual Document Retrieval. Veneroso, J.; Jayaram, R.; Rao, J.; Ábrego, G. H.; Hadian, M.; and Cer, D. 2025. CRISP: Clustering Multi-Vector Rep-resentations for Denoising and Pruning. arXiv:2505.11471. Weller, O.; Boratko, M.; Naim, I.; and Lee, J. 2026. On the Theoretical Limitations of Embedding-Based Retrieval. arXiv:2508.21038. Xiang, H.; Yan, Y.; Huo, J.; Huang, Y.; Cao, Y.; Ou, M.; and Hu, X. 2026. MM-Matryoshka: Towards Budget-Elastic Visual Document Retrieval via a 2D Multimodal Matryoshka Training Framework. arXiv:2606.07654. Xiao, Z.; Ma, Q.; Gu, M.; cheng Jason Chen, C.; Chen, X.; Ordonez, V.; and Mohan, V. 2026. MetaEmbed: Scaling Multimodal Retrieval at Test-Time with Flexible Late Inter-action. arXiv:2509.18095. Yan, Y.; Huo, J.; Feng, G.; Ou, M.; Cao, Y.; Zou, X.; Liu, S.; Lyu, Y.; Huang, Y.; Li, J.; Zheng, K.; Zheng, X.; Yu, P. S.; Kwok, J.; and Hu, X. 2026a. Unlocking Multimodal Document Intelligence: From Current Triumphs to Future Frontiers of Visual Document Retrieval. arXiv:2602.19961. Yan, Y.; Ou, M.; Cao, Y.; Huo, J.; Zou, X.; Liu, S.; Kwok, J.; and Hu, X. 2026b. Visual Late Chunking: An Empirical Study of Contextual Chunking for Efficient Visual Document Retrieval. arXiv:2604.10167. Yan, Y.; Ou, M.; Cao, Y.; Zou, X.; Huo, J.; Liu, S.; Kwok, J.; and Hu, X. 2026c. Sculpting the Vector Space: Towards Efficient Multi-Vector Visual Document Retrieval via Prune-then-Merge Framework. arXiv:2602.19549. Yan, Y.; Xu, G.; Zou, X.; Liu, S.; Kwok, J.; and Hu, X. 2025. DocPruner: A Storage-Efficient Framework for Multi-Vector Visual Document Retrieval via Adaptive Patch-Level Embedding Pruning. arXiv:2509.23883. Zhang, J.; Zhang, Q.; Wang, B.; Ouyang, L.; Wen, Z.; Li, Y.; Chow, K.-H.; He, C.; and Zhang, W. 2025. OCR Hinders RAG: Evaluating the Cascading Impact of OCR on Retrieval-Augmented Generation. arXiv:2412.02592.
