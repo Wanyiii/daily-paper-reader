@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-07</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-08</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 30 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 25 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>17</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>12</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-07 23:49:07 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-08 22:43:21 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共扫描30篇论文，精读17篇，速读13篇，覆盖跨视角定位、语言模型与3D重建等前沿方向。最值得关注的是满分论文《ARC-Loc》利用方位角射线收敛实现跨视角直接定位，以及《Location-Aware Language Models》通过二级嵌入注入位置感知。建议优先精读这两篇，并顺带浏览触觉智能、3D重建置信度校准的速读清单，把握多模态定位与感知新趋势。</p>
+<p>今日25篇AI论文中，精读重点聚焦跨模态特征描述与开放词汇3D实例映射。最值得关注的是《CrossFeat》与《VOIM》，均获9分高分，分别打通影像模态描述符和实现训练自由3D实例建图。建议先看这两篇的摘要与图表，把握跨模态对齐与SLAM结合的新趋势。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +78,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">17 篇</strong>
+    <strong class="dpr-home-dashboard-count">12 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="ARC-Loc: Leveraging Azimuthal Ray Convergence as a Geometric Cue for Direct Cross-View Localization">ARC-Loc: Leveraging Azimuthal Ray Convergence as a Geometric Cue for Direct Cross-View Localization</span></li><li><span class="dpr-home-dashboard-paper-title" title="Location-Aware Language Models via Secondary Embeddings">Location-Aware Language Models via Secondary Embeddings</span></li><li><span class="dpr-home-dashboard-paper-title" title="ViTAL-X: Video-Text Alignment with Cross-Modal Temporal Edits">ViTAL-X: Video-Text Alignment with Cross-Modal Temporal Edits</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CrossFeat: Bridging Imaging Modalities in Feature Descriptor Space">CrossFeat: Bridging Imaging Modalities in Feature Descriptor Space</span></li><li><span class="dpr-home-dashboard-paper-title" title="VOIM: Training-Free Open-Vocabulary 3D Instance Mapping for RGB-D and Monocular SLAM">VOIM: Training-Free Open-Vocabulary 3D Instance Mapping for RGB-D and Monocular SLAM</span></li><li><span class="dpr-home-dashboard-paper-title" title="IT-TextFusion: Iterative Text-Image Interaction with Text-Guided Residual Refinement for Degradation-Aware Image Fusion">IT-TextFusion: Iterative Text-Image Interaction with Text-Guided Residual Refinement for Degradation-Aware Image Fusion</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>10</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>5</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>2</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>7</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>5</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -94,9 +94,9 @@
     <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="$\mathcal{N}_0$-Foundation: Towards the Age of Tactile Intelligence">$\mathcal{N}_0$-Foundation: Towards the Age of Tactile Intelligence</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Calibration Audit of Confidence in Feed-Forward 3D Reconstruction">A Calibration Audit of Confidence in Feed-Forward 3D Reconstruction</span></li><li><span class="dpr-home-dashboard-paper-title" title="XDG: Accelerated Visual Disambiguation">XDG: Accelerated Visual Disambiguation</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Motion-Saliency Complementary Masked Modeling for Point Cloud Video Understanding">Motion-Saliency Complementary Masked Modeling for Point Cloud Video Understanding</span></li><li><span class="dpr-home-dashboard-paper-title" title="AQ3D: Adaptive Query Transformer for 3D Instance Segmentation">AQ3D: Adaptive Query Transformer for 3D Instance Segmentation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Lucida: Parse, Generate, and Place for Composable Real-to-Sim Scene Modeling">Lucida: Parse, Generate, and Place for Composable Real-to-Sim Scene Modeling</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">multimodal <strong>7</strong></span><span class="dpr-home-dashboard-tag">d-vision <strong>6</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>11</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>1</strong></span></div>
 </section>
 </div>
 
