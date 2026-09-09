@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-08</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-09</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 25 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 34 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>12</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>21</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-08 22:43:21 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-09 21:40:18 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日25篇AI论文中，精读重点聚焦跨模态特征描述与开放词汇3D实例映射。最值得关注的是《CrossFeat》与《VOIM》，均获9分高分，分别打通影像模态描述符和实现训练自由3D实例建图。建议先看这两篇的摘要与图表，把握跨模态对齐与SLAM结合的新趋势。</p>
+<p>今日共扫描34篇新论文，精读21篇、速读13篇，聚焦3D场景理解与重建前沿进展。最值得关注的是满分论文《Spheriverse》开创球面观测下的野外3D场景理解新范式，以及9分论文《On-the-Fly3R》面向无人机大规模场景的在线重建方案；速读中《MeshSplatBench》为三角形神经渲染提供了统一基准。建议普通读者优先精读这两篇高分工作，关注其开源代码与基准数据集，以快速跟进3D重建领域最新突破。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +78,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">12 篇</strong>
+    <strong class="dpr-home-dashboard-count">21 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="CrossFeat: Bridging Imaging Modalities in Feature Descriptor Space">CrossFeat: Bridging Imaging Modalities in Feature Descriptor Space</span></li><li><span class="dpr-home-dashboard-paper-title" title="VOIM: Training-Free Open-Vocabulary 3D Instance Mapping for RGB-D and Monocular SLAM">VOIM: Training-Free Open-Vocabulary 3D Instance Mapping for RGB-D and Monocular SLAM</span></li><li><span class="dpr-home-dashboard-paper-title" title="IT-TextFusion: Iterative Text-Image Interaction with Text-Guided Residual Refinement for Degradation-Aware Image Fusion">IT-TextFusion: Iterative Text-Image Interaction with Text-Guided Residual Refinement for Degradation-Aware Image Fusion</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Spheriverse: 3D Scene Understanding from Spherical Observations in the Wild">Spheriverse: 3D Scene Understanding from Spherical Observations in the Wild</span></li><li><span class="dpr-home-dashboard-paper-title" title="On-the-Fly3R: Towards Robust Online 3D Reconstruction with Feed-Forward 3R Models for Large-Scale UAV Scenarios">On-the-Fly3R: Towards Robust Online 3D Reconstruction with Feed-Forward 3R Models for Large-Scale UAV Scenarios</span></li><li><span class="dpr-home-dashboard-paper-title" title="AutoCompass: Accurate Visual Localization on Public Maps by Learning from Weak Labels">AutoCompass: Accurate Visual Localization on Public Maps by Learning from Weak Labels</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>7</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>5</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>14</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>4</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -94,9 +94,9 @@
     <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Motion-Saliency Complementary Masked Modeling for Point Cloud Video Understanding">Motion-Saliency Complementary Masked Modeling for Point Cloud Video Understanding</span></li><li><span class="dpr-home-dashboard-paper-title" title="AQ3D: Adaptive Query Transformer for 3D Instance Segmentation">AQ3D: Adaptive Query Transformer for 3D Instance Segmentation</span></li><li><span class="dpr-home-dashboard-paper-title" title="Lucida: Parse, Generate, and Place for Composable Real-to-Sim Scene Modeling">Lucida: Parse, Generate, and Place for Composable Real-to-Sim Scene Modeling</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="MeshSplatBench: A Unified Benchmark for Triangle-Based Neural Rendering">MeshSplatBench: A Unified Benchmark for Triangle-Based Neural Rendering</span></li><li><span class="dpr-home-dashboard-paper-title" title="Uncovering Understanding-Generation Synergy in Native Unified Multimodal Models: From Representation, Task to System">Uncovering Understanding-Generation Synergy in Native Unified Multimodal Models: From Representation, Task to System</span></li><li><span class="dpr-home-dashboard-paper-title" title="GeoStore: Finding Small Storefronts in Large Scenes -- A Fine-Grained POI Localization Benchmark with Global-to-Local Asymmetric Matching">GeoStore: Finding Small Storefronts in Large Scenes -- A Fine-Grained POI Localization Benchmark with Global-to-Local Asymmetric Matching</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>11</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>7</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>5</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
 </section>
 </div>
 

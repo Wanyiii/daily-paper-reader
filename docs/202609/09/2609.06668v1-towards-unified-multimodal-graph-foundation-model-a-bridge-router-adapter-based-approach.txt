@@ -1,0 +1,536 @@
+Title: Towards Unified Multimodal Graph Foundation Model: A Bridge-Router-Adapter Based Approach
+
+URL Source: https://arxiv.org/pdf/2609.06668v1
+
+Published Time: Wed, 09 Sep 2026 01:24:27 GMT
+
+Number of Pages: 9
+
+Markdown Content:
+# Towards Unified Multimodal Graph Foundation Model: A Bridge-Router-Adapter Based Approach 
+
+Sirui Zhang, Yubing Zhou, Xunkai Li, Zekai Chen, Shumeng Li, Wang Luo, Yinlin Zhu, Yujin Gao, Rong-Hua Li ∗
+
+Beijing Institute of Technology Beijing, China 
+
+Abstract 
+
+Multimodal graphs couple node attributes in different modal-ities, such as text and images, with relational structure, en-abling topological structure and cross-modality attributes to be modeled jointly. Multimodal graph foundation mod-els seek unified representations from such data that transfer across different graph domains and downstream tasks. How-ever, existing methods exhibit two fundamental limitations. 
+
+(1) Cross-Scope Context Entanglement. They merge scope-specific graph contexts into a unified representation, obscuring their distinctions during multimodal construction. (2) Scope-Ignorant Modality Routing. They route modalities within a fixed graph scope, overlooking how modality relevance varies across neighborhood ranges. To address these challenges, we propose BRAIN , a unified model that focuses on graph context that combines neighborhood scope with modality composi-tion. BRAIN comprises a scope-conditioned Bridge that com-bines structural information spanning local-to-global neigh-borhood scopes with different modality compositions; a hier-archical Router that estimates the relevance between the scope and the task, and selects compositions separately within each scope, allowing modality utility to vary with graph range; and a lightweight residual Adapter that further specializes the routed embedding for downstream prediction. BRAIN is trained through multi-graph pretraining followed by task-specific adaptation. Experiments across nine datasets and four task families demonstrate its broad effectiveness, improving node-classification and link-prediction performance by up to 
+
+4.73% relative to the strongest baseline, while achieving an average relative improvement of 14.72% across four graph-to-text and two graph-to-image metrics. 
+
+Introduction 
+
+Multimodal graphs (MMGs) represent entities as nodes, rela-tions as edges, and text and image attributes as node content. Their relational structure supports recommendation, graph-aware understanding, and graph-grounded generation (Wei et al. 2019; Ning et al. 2025; Feng et al. 2025; Wan et al. 2026). Unlike isolated samples, each node is interpreted through both its attributes and related context. Graph foundation models seek representations transfer-able across domains (Mao et al. 2024; Liu et al. 2024). Re-cent methods learn unified MMG embeddings, inject graph neighborhoods into language models, or integrate graph en-coders with language and vision–language models (He et al. 
+
+> ∗
+
+Corresponding author. Copyright © 2027, Association for the Advancement of Artificial Intelligence (www.aaai.org). All rights reserved. 
+
+2025; Yoon et al. 2023; Chen et al. 2024; Fan et al. 2025; Fang et al. 2025). However, the appropriate neighborhood scope and modality composition vary across tasks and instances. As summarized in Fig. 1, existing methods exhibit two fun-damental limitations. (1) Cross-Scope Context Entangle-ment. Some methods collapse scope-specific graph context into the unified representation, instead of explicitly preserv-ing and distinguishing it throughout multimodal represen-tation construction. UniGraph2 aligns propagated modality features in a unified space, while Graph4MM and PLANET incorporate multi-hop structure through cross-modal inter-action (He et al. 2025; Ning et al. 2025; Liu et al. 2026). As different neighborhood ranges are absorbed into one output, local, broader, and compressed global context cannot remain distinguishable, limiting scope-specific representation con-struction. 
+
+(2) Scope-ignorant Modality Routing. Many current methods adapt modality usage under a fixed graph scope, failing to capture how modality relevance changes across local-to-global neighborhoods. Mario routes among modal-ity instruction views, while DiP adjusts intra-modal propaga-tion and inter-modal aggregation (Sun et al. 2026; Hong et al. 2026). However, their structural range remains prescribed rather than jointly selected with modality composition. They determine which modalities to use, but not the graph range in which to interpret them, although modality utility may vary across neighborhood ranges. To address these challenges, we propose BRAIN , a
+
+Bridge– Router– Adapter Infusion Network centered on graph context. BRAIN defines context as c = ( s, m ), where 
+
+s denotes neighborhood scope and m denotes modality com-position, and models their task- and instance-dependent rele-vance. Its central intuition is to separate context construction, conditional selection, and task specialization: it constructs candidates across local-to-global scopes and modality com-positions, routes them according to the task and instance, and specializes the routed representation. Multi-graph pre-training learns transferable scope representations, followed by task-specific adaptation. The scope-conditioned Bridge constructs a graph-aware representation for each neighborhood scope and derives text-dominant, image-dominant, and multimodal candidates from it. This preserves scope identity and separates scope aggre-gation from composition specialization, enabling multiple arXiv:2609.06668v1 [cs.LG] 6 Sep 2026 Prior Paradigms  BRAIN Task- and Instance-
+
+Dependent Evidence  Cross-Scope Context Entanglement    
+
+> Graph-Aware
+> Encoder
+> unified repr
+> text image
+> Scope-Ignorant Modality Routing
+> graph info
+> text image multimodal
+> 1-hop
+> 2-hop
+> global
+> anchor
+> Task & Instance
+> Scope
+> Same graph instance, different
+> supporting evidence
+> graph
+
++ + 
+
+> compress structural information into a unified representation.
+> lack of scope-specific graph context construction.
+> Modality relevance varies across instances.
+> All prompts are constructed from same graph scope.
+> OR OR
+
++
+
+> modality-specific
+> prompt
+> Composition
+> Construct candidates across scopes and compositions.
+> Jointly route over the scope –composition candidate space.
+> Anchor Representation
+> NC/LP/G2Text/G2Image
+> 9 Datasets
+
+Figure 1: Comparison of context construction paradigms. Prior methods either construct a unified representation or adapt multimodal processing under a prescribed structural organization. BRAIN constructs and routes a candidate pool across neighborhood scopes and modality compositions according to the task and instance. modality interpretations without repeatedly reconstructing structural context. The candidate pool is processed by a hierarchical Router ,which first estimates scope relevance and then selects modal-ity compositions separately within each scope. This explicitly conditions modality preference on graph range. A lightweight residual Adapter subsequently specializes the routed rep-resentation while retaining transferable information. These modules jointly preserve context during local-to-global con-struction, coupling it with scope-dependent modality routing. 
+
+Our contributions. (1) New Perspective. We formulate 
+
+graph-conditioned context relevance as task- and instance-dependent modeling of neighborhood scope and modality composition. (2) New Method. We introduce BRAIN, com-bining scope-conditioned candidate construction, hierarchi-cal scope-first routing, and residual adaptation. (3) SOTA Performance. Across nine datasets and four task families, BRAIN ranks first on nine of ten discriminative comparisons and achieves an average relative improvement of 14.72% 
+
+across four graph-to-text and two graph-to-image metrics. 
+
+Preliminaries 
+
+Problem formulation. Consider a multimodal attributed graph G = ( V, E, X ), where X = {(xtxt  
+
+> v
+
+, x img  
+
+> v
+
+)}v∈V con-tains textual and visual node attributes. BRAIN first con-structs reusable node-level alternatives and allows a down-stream task to read one or more node representations. For an anchor node v, let S = {1-hop , 2-hop , global }
+
+denote the available neighborhood scopes and let M =
+
+{text-dominant , image-dominant , multimodal } denote the modality compositions. Each context candidate is indexed by 
+
+c = ( s, m ) ∈ S × M . (1) For task τ , BRAIN models the joint relevance of scope and composition through 
+
+p(c | v, τ, G ) = p(s | v, τ, G )p(m | s, v, τ, G ). (2) Downstream tasks consume one or more routed node rep-resentations through lightweight task-specific heads; tensor organization and task interfaces are detailed in Supplemen-tary Secs. C.1 and C.5. 
+
+Related Work. We review multimodal graph learning and graph foundation models, which respectively integrate het-erogeneous modalities with graph structure and learn trans-ferable representations across graphs and tasks. 
+
+Multimodal graph learning. Early methods propagate in-formation over interaction graphs and fuse modality repre-sentations (Wei et al. 2019). Later studies construct modality-aware graphs from visual and textual similarities or improve them through graph freezing and denoising (Zhang et al. 2021; Zhou and Shen 2023). Recent work explores hetero-geneous neighbor aggregation, cross-modal modeling, and graph-conditioned language models (Yoon et al. 2023; Ning et al. 2025; Fan et al. 2025; Fang et al. 2025). Nevertheless, these methods mainly encode a predefined graph view into a single multimodal representation. 
+
+Graph foundation models. Graph foundation models learn reusable representations across graphs and tasks (Mao et al. 2024). Existing approaches use prompting, structure-aware tokenization, shared encoders, cross-domain alignment, do-main adaptation, and topology-aware pretraining (Liu et al. 2024; Chen et al. 2024; He et al. 2025; Feng et al. 2025; Wang et al. 2025; Yuan et al. 2025). Multimodal variants further align graph structure, text, and images within transferable backbones (He et al. 2025; Liu et al. 2026). However, most rely on a predetermined structural range rather than selecting among graph scopes and modality compositions. 
+
+Methodology 
+
+Overview 
+
+As discussed above, existing methods do not jointly model which graph range is relevant and which modality composi-tion is useful within that range. BRAIN addresses this gap Discriminative & Generative task     
+
+> 2 layer -MLP
+> 2 layer -MLP
+
+## ⊙
+
+## ⨂        
+
+> neighbor
+> 𝑙𝑜𝑔(𝑑 𝑣 )
+> scope
+> local 1 -hop
+> local 2 -hop
+> global
+> composition
+> text -dominant
+> image -dominant
+> compressed mm
+> Softmax
+> MLP/Lora scope +𝒉 𝒗 𝒎𝒎 +composition
+> Stage1
+> Scope -Conditioned
+> Multimodal Bridge
+> Stage2
+> Hierarchical Context Router Stage3 -Adapter
+> scope logits
+> composition logits 𝓛 task
+
+𝓛 graph   
+
+> Image
+> Projector
+> Text
+> Projector
+> Cross -
+> Attention
+> Text
+> Encoder
+> Image
+> Encoder
+> Modality Encoding & Projection
+> Scope -aware
+> Multimodal Pooling
+> 𝓛 align
+> ℎ𝑣 𝑡𝑥𝑡
+> concat
+> ℎ𝑣 𝑖𝑚𝑔
+> ℎ𝑣
+> 𝑚𝑚
+> q
+> k/v
+> concat GCN layers
+> LayerNorm LayerNorm
+> Structural residual
+> 𝑧 𝑣
+> concat
+> Self -
+> Attention
+> ℎ𝑣 𝑠𝑢𝑚𝑚𝑎𝑟𝑦
+> MLP
+> 𝓛 cond
+> candidate pool
+> Softmax
+> Tunable
+> Frozen
+> Forward
+> Backward
+> soft routing / top k
+> graph info
+> weighted sum
+> ℎ𝑟𝑜𝑢𝑡𝑒
+> 𝓛 div
+> 𝓛 route
+> 𝜌 𝑠,𝑚 = 𝛼 𝑠 𝛽 𝑚|𝑠
+
+Figure 2: BRAIN uses two training stages: Stage 1 pretrains reusable scope representations, and Stage 2 learns routing, post-routing adaptation, and task prediction. The Bridge forms a scope–composition candidate pool; the conditional Router estimates 
+
+αsβm|s; and a residual Adapter specializes the routed representation before task prediction. by separating scope-aware candidate construction from task-aware candidate selection. As illustrated in Fig. 2, BRAIN follows a Bridge–Router– Adapter architecture. Given an anchor node v, the Scope-Conditioned Multimodal Bridge first constructs a shared representation Sv,s for each graph scope s ∈ S by combin-ing anchor-relevant semantic information with connectivity-aware structural information. It then derives text-dominant, image-dominant, and multimodal candidate representations 
+
+{Vv,s,m }m∈M from each shared scope representation. This separation performs contextual aggregation once per scope while retaining distinct alternatives across graph ranges and modality compositions. For downstream task τ , the Hierarchical Context Router reads the candidate pool in a scope-first manner. It first esti-mates scope relevance and then predicts a composition dis-tribution conditioned on each scope. Their product aggre-gates the candidates into a routed representation, which is subsequently specialized by a lightweight task-conditioned Adapter for task heads. BRAIN therefore constructs reusable node-level alternatives and lets each task determine which graph range and modality organization to emphasize. BRAIN is optimized in two stages. Stage 1 jointly samples anchor nodes from multiple graph datasets and pretrains the shared node- and scope-representation pathway. A symmet-ric InfoNCE loss aligns the refined textual and visual em-beddings of the same anchor, while a graph contrastive loss encourages its graph summary to preserve information con-sistent with the observed neighborhood scopes. The Stage 1 objective is 
+
+LS1 = Lalign + λGLgraph . (3) This stage establishes reusable multimodal and structural representations before task-dependent routing is introduced. Stage 2 initializes the shared representation pathway from Stage 1 and jointly optimizes composition specialization, the Router, the post-routing Adapter, and task heads. Candidate-level task losses are converted by a stop-gradient teacher into a target utility distribution that assigns greater probability to candidates with lower loss. The routing loss Lroute aligns the predicted joint distribution with this teacher. The conditional loss Lcond emphasizes samples whose preferred modality compositions vary across scopes, while Ldiv prevents differ-ent compositions within the same scope from collapsing to redundant representations. The Stage 2 objective is 
+
+LS2 = Ltask + λroute Lroute + λcond Lcond + λdiv Ldiv . (4) The two stages thus separate reusable candidate-space learn-ing from task-supervised routing and adaptation. Complete loss definitions and training pseudocode are provided in Sup-plementary Sec. D. 
+
+Scope-Conditioned Multimodal Bridge 
+
+The Bridge separates scope aggregation from composition specialization. It first constructs one shared multimodal rep-resentation for each scope and then derives text-dominant, image-dominant, and multimodal candidates from that repre-sentation. Consequently, contextual aggregation is performed once per scope rather than repeated for every composition. 
+
+Scope representation. For each anchor–scope pair, the se-mantic branch selects contextual information conditioned on both the refined anchor embedding and the target graph scope. With scope embedding es, the scope-conditioned query and semantic readout are defined as 
+
+qv,s = Wq [ehmm  
+
+> v
+
+| es],
+
+(Satt  
+
+> v,s
+
+, Ωv,s ) = MHA( qv,s , H mm  
+
+> v,s
+
+, H mm  
+
+> v,s
+
+). (5) Here, Ωv,s denotes the attention map. The semantic branch identifies context nodes whose multimodal information is most relevant to anchor v under scope s.In parallel, the structural branch, enabled by default in all reported BRAIN configurations, propagates information over the induced scoped subgraph and pools the resulting node representations: 
+
+Sgcn  
+
+> v,s
+
+= Pool  GCN( Hmm  
+
+> v,s
+
+, A v,s ) . (6) Whereas the semantic branch prioritizes anchor-relevant information, the structural branch preserves connectivity-aware interactions among nodes within the same graph range. The outputs of the two branches are combined to construct the shared representation of scope s:
+
+Sv,s = Satt  
+
+> v,s
+
++ ηsSgcn  
+
+> v,s
+
+, (7) where ηs ∈ (0 , 1) controls the structural contribution. The resulting Sv,s provides the shared graph-aware basis from which all modality compositions at scope s are derived. 
+
+Scope-aligned candidates. Let ¯Ωv,s denote the atten-tion map averaged across heads. BRAIN reuses this node-selection distribution to obtain textual and visual readouts 
+
+otxt  
+
+> v,s
+
+and oimg  
+
+> v,s
+
+from the same context nodes. Each scope– composition candidate is then constructed by 
+
+Vv,s,m = Mod 
+
+
+
+Sv,s , ψ m(ehtxt  
+
+> v
+
+, ehimg  
+
+> v
+
+, o txt 
+
+> v,s
+
+, o img  
+
+> v,s
+
+), c m
+
+
+
+.
+
+(8) Reusing the attention map preserves node-level correspon-dence between textual and visual information and avoids re-peated graph aggregation. The composition function ψm or-ganizes anchor and contextual signals according to composi-tion m. The text- and image-dominant branches place greater emphasis on their respective modalities, whereas the mul-timodal branch additionally models cross-modal agreement and difference. Here, Mod is a bounded residual feature-wise modulation that maps the composition signal and embedding 
+
+cm to scale and shift terms applied to Sv,s . This preserves the shared graph-aware scope representation while enabling composition-specific specialization. All candidates remain modality-complete; “dominant” indicates only the principal conditioning modality. Together, the candidates {Vv,s,m }s∈S ,m ∈M form the scope–composition candidate pool. The Bridge additionally constructs a graph summary gv by applying attention pool-ing to {Sv,s }s∈S together with the refined anchor embed-ding. The graph summary conditions the Router, while the candidate pool provides the alternative node representations available for task-dependent selection. Projection, scoped-context construction, and the full modulation equations are detailed in Supplementary Secs. C.2–C.3. 
+
+Hierarchical Context Router and Adapter 
+
+Unlike flat or scope-independent routing, BRAIN’s scope-first factorization allows modality preference to vary across graph ranges: it first estimates a scope distribution and then predicts a separate composition distribution conditioned on each scope. For task τ with embedding eτ , the Router first constructs a task-aware query: 
+
+rv = LN( Wg gv + Wτ eτ ). (9) Let Sv = {Sv,s ′ }s′∈S denote the set of available scope rep-resentations. The scope Router compares rv with these rep-resentations and produces 
+
+αv,s = pθ (s | rv , Sv ). (10) This distribution measures the relevance of each graph range to the current anchor and downstream task. For each scope, the Router subsequently evalu-ates the available modality compositions. Let Vv,s =
+
+{Vv,s,m ′ }m′∈M denote the candidate set constructed within scope s. The scope-conditioned composition distribution is 
+
+βv,m |s = pθ (m | s, r v , S v,s , Vv,s ). (11) Here, Sv,s provides the shared representation of the current graph scope, whereas Vv,s contains the composition-specific candidates derived from that representation. The composi-tion scorer combines the task-aware query and the corre-sponding scope representation through additive and multi-plicative interactions. Consequently, the preferred modality composition can vary across graph ranges rather than being shared across all scopes. The joint routing weight for candidate Vv,s,m is 
+
+ρ(τ ) 
+
+> v,s,m
+
+= αv,s βv,m |s. (12) This factorization couples where graph information is col-lected with how the modalities within that context are orga-nized. We use ρv to denote the resulting distribution flattened over (s, m ). Exact scorer definitions and a controlled com-parison with the reverse composition-first factorization are provided in Supplementary Secs. C.4 and G.2. The routed node representation is obtained by weighted aggregation over the candidate pool: 
+
+z(τ ) 
+
+> v
+
+= X
+
+> s∈S
+
+X
+
+> m∈M
+
+ρ(τ )
+
+> v,s,m
+
+Vv,s,m . (13) A lightweight residual Adapter then specializes the routed representation: 
+
+h(τ ) 
+
+> v
+
+= LN 
+
+
+
+z(τ ) 
+
+> v
+
++ A(z(τ ) 
+
+> v
+
+, e τ )
+
+
+
+. (14) Both routing distributions use lightweight low-dimensional attention scorers. Placing the Adapter after routing concen-trates task-specific specialization in a compact module with-out altering scope aggregation or candidate construction. The Adapter architecture and task-specific heads are detailed in Supplementary Sec. C.5. Method NC LP ele-fashion RedditS Grocery Movies Bili_Food DY sports Acc MRR Hits@3 MRR Hits@3 MRR Hits@3 
+
+GNN Models 
+
+GCN 82.75 ±0.21 91.87 ±0.28 79.95 ±0.39 51.13 ±0.34 28.56 ±0.74 35.96 ±0.98 41.06 ±0.56 47.79 ±0.75 85.16 ±0.25 96.99 ±0.12 
+
+GAT 85.20 ±0.18 91.08 ±0.25 80.97 ±0.36 51.22 ±0.31 27.18 ±0.68 33.13 ±0.89 49.12 ±0.51 51.56 ±0.69 90.44 ±0.20 96.57 ±0.09 
+
+GraphSAGE 85.92 ±0.17 92.53 ±0.22 81.08 ±0.34 52.31 ±0.29 23.11 ±0.73 23.66 ±0.96 44.74 ±0.59 48.59 ±0.77 92.58 ±0.15 96.17 ±0.07 
+
+Multimodal Graph Models 
+
+MMGCN 82.04 ±0.24 81.90 ±0.31 74.18 ±0.41 47.56 ±0.37 34.50 ±0.82 42.06 ±1.05 32.54 ±0.72 36.50 ±0.94 89.10 ±0.46 91.50 ±0.24 
+
+MGAT 85.89 ±0.15 94.41 ±0.19 81.93 ±0.30 52.68 ±0.27 37.34 ±0.61 41.42 ±0.78 57.14 ±0.44 66.43 ±0.59 90.87 ±0.22 96.15 ±0.10 
+
+MHGAT 86.05 ±0.16 94.15 ±0.23 81.94 ±0.32 53.71 ±0.35 28.18 ±0.84 34.80 ±1.12 50.95 ±0.63 56.36 ±0.81 89.29 ±0.27 97.52 ±0.11 
+
+DGF 87.04 ±0.12 92.75 ±0.20 82.05 ±0.28 52.08 ±0.24 29.77 ±0.69 33.82 ±0.93 54.28 ±0.47 57.54 ±0.65 97.61 ±0.18 98.91 ±0.05 
+
+Graph Foundation Models 
+
+GFT (Text-Only) 85.66 ±0.13 93.38 ±0.21 81.82 ±0.26 51.42 ±0.28 31.38 ±0.55 37.63 ±0.74 62.38 ±0.61 67.63 ±0.79 93.34 ±0.24 96.89 ±0.13 
+
+RiemannGFM (Text-Only) 86.88 ±0.14 91.41 ±0.27 82.01 ±0.29 51.20 ±0.31 35.67 ±0.64 41.22 ±0.82 71.56 ±0.58 76.28 ±0.76 86.05 ±0.31 94.45 ±0.16 
+
+Graph4MM (Multimodal) 87.06 ±0.11 95.59 ±0.18 79.48 ±0.31 53.40 ±0.24 38.51 ±0.52 39.39 ±0.61 73.43 ±0.43 76.50 ±0.58 95.82 ±0.21 98.86 ±0.09 
+
+UniGraph2 (Multimodal) 80.74 ±0.19 93.48 ±0.22 76.46 ±0.35 50.70 ±0.32 37.66 ±0.48 43.22 ±0.57 70.58 ±0.55 74.29 ±0.73 88.93 ±0.38 93.49 ±0.19 
+
+BRAIN (Multimodal) 87.77 ±0.08 95.34 ±0.16 82.92 ±0.14 56.25 ±0.18 38.63 ±0.28 43.64 ±0.25 75.70 ±0.31 77.76 ±0.32 97.91 ±0.12 99.09 ±0.06 
+
+Table 1: Performance comparison on node classification (NC) and link prediction (LP). The best and second-best mean results are highlighted in bold and underlined, respectively. 
+
+Experiment 
+
+We evaluate BRAIN through four complementary research questions: Q1 : How effective is BRAIN across discriminative and generative tasks? Q2 : How does Stage 1 pretraining affect downstream data efficiency? Q3 : How do the Bridge, Router, and Adapter contribute to performance, and what routing behaviors do they learn? Q4 : What computational costs does BRAIN incur? Experiments cover nine multimodal graph datasets span-ning node classification, link prediction, graph-to-text gen-eration, and graph-to-image generation. Dataset statistics, task construction, leakage controls, metric definitions, and checkpoint-selection rules are documented in Supplemen-tary Sec. B. 
+
+Overall Effectiveness 
+
+Experimental Settings. We evaluate node classification (NC) on ele-fashion, RedditS, Grocery, and Movies, and link prediction (LP) on Bili_Food, DY, and sports under the Open-MAG protocols (Wan et al. 2026). We report Accuracy for NC and filtered MRR and Hits@3 for LP. For graph-to-text generation (G2Text), we use Flickr30k, where descriptions 2–5, the anchor image feature, and the permitted neighbors’ text and image features are provided as input, while descrip-tion 1 is held out as the generation target. We report BLEU-4, ROUGE-L, CIDEr, and BERTScore. For graph-to-image generation (G2Image), we use SemArt, where the target im-age is excluded from the input and used only for evaluation. We report CLIPScore and DINOv2 similarity. For fair com-parison, all methods use the same task-specific generation backbones. 
+
+Baselines. For NC and LP, we compare with standard GNNs (GCN (Kipf and Welling 2017), GAT (Veličković et al. 2018), and GraphSAGE (Hamilton, Ying, and Leskovec 2017)), multimodal graph models (MMGCN (Wei et al. 2019), MGAT (Tao et al. 2020), MHGAT (Jia et al. 2023), and DGF (Zheng et al. 2026)), graph foundation models (GFT (Wang et al. 2024) and RiemannGFM (Sun et al. 2025)), and multimodal graph foundation models (Uni-Graph2 (He et al. 2025), Graph4MM (Ning et al. 2025), and PLANET (Liu et al. 2026)). For generation, NTSFormer (Hu et al. 2026), PLANET, and Graph4MM are evaluated where applicable within the same task-specific language or diffusion pipeline, with matched data splits, context budgets, prompts, and decoding or sampling settings. 
+
+Discriminative tasks. Tab. 1 shows that BRAIN ranks first on nine of the ten dataset–metric comparisons and second on the remaining one. Its strongest NC advantage appears on Movies, while it remains competitive on RedditS and Grocery. BRAIN also leads on every reported LP dataset and metric.These results are consistent with the value of jointly modeling scope and modality composition; the causal contribution of this design is examined through controlled ablations below. The smaller margins on some NC datasets further suggest that the largest gains occur when a fixed local view is insufficient, rather than being tied to a single favorable domain. 
+
+Generative tasks. As shown in Fig. 3, BRAIN leads all baselines across G2Text and G2Image metrics, outperform-ing the top baseline by 19.9% in CIDEr and 29.3% in DINO Similarity. Gains in G2Text reflect better lexical cov-erage and semantic fidelity, while higher CLIPScore and DI-NOv2 demonstrate superior text–image alignment and visual consistency.(Detailed analysis are given in Supplementary Sects. E.2 and I.) BLEU-4 ROUGE-L      
+
+> Flickr30k (G2Text)
+> 5.6 6.4 7.2 8.0
+> BLEU-4
+> (a) G2Text: BLEU-4 and ROUGE-L
+> NTSFormer PLANET Graph4MM
+> BRAIN
+> 5.56 6.38 6.93
+> 7.41
+> CIDEr BERTScore
+> Flickr30k (G2Text)
+> 42 48 54 60
+> CIDEr
+> (b) G2Text: CIDEr and BERTScore
+> 40.05 42.21 49.58
+> 59.47
+> CLIP Score DINO Similarity
+> SemArt (G2Image)
+> 816 24 32
+> CLIP Score
+> (c) G2Image on SemArt
+> 13.98 14.21 14.95
+> 16.36
+> 20 25 30 35
+> ROUGE-L
+> 20.67 28.40 29.14
+> 34.34
+> 82.5 85.0 87.5 90.0
+> BERTScore
+> 83.45 85.68 86.45
+> 90.64
+> 015 30 45
+> DINO Similarity
+> 12.59 13.99 16.80
+> 21.73
+
+Figure 3: Generative performance on Flickr30k G2Text and SemArt G2Image. We report BLEU-4, ROUGE-L, CIDEr, and BERTScore for G2Text, and CLIPScore and DINOv2 similarity for G2Image. Relative improvements are computed against the strongest baseline for each metric. 
+
+Data Efficiency of Stage-1 Pretraining 
+
+We compare random initialization with joint multi-graph Stage 1 pretraining while fixing the Stage 2 architecture, op-timization schedule, and data split. Because the target graphs participate in Stage 1, this experiment measures downstream data efficiency rather than transfer to an unseen graph. We vary Stage 2 supervision from 5% to 80% on Movies NC and Bili_Food LP, and from 10% to 80% on DY LP; exact subsampling protocols and complete values are reported in Supplementary Sec. F. 
+
+Reduced-supervision results. Figure 4 shows that Stage 1 most consistently improves data efficiency on LP. On DY, pretrained initialization improves MRR at every supervision level, including gains of 0.2123 and 0.2308 at 10% and 20% supervision. Bili_Food obtains its largest gain, 0.0781 MRR, at 20%. These results indicate that multi-graph pretraining provides a useful relational prior, although its benefit depends on the downstream task and the amount of supervision. Movies exhibits a different adaptation profile: pretrained 10 20 30 40 50 60 70 80 40 44 48 52 Accuracy (%)  
+
+> Movies (NC)
+> 10 20 30 40 50 60 70 80 0.4 0.5 0.6 0.7 0.8 MRR
+> DY (LP)
+> 10 20 30 40 50 60 70 80 0.15 0.25 0.35 0.45 MRR
+> Bili_Food (LP)
+> Stage-2 training data (%)
+> Scratch Joint Stage-1
+
+Figure 4: Data efficiency on Movies NC (left), DY LP (mid-dle), and Bili_Food LP (right). Random initialization and joint Stage 1 pretraining use the same Stage 2 protocol. initialization is slightly weaker in the lowest-supervision regimes, but the gap narrows and reverses as more labels become available. At 80% supervision, Accuracy rises from 51.84% to 53.96%, an absolute gain of 2.12 percentage points. This crossover suggests that transferable scope rep-resentations may require sufficient task supervision to be specialized effectively, rather than providing a uniform ad-vantage in every extreme low-label regime. 
+
+Ablation and Routing Analysis 
+
+We analyze the necessity of each module using component ablations, and investigate the learned scope–composition dis-tributions across representative datasets. 
+
+Experimental settings. The Bridge controls remove graph context while retaining the anchor representation, col-lapse the three modality-composition candidates within each scope, or retain only the 1-hop scope. The routing controls replace the conditional factorization αsβm|s with three al-ternatives: uniform mixing assigns weight 1/9 to every can-didate; the independent Router uses αsβm and shares one composition distribution across all scopes; and the flat 9-way Router treats the nine scope–composition candidates as unrelated choices by predicting one softmax directly over them. The final control removes the post-routing residual Adapter. Supplementary Sec. G additionally examines rout-ing distributions, factorization order, context budgets, and sparse route selection. Method Node Classification Link Prediction Grocery RedditS Movies Bili_Food DY 
+
+Bridge and candidate construction 
+
+w/o graph context 79.31 91.92 49.31 31.78 61.40 w/o composition modulation 82.45 94.31 52.22 34.16 59.23 Single scope (1-hop only) 82.16 93.91 52.97 33.85 62.36 
+
+Routing mechanism 
+
+Uniform mixing (1 /9) 81.69 94.23 52.67 35.17 70.50 Independent Router (αsβm) 82.60 94.31 53.46 35.89 74.16 Flat 9-way joint Router 82.78 94.22 54.43 36.58 74.37 
+
+Adaptation mechanism 
+
+w/o Adapter 82.60 94.47 52.79 29.46 61.57 
+
+BRAIN (full) 82.92 95.34 56.25 38.63 75.70 
+
+Table 2: Ablation results on representative NC and LP datasets. NC reports Accuracy (%); LP reports MRR (%). text image mm 1-hop 2-hop global                                                     
+
+> Scope
+> 13.6% 12.3% 15.0%
+> 11.8% 10.8% 13.0% 7.9% 7.7% 8.1%
+> Grocery
+> text image mm
+> 16.5% 13.0% 16.4% 13.9% 11.6% 13.7% 5.2% 3.6% 6.1%
+> RedditS
+> text image mm
+> 10.8% 10.6% 14.4% 10.4% 10.2% 14.5%
+> 9.4% 8.1% 11.6%
+> Movies
+> text image mm
+> 11.9% 17.9% 13.5% 8.7% 13.1% 9.9% 6.9% 10.3% 7.8%
+> DY
+> text image mm
+> 19.7% 4.8% 4.7% 23.3% 5.6% 5.6%
+> 24.4% 5.9% 5.8%
+> Bili_Food
+> text image mm 1-hop 2-hop global
+> Scope
+> 19.1% 17.8% 7.1% 14.9% 13.9% 5.5% 9.1% 8.5% 3.4%
+> sports
+> 0246810 12 14 16 0510 15 20 25
+> Node Classification Link Prediction
+> Composition Composition
+
+Figure 5: Average scope–composition routing distributions across representative NC and LP datasets. The preferred graph range and modality composition vary across datasets and tasks. 
+
+Ablation findings. Removing graph context causes the largest and most consistent degradation, confirming that neighborhood information contributes beyond the anchor modalities. Collapsing composition candidates or retaining only one scope is particularly damaging on LP and Movies, where useful signals are distributed across graph ranges and modality configurations. All three routing controls remain below the Hierarchical Context Router in the reported re-sults, while removing the Adapter produces a pronounced LP drop. These results support these modules as necessary components: the Bridge constructs complementary candi-dates, the Router performs context-dependent selection, and the Adapter specializes the routed representation. Together, these results indicate that BRAIN’s gains do not arise merely from enlarging the candidate bank: scope-preserving con-struction, conditional routing, and post-routing specializa-tion contribute complementary benefits across classification and relational prediction. 
+
+Routing preferences. Fig. 5 reveals dataset-specific rout-ing patterns. Grocery and RedditS favor local context, whereas Movies balances different scopes while preferring multimodal candidates. DY is image-dominant, Bili_Food fa-vors broader text-dominant context, and Sports relies mainly on local text and image evidence. These patterns show that neither a fixed graph range nor a single modality composition is optimal across datasets. 
+
+Efficiency and Complexity 
+
+Complexity. BRAIN contains 7.33M trainable parameters in the profiled NC configuration, of which the Router ac-counts for only 8.3%. With three scopes and three modality compositions, the candidate bank has a fixed size of K = 9 ,and Router scoring grows linearly with the number of scope– composition pairs. The main additional cost arises from con-structing and scoring the nine candidates; the lightweight Adapter is evaluated only once after routing. Therefore, the candidate bank is the principal target for future top-k or hard-routing acceleration. Formal complexity and profiling boundaries are detailed in Supplementary Sec. H. 
+
+Efficiency and memory profiling. As shown in Fig. 6, BRAIN achieves the highest accuracy with a Stage 2 training time of 8.12 minutes, demonstrating a favorable accuracy– efficiency trade-off. Although several lightweight baselines 1 2 5 10 20 40     
+
+> NC training time (log(min))
+> 80 82 84 86 88
+> Accuracy (%)
+> (a) Training Efficiency on ele-fashion (NC)
+> UniGraph2 2.19 min Graph4MM 5.06 min
+> BRAIN 8.12 min
+> MMGCN 7.57 min MGAT 7.88 min RiemannGFM 12.20 min PLANET 25.23 min DGF 37.29 min MMGCN RiemannGFM Graph4MM MGAT NTSFormer PLANET DGF UniGraph2
+> BRAIN*
+> 0510 15 20 25 30
+> Peak GPU memory (GiB)
+> 2.20 12.01 3.53 4.32 6.65 13.41 17.72 10.90 21.90 22.61 12.50 18.76
+> 2.37
+> (b) Peak GPU Memory on ele-fashion (NC)
+> Pre-training Fine-tuning/E2E
+
+Figure 6: Efficiency and memory consumption analysis. train faster, they obtain lower accuracy. BRAIN also requires only 2.37 GiB of peak GPU memory during Stage 2, the second-lowest footprint among all com-pared methods and only 0.17 GiB above MMGCN. This is 32.9%–89.2% lower than the remaining baselines. Although Stage 1 pretraining peaks at 18.76 GiB, Stage 2 reduces the memory requirement by 87.4%. These results show that learning multiple scope–composition candidates is a man-ageable one-time pretraining cost while preserving efficient downstream adaptation. 
+
+Conclusion 
+
+We introduced BRAIN, a multimodal graph foundation model for graph-conditioned context relevance. BRAIN combines attention-based semantic aggregation and GCN-based structural propagation to construct a candidate pool of graph scopes and modality compositions. A hierarchi-cal conditional Router mixes these candidates, after which a residual Adapter specializes the routed representation for downstream prediction. Its two-stage training first learns reusable multimodal and structural representations across graphs and then optimizes candidate construction, routing, adaptation, and task heads with supervision. Across nine datasets and four task families, BRAIN achieves strong per-formance, with clear gains on relational matching and genera-tion. Low-resource experiments demonstrate task-dependent data-efficiency benefits, while ablations and routing anal-yses validate graph context, structured candidate construc-tion, conditional selection, and domain-specific context pref-erences across heterogeneous datasets and downstream tasks. References 
+
+Chen, R.; Zhao, T.; Jaiswal, A. K.; Shah, N.; and Wang, Z. 2024. LLaGA: Large Language and Graph Assistant. In Pro-ceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research , 7809–7823. PMLR. Fan, D.; Fang, Y.; Liu, J.; Difallah, D.; and Tan, Q. 2025. MLaGA: Multimodal Large Language and Graph Assistant. 
+
+arXiv preprint arXiv:2506.02568 .Fang, Y.; Jin, B.; Shen, J.; Ding, S.; Tan, Q.; and Han, J. 2025. GRAPHGPT-O: Synergistic Multimodal Com-prehension and Generation on Graphs. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 19467–19476. Feng, T.; Wu, Y.; Lin, G.; and You, J. 2025. Graph World Model. In Proceedings of the 42nd International Confer-ence on Machine Learning , volume 267 of Proceedings of Machine Learning Research , 16931–16955. PMLR. Hamilton, W. L.; Ying, R.; and Leskovec, J. 2017. Inductive Representation Learning on Large Graphs. In Advances in Neural Information Processing Systems , volume 30, 1024– 1034. He, Y.; Sui, Y.; He, X.; Liu, Y.; Sun, Y.; and Hooi, B. 2025. UniGraph2: Learning a Unified Embedding Space to Bind Multimodal Graphs. In Proceedings of the ACM on Web Conference 2025 , 1759–1770. Hong, X.; Lin, M.; Wang, X.; Wang, C.; and Li, W. 2026. Multimodal Graph Representation Learning with Dynamic Information Pathways. Proceedings of the AAAI Conference on Artificial Intelligence , 40(17): 14829–14837. Hu, J.; He, Y.; Li, Y.; Hooi, B.; and He, B. 2026. NTSFormer: A Self-Teaching Graph Transformer for Multimodal Isolated Cold-Start Node Classification. Proceedings of the AAAI Conference on Artificial Intelligence , 40(17): 14856–14864. Jia, X.; Jiang, M.; Dong, Y.; Zhu, F.; Lin, H.; Xin, Y.; and Chen, H. 2023. Multimodal Heterogeneous Graph Attention Network. Neural Computing and Applications , 35(4): 3357– 3372. Kipf, T. N.; and Welling, M. 2017. Semi-Supervised Classi-fication with Graph Convolutional Networks. In Proceedings of the 5th International Conference on Learning Represen-tations .Liu, H.; Feng, J.; Kong, L.; Liang, N.; Tao, D.; Chen, Y.; and Zhang, M. 2024. One For All: Towards Training One Graph Model For All Classification Tasks. In International Conference on Learning Representations .Liu, S.; Li, X.; Su, D.; Zhang, R.; Qin, H.; Li, R.; and Wang, G. 2026. Toward Effective Multimodal Graph Founda-tion Model: A Divide-and-Conquer Based Approach. arXiv preprint arXiv:2602.04116 .Mao, H.; Chen, Z.; Tang, W.; Zhao, J.; Ma, Y.; Zhao, T.; Shah, N.; Galkin, M.; and Tang, J. 2024. Position: Graph Foundation Models Are Already Here. In Proceedings of the 41st International Conference on Machine Learning , volume 235 of Proceedings of Machine Learning Research , 34670– 34692. PMLR. Ning, X.; Fu, D.; Wei, T.; Xu, W.; and He, J. 2025. Graph4MM: Weaving Multimodal Learning with Structural Information. In Proceedings of the 42nd International Con-ference on Machine Learning , volume 267 of Proceedings of Machine Learning Research , 46448–46472. PMLR. Sun, L.; Huang, Z.; Zhou, S.; Wan, Q.; Peng, H.; and Yu, P. S. 2025. RiemannGFM: Learning a Graph Foundation Model from Riemannian Geometry. In Proceedings of the ACM Web Conference 2025 , 1154–1165. Sun, Y.; Li, K.; Guo, P.; Liu, J.; and Tan, Q. 2026. Mario: Multimodal Graph Reasoning with Large Language Models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , 19219–19228. Tao, Z.; Wei, Y.; Wang, X.; He, X.; Huang, X.; and Chua, T.-S. 2020. MGAT: Multimodal Graph Attention Network for Recommendation. Information Processing & Management ,57(5): 102277. Veličković, P.; Cucurull, G.; Casanova, A.; Romero, A.; Liò, P.; and Bengio, Y. 2018. Graph Attention Networks. In 
+
+Proceedings of the 6th International Conference on Learning Representations .Wan, C.; Li, X.; Zuo, Y.; Deng, H.; Li, S.; Fan, B.; Qin, H.; Li, R.; and Wang, G. 2026. OpenMAG: A Comprehensive Benchmark for Multimodal-Attributed Graph. arXiv preprint arXiv:2602.05576 .Wang, S.; Wang, B.; Shen, Z.; Deng, B.; and Kang, Z. 2025. Multi-Domain Graph Foundation Models: Robust Knowl-edge Transfer via Topology Alignment. In Proceedings of the 42nd International Conference on Machine Learning ,volume 267 of Proceedings of Machine Learning Research ,64806–64821. PMLR. Wang, Z.; Zhang, Z.; Chawla, N. V.; Zhang, C.; and Ye, Y. 2024. GFT: Graph Foundation Model with Transferable Tree Vocabulary. In Advances in Neural Information Processing Systems , volume 37. Wei, Y.; Wang, X.; Nie, L.; He, X.; Hong, R.; and Chua, T.-S. 2019. MMGCN: Multi-modal Graph Convolution Net-work for Personalized Recommendation of Micro-video. In 
+
+Proceedings of the 27th ACM International Conference on Multimedia , 1437–1445. Yoon, M.; Koh, J. Y.; Hooi, B.; and Salakhutdinov, R. 2023. Multimodal Graph Learning for Generative Tasks. In 
+
+NeurIPS 2023 Workshop: New Frontiers in Graph Learning .Yuan, H.; Sun, Q.; Shi, J.; Fu, X.; Hooi, B.; Li, J.; and Yu, P. S. 2025. How Much Can Transfer? BRIDGE: Bounded Multi-Domain Graph Foundation Model with Generalization Guarantees. In Proceedings of the 42nd International Con-ference on Machine Learning , volume 267 of Proceedings of Machine Learning Research , 73604–73644. PMLR. Zhang, J.; Zhu, Y.; Liu, Q.; Wu, S.; Wang, S.; and Wang, L. 2021. Mining Latent Structures for Multimedia Recom-mendation. In Proceedings of the 29th ACM International Conference on Multimedia , 3872–3880. Zheng, H.; Yang, R.; Wang, H.; and Xu, J. 2026. Cross-Contrastive Clustering for Multimodal Attributed Graphs with Dual Graph Filtering. In Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining , 2020–2030. Association for Computing Machinery. Zhou, X.; and Shen, Z. 2023. A Tale of Two Graphs: Freez-ing and Denoising Graph Structures for Multimodal Recom-mendation. In Proceedings of the 31st ACM International Conference on Multimedia , 935–943.

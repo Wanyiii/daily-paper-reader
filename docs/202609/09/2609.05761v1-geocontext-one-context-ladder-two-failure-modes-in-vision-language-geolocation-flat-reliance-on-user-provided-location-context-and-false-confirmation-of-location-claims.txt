@@ -1,0 +1,521 @@
+Title: GeoContext: One Context Ladder, Two Failure Modes in Vision-Language Geolocation: Flat Reliance on User-Provided Location Context and False Confirmation of Location Claims
+
+URL Source: https://arxiv.org/pdf/2609.05761v1
+
+Published Time: Wed, 09 Sep 2026 00:18:18 GMT
+
+Number of Pages: 22
+
+Markdown Content:
+# GeoContext : One Context Ladder, Two Failure Modes in Vision–Language Geolocation 
+
+## Flat Reliance on User-Provided Location Context, and False Confirmation of Location Claims Yifan Zhang 
+
+powerfan233@gmail.com 
+
+## Kai Wang 
+
+wangjinjie722@gmail.com 
+
+## September 9, 2026 
+
+Abstract 
+
+Visual geolocation benchmarks ask a model where a photograph was taken and score how far off it is. Real users rarely ask that in isolation: they volunteer where they think they are — “I took this near X” — and that sentence is usually true but imprecise . How a model should weigh such a hint is unmeasured, and the same weighing governs a deployed decision: whether a photograph confirms a location claim , as when a platform asks a driver to photograph a drop-off. We present GeoContext , one resource supporting two tasks: GeoHint , open-ended localization given a true but coarse hint, and GeoVerify , binary verification that an image was taken within 150 m of a claimed place, scored with signal detection theory. The shared resource is a context ladder that stratifies mined reference points by distance (0 .5–6 km) and by referenceability — how often people use a place to say where they are, which we show is distinct from fame — so that the image is held fixed while only the hint varies. The release covers 109 sites in 30 cities, 5 VLMs, and 21 933 scored 
+
+GeoHint and 6270 GeoVerify responses. Our evaluation yields three main findings. Reliance on the hint is flat along both axes — 1 .5 points across referenceability, under 3 across distance — while the error that relying produces grows steadily, so the cost scales and the reliance does not. Where the imagery is illegible the median ratio of error to hint distance is 1 .00: the answer is the hint. Where it is legible that ratio falls to 0 .24 to 0 .69, and one model of five is measurably less accurate with a hint than without one. On GeoVerify no model reaches d′ = 1 at the tolerance a deployment needs, ranking by accuracy inverts the ordering because models differ sharply in response bias, and 83 .8 % of false acceptances are stated at confidence ≥ 0.8. Code, data and every audit decision are released. 
+
+# 1 Introduction 
+
+Visual geolocation benchmarks score a model by how far its predicted coordinate falls from the truth. That framing hides a failure mode that ordinary users hit constantly. Consider the interaction that motivated this work: one of us photographed a building while traveling, asked a VLM what it was, and received the name of a different, more famous building a few hundred meters away. The region was right. The entity was wrong. A coordinate-distance metric barely registers the error; a user trying to identify what is in front of them is completely misled. Such interactions are rarely context-free. Users volunteer what they know: “I took this near Bastille”, “somewhere in Shoreditch”. These statements are true but under-specified —they constrain the answer to a neighborhood, not a building. Prior work on textual context in geolocation has studied the two extremes: adversarial text inside the image (Li et al., 2026), and out-of-image captions that either give the answer away or are irrelevant (Wang et al., 2025). The middle case—context that is honest, helpful in principle, and merely coarse—is where real users live, and it is unstudied. We ask: does a VLM’s reliance on user-provided location context track how informative that context is? We find it does not discriminate along either axis, and the two readings differ. How commonly a place is used to give directions can be judged from its name, so a model that repeats an obscure reference point as readily as a universally known one is failing at something it could have done. How far away that place is cannot be read off the name, so flatness there is the absence of a signal rather than a failure to use one — but the error that repeating it produces grows with that distance regardless, which is what makes the flatness consequential. 1arXiv:2609.05761v1 [cs.CV] 4 Sep 2026 The same failure has a second face, with a deployed decision attached to it. Turn the question around — instead of asking the model to produce a location given a hint, ask it to check one: the photo is claimed to have been taken at a particular place; is that true? This is the shape of visual arrival verification, and a model that cannot discount an unreliable hint when naming a place is unlikely to reject a false claim when checking one. We therefore build both tasks on one resource and report them together. 
+
+Contributions. 
+
+1. A resource supporting two tasks. A context ladder, mined from Wikidata and rated by a text-only auditor for referenceability, which stratifies reference points by distance × referenceability and transfers to a new city with no human labor (Sec. 3.3). It supports both GeoHint (Sec. 4) and, reusing the same coordinates as decoys, GeoVerify (Sec. 5). 2. Reliance that stays flat while its cost grows. Models repeat a hint almost as often when it is distant and obscure as when it is near and universally known, while the error that repeating it produces grows steadily with its distance (Sec. 6.2.1). Referenceability is legible from the name and is still ignored; distance is not, and the models discount it only where the image lets them check it. The cost of relying on the hint scales; the reliance does not. 3. A consequence conditional on image legibility, and a mitigation that follows the same mechanism. Where the imagery is illegible the answer collapses onto the hint (median error/distance ratio 1 .00); where it is legible the image does the work instead, and one of the five models is reliably less accurate for having been given true information (Sec. 6.1.2). Warning the model that the user may be wrong is obeyed in both regimes but helps only in the legible one (Sec. 6.3.1); a structured evidence checklist helps in neither, against pre-registered criteria (Sec. 6.3.2). 4. Verification scored without a geocoder, and the measurement hazards of scoring with one. GeoVerify ’s ground truth is a haversine comparison, so no geocoder, judge model or output threshold enters the measurement; we score it with signal detection theory and summarize each model by a discrimination radius (Sec. 5). By contrast we document four faults in the geocoded metric, one of which reversed our own headline result, as a general hazard for distance-thresholded geolocation scoring (Sec. 4.2). 
+
+# 2 Related Work 
+
+Image-only geolocation. The dominant line predicts coordinates from the image alone (Clark et al., 2023), evaluated with distance-threshold accuracy Acc@ k km. Because test images are drawn near-uniformly over the globe, most of them are wilderness, road, or low-density periphery — not where people photograph things and ask what they are. Recent LLM-era benchmarks inherit both the sampling and the metric (Li et al., 2025). Under a distance metric, naming the building next door is an 80 m error and therefore indistinguishable from a perfect answer; the failure this paper is about is invisible by construction. We keep a distance threshold for task performance , because it is the measure that is comparable across sites, and carry the entity-level question on two other measures instead: how often the answer is the hint repeated back (echo rate), and how far the answer lands relative to how far away the hint was (Sec. 6.2). 
+
+Text alongside the image. SIGNPOST-Bench (Li et al., 2026) renders adversarial place names into 
+
+the image; predictions shift by hundreds of kilometers. KoreaGEO (Wang et al., 2025) pairs images with out-of-image captions that are either irrelevant or directly revealing. Both manipulate text that either contradicts the image or gives the answer away. Ours does neither: it is true, out-of-image, and coarse, so failures can appear only at the entity level while the region stays correct. 
+
+Anchoring on salient objects. HoloGeo (Zhou et al., 2026) reports that models over-weight visually salient landmarks and proposes two bias metrics. That work concerns what is inside the image; we concern the text the user adds beside it. Their metrics also require output probability distributions and so cannot be computed for API-only models — a reproducibility constraint we deliberately avoid. 2Auxiliary hints, and why they have not been studied as a variable. EarthWhere (Qian et al., 2025) is the closest prior work: its WhereStreet split supplies each item with a free-text HINT taken from the source video (e.g. “this image was taken on my way to school”). Two features of that design leave the gap we fill. First, the hint is whatever the narrator happened to say: its distance from the target and its usefulness are neither controlled nor recorded, and there is no matched no-hint condition, so no dose–response curve can be estimated. Second, the scoring protocol explicitly removes the behavior we measure — credit is computed one level below whatever the hint names, on the instruction to “treat the Hint as free information; exclude it from credit”, with a further rule zeroing predictions that merely copy it. Guarding against the behavior concedes that it happens; it also converts it from a phenomenon into a scoring problem. We make it the dependent variable instead, and vary the hint’s distance and referenceability so that the reliance a model shows can be compared against the reliance the hint warrants. 
+
+Verifying a location claim. A second line of work asks not where an image was taken but whether a 
+
+claimed time or place is consistent with it. Li et al. (2018) infer the sun position from a single shadow and compare it against the position implied by the claimed timestamp and coordinates, correctly flagging 91 .5 % of falsified photographs; Padilha et al. (2022) learn the same consistency check end-to-end, raising accuracy on timestamp manipulation from 59 .0 % to 81 .1 %. Both verify a claim through a physical channel — shadow geometry, illumination — that is independent of what the scene depicts. At industrial scale, Fan et al. (2024) verify points of interest by matching signboard imagery against an archived database, replacing crowdworker effort with retrieval. The question we ask is whether a general-purpose VLM can carry this decision through the semantic channel instead, judging from the scene itself whether a named place is where the photograph was taken, at the tolerance a deployment needs. The nearest benchmark in spirit is Zheng et al. (2025), which pairs panoramas with satellite imagery and asks models for relative pose; its supervision is cross-view geometry rather than a named claim a user might assert, and it does not measure the false-acceptance behavior that matters when the claim is adversarial. 
+
+# 3 The GeoContext resource 
+
+Everything in this section is shared by both tasks. We call the resource GeoContext : a programmatic pipeline that, for any city, produces photo sites, street-level imagery of those sites, and a context ladder of nearby reference points stratified by distance and referenceability. Two evaluation protocols run on top of it: 
+
+GeoHint (Sec. 4.2, 6) — open-ended naming. The model sees the image plus one true but coarse sentence of user-supplied context, and must name where the photo was taken. This is the task an ordinary user performs when they ask a chatbot what they are looking at. 
+
+GeoVerify (Sec. 5, 6.4) — claim verification. The model sees the image plus a claimed location and must answer whether the photo was taken within a stated tolerance of that claim. This is the task a platform performs when it asks a driver for a photo to confirm a drop-off. The two tasks read the same sites, the same images and the same audited reference-point pool; they differ only in what is asked and how the answer is scored. GeoHint needs a geocoder, and its threshold is applied to the geocoded output. GeoVerify needs no geocoder, and its tolerance τ is applied to two known coordinates rather than to anything the model produced, so the ground truth is a deterministic distance comparison (Sec. 5.3). 
+
+## 3.1 Scope: dense, walkable urban cores 
+
+Figure 1 summarises the construction. Distance bands only mean the same thing across cities if the cities have comparable spatial granularity. We make the inclusion criterion explicit and measurable. For a site, let Ldist be the median nearest-neighbor distance among OSM place=neighborhood|suburb|quarter 
+
+point nodes within 6 km. We use point nodes rather than administrative polygons because polygon coverage is wildly uneven—New York returns 11 polygons, and informal but universally used names (SoHo, Nolita, Tribeca) have none. Two details matter. First , addressing units must be excluded. Of 800 “neighbourhoods” within 6 km of Shibuya, 573 (72 %) are X-ch¯ ome street-numbering blocks. Including them yields Ldist = 0 .24 km for Tokyo versus 0 .51 km for Paris, supporting a conclusion—“Tokyo’s neighbourhoods are twice as fine-grained”— that is purely an artifact of Japanese OSM tagging convention. After exclusion Tokyo’s three sites give 3Tourist cities       
+
+> map API
+> 58 cities screened for street-view coverage
+> Photo sites
+> Wikidata
+> fi ne-grained POI types, sitelinks
+> ≤60
+> Images
+> Mapillary
+> perspective frames, LLM + human audit
+> Context ladder
+> Wikidata
+> 8,721 candidates rated for referenceability
+> Evaluation
+> 5 VLMs
+> distance ×
+> referenceability grid
+> held fi xed across conditions manipulated
+> Every stage is programmatic: adding a city costs no manual curation, and the benchmark can be re-sampled on fresh imagery rather than shipped as a fi xed fi le.
+
+Figure 1: Construction pipeline. City screening, site selection, imagery retrieval and reference-point rating are all programmatic; the only human step is a spot audit of the retrieved images (Sec. 3.1). The first three stages are held fixed within a site, so the reference point is the sole manipulated input. Because the pipeline is a sampler rather than a fixed file, the benchmark can be regenerated on imagery captured after a given date — the route we intend to use for contamination control. 
+
+0.34 /0.44 /0.58, in line with everywhere else. Second , the measure captures granularity, not motorised accessibility (Sec. 7). For the 19 hand-picked sites, measured individually, Ldist ∈ [0 .33 , 0.65] km, a spread of only 1 .98 ×; we therefore use fixed absolute distance bands. San Jose, a car-oriented city we measured but excluded, gives 
+
+Ldist = 0 .99 km with only 21 neighborhood nodes in the same radius. Car-oriented low-density urban areas are out of scope ; there “nearby” is set by drive time, not neighborhood granularity, and would require a different band design. For the 90 algorithmically selected sites the criterion was applied at city level — one representative center coordinate per city, all 30 within [0 .32 , 0.65] km — rather than per site. Two cities, Tokyo and Bogotá, sit at 0 .328 and 0 .327 and were admitted by lowering the floor from 0 .33 to 0 .32; Seville at 0 .316 was not. Per-site verification for this batch is outstanding and is listed in Sec. 7. 
+
+## 3.2 Sites and images 
+
+109 sites in 30 cities, from two selection procedures. 19 were hand-picked across 6 countries: Paris (Montmartre, Bastille, Île de la Cité, Canal Saint-Martin, Marais), London (Shoreditch, Covent Garden, Notting Hill), Barcelona (Gràcia, El Born), San Francisco (Mission, North Beach, Hayes Valley), Mexico City (Roma Norte, Condesa), Tokyo (Shibuya, Shimokitazawa, Yanaka), New York (SoHo). The remaining 90 were selected automatically, three per city across 30 cities, by the procedure of Sec. 3.2.1. The hand-picked cities are a subset of the 30, so those cities carry more sites than the rest. 
+
+Site selection deliberately avoids the most iconic landmarks (Eiffel Tower, Sagrada Família, Zócalo). Two reasons: iconic targets saturate the baseline and lose discriminative power; and the failure mode under study is substituting the nearby iconic landmark, which is meaningless if the target is that landmark. For the hand-picked sites this was a judgement call by the authors; the automatic procedure below replaces that judgement with a reproducible rule, and the two sets should be read as offering different guarantees. 
+
+3.2.1 Automatic site selection 
+
+Candidate cities are a manually compiled list of 58 tourist destinations (the union of several published rankings; the list is an input to the pipeline and can be edited freely, since the two automatic filters below do the work). A city is admitted if it has ≥ 30 perspective Mapillary images within 1 km of its center and its Ldist falls in [0 .32 , 0.65] km. Within an admitted city we query Wikidata for entities within 3 km of the center that (i) instantiate one of 16 photographable types — museum, park, church, theatre, market, bridge, square, library, castle and similar, deliberately excluding administrative divisions, which are areas rather than objects — and (ii) have at most 60 Wikipedia sitelinks, a ceiling that removes only the extreme top of the fame distribution. Candidates are then shuffled and checked in random order for street-view coverage ( ≥ 8 perspective images within 150 m), taking the first three that pass and skipping any within 250 m of an already-chosen site. 4The shuffle is the detail that matters. Querying Wikidata returns candidates ordered by sitelinks, and an earlier version simply walked that list until it had three with coverage — which is equivalent to “the most famous eligible landmarks in this city” and produced a test batch consisting almost entirely of tourist-postcard subjects (Anne Frank House, Brandenburg Gate). Every one of them was below the sitelinks ceiling, so the fault was in the traversal order, not the threshold. We note also that a narrower sitelinks band does not work as a proxy for referenceability. Across the 8649 audited candidates for which Wikidata reports a sitelink count, the range 5–40 holds 76 .7 % of the places rated highly referenceable, missing close to a quarter of them, and internally it spans every referenceability level from 0 to 5. Sitelinks can exclude extremes; they cannot select the middle. 
+
+Replication unit is the site, not the image. Multiple images at one site are near-duplicates—same buildings, same street, correlated errors— whereas the generalization claim is “does this hold somewhere else”. We therefore prefer more sites over more images per site. 
+
+Images come from Mapillary (CC-BY-SA); we release image IDs and coordinates rather than pixels. Candidates pass an automatic daylight/brightness filter and are then audited twice, independently : by a human, and by a vision model ( deepseek-vision , which is not among the evaluated models). The model rates each image on answer leakage — text burned into the frame naming a place or printing coordinates, the one hard exclusion — as well as scene type, shooting through glass, visible tourist infrastructure, and overall quality (prompt in Appendix A.4). The human marks each image keep or exclude with a free-text reason. Neither reviewer sees the other’s verdict before deciding, so agreement between them is meaningful. Of 429 audited candidates (170 hand-picked, 259 automatic) the human kept 347; 159 of these enter the evaluation (59 hand-picked, 100 automatic), sampled to cover every site. 
+
+The two audits are not redundant, and agreement statistics say so. Human and model agree on 343 of 429 images (80 .0 %), but Cohen’s κ = 0 .185: the high raw agreement comes mostly from the large majority of images that are unproblematic for both, and the two judgements are close to independent where it matters. The disagreements are systematic rather than noisy, and each direction has a cause: • Human excludes, model accepts (65 images). The human’s operative criterion — “nothing in this frame identifies a location” — is not among the model’s fields at all. A blank wall photographed sharply in good light scores well on every dimension the model rates. • Model rejects, human keeps (21 images), of which 17 are shots from inside a vehicle. The model treats scene_type ̸ = street as disqualifying; the human keeps the frame whenever the street outside is legible through the windscreen. Answer leakage is the category that most rewards running both tracks, because neither catches all of it. Nine images carry GPS coordinates burned into the frame by a vehicle-mounted camera. The model raised its overlay flag on 6 of the 9; the human excluded 8 of the 9, and one of those exclusions rests on the model’s flag alone — a watermark from the same camera model as an image the human had already pulled, which the model matched and the human had not yet reached. The model’s flag also fires twice on overlays that name no place at all (an Uber interface label, a BLACKVUE device string), so 8 flags cover 6 real leaks. The one coordinate-bearing image both reviewers passed was never sampled into the evaluation, and no image carrying coordinates appears in it. We therefore treat neither audit as authoritative: exclusion runs off the human verdict, with the model’s leakage flags reviewed case by case, and both columns are released so a reader can recompute this agreement. 
+
+## 3.3 The context ladder 
+
+For each site we retrieve Wikidata entities with coordinates within 6 km (156–237 per site) and pass each to a text-only auditor ( deepseek-v4-pro ) that returns: (i) usability as a reference point, (ii) 
+
+referenceability on 0–5, (iii) a canonical English name. The prompt is reproduced in Appendix A.3. 
+
+Referenceability is not fame. The prompt states this explicitly: the quantity is “how often would locals or tourists use it to describe where they are”, not “how well known is it”. This distinction is empirically necessary. Wikipedia pageviews rank San Jose’s Rosicrucian Park (5846 views) above the Municipal Rose Garden (2294), but the former is a curiosity museum nobody navigates by. Pageviews measure how many people look a place up, not how many people use it to say where they are. 
+
+5Three construction constraints. 
+
+1. The auditor must not be an evaluated model , else the benchmark sets its own exam. Our auditor is text-only, so it cannot see the images at all. 2. Every audit decision is logged and released ( audit_decisions.jsonl ), or the benchmark is not reproducible. 3. Disagreement between the LLM and pageviews becomes a human review queue , not an automatic override. 
+
+Auditor robustness. Cohen’s κ = 0 .919 across auditor models and 0 .906 across prompt languages on the referenceability tier assignment. 
+
+Exclusion of contentious names. A separate audit pass removes place names tied to Nazism/fascism, Japanese militarism, or the celebration of slavery, which we keep distinct from the usability field because referenceability is a measurement while exclusion is a dataset policy. It is deliberately narrow and flags 17 of 8676 candidates; all decisions ship in audit_sensitive.jsonl .Stratifying by distance (0 .5–1 .5, 1 .5–3, 3–6 km) × referenceability tier (high 4–5, mid 2–3, low 0–1) with 2 draws per cell gives up to 18 reference points per site. Cells run short in practice (Sec. 7), so per-site counts must be weighted in analysis. Draws within a cell are random , not sorted by distance to the band center: sorting cost us the single most diagnostic condition in an early version, where a referenceability-5 landmark lost to a referenceability-4 metro station by 0 .02 km. 
+
+# 4 Task 1: GeoHint 
+
+GeoHint asks the model where a photograph was taken, given a location hint that is true but coarse. The manipulation is entirely in the hint: the image is held fixed while the reference point moves along the two axes of Sec. 3.3. 
+
+## 4.1 Task definition and prompts 
+
+All conditions share one output schema and differ only in a prefix sentence. • Baseline (context=none ): “Where was this photo taken? Look at the image carefully and infer.” • Context (forced ): prefixed with “I took this photo near X.” • Warned (forced_warn ): as above, plus “Important: the location the user mentions may be inaccurate , or may refer to a different nearby area. Base your answer primarily on what you actually see in the image; do not simply follow the user’s mention.” A fourth condition, forced_chain , appends a structured evidence checklist and is described where it is used (Sec. 6.3.2). All four are reproduced in full in Appendix A.1. The schema requires city , area and building with no “unknown” escape, plus separate confidence fields—the forced-choice design standard in psychophysics. This was necessary: under the permissive schema 43 .6 % of responses decline to name a building at all, leaving the entity-level question unanswered, against 1 .6 % under the forced schema. We keep the permissive schema as a released control condition, and we do not post-hoc filter to finely-answered rows, since models answer finely when confident and confidence tracks easiness. 
+
+## 4.2 Metric 
+
+From binary hit to continuous distance. Binary scoring (“does the answer contain Shibuya ?”) is acutely sensitive to whether a neighborhood has a usable name, so it is not comparable across sites. It also collapses “Lower Manhattan” (off by ≈ 1 km) and “Chicago” (off by 1200 km) into the same wrong answer. We instead geocode the model’s answer and measure haversine distance err km to the site’s ground-truth coordinate, trying building → area → city and recording which level resolved. Ambiguous names are disambiguated using an anchor derived from the model’s own answered city , never the ground truth—using the truth to disambiguate launders a wrong answer (“London Soho”) into a right one (“New York SoHo”). 64.3 Four faults that reversed the sign of the result 
+
+Building this metric surfaced four scoring faults, every one of which was invisible in aggregate statistics and was found only by reading individual records. We report them because each produces plausible-looking numbers rather than errors, and because together they had reversed the sign of our own headline result before we found them: 1. Parenthetical aliases silently degrade to city level. Shibuya resolves under exact-label search but Shibuya (Miyamasuzaka) does not, falling back to a plausible-looking 3 .42 km rather than to an error. 2. Linear features cannot be scored as points. place=Meiji-d¯ ori is correct with area=Shibuya 
+
+and wrong with area=Harajuku ; the two are indistinguishable at the place level, so the information must be read from area .3. A global fallback fabricates enormous errors. Falling back to the globally most-linked entity turned an unverifiable answer into a 16 609 km error. Treating out-of-anchor as a level failure cut 
+
+> 1000 km errors from 976 to 459. 4. The city-level fallback distance is a constant, and at one site it sits below the hit threshold. Paris’s city centroid is 0 .761 km from the site, so every answer resolving no finer than “Paris” counted as a sub-kilometer hit, inflating that site by 20 .7 points and masking the accuracy drop reported in Sec. 6.1.3. Together these corrections cut city-level resolution from 51 .0 % to 9 .0 % of responses across the full release, and hit() now treats city-level resolution as censored : it states only that the answer is no finer than the city. Appendix B explains why we do not substitute a commercial geocoder. 
+
+# 5 Task 2: GeoVerify 
+
+## 5.1 Why a second task 
+
+GeoHint inherits a measurement chain that we have already shown to be fragile: the model’s free text must be geocoded, the geocode must resolve at a usable granularity, and a threshold must be chosen (Sec. 4.3 documents four faults in that chain, one of which reversed our headline result). It also asks a question with no deployed decision attached to it: a tourist who receives the wrong building name is misled, but nothing acts on the answer. 
+
+GeoVerify removes both problems. It asks a binary question whose ground truth is mechanical, and it corresponds to a decision that platforms already want to automate: a driver claims to have completed a drop-off, the platform asks for a photograph, and something must decide whether the photograph is consistent with the claimed destination. Patents for exactly this mechanism predate current vision–language models, 1 but the proof-of-location literature that grew up around them is built on GNSS cross-checks, radio fingerprints and inertial sensors; we are not aware of a benchmark that asks whether the visual channel can carry this decision at the tolerance a real deployment needs. 
+
+## 5.2 Task definition 
+
+Let gimg be the true camera position of an image and gcand the coordinate of a named candidate place. Fix a tolerance τ . The model is shown the image and the candidate’s name only , and asked 
+
+Was this photo taken within τ of “{candidate}”? 
+
+and must answer yes or no together with a confidence in [0 , 1]. The ground truth is 
+
+y = ⊮[ d(gimg , g cand ) < τ ] , (1) where d(·, ·) is haversine distance. We set τ = 150 m, the order of magnitude at which ride-hailing and delivery platforms treat an arrival as complete. Nothing about Eq. 1 depends on a geocoder, a judge model, 
+
+> 1E.g. Niantic’s “verifying a player’s real world location using image data of a landmark” family (US 10549198, 10828569, 11325042, 11771996), filed to deter GPS spoofing in location-based games.
+
+7or a tunable threshold on the model’s output: the candidate coordinates come from Wikidata and the image coordinates from the imagery provider’s metadata. The prompt is reproduced in Appendix A.2. The candidate is presented by name alone . We give no coordinates, no city, and no description — both because supplying them would hand over half the answer, and because the deployed interface (“your destination: {name}”) has only a name. 
+
+Trials. For each image we draw two kinds of trial from the same audited reference-point pool used by the context ladder (Sec. 3.3): • Signal trials : candidates with d(gimg , g cand ) < τ . Correct answer yes .• Noise trials : candidates drawn from five decoy bands — 0 .15 km to 0 .3 km, 0 .3 km to 0 .7 km, 0 .7 km to 1 .5 km, 1 .5 km to 3 km and 3 km to 6 km. Correct answer no .The nearest band starts immediately above τ on purpose: “dropped off one street away” is both the hardest discrimination and the one a deployment actually has to make. Decoys are matched to the signal candidate on referenceability (within one tier) wherever the cell allows it, so that a model cannot reject a decoy on type alone — rejecting “a famous museum” because the photograph shows no museum is a category judgement, not a spatial one. 
+
+## 5.3 Metric: sensitivity separated from bias 
+
+Raw accuracy is not usable here. A model that answers no to everything scores perfectly on every noise trial while having no spatial discrimination at all, and the ratio of signal to noise trials is a property of our sampling rather than of the model. We therefore score with signal detection theory (Green and Swets, 1966; Macmillan and Creelman, 2005), which separates how well the model can tell the two cases apart 
+
+from how willing it is to say yes .Write H for the hit rate and F (δ) for the false-alarm rate at decoy distance δ:
+
+H = P (yes | signal) , F (δ) = P (yes | decoy at distance δ). (2) In other vocabularies H is the true-positive rate or recall, and F the false-positive rate; in a deployment that screens location claims, F is the rate at which a false claim is accepted, and we call it the false-acceptance rate when discussing that reading. Under the equal-variance Gaussian model, sensitivity and criterion are 
+
+d′(δ) = z(H) − z(F (δ)) , c(δ) = − 12 [ z(H) + z(F (δ))] , (3) with z(·) the standard normal quantile function. d′ = 0 means the model is exactly as likely to say yes 
+
+when the candidate is 200 m away as when it is the right place — no discrimination, whatever the raw accuracy happens to be. c < 0 marks a liberal criterion (biased toward confirming), c > 0 a conservative one. Because z diverges at 0 and 1, we apply the standard log-linear correction (Hautus, 1995), adding 0.5 to each cell count and 1 to each total before computing rates; with the cell sizes reported below this bounds |d′| well above any value we observe, so no estimate is at the correction’s ceiling. Reporting d′ from Eq. 3 as a function of δ turns the task into a psychometric curve rather than a single score. The summary we propose for leaderboard use is the discrimination radius 
+
+δ1 = min { δ : d′(δ) ≥ 1 } , (4) the decoy distance at which a model first reaches conventional discriminability. It is a single number in meters with a directly operational reading: below δ1, this model cannot be relied on to tell a true drop-off from a false one. 
+
+Confidence. Because the deployed failure is not “wrong” but “confidently wrong”, we additionally report the confidence distribution of false alarms. A verifier that fails but reports low confidence can be gated; one that fails at the same confidence with which it succeeds cannot. 85.4 Controls 
+
+Two control arms run alongside the main arm on the same candidates. 
+
+Mismatched image. The candidate is held fixed and the image is replaced by street-level imagery from a different continent. Every trial is a noise trial and F should be near zero. If it is not, the model is reasoning from the name rather than the photograph and the task does not measure what it claims to. 
+
+Blank image. The image is replaced by a uniform gray field, holding the request shape constant while removing all visual evidence. This bounds what can be achieved from the name alone. 
+
+Pre-registered read-out. Fixed before running, and reproduced here verbatim from the analysis script: the task is invalid if mismatched-image F > 20 %, or if blank-image F comes within 5 points of the main arm; the benchmark is uninformative (models already solve it) if d′ > 2 in the nearest band; and it is informative if d′ < 0.5 in the nearest band while d′ > 1.5 in the farthest. 
+
+# 6 Results 
+
+5 models ( gemini-3.6-flash , claude-opus-5 , claude-haiku-4-5 , qwen3-vl-235b , qwen3-vl-8b ), 21 933 scored responses across 109 sites in 30 cities, English only. claude-opus-5 is sampled at one third the rate of the others on the automatic batch, its per-call cost being an order of magnitude higher; all comparisons involving it are either within-model or strictly paired, so the lower rate widens its intervals without biasing any contrast. Every p-value below treats the site as the unit of resampling, not the individual response. Images at one site show the same buildings and the same street, and the reference points offered there come from one pool, so responses within a site are correlated and counting each as an independent draw would overstate the evidence. Regressions use cluster-robust standard errors grouped by site; paired tests flip the sign of a whole site at a time rather than of one item at a time. Point estimates are unaffected — every percentage, slope and ratio reported here is the same either way — and the clustered standard errors run 0 .9 to 1 .8times the unclustered ones. 
+
+## 6.1 Task performance 
+
+This section reports how well the task is completed — whether the model names a place close to where the photograph was taken. Sec. 6.2 then turns to a separate question: how much the model leans on the hint it was given. 
+
+6.1.1 Aggregate accuracy 
+
+Table 1 reports accuracy and echo rate per model. A “hit” is err km < 1 km and resolution finer than city level.     
+
+> Table 1: Per-model results, forced schema, context conditions only (baseline rows excluded). Bands are the distance from the true location to the reference point the model was handed. Echo rate is the fraction of responses naming that reference point. claude-opus-5 has fewer trials because it was sampled at one third the rate of the others, its per-call cost being an order of magnitude higher.
+
+Hit rate by band (km) Model n Hit rate 0.5–1 .5 1.5–3 3–6 Echo rate 
+
+claude-opus-5 1208 52 .6 % 62 .0 % 49 .5 % 47 .9 % 19 .2 % 
+
+gemini-flash 1788 51 .2 % 63 .4 % 47 .8 % 44 .1 % 12 .2 % 
+
+qwen3-vl-235b 1783 32 .6 % 46 .0 % 29 .2 % 24 .6 % 24 .6 % 
+
+qwen3-vl-8b 1790 30 .6 % 46 .0 % 23 .1 % 24 .5 % 42 .3 % 
+
+claude-haiku-4-5 1773 25 .0 % 39 .8 % 20 .6 % 16 .7 % 22 .8 % Three observations. First, the models fall into three accuracy groups: claude-opus-5 and gemini-flash 
+
+are close to level at 52 .6 % and 51 .2 %, the two qwen3-vl models follow at 32 .6 % and 30 .6 % — the 235B and 8B versions differ by 2 .0 points — and claude-haiku-4-5 is lowest at 25 .0 %. 90.5-1.5 1.5-3 3-6    
+
+> Reference-point distance, km
+> 10 20 30 40 50 60 70
+> Hit rate, %
+> 16% 48%
+> n= 1151 –1668 per point
+> Illegible imagery (65 sites) Legible imagery (44 sites) Figure 2: Hit rate by reference-point distance, forced schema, with sites split by whether their imagery is legible. Each plotted point rests on 1151 to 1668 observations; error bars are 95 % binomial intervals. The gap between the two curves is stable across all three distance bands and neither curve’s interval approaches the other’s at any band. Both curves are built from context conditions only, which the regime assignment never touches; the one comparison that does read the no-context column is corrected separately in Table 3.
+
+Second, hit rate is highest in the nearest band for every model. Part of this follows from the scoring threshold: a hit requires an error below 1 km, and in the 0 .5 km to 1 .5 km band the reference point is itself close enough that naming it lands inside that radius a fair share of the time. Between the two farther bands the rates are similar (differences of 1 .4 to 4 .6 points, in one case in the opposite direction), so most of the variation with distance occurs in the first step rather than accumulating across the range. Third, echo rate runs broadly opposite to hit rate: it is 12 .2 % and 19 .2 % for the two most accurate models and 42 .3 % for qwen3-vl-8b , with claude-haiku-4-5 at 22 .8 % the main departure from the ordering. With 5 models we report this as an observed ordering and attach no statistic to it. Sec. 6.1.3 examines how echo rate relates to image legibility and to accuracy within each model. 
+
+6.1.2 Two regimes, separated by whether the image is legible 
+
+Figure 2 is the headline result. The control is the no-context baseline : same image, same model, same schema, minus the “I took this near X” sentence. A model merely guessing around the reference point could only gain from the context; it cannot fall below an uninformative baseline, so a drop below it requires a different mechanism. That reading holds only once the baseline is estimated separately from the split it defines, which Sec. 6.1.3 does. Splitting sites at a 50 % no-context hit rate gives two regimes that differ in kind, not degree: 65 sites fall below the line and 44 above it. One property of this split should be stated before the results. Each site’s no-context hit rate is estimated from a median of 5 responses, so the assignment of individual sites near the threshold is noisy. The analyses in Sec. 6.1.3 compare each model against its own no-context baseline on the same sites, so a site assigned to the wrong side of the threshold moves both columns together rather than creating a difference between them; the interventions of Sec. 6.3 are paired within site and do not use the split at all. 
+
+6.1.3 The same split, per model 
+
+Table 2 repeats the breakdown of Table 1 within each regime. Reading the two halves against each other shows where the pooled numbers of Sec. 6.1.1 come from. Three points. First, the accuracy ordering of the models is nearly the same in both regimes: 
+
+qwen3-vl-235b , qwen3-vl-8b and claude-haiku-4-5 hold positions three to five in each half, while 
+
+claude-opus-5 and gemini-flash exchange first and second (39 .6 % against 34 .8 % at illegible sites, 67 .6 % against 70 .8 % at legible ones). 10 Table 2: Per-model results within each regime, forced schema. Sites are assigned to a regime by a fixed 50 % threshold on their no-context hit rate (65 illegible, 44 legible). “No context” is the baseline condition for the same sites and model; the remaining columns cover the context conditions, with n counting those. Rows ordered by overall accuracy. Hit rate by band (km) Model n No context With context 0.5–1 .5 1.5–3 3–6 Echo rate                                                                       
+
+> Illegible sites ( 65 )
+> claude-opus-5 649 34 .0 % 39 .6 % 48 .2 % 37 .9 % 34 .4 % 23 .9 %
+> gemini-flash 974 47 .2 % 34 .8 % 49 .5 % 30 .7 % 26 .4 % 15 .7 %
+> qwen3-vl-235b 974 7.9 % 17 .7 % 33 .6 % 12 .1 % 9.6 % 30 .1 %
+> qwen3-vl-8b 974 7.9 % 14 .2 % 29 .8 % 7.4 % 7.3 % 51 .1 %
+> claude-haiku-4-5 974 4.5 % 12 .2 % 23 .7 % 7.1 % 7.3 % 25 .3 %
+> Legible sites ( 44 )
+> claude-opus-5 559 85 .4 % 67 .6 % 78 .4 % 62 .8 % 63 .6 % 13 .8 %
+> gemini-flash 814 91 .5 % 70 .8 % 79 .8 % 68 .4 % 65 .3 % 8.1 %
+> qwen3-vl-235b 809 70 .4 % 50 .7 % 60 .6 % 50 .0 % 42 .9 % 17 .9 %
+> qwen3-vl-8b 816 64 .3 % 50 .1 % 65 .1 % 41 .9 % 45 .1 % 31 .7 %
+> claude-haiku-4-5 799 42 .9 % 40 .6 % 59 .3 % 37 .1 % 28 .1 % 19 .9 %
+
+Second, echo rate is higher at illegible sites for every model, by 5 .4 to 19 .4 points, and the ordering across models is preserved: qwen3-vl-8b echoes most in both halves (51 .1 % and 31 .7 %), gemini-flash 
+
+least (15 .7 % and 8 .1 %). Third, the “No context” column needs a correction before it can be compared with the others. Each site’s regime is assigned from that same column, so a site that lands in the legible group partly because its baseline draw came out high carries that upward noise into the number the context conditions are then measured against. The comparison is biased against context at legible sites and in favour of it at illegible ones, with no true effect required. The effect is diluted — each model contributes about a fifth of the pooled baseline that assigns the regime — but not removed. We correct it by splitting each site’s baseline responses at random, assigning the regime from one half and reading the no-context column off the other, over 200 splits (Table 3). Read uncorrected, three models are less accurate with a near reference point than without one at legible sites. Corrected, one is: 
+
+gemini-flash , at −8.4 points. claude-opus-5 and qwen3-vl-235b move to within one standard deviation of zero, and the two weakest models gain more than the uncorrected figures show. At illegible sites every corrected gain stays large. Two things support reading the corrected column rather than the raw one. An independent estimate that uses no regime split at all — each model’s no-context rate against its near-band rate over all 109 sites, paired by image — gives +4 .8, −3.9, +8 .9, +11 .0 and +19 .3 in the same model order, agreeing that 
+
+gemini-flash alone is worse with the hint. And the correction can only push a group contrast toward zero, never away from it, so the gains that survive it are conservative. This correction is needed for one comparison and no other. Everywhere else the regime appears — the error ratios of Sec. 6.2.2, the slopes of Sec. 6.2.3, the echo rates of Sec. 6.2.1 and the intervention tables of Sec. 6.3 — the quantities set against each other are context conditions, and context responses never enter the assignment, so the split is exogenous to them. Re-deriving those quantities from a deliberately noisier assignment, one that uses half of each site’s baseline responses, moves every one of them toward the two groups agreeing rather than apart: the illegible near-band ratio holds at 1 .00, the echo-rate gap narrows from 11 .2 to 8 .4 points and the ratio between the two slopes from 1 .56 to 1 .41. Assignment noise attenuates these contrasts; it cannot manufacture them, and the full-baseline assignment the paper uses is the less noisy of the two. 
+
+## 6.2 Reliance on the hint 
+
+The measures above ask whether the answer was right. The three that follow ask where the answer came from: how far the model moved with the reference point it was handed. Each is defined only for the context conditions, and each is reported against the regime split of Sec. 6.1.2. 
+
+6.2.1 Echo rate 
+
+The echo rate is the fraction of responses whose area or building field names the reference point itself. 11 Table 3: The no-context comparison before and after correcting for the fact that the no-context column also assigns the regime. “Uncorrected” is the near-band figure minus the “No context” column of Table 2; “corrected” assigns the regime from a random half of each site’s baseline responses and measures the column on the other half, averaged over 200 splits. An average of 19 of the 109 sites change side per split. Regime Model Uncorrected Corrected Shift Illegible                                                     
+
+> claude-opus-5 +14 .2+9 .3±7.1−4.8
+> gemini-flash +2 .3−3.0±4.8−5.3
+> qwen3-vl-235b +25 .7+19 .6±4.9−6.1
+> qwen3-vl-8b +22 .0+16 .9±4.0−5.1
+> claude-haiku-4-5 +19 .2+17 .8±4.0−1.4Legible
+> claude-opus-5 −7.0+1 .4±5.6+8 .3
+> gemini-flash −11 .7−8.4±4.4+3 .3
+> qwen3-vl-235b −9.8+2 .6±5.5+12 .3
+> qwen3-vl-8b +0 .8+10 .6±5.6+9 .8
+> claude-haiku-4-5 +16 .4+20 .2±5.2+3 .80.5-1.5 km 1.5-3 km 3-6 km
+
+Distance of the reference point from the true location      
+
+> 010 20 30 40
+> Echo rate, %  27 21 25 28 24 26 27 21 22
+> High (4-5) Mid (2-3) Low (0-1)
+> Figure 3: Echo rate by reference-point distance and referenceability tier, forced schema, 109 sites. Within every distance band the three referenceability tiers agree to within about 5 points: a reference point almost nobody uses for navigation is repeated about as often as one everybody uses. Distance does have an effect, but a small and non-monotone one — pooled over tiers the rate falls from 27 .4 % to 22 .1 % between the first and second band and returns to 24 .6 % in the third, so moving the reference point from 0 .5 km to 6 km away changes it by 2 .8 points.
+
+Echo rate by regime. Models name the reference point in their answer more often at illegible sites: 29 .6 % of contexted responses (1345 /4545), against 18 .6 % (706 /3797) at legible ones. The per-model rates are in the last column of Table 2. Every model echoes more in the illegible half, and the ordering across models is the same in both halves. One reading of this pattern is that echoing is what a model produces when it cannot identify the scene and is required to answer anyway: the schema forbids “unknown” (Sec. 4), so some place name has to be produced, and the reference point is the one name the prompt supplies. Echoing was not manipulated in the design, so this is an interpretation of the pattern rather than a result the experiment establishes. Table 4 and Figure 3 give the core mechanistic result, and the two axes behave differently. Referenceability does essentially nothing: pooled over distance, a reference point that almost nobody uses for navigation is echoed 22 .9 % of the time against 24 .4 % for one everybody uses — a gap of 1 .5 points, with the middle tier the highest of the three. This axis is one the model could act on: how commonly a place is used to give directions is judgeable from its name, which is the only thing the prompt supplies about it. Distance moves the rate a little more and still not much: a change from 0 .5 km to 6 km takes it from 27 .4 % to 24 .6 %, and the change is not monotone — it happens between the first and second band and then partially reverses. The two axes therefore support different readings. Distance is not visible in the prompt, so a flat rate along it is the absence of a signal to act on rather than a failure to act on one, and Sec. 6.2.3 shows the models do discount the hint where the image gives them an independent check. Referenceability is visible, 12 Table 4: Echo rate (%). Flat along both axes. 
+
+0.5–1 .5 1.5–3 3–6 All 
+
+By referenceability tier 
+
+High (4–5) 27.3 21.0 24.9 24.4 
+
+Mid (2–3) 27.6 23.6 26.5 25.8 
+
+Low (0–1) 27.0 21.1 21.9 22.9 
+
+Pooled 
+
+All 27.4 22.1 24.6 24.6 and is ignored anyway. What the two share is that the error repeating the hint produces grows with its distance (Sec. 6.2.2) while the rate of repeating it does not. 
+
+6.2.2 Error relative to hint distance     
+
+> Table 5: Distance to the reference point and distance to the model’s answer, by regime and band. The dref and err km columns are geometric means; the last column is the median of the per-response ratio err km /d ref . Computed only on responses resolving finer than city level, so the constant city-centroid fallback (Sec. 4.3) cannot drive the ratio.
+
+Regime Band (km) n dref err km Median ratio Illegible (65 sites) 0.5–1 .5 1163 1.01 1.27 1.00 
+
+1.5–3 1325 2.22 2.17 1.00 
+
+3–6 1452 4.20 3.04 0.90 Legible (44 sites) 0.5–1 .5 1102 0.95 0.54 0.69 1.5–3 1194 2.11 0.75 0.44 3–6 1323 4.41 0.99 0.24 Table 5 is computed entirely within contexted responses and is therefore separated from the baseline used to assign the regime; per-model comparisons against the baseline appear in Sec. 6.1.3, where each model is reported separately. Two distances are involved, and both are measured from the site’s ground-truth coordinate, which is fixed per site and shared by its images. dref is the distance from that coordinate to the reference point given as the hint in the prompt, which is the quantity the distance bands control. err km is the distance from that coordinate to the place the model predicted. Their ratio says how far the answer landed relative to how far away the hint was: a ratio of 1 means the answer sits as far from the site as the hint does, which is what naming the hint itself produces. In the illegible regime the median ratio is 1 .00 to two decimal places in both the near and mid bands. The model is not answering badly; it is answering with the reference point. In the legible regime it is 0.24–0 .69: the image is doing real work. 
+
+6.2.3 Distance slope 
+
+Sec. 6.2.2 summarised the same two distances as a median ratio, one value per band. Fitting them instead gives a rate: how much the error grows per kilometre the reference point is moved away, using every response rather than a per-band summary. Regressing log 10 err km on dref within contexted conditions gives a positive coefficient everywhere we look: the farther away the reference point, the worse the answer. Pooled over all 109 sites, β = +0 .0820 (p = 1 .5 × 10 −20 , n = 8274 responses over 109 sites), and restricting to responses that resolved finer than city level—so that the constant city-centroid fallback cannot drive the slope—moves it to +0 .0840 (p = 3 .6 × 10 −21 ). Table 6 shows the slope holds separately for every model, with the strongest model showing the shallowest slope and the weakest the steepest. 
+
+What the slope measures. The coefficient has a scale with two interpretable endpoints. A model that ignores the hint entirely produces an error unrelated to how far away the hint is, giving β = 0. A model that always answers with the hint produces err km = dref , which on this distribution of reference-point distances fits a slope of 0 .176. The pooled estimate of +0 .0820 therefore sits at 47 % of the way from 13 ignoring the hint to reciting it. Read on the original scale, moving the reference point from 0 .5 km to 6 km multiplies the error by 2 .8.        
+
+> Table 6: log 10 err km ∼dref per model, forced schema, context conditions only. “Fine only” excludes city-level resolutions. Every slope is positive and significant.
+
+Model n β p β (fine only) 
+
+claude-haiku-4-5 1767 +0 .1046 3.2 × 10 −12 +0 .1026 
+
+qwen3-vl-235b 1766 +0 .0961 4.8 × 10 −12 +0 .0966 
+
+qwen3-vl-8b 1777 +0 .0812 3.4 × 10 −12 +0 .0805 
+
+gemini-flash 1758 +0 .0713 3.2 × 10 −10 +0 .0795 
+
+claude-opus-5 1206 +0 .0500 5.6 × 10 −4 +0 .0596       
+
+> Table 7: log 10 err km ∼dref fitted separately within each regime, forced schema, context conditions only. A larger slope means the answer degrades faster as the reference point is moved away.
+
+Illegible Legible Model n β n β
+
+claude-opus-5 647 +0 .0684 559 +0 .0347 
+
+gemini-flash 955 +0 .0935 803 +0 .0497 
+
+qwen3-vl-235b 970 +0 .1223 796 +0 .0704 
+
+qwen3-vl-8b 968 +0 .1116 809 +0 .0521 
+
+claude-haiku-4-5 972 +0 .1015 795 +0 .1110 All 4512 +0 .1008 3762 +0 .0648 Fitting the same regression within each regime separates the two (Table 7). Pooled over models the slope is +0 .1008 at illegible sites and +0 .0648 at legible ones, a factor of 1 .56; restricting to responses finer than city level gives +0 .1078 and +0 .0625. On the scale above, where 0 .176 corresponds to always answering with the hint, these are 57 % and 37 % of the way to that endpoint: at illegible sites the answer moves with the reference point roughly half again as much as it does at legible ones. Four of the five models follow that pattern individually, with slopes roughly twice as steep at illegible sites. claude-haiku-4-5 
+
+does not: its slopes are +0 .1015 and +0 .1110, the only case where the legible value is the larger of the two, which places it at the illegible level even on sites where its own no-context accuracy is above the threshold. All ten coefficients are positive. Nine reach p < 0.01; claude-opus-5 ’s legible-regime slope, the shallowest of the ten and the one resting on the fewest responses, reaches p = 0 .067. 
+
+## 6.3 Interventions 
+
+Two prompt-level interventions were tested against the plain forced condition on strictly paired items. The first tells the model the hint may be wrong; the second requires it to work through a visual-evidence checklist before answering. 
+
+6.3.1 Warning that the hint may be wrong 
+
+Table 8 compares forced against forced_warn on strictly paired observations — same site, same image, same model, same language, same reference point — giving 8215 pairs across 109 sites. 
+
+> Table 8: Hit rate (%) by regime, strictly paired. ∆ is the paired difference with a two-sided permutation test, 10 000 sign flips.
+
+Regime Schema Near Mid Far Overall Paired ∆ Illegible forced 36.1 17.7 15.8 22.6 +0 .46, p = 0 .49 
+
+forced_warn 35.4 18.1 17.3 23.0 Legible forced 67.9 51.4 48.2 55.2 +3.94 , p = 0 .0008 
+
+forced_warn 69.4 55.5 54.2 59.2 
+
+All sites forced 50.6 33.0 30.5 37.4 +2 .01, p = 0 .002 
+
+forced_warn 50.7 35.0 33.9 39.3 14 The warning is demonstrably obeyed in both regimes: echo rate falls from 29 .4 % to 21 .0 % where the image is illegible and from 18 .7 % to 12 .6 % where it is legible. Obedience is therefore not what separates the two regimes — what separates them is whether obeying helps. It helps only where the image is legible (+3 .94 points, p = 0 .0008). Where it is not, the paired difference is +0 .46 points and indistinguishable from zero ( p = 0 .49). This is what the mechanism predicts: the warning’s only action is trust the text less , which is worth something only if there is something else to trust. Nothing that merely discounts the context can repair the illegible regime. Table 9 gives the paired difference per model. Every model gains more at legible sites than at illegible ones. The largest gains belong to qwen3-vl-235b (+6 .54 points) and claude-opus-5 (+6 .17); 
+
+claude-haiku-4-5 , the least accurate model in Table 1, moves by +0 .38.     
+
+> Table 9: Paired difference in hit rate (percentage points) from adding the warning, by model. Positive means
+> forced_warn scored higher than forced on the same items. Rows ordered by overall accuracy.
+
+Model n pairs All sites Illegible Legible 
+
+claude-opus-5 1200 +3 .67 +1 .54 +6 .17 
+
+gemini-flash 1754 +2 .51 +2 .05 +3 .08 
+
+qwen3-vl-235b 1753 +2 .97 +0 .10 +6 .54 
+
+qwen3-vl-8b 1754 +1 .45 −0.72 +4 .17 
+
+claude-haiku-4-5 1754 +0 .00 −0.31 +0 .38 
+
+What each condition costs in precision. The warning makes answers slightly coarser. On the same strictly paired items, the share of responses resolving at building level falls from 27 .9 % under forced to 24 .7 % under forced_warn , a paired difference of −3.15 points ( p < 10 −4, n = 8215 pairs over 109 sites): told the hint may be wrong, the model retreats to naming a neighbourhood rather than a building. The accuracy gain reported above is therefore bought at some loss of precision. Supplying the context itself moves answers the other way. Building-level resolution sits above the no-context baseline in all three bands, paired by image (+4 .3, +4 .0 and +2 .9 points, at p = 0 .007, 0 .010 and 0 .046), so the coarsening belongs to the warning rather than to the hint. 
+
+6.3.2 Requiring a structured evidence checklist 
+
+If the failure in the illegible regime were a reasoning failure, forcing the model to enumerate visual evidence before answering should repair it. We tested this directly with forced_chain , a schema that requires the model to fill a checklist of visual-clue categories adapted from GeoRC (Talreja et al., 2026) — infrastructure, vegetation, architecture, script, terrain — and to write "not visible" rather than leave a slot empty. (We deliberately omit GeoRC’s “meta information” category, which in our setting would leak the answer.) The schema ran on three of the five models, so every comparison below is restricted to those three and strictly paired: same site, same image, same model, same language, same reference point; 2538 pairs across 18 sites. We fixed the read-out criteria before running. The decisive one was the ratio of answer error to reference-point distance (Table 5): a ratio of 1 .00 means the answer is the reference point, and a reasoning intervention that made models read the image should pull it down.    
+
+> Table 10: forced_chain versus forced , strictly paired, three models. Hit rate in %; ratio is median error/reference distance, computed on non-city-level resolutions only.
+
+Regime Schema Near Mid Far Overall Ratio (near/mid/far) Illegible forced 37.4 16.7 15.7 22.2 1.00 / 1.01 / 0.87 
+
+forced_chain 39.8 14.9 15.5 22.2 1.00 / 1.02 / 0.87 Legible forced 66.7 49.0 41.5 51.2 0.60 / 0.50 / 0.50 
+
+forced_chain 63.2 51.6 44.4 52.2 0.60 / 0.43 / 0.35 Every pre-registered criterion fails (Table 10). The paired change in hit rate is 0 .00 points in the illegible regime ( n = 1197, p = 1 .00) and +1 .04 in the legible one ( n = 1341, p = 0 .38); the smallest p for any individual model is 0 .17. The ratio holds at 1 .00 in the nearest band of the illegible regime and within 0 .02 of it in the middle band. The echo rate holds as well (22 .1 % to 22 .1 % illegible, 15 .9 % to 14 .8 % legible), so the schema leaves even the wording of the answers where it was. For comparison, the one-sentence warning of Section 6.3.1 buys +3 .94 points in the legible regime at a fraction of the token cost. 15 The models filled the checklist in. A checklist that no one follows would produce the same null, so we read the raw responses back (Table 11). An evidence object is present in at least 99 .7 % of responses from every model; 2 responses out of 2799 are unparseable. The three counts in this section cover different things: 2799 is every forced_chain response, 2538 of them pair against a forced counterpart in a distance band, and the slot count below runs over the 2797 that parsed. Of the 13 961 category slots, 7 .0 % are answered "not visible" , and the rate depends on the category: vegetation is declined between 21 % and 30 % of the time, architecture never, by any model. The models use the exit where the image gives them nothing, and architecture is a category they can always say something about. The null result therefore describes the intervention, under compliance with it.                              
+
+> Table 11: forced_chain compliance, 2799 responses. The second column gives the share of responses carrying an evidence object; the remaining columns give the share of each category’s slots answered "not visible" , the response the prompt requires in place of a guess. Model evidence Infra. Veg. Arch. Script Terrain
+> gemini-flash 99 .7 % 0.0 % 21 .2 % 0.0 % 2.6 % 0.0 %
+> qwen3-vl-235b 100 .0 % 3.8 % 29 .8 % 0.0 % 7.2 % 4.5 %
+> claude-haiku-4-5 99 .8 % 0.0 % 27 .6 % 0.0 % 7.2 % 0.4 %
+
+This replicates, under a stricter design, EarthWhere’s finding that deeper reasoning does not reliably help when visual clues are limited (Qian et al., 2025); their comparison was across conditions, ours is paired within item and model. We read it as evidence about where the deficit sits: a checklist can only reorganise evidence the model has already extracted, and in the illegible regime there is none to reorganise. 
+
+## 6.4 GeoVerify: discrimination as a function of decoy distance 
+
+We report the algorithmically selected batch only: 90 sites in 30 cities, 100 images, 1448 trials, 6270 scored responses across the same 5 models. Every returned response parsed; one call failed at the API and is excluded. 
+
+Controls. Both pre-registered validity checks pass overall (Table 12). Replacing the image with one from another continent while keeping the claim drops false acceptances to 5 .0 %, against 37 .7 % in the main arm, and a uniform gray field gives 0 .0 % for every model. The models are reading the photograph, not the place name. The per-model column shows what the pooled control hides. claude-haiku-4-5 accepts 18 .1 % (36 /199) of the swapped-continent claims — approaching the 20 % threshold at which we had pre-committed to declaring the task invalid — while the other four models sit between 0 .0 % and 3 .5 %. Together with its d′
+
+below 1 in every band, this indicates that this model is largely not using the image for this task. 
+
+Discrimination rises with decoy distance, but not where it matters. Pooled d′ climbs monotoni-cally from 0 .33 in the nearest band to 1 .20 in the farthest (Figure 4), and the criterion c moves from −0.36 to +0 .08 over the same range. The band that matters for the deployed decision is the nearest one — a vehicle left one street away rather than at the requested door — and there no model reaches d′ = 1; the best, gemini-flash , manages 0 .68. The task is hardest exactly where a platform would need it to work. 
+
+Accuracy alone would invert the ranking. claude-opus-5 answers “yes” to only 47 .2 % of true claims, the second-worst hit rate in the table, yet has the second-best sensitivity ( d′ = 1 .95 in the farthest band). It is not worse at the task; it is running a far stricter criterion: its c runs from +0 .23 to +1 .04 across the bands, against −1.14 to −0.31 for gemini-flash , where positive values mean a bias toward rejecting a claim and negative values a bias toward accepting one. Any metric that does not separate sensitivity from bias would rank these two models the wrong way round — which is the empirical case for scoring this task with signal detection theory rather than accuracy. 
+
+Confidence does not identify the errors. Table 12 gives the self-reported confidence attached to false acceptances. Pooled, their median confidence is 0 .85 against 0 .95 for correct acceptances, and 83 .8 % of them are stated at confidence ≥ 0.8. The per-model spread is an order of magnitude: claude-opus-5 states 9.8 % of its false acceptances at that confidence, while qwen3-vl-8b states 100 .0 % of its 177. A platform cannot threshold on model-reported confidence to filter these mistakes out, except with claude-opus-5 .16 Table 12: GeoVerify results, one column per model. H is the hit rate on signal trials (true-positive rate) and F
+
+the false-acceptance rate; the control rows give F when the image is swapped for one from another continent and when it is replaced by a uniform gray field. d′ is sensitivity by decoy distance and δ1 the discrimination radius, the nearest band reaching d′ ≥ 1. The criterion c is negative when a model is biased toward accepting a claim and positive when biased toward rejecting one. The last two rows describe the confidence attached to false acceptances. Log-linear correction applied (Hautus, 1995). 
+
+gemini- claude- qwen3- qwen3- claude-flash opus-5 vl-8b vl-235b haiku-4-5 Pooled 
+
+Response rates 
+
+H (signal accepted) 93 .5 % 47 .2 % 44 .4 % 70 .4 % 78 .7 % 69 .9 % 
+
+F (decoy accepted) 35 .1 % 13 .1 % 18 .8 % 43 .8 % 61 .1 % 37 .7 % control: swapped image 3.5 % 0.0 % 0.0 % 0.0 % 18 .1 % 5.0 % control: gray field 0.0 % 0.0 % 0.0 % 0.0 % 0.0 % 0.0 % 
+
+Sensitivity d′ by decoy distance ( km )
+
+0.15–0 .3 0.68 0.32 0.51 0.24 0.22 0.33 0.3–0 .7 1.61 0.75 0.55 0.46 0.40 0.65 0.7–1 .5 2.16 1.24 0.66 0.68 0.44 0.87 1.5–3 2.34 1.44 0.89 0.87 0.55 1.03 
+
+3–6 2.36 1.95 1.13 1.07 0.82 1.20 
+
+δ1 0.3–0 .7 0.7–1 .5 3–6 3–6 none 1.5–3 
+
+Criterion c
+
+nearest band −1.14 +0 .23 +0 .39 −0.41 −0.68 −0.36 farthest band −0.31 +1 .04 +0 .70 +0 .00 −0.37 +0 .08 
+
+Confidence on false acceptances 
+
+median 0.95 0.60 0.95 0.95 0.85 0.85 share ≥ 0.8 97 .6 % 9.8 % 100 .0 % 99 .5 % 65 .0 % 83 .8 % 0.2 0.3 0.5 1 2 4  
+
+> decoy distance (km, log scale)
+> 0.5 1.0 1.5 2.0
+> sensitivity  d0
+> tolerance band
+> d0= 1 (usable discrimination) gemini-fl ash claude-opus-5 qwen3-vl-8b qwen3-vl-235b claude-haiku-4-5
+
+Figure 4: Sensitivity against decoy distance, one line per model; the same numbers as the d′ block of Table 12, drawn to show the shape. The dashed line marks d′ = 1, conventional usable discrimination. The shaded strip is the band that begins immediately above the 150 m tolerance — the discrimination a deployment actually has to make — and no model crosses the dashed line inside it. Every model improves as the decoy is moved away, and they separate by a factor of three by the farthest band, so the difficulty is a property of the distance rather than of the task as a whole. 
+
+17 Read-out against the pre-registered criteria. We pre-committed to calling the result informative if the nearest band gave d′ < 0.5 and the farthest exceeded d′ > 1.5. Pooled, the first holds (0 .33) and the second does not (1 .20), so by that rule the pooled result is inconclusive . We report this rather than adjusting the threshold after the fact. The per-model table shows why. One model meets both halves of the criterion: claude-opus-5 , at 0 .32 in the nearest band and 1 .95 in the farthest. gemini-flash clears the far end by the widest margin of any model (2 .36) and still misses the near one (0 .68 > 0.5), which is the result stated plainly — the model with the best discrimination overall cannot make the discrimination the tolerance demands. The remaining three miss the far end, and they are what pulls the pooled curve below it. The correct summary is that model-to-model variation on this task is large, not that the task is uniformly too hard. 
+
+# 7 Limitations 
+
+The benchmark inherits the geography of its imagery source. Mapillary is volunteer-contributed and its coverage is uneven, dense across Western Europe and North America and thin where street-level capture is regulated or the contributor community is small, with mainland China the largest such gap. Every candidate city we tried cleared the coverage check, but that says more about how the candidate list was assembled — major tourist destinations — than about global coverage; one city measured outside that list offered 141 images that were entirely equirectangular panoramas, with no usable perspective frames. Wikidata introduces a second bias, toward encyclopedically notable reference points: 8 .1 % of the candidates it returns carry no English title, and a place with no English-language coverage is unlikely to be returned at all. All prompts are in English, and one site’s imagery is three to five years older than the rest, which will have changed shopfront signage but not building-level judgements. Whether the asymmetry we report holds for a user writing in another language, or in a car-oriented city, is untested. Two measurement caveats bound how far the results can be pushed. Each site’s no-context hit rate rests on a median of 5 responses, so sites near the 50 % threshold are assigned to a regime with real uncertainty; two more images per site would roughly triple that baseline at a cost of a few hundred calls, and until then the per-model results of Sec. 6.1.3 are the more dependable cut. Sparse ladder cells, notably low-referenceability at far distances, yield fewer reference points than the design allows, so per-site counts must be weighted. Finally, two constructs are narrower than their names suggest: Ldist measures how finely neighbourhoods are cut rather than how far apart they feel to someone in a taxi, and linear features such as a long avenue resolve only to neighbourhood level, costing precision — Meiji-d¯ ori + Shibuya 
+
+scores 0 .53 km against a true 0 .05 km — without affecting whether an answer counts as correct. 
+
+# 8 Conclusion 
+
+A VLM’s reliance on user-supplied location context does not scale with how informative that context is: neither the reference point’s distance nor its referenceability changes how often the model repeats it, while the error that repeating it produces grows steadily with distance. The consequence is conditional on the image. Where it is unreadable the answer collapses onto the hint — the median error equals the hint’s own distance — and the hint is the only signal the model has. Where it is readable the image does real work, and one model of the five is measurably worse for having been handed true information — a smaller claim than the raw regime comparison suggests, and the one that survives correcting that comparison for its own selection bias. Telling the model the user may be wrong is obeyed in both cases but only pays where there is something else to trust; a structured evidence checklist pays nowhere. On the same images, verifying a location claim is not yet reliable at the tolerance a deployment would need: no model separates a true claim from a decoy one street away, ranking by accuracy would order the models wrongly because they differ sharply in how readily they say yes, and most false acceptances are asserted confidently. We release the benchmark, the auto-generated context ladders, every auditor decision, and the scoring code. 
+
+# Reproducibility 
+
+Code and data: https://github.com/Yifan1209/geocontext . We release image IDs and coordinates rather than Mapillary pixels. audit_decisions.jsonl , audit_sensitive.jsonl , the 109 ladder CSVs, 
+
+district_scale.csv , the city-screening and candidate tables, the parsed and geocoded GeoHint responses, the raw GeoVerify responses and the raw forced_chain responses that Table 11 is computed from are 18 included. The raw response text for the remaining GeoHint schemas is available from the authors on request. 
+
+# References 
+
+Brandon Clark, Alec Kerrigan, Parth Parag Kulkarni, Vicente Vivanco Cepeda, and Mubarak Shah. Where we are and what we’re looking at: Query based worldwide image geo-localization using hierarchies and scenes. arXiv preprint arXiv:2303.04249 , 2023. Miao Fan, Jizhou Huang, and Haifeng Wang. Dumapper: Towards automatic verification of large-scale pois with street views at baidu maps. arXiv preprint arXiv:2411.18073 , 2024. David M. Green and John A. Swets. Signal Detection Theory and Psychophysics . Wiley, New York, 1966. Michael J. Hautus. Corrections for extreme proportions and their biasing effects on estimated values of d′.
+
+Behavior Research Methods, Instruments, & Computers , 27(1):46–51, 1995. Lingyao Li, Runlong Yu, Qikai Hu, Bowei Li, Min Deng, Yang Zhou, and Xiaowei Jia. From pixels to places: A systematic benchmark for evaluating image geolocalization ability in large language models. 
+
+arXiv preprint arXiv:2508.01608 , 2025. Sirun Li, Minghao Liu, Ling Dai, Yong Li, Haoxin Lyu, Junting Zhou, and Fan Zhang. Signpost-bench: Benchmarking text–vision conflict resolution in multimodal large language models. arXiv preprint arXiv:2608.04244 , 2026. Xiaopeng Li, Xianshan Qu, Wenyuan Xu, Song Wang, Yan Tong, and Lannan Luo. Validating the contextual information of outdoor images for photo misuse detection. arXiv preprint arXiv:1811.08951 ,2018. Neil A. Macmillan and C. Douglas Creelman. Detection Theory: A User’s Guide . Lawrence Erlbaum Associates, 2nd edition, 2005. Rafael Padilha, Tawfiq Salem, Scott Workman, Fernanda A. Andaló, Anderson Rocha, and Nathan Jacobs. Content-aware detection of temporal metadata manipulation. IEEE Transactions on Information Forensics and Security , 2022. Zhaofang Qian, Hardy Chen, Zeyu Wang, Li Zhang, Zijun Wang, Xiaoke Huang, Hui Liu, Xianfeng Tang, Zeyu Zheng, Haoqin Tu, Cihang Xie, and Yuyin Zhou. Where on earth? a vision-language benchmark for probing model geolocation skills across scales. arXiv preprint arXiv:2510.10880 , 2025. Mohit Talreja, Joshua Diao, Jim Thannikary James, Radu Casapu, Tejas Santanam, Ethan Mendes, Alan Ritter, Wei Xu, and James Hays. Georc: A benchmark for geolocation reasoning chains. arXiv preprint arXiv:2601.21278 , 2026. Xiaonan Wang, Bo Shao, and Hansaem Kim. Toward reliable vlm: A fine-grained benchmark and framework for exposure, bias, and inference in korean street views. arXiv preprint arXiv:2506.03371 , 2025. Yushuo Zheng, Jiangyong Ying, Huiyu Duan, Chunyi Li, Zicheng Zhang, Jing Liu, Xiaohong Liu, and Guangtao Zhai. Geox-bench: Benchmarking cross-view geo-localization and pose estimation capabilities of large multimodal models. arXiv preprint arXiv:2511.13259 , 2025. Pengcheng Zhou, Xuanyu Liu, Yanchen Yin, Bobo Li, Shengqiong Wu, Mong-Li Lee, and Wynne Hsu. Hologeo: Mitigating landmark bias in geo-localization via evidence-driven reasoning. arXiv preprint arXiv:2607.15255 , 2026. 
+
+# A Prompts 
+
+All prompts are reproduced from the released code. The prompt is the method here, so we ship it rather than paraphrase it. 19 A.1 GeoHint 
+
+The context sentence, prepended to the schema, is I took this photo near <reference point>. in-cluding the trailing space. v1 permits abstention and serves as the control; forced is the schema all reported results use. Long lines are wrapped to fit the page. 
+
+v1 .
+
+<context>Where was this photo taken? Look at the image carefully and infer. Output only JSON, no other text, in this format: {"country": "country", "city": "city", "area": "the specific commercial district / neighborhood / landmark area, or unknown", "place": "the most specific place or shop name, or unknown", "confidence": a number between 0.0 and 1.0, "clues": ["a concrete cue you actually see in this image supporting your answer", "..."] }In "clues", list only things you **actually see in this image**. If you cannot see something clearly, say so. 
+
+forced .
+
+<context>Where was this photo taken? Look at the image carefully and infer. Output only JSON, no other text: {"city": "city", "area": "commercial district / neighbourhood name. **Give your best guess -- ’unknown’ is not allowed**", "building": "the building or shop that is the main subject. **Guess -- ’unknown’ is not allowed**", "confidence_area": 0.0-1.0, your confidence in ‘area‘, "confidence_building": 0.0-1.0, your confidence in ‘building‘, "clues": ["a concrete cue you actually see in this image supporting your answer", "..."] }Commit to a specific name even when unsure -- express the uncertainty in the confidence fields, do not fall back on ’unknown’. In "clues", list only things you **actually see in this image**. 
+
+forced_warn . The text below is appended to forced .
+
+Important: the location the user mentions **may be inaccurate**, or may refer to a different nearby area. Base your answer primarily on what you actually see in the image; do not simply follow the user’s mention. 
+
+forced_chain . Appended to forced . The category ordering follows the citation frequency measured over champion-level reasoning chains by Talreja et al. (2026); their meta-information category is dropped because it is specific to the GeoGuessr interface, and the language category asks for script only, so that reading place names off signage cannot substitute for visual inference. 
+
+Before answering, examine the image for the following categories of geographic evidence, in this order. For each, write what you actually observe, or "not visible" if you cannot see it. Do not guess. 1. Infrastructure -- utility poles, bollards, kerbs, road markings, traffic light mounting, signage shapes 2. Vegetation -- species type, whether tropical / temperate / arid 3. Architecture -- building materials, window proportions, roof style, facade rhythm 4. Language -- the SCRIPT of any visible text (Latin / Cyrillic / CJK / Arabic ...). Report the script only, NOT what the text says. 5. Terrain, climate, vehicles, road surface Base your answer on what you listed. Add an "evidence" object to the JSON with one short string per category above (use "not visible" where applicable). 
+
+20 A.2 GeoVerify 
+
+One prompt for every trial, including both controls; only the image and the candidate name change. The candidate is given by name alone, with no coordinates, city, or description, matching what a deployed application would show. The wording pushes toward neither verdict, so that the criterion c is measured rather than set by the prompt. 
+
+> You are checking whether a photo was taken at a claimed location. CLAIM: This photo was taken within 150 metres of "<candidate>". Look at the image and decide whether the claim is true. Output only JSON, no other text: {"verdict": "yes" or "no", "confidence": a number between 0.0 and 1.0, "evidence": ["specific things you actually see in the image that led to your verdict"] }You must choose "yes" or "no". Put your uncertainty in ‘confidence‘, not in the verdict. In ‘evidence‘, list only what you can actually see in this image.
+
+## A.3 Reference-point audit ( deepseek-v4-pro , text only) 
+
+This is the prompt that rates each Wikidata candidate for usability and referenceability (Sec. 3.3). The auditor never sees an image. The zh field asks for a Chinese name where one exists. It is carried through to the released ladder files but plays no part in this paper, whose conditions are English only; we keep it in the prompt because every audit decision we release was produced by exactly this text, and editing the prompt would leave those decisions unreproducible. Chinese strings in the original are shown as <Chinese name> below, as this document loads no CJK fonts. 
+
+You are selecting LOCATION REFERENCE POINTS for a visual geolocation experiment. Scenario: a tourist photographs something, asks an AI "where is this?", and casually adds their rough whereabouts - "I took this near <somewhere>". Judge whether each candidate works as that <somewhere>. For each candidate give four fields: 1. ‘ok‘: usable or not. Typical rejects: - Administrative divisions (districts, subdistricts, wards, boroughs) -nobody says "I’m near the 3rd Municipal Subdistrict" - Abstract systems (a metro network, a railway line) - not a spot you can stand next to - Events and incidents - the coordinate is merely where it happened - Objects too small to navigate by (gravestones, plaques, individual rooms) 2. ‘familiarity‘: **referenceability**, 0-5. This is NOT "how famous is it". It is "how often would locals or tourists use it to describe where they are". A curiosity attraction may get many encyclopedia readers yet nobody navigates by it - score those low. 5 = everyone uses it to locate themselves; 3 = locals use it; 1 = almost nobody says it. 3. ‘zh‘: canonical Simplified Chinese name. Use null if there is no common Chinese name. 4. ‘en‘: canonical English name. Use null if there is none. Candidates (with distance from the reference point): {items} Output ONLY a JSON array, elements like: 
+
+21 {"idx":0,"ok":true,"familiarity":4,"zh":"<Chinese name>", "en":"San Jose Municipal Rose Garden","why":"under 12 words"} No other text. 
+
+## A.4 Image audit ( deepseek-vision )
+
+This is the model half of the two-track image audit (Sec. 3). The human reviewer works from the image alone and records a keep/exclude verdict with a free-text reason, without seeing these fields. 
+
+Audit this street-level photo for a geolocation benchmark. Report on the IMAGE ITSELF, not on where you think it was taken. 1. ‘answer_overlay‘: is there text OVERLAID on the photo (app UI, news subtitle, watermark, caption bar) that names a place, street, district, city or landmark? Text physically present in the scene - shop signs, street signs, banners, billboards - does NOT count. Those are legitimate visual cues. 2. ‘overlay_text‘: any overlaid text you can read (empty string if none). 3. ‘scene_type‘: one of "street", "indoor", "vehicle_interior", "closeup", "other". "street" = an outdoor street-level view a pedestrian or car would see. "vehicle_interior" = shot from inside a vehicle with dashboard/pillars visible. "closeup" = a wall, sign or object filling the frame with no street context. 4. ‘through_glass‘: shot through a windscreen or window (reflections, glare, wipers)? 5. ‘tourist_infrastructure‘: does the scene show visual signs of being right next to a major tourist attraction, EVEN IF the attraction itself is not in frame? Look for: souvenir/gift shops, ticket booths or entrance queues, tour groups or guides with flags/umbrellas, dense multilingual directional signage aimed at visitors. Ordinary shops, ordinary street signs, and ordinary pedestrians do NOT count. 6. ‘quality‘: 0-5 overall usability for geolocation. 5 = sharp, well framed, plenty of context; 3 = usable; 0 = unusable. 7. ‘usable‘: false if answer_overlay is true, or scene_type is not "street", or quality <= 1. (‘tourist_infrastructure‘ does NOT affect ‘usable‘ - it is recorded for robustness analysis, not filtered out.) Output ONLY JSON: {"answer_overlay": true/false, "overlay_text": "", "scene_type": "street", "through_glass": false, "tourist_infrastructure": false, "quality": 4, "usable": true, "why": "under 15 words"} 
+
+# B Why not a commercial geocoder 
+
+On the 100 labels Wikidata currently fails, Nominatim resolves 15 (net new 10). Classifying the 85 both fail: 36 are descriptive phrases (“Friday’s or an adjacent commercial building”), 21 are generic categories (“roadside public restroom”), 28 are plausible names—8 of which are bank chains with thousands of branches and hence not uniquely locatable. The ceiling is ≈ 3 % of records, against a cost of new cross-city fuzzy-match errors. Google Places is better still, but its terms restrict caching and dataset creation, which conflicts with releasing resolved coordinates for reproducibility. 22

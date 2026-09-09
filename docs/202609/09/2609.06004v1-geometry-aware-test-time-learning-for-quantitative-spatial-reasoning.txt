@@ -1,0 +1,566 @@
+Title: Geometry-Aware Test-Time Learning for Quantitative Spatial Reasoning
+
+URL Source: https://arxiv.org/pdf/2609.06004v1
+
+Published Time: Wed, 09 Sep 2026 00:36:40 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Geometry-Aware Test-Time Learning for Quantitative Spatial Reasoning 
+
+# Gege Zhang ∗
+
+South China University of Technology Guangzhou, China ftzgg@mail.scut.edu.cn 
+
+# Shuaicheng Niu ∗
+
+Nanyang Technological University Singapore, Singapore shuaicheng.niu@ntu.edu.sg 
+
+# Gang Dai 
+
+Guangdong University of Technology Guangzhou, China daigang@gdut.edu.cn 
+
+# Lei Sun 
+
+South China University of Technology Guangzhou, China sunlei@guangzhou.csg.cn 
+
+# Shuangping Huang †
+
+South China University of Technology Guangzhou, China eehsp@scut.edu.cn 
+
+## Abstract 
+
+Quantitative spatial reasoning in visual-language models (VLMs) aims to infer spatial distances and directional relationships among objects in 3D space from a 2D image and a natural language query. Despite recent progress, VLM spatial reasoning remains brittle under distribution shifts, largely due to the high cost of 3D super-vision. As a result, models often produce inconsistent or contra-dictory predictions when faced with novel object configurations or rephrased spatial queries, revealing a misalignment between learned representations and underlying geometry. To address this, we propose TTL-SR , a geometry-aware Test-Time Learning frame-work for quantitative Spatial Reasoning that leverages geometric consistency constraints and unlabeled test data to adapt models to target domains. Specifically, TTL-SR augments the input query with geometrically coupled auxiliary queries, filters unreliable pre-dictions via adaptive geometric triggering to construct structured token-level pseudo-labels, and updates model parameters under a geometry-aware multi-objective loss using only test data. Ex-perimental results demonstrate that TTL-SR significantly boosts spatial reasoning performance, yielding 6.47% and 9.41% accuracy gains for Qwen3-VL-4B-Instruct and SpatialRGPT-VILA-1.5-8B on Q-Spatial-ScanNet dataset, respectively. 
+
+## CCS Concepts 
+
+• Computing methodologies → Learning paradigms .
+
+## Keywords 
+
+Test-Time Learning, Spatial Reasoning, Vision-Language Models 
+
+ACM Reference Format: 
+
+Gege Zhang, Shuaicheng Niu, Gang Dai, Lei Sun, and Shuangping Huang. 2026. Geometry-Aware Test-Time Learning for Quantitative Spatial Reason-ing. In Proceedings of the 34th ACM International Conference on Multimedia (MM ’26), November 10–14, 2026, Rio de Janeiro, Brazil. ACM, New York, NY, USA, 10 pages. https://doi.org/10.1145/3767308.3835932 
+
+> ∗
+
+Equal contribution †Corresponding author 
+
+This work is licensed under a Creative Commons Attribution 4.0 International License. 
+
+MM ’26, Rio de Janeiro, Brazil 
+
+© 2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2213-4/2026/11 https://doi.org/10.1145/3767308.3835932 VLM 
+
+> Predict Direct / Horizontal distance between the monitor and laptop. The Direct / Horizontal distance is 0.65 m / 0.90 m.
+> (a) Standard inference pipeline (b) Our proposed approach
+> Test-time Optimization
+> VLM
+> Adaptive Geometric Consistency Modeling Predict Direct / Horizontal distance between the monitor and laptop. The Direct / Horizontal distance is 0.50 m / 0.45 m.
+
+Figure 1: Comparison of spatial reasoning paradigms. (a) Standard VLM inference is static, often leading to inconsis-tent and physically implausible predictions. (b) Our proposed approach leverages geometric consistency at test time, en-abling coherent and physically plausible spatial reasoning. 
+
+## 1 Introduction 
+
+Quantitative spatial reasoning in visual-language models (VLMs) estimates 3D distances and directions from a single image and lan-guage query, supporting embodied AI [2], robotic manipulation [31, 41], and augmented reality [14]. Despite recent VLM progress, this task remains a challenging problem, as it requires precise mod-eling of geometric relationships and spatial structure. Recent studies improve VLM spatial reasoning mainly through fine-tuning on synthesized spatial VQA data [3, 4, 6, 24, 26, 35, 36]. However, costly 3D annotations restrict training coverage, leaving spatial knowledge implicitly encoded in fixed parameters. At test time, this knowledge is not explicitly activated or jointly constrained, so models treat inter-dependent geometric attributes in isolation and often produce physically inconsistent predictions under novel scenes, as shown in Figure 1 (a). To address the above issue, a natural next step is to introduce learning objectives at test time that allow the model to adapt to the test data distribution. Although explicit spatial annotations are unavailable during inference, the model has access to abundant unlabeled test inputs, making Test-Time Learning (TTL) a practical solution. TTL updates model parameters during inference and has arXiv:2609.06004v1 [cs.CV] 5 Sep 2026 MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Gege Zhang et al. 
+
+demonstrated improved robustness and generalization in vision recognition models [16, 43, 51] and large language models across diverse reasoning tasks [1, 20, 54]. However, existing TTL methods are primarily designed for stan-dard vision tasks (e.g., classification and segmentation) and typ-ically rely on confidence-based objectives, such as entropy min-imization [20, 43]. When directly applied to quantitative spatial reasoning, these objectives often prove ineffective or even harmful. Intuitively, while confidence maximization encourages compact and homogeneous representations that benefit classification tasks, as in Figure 3, quantitative spatial reasoning requires preserving fine-grained geometric distinctions to support accurate continuous predictions. As a result, naive confidence optimization tends to over-collapse representations and disrupt the underlying geomet-ric structure of the feature space. This limitation highlights the need for TTL objectives that go beyond prediction confidence and explicitly enforce geometric consistency during inference. In this paper, we propose TTL-SR , a geometry-aware Test-Time 
+
+Learning framework for enhanced quantitative Spatial Reasoning in VLMs. The key challenge we address lies in bridging explicit phys-ical geometry with the inherently discrete and probabilistic output space of language models. Instead of treating spatial reasoning as isolated predictions, TTL-SR grounds TTL in fundamental geomet-ric constraints, e.g., metric relations implied by the Pythagorean the-orem, which must be jointly satisfied across multiple spatial queries. As shown in Figure 1, to operationalize these constraints during inference, we design a query augmentation strategy that systemati-cally probes inter-dependent geometric attributes under the same visual scene. The resulting predictions, expressed as token-level probability distributions over the language model vocabulary, are then aligned and transformed into a differentiable, self-supervised learning objective. This geometry-consistent objective enables reli-able parameter updates at test time. As a result, TTL-SR actively corrects physically implausible predictions and enforces global geo-metric coherence, leading to substantially improved performance for quantitative spatial reasoning. 
+
+Main novelty and contributions: 1) We propose TTL-SR , a model-agnostic, plug-and-play TTL framework that integrates with pre-trained VLMs to enhance quantitative spatial reasoning. 2) We design a geometry-consistent test-time objective based on struc-tured spatial query augmentations, which aligns discrete language model predictions with continuous geometric relations and sup-ports stable, self-supervised parameter updates. 3) Extensive exper-iments demonstrate that TTL-SR consistently improves accuracy, robustness, and generalization across spatial reasoning benchmarks on both specialized and general-purpose VLMs. 
+
+## 2 Related Work 2.1 Spatial Reasoning in VLMs 
+
+Spatial reasoning has become a key challenge in vision-language research. Early studies improve spatial understanding using ad-ditional sensory cues, such as depth [15] or sequential RGB ob-servations [25]. In contrast, our work focuses on the more chal-lenging single-image setting. Recent advances primarily enhance spatial reasoning through training-stage improvements. A domi-nant line of work fine-tunes VLMs on curated spatial VQA datasets to strengthen spatial associations and numerical prediction capabil-ities [3, 4, 35, 45]. Complementarily, SpatialReasoner-R1 [38] adopts fine-grained preference optimization to elicit Chain-of-Thought rea-soning patterns for solving geometric problems. Other approaches incorporate external geometric priors, such as zero-shot frame-works that leverage 3D foundation models [24], or region-aware architectures that improve grounding through explicit spatial lo-calization [6, 17, 49]. These methods improve spatial reasoning by either enriching supervision signals or introducing inductive biases into model architectures. Related vision research has also explored structure-aware generation, visual in-context guidance, cross-modal alignment, and metric learning, which provide broader context for modeling visual structure and correspondence [9–12, 32–34]. In parallel, several benchmarks have been proposed to evaluate spatial reasoning capabilities, including Q-Spatial Bench [23], SpatialRGPT-Bench [6], Spatial-MM [40], VSI-Bench [47], MindCube[48], SPAR-Bench [50], and ViewSpatial-Bench [22], which cover diverse spatial reasoning tasks and evaluation protocols. Nevertheless, existing methods typically acquire spatial knowl-edge from a narrow range of training scenarios due to the high cost of 3D supervision. Since spatial knowledge is injected through training-time parameter updates, it remains implicitly embedded in fixed model parameters and cannot be activated at test time. 
+
+## 2.2 Test-Time Learning for Reasoning 
+
+TTL has emerged as a compelling paradigm that enables models to adapt during inference using only unlabeled test data. In vi-sion, early Test-Time Adaptation (TTA) methods such as Tent [43] established entropy minimization as a simple unsupervised up-date rule, followed by works that improve stability, calibration, and anti-collapse behavior through uncertainty calibration, sharp-ness and feature regularization, self-bootstrapping, or asymmetric entropy optimization [5, 27, 28, 42]. Beyond vision recognition, test-time learning has recently been extended to reasoning models. Reflexion [39] improves test-time reasoning through iterative self-feedback, while TTRL [54] formulates test-time adaptation as rein-forcement learning. TLM [20] performs self-supervised adaptation via perplexity minimization with sample selection, EMPO [52] pro-poses unsupervised incentivization, and [44] studies unsupervised post-training for multi-modal large language models. Test-time optimization has also been explored in diffusion models through guided trajectory refinement [8]. Although existing TTL approaches enhance general reasoning, they primarily rely on self-certainty-driven objectives. These meth-ods lack the mechanisms to model structured numerical or physical constraints, which are essential for quantitative spatial reasoning. Consequently, they remain prone to producing logically consistent but physically impossible results, necessitating a TTL paradigm explicitly tailored to quantitative spatial reasoning. 
+
+## 3 Geometry-aware TTL for Spatial Reasoning 3.1 Problem Formulation and Motivation 
+
+3.1.1 Test-time Learning for Spatial Reasoning . In quantita-tive spatial reasoning, a VLM Φ𝜃 (·) takes an image I and a spatial query 𝑞 to predict a continuous spatial attribute ˆ 𝑦 = Φ𝜃 (I , 𝑞 ).Geometry-Aware Test-Time Learning for Quantitative Spatial Reasoning MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil What is the direct distance between the coffee grinder and the serving cup? 
+
+> Input Image and Query
+
+ࣛ Spatial Query Augmentation     
+
+> Query Templates
+> Adaptive Geometric Consistency Modeling
+> VLM
+> VLM
+> VLM
+> VLM
+> …
+> VLM
+> (ݍ ,ܫௗ௜௥) (ݍ ,ܫ௩௘௥) (ݍ ,ܫ௪௜ௗ) (ݍ ,ܫ௛௢௥)
+> Adaptive Geometric Triggering
+> ࣎ ࢇࡱࡾ ૚ࡻ ૛ࡻ ࢘࢕ࢎ ࢜࢘࢏ࢊ ࢘ࢋ
+> (i) Pythagorean Theorem (ii) Aspect Ratio Stability
+> ࢝ࢎ ࢝૚ࢎ ૚≈ ࢝૛ࢎ ૛
+> (iii) Semantic Consistency
+> Structured Token-level Pseudo-labeling ࢟ࢇ∗࢚࢏࢔࢛ࢉ , ࢉࢇ࢘ࢌࢉ , ࢚࢕ࢊࢉ , ࢚࢔࢏ࢉ
+> Numeric Tokens
+> ) ࢉࢇ࢘ࢌࢉ , ࢚࢔࢏ࢉ( ݊1 ࢚࢜ठ ∗ −࣎ ࢒ࢋ࢈ࢇ࢒ ࢚࢜ , ∗ +࣎ ࢚࢜࢒ࢋ࢈ࢇ࢒ ∗1ठ
+> Test-time Optimization
+
+∶ ࢚࢔ࢋख ࢒ख ∶ 
+
+> VLM VLM
+
+:࢕ࢋࢍख ࡯෡∗ ࢇෝ ࢟←     
+
+> Geometric Consistency
+> VLM
+> The direct distance is 0.3 meters .
+> ௗ௜௥ݍ ௩௘௥ݍ ௛௢௥ݍ ௛௘௜ݍ ௪௜ௗݍ …ݕොௗ௜௥ ݕො௩௘௥ ݕො௛௢௥ ݕො௛௘௜ ݕො௪௜ௗ …Structural Tokens
+> ࢚࢏࢔࢛ࢉ , ࢚࢕ࢊࢉ( ࢗ) ࢘࢏ࢊ (૚) ࢗ≈ ࢘࢏ࢊ (૛)
+> Templates
+
+Figure 2: Overview of the TTL-SR pipeline. The framework operates in three phases: (1) Spatial Query Augmentation generates geometrically coupled auxiliary queries via predefined templates; (2) Adaptive Geometric Consistency Modeling filters raw nu-merical estimates through reliability triggers to construct structured token-level pseudo-labels; and (3) Test-Time Optimization iteratively updates VLM parameters through a multi-objective loss. 
+
+Here, ˆ 𝑦 ∈ R+ is a natural language response containing a numeri-cal measurement (e.g., distance). Given an unlabeled test dataset 
+
+D𝑡𝑒𝑠𝑡 = {(I 𝑖 , 𝑞 𝑖 )} 𝑁 𝑖 =1 from a target domain, we aim to adapt the model to target distribution via unsupervised optimization: min 
+
+> ¯𝜃
+
+L( Φ ¯𝜃 ; I, 𝑞 ), (I , 𝑞 ) ∼ D 𝑡𝑒𝑠𝑡 , (1) where ¯𝜃 ⊆ 𝜃 denotes the subset of model parameters updated during test time. The choice of the objective L(·) is critical, as it must effectively activate the model’s spatial knowledge without access to ground-truth labels. 
+
+3.1.2 Motivation for Geometry Consistency Optimization .
+
+One straightforward choice for L(·) is entropy minimization, which has been widely adopted in prior TTL literature [29, 43]. In our preliminary studies, we first examined this objective in our quanti-tative spatial reasoning context. However, we observed that naive entropy minimization yields only marginal improvements, or even degrades performance, as shown in Figure 3. Upon closer inspection, our analysis reveals also that naively minimizing prediction entropy leads to a rapid increase in feature similarity, indicating a strong mode-seeking behavior in the repre-sentation space. Such representation homogenization is beneficial for classification tasks. However, it becomes problematic for quan-titative spatial reasoning, where accurate continuous prediction relies on preserving fine-grained geometric relationships between samples. This observation motivates us to move beyond confidence-driven objectives and introduce a geometry-consistent learning objective, which explicitly constrains the relative structure of fea-tures during adaptation and prevents representation degeneration. Extended analysis are provided in the supplementary materials C.1. 
+
+## 3.2 Method Overview 
+
+Based on the above motivation, we propose TTL-SR , a geometry-aware test-time learning framework designed to enhance quantita-tive spatial reasoning in VLMs. The overall pipeline is illustrated in Figure 2. Given an input image I and a spatial query 𝑞 , the primary Inter-Avg Intra-Avg Direct Horizontal Vertical Width Height   
+
+> 60 80 100 120 140
+> L2 Distance
+> Initial Entropy Minimization -40 -20 020 40 60 80
+> Accuracy (%)
+> 40.0 38.8 52.8 52.8 21.7 25.0 34.5 31.0 56.5 56.5 59.1 45.5
+
+Figure 3: Preliminary analysis of feature space evolution and reasoning performance on the Q-Spatial-ScanNet dataset [23]. Bars (left y-axis) show the average pairwise 𝐿 2 distance be-tween sample features extracted from the last hidden layer of Qwen3-VL-4B-Instruct [46], while markers and lines (right y-axis) indicate the corresponding accuracy, respectively. 
+
+challenge is that standard inference treats the query in isolation, leaving the prediction under-constrained and often physically im-plausible. To exploit the implicit geometric structure within the scene, we introduce Spatial Query Augmentation (c.f. Sec. 3.3), which expands the original query into a set of geometrically coupled auxiliary queries. These queries are paired with the same image and processed independently by the VLM to produce raw numerical estimates { ˆ𝑦 𝑑𝑖𝑟 , ˆ𝑦 𝑣𝑒𝑟 , ˆ𝑦 ℎ𝑜𝑟 , . . . }.To explicitly leverage geometric consistency as an optimiza-tion objective, we introduce Adaptive Geometric Consistency Modeling (Sec. 3.4). For a given set of predictions, we construct a numerical pseudo target 𝑦 ∗ 
+
+> 𝑎
+
+from auxiliary predictions and com-pute its relative error 𝑅𝐸 𝑎 with respect to the original output ˆ 𝑦 𝑎 ,where 𝑎 denotes the question type. The relative error serves as an indicator of internal reasoning coherence: only when the model’s MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Gege Zhang et al. 
+
+predictions are mutually consistent under geometric constraints (i.e., 𝑅𝐸 𝑎 < 𝜏 ) do we treat the numerical pseudo target as reliable. In this case, 𝑦 ∗ 
+
+> 𝑎
+
+is used to construct token-level pseudo-labels ˆ 𝐶 ∗,effectively converting the numerical target into a discrete sequence that provides a structured, learnable self-supervision signal. Finally, in Test-Time Optimization (Sec. 3.5), the model is optimized using these pseudo-labels by minimizing: 
+
+Ltotal = Lgeo + 𝜆 kl Lkl + 𝜆 ent Lent , (2) where Lgeo leverages geometric constraints via the generated pseudo-labels, Lkl mitigates distributional drift to safeguard against rep-resentation collapse, and Lent regularizes predictive certainty. By iteratively minimizing Ltotal at test time, TTL-SR encourages phys-ically plausible and self-consistent spatial predictions. 
+
+## 3.3 Spatial Query Augmentation 
+
+Standard VLM inference processes spatial queries independently, ignoring geometric dependencies among attributes and leaving numerical predictions under-constrained. To expose these depen-dencies, we introduce a spatial query augmentation operator A that expands an isolated query into a set of coupled auxiliary queries. Given a target query 𝑞 , A generates related variants that probe complementary components of the same scene. For example, consider the direct distance query: “What is the direct distance between the coffee grinder and the coffee serving cup?”. We construct auxiliary queries that decompose this relation into geometric components, such as “What is the vertical distance between the coffee grinder and the coffee serving cup?” and “What is the horizontal distance between the coffee grinder and the cof-fee serving cup?”, forming Q𝑟𝑒𝑙 = {𝑞 𝑑𝑖𝑟 , 𝑞 𝑣𝑒𝑟 , 𝑞 ℎ𝑜𝑟 }. We further add intrinsic attribute queries, e.g., “What is the height of the coffee grinder?” and “What is the width of the coffee serving cup?”, form-ing the final query set Q = Q𝑟𝑒𝑙 ∪ Q 𝑎𝑡𝑡𝑟 . All queries are generated via template-based transformations without external supervision. Querying the VLM with Q induces a set of geometrically coupled predictions, whose internal consistency provides a structured self-supervision signal for subsequent test-time adaptation. 
+
+## 3.4 Adaptive Geometric Consistency Modeling 
+
+Based on the augmented query set Q, we independently probe the VLM to obtain a set of raw numerical estimates. These estimates provide the metric scale through the base VLM, while geometric constraints only relate coupled quantities, such as direct, vertical, and horizontal distances. Thus, our goal is not to infer absolute scale from geometry alone, but to convert reliable cross-query agree-ment into self-supervision. The primary challenge is determining when such consistency signals are reliable enough for optimiza-tion. Although geometric principles (e.g., the Pythagorean theorem) provide natural constraints, directly enforcing them can be counter-productive: prediction errors and hallucinations may violate these relations, leading to unstable gradients and error amplification. To address this issue, we introduce Adaptive Geometric Consis-tency Modeling, which treats geometric relations as a reliability-aware filtering mechanism. Instead of directly enforcing geometric constraints, we use them to assess the internal consistency of pre-dictions and selectively enable optimization. This design ensures that adaptation is guided by physically plausible reasoning patterns, while preventing updates driven by erroneous or noisy estimates. 
+
+3.4.1 Adaptive Geometric Triggering . Before constructing op-timization targets, we first check whether the VLM predictions are internally coherent enough to support self-supervision. We therefore introduce a lightweight geometric trigger that activates test-time optimization only for reliable prediction groups. Specifically, we evaluate a small set of consistency conditions expected in physically plausible scenes: (i) Pythagorean consistency ,where the predicted direct distance ˆ 𝑦 𝑑𝑖𝑟 should agree with its verti-cal and horizontal components via 𝑦 ∗ 
+
+> 𝑑𝑖𝑟
+
+=√︃ ˆ𝑦 2 
+
+> 𝑣𝑒𝑟
+
++ ˆ𝑦 2 
+
+> ℎ𝑜𝑟
+
+; (ii) aspect ratio stability , where relative proportions such as width-to-height ratios remain stable across equivalent queries; and (iii) semantic consistency , where predictions for the same spatial attribute under different natural language formulations remain mutually consistent. Rather than serving as direct supervision, these conditions pro-vide reliability criteria for selecting valid optimization signals. For a target attribute 𝑎 , we derive a reference value 𝑦 ∗ 
+
+> 𝑎
+
+from its coupled predictions and trigger test-time optimization only when its relative error to the model prediction ˆ 𝑦 𝑎 satisfies: RE 𝑎 = | ˆ𝑦 𝑎 − 𝑦 ∗ 
+
+> 𝑎
+
+|
+
+𝑦 ∗
+
+> 𝑎
+
+< 𝜏, (3) where 𝜏 is a predefined tolerance threshold. 
+
+3.4.2 Structured Token-level Pseudo-labeling . Once the geo-metric triggering condition is satisfied, we convert the reconciled estimate 𝑦 ∗ 
+
+> 𝑎
+
+into a token-level optimization target. This step is essen-tial, as geometric constraints are defined in continuous numerical space and cannot be directly optimized in autoregressive VLMs. Before tokenization, we express 𝑦 ∗ 
+
+> 𝑎
+
+in the same unit as the model’s original prediction ˆ 𝑦 𝑎 , avoiding mismatched supervision such as centimeters versus meters. We represent each quantitative answer as a structured token sequence 𝑆 = [𝑐 𝑖𝑛𝑡 , 𝑐 𝑑𝑜𝑡 , 𝑐 𝑓 𝑟𝑎𝑐 , 𝑐 𝑢𝑛𝑖𝑡 ], corre-sponding to the integer part, decimal point, fractional part, and measurement unit. This decomposition follows the standard for-mat of numerical expressions, when certain components are absent (e.g., no fractional part or unit), the sequence is deterministically adjusted to maintain consistent token alignment. For each token position 𝑡 , we construct a pseudo-label distribution ˆ 𝐶 ∗ 
+
+> 𝑡
+
+over the vocabulary V based on 𝑦 ∗ 
+
+> 𝑎
+
+.
+
+Structural tokens . For structural tokens ( 𝑐 𝑑𝑜𝑡 , 𝑐 𝑢𝑛𝑖𝑡 ), which determine numerical formatting and physical scale, we apply deter-ministic anchoring using one-hot pseudo-labels: ˆ𝐶 ∗ 
+
+> 𝑡
+
+(𝑣 ) =
+
+(
+
+1, 𝑣 = 𝑣 ∗
+
+> 𝑡
+
+0, otherwise , ∀𝑣 ∈ V , (4) where 𝑣 ∗ 
+
+> 𝑡
+
+denotes the target token at position 𝑡 . The decimal point token is predefined by the output format, while the unit token is inherited from the model’s current prediction ˆ 𝑦 𝑎 .
+
+Numeric tokens . For numeric tokens ( 𝑐 𝑖𝑛𝑡 , 𝑐 𝑓 𝑟𝑎𝑐 ), we explicitly model uncertainty in 𝑦 ∗ 
+
+> 𝑎
+
+. Let 𝑣 ∗ 
+
+> 𝑡
+
+denote the digit token corresponding to 𝑦 ∗ 
+
+> 𝑎
+
+at position 𝑡 . We define a tolerance interval [𝑣 ∗ 
+
+> 𝑡
+
+− 𝜏 𝑙𝑎𝑏𝑒𝑙 , 𝑣 ∗ 
+
+> 𝑡
+
++
+
+𝜏 𝑙𝑎𝑏𝑒𝑙 ] and collect all tokens within this range. Formally, let V𝑛𝑏𝑟 ⊂V𝑛𝑢𝑚 ⊂ V denote this candidate set. We then construct a uniform Geometry-Aware Test-Time Learning for Quantitative Spatial Reasoning MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+pseudo-label distribution: ˆ𝐶 ∗ 
+
+> 𝑡
+
+(𝑣 ) =
+
+( 1  
+
+> | V 𝑛𝑏𝑟 |
+
+, 𝑣 ∈ V 𝑛𝑏𝑟 
+
+0, otherwise , (5) where |V 𝑛𝑏𝑟 | denotes the number of valid tokens. This soft supervi-sion distributes probability mass over a plausible numerical interval rather than collapsing to a single value, yielding stable gradients that are robust to noise in geometry-derived estimates and enabling reliable test-time learning. 
+
+## 3.5 Test-Time Optimization 
+
+Quantitative spatial answers are expressed as structured numerical sequences. Given an image-query pair (I , 𝑞 ), the model produces a logit tensor Z ∈ R𝐿 × | V | , where 𝐿 is the output sequence length. Following Sec. 3.4.2, we select geometry-relevant token positions 
+
+𝑆 = {𝑠 1, 𝑠 2, 𝑠 3, 𝑠 4 } corresponding to [𝑐 𝑖𝑛𝑡 , 𝑐 𝑑𝑜𝑡 , 𝑐 𝑓 𝑟𝑎𝑐 , 𝑐 𝑢𝑛𝑖𝑡 ], and re-strict optimization to these positions: 
+
+Z𝑆 = [z𝑠 1 , z𝑠 2 , z𝑠 3 , z𝑠 4 ]⊤, (6) where z𝑠 𝑖 ∈ R| V | denotes the logits at position 𝑠 𝑖 . For each 𝑠 𝑖 ∈ 𝑆 ,the predictive distribution is obtained via softmax: 
+
+𝑃 𝜃 (𝑣 | I , 𝑞, 𝑡 = 𝑠 𝑖 ) = exp (z(𝑣 ) 
+
+> 𝑠 𝑖
+
+)
+
+Í𝑣 ′ ∈ V exp (z(𝑣 ′ ) 
+
+> 𝑠 𝑖
+
+) , (7) this design ensures that gradients are propagated only through tokens that directly determine the numerical value and physical scale of spatial predictions. 
+
+3.5.1 Geometric Consistency Loss . This loss serves as the core supervision signal and is composed of complementary components. We adopt MLE Positive Learning and employ a multi-label cross-entropy loss [53] to encourage the model to distribute probability mass over all geometrically valid candidate tokens V𝑛𝑏𝑟 at each key position 𝑠 𝑖 ∈ 𝑆 . Specifically, for each key position 𝑠 𝑖 , we define the local MLE loss as: 
+
+ℓmle (𝑠 𝑖 ) = −∑︁  
+
+> 𝑣 ∈ V 𝑛𝑏𝑟
+
+ˆ𝐶 ∗ 
+
+> 𝑠 𝑖
+
+(𝑣 ) log 𝑃 𝜃 (𝑣 | I , 𝑞, 𝑠 𝑖 ), (8) where ˆ 𝐶 ∗ 
+
+> 𝑠 𝑖
+
+(𝑣 ) denotes the pseudo-target distribution over valid can-didate tokens, and 𝑃 𝜃 (𝑣 | I , 𝑞, 𝑠 𝑖 ) is the model’s full-vocabulary prediction at position 𝑠 𝑖 .To suppress confident but geometrically invalid predictions, we apply an Unlikelihood Loss (UL) on numeric positions 𝑆 𝑢𝑙 ⊂ 𝑆 . For each 𝑠 𝑖 ∈ 𝑆 𝑢𝑙 , a negative token 𝑣 𝑛𝑒𝑔 ∉ V𝑛𝑏𝑟 is sampled from top-𝑘 :
+
+ℓul (𝑠 𝑖 ) = −( 1 − 𝑃 (𝑣 𝑛𝑒𝑔 ) 
+
+> 𝑠 𝑖
+
+) log (1 − 𝑃 (𝑣 𝑛𝑒𝑔 ) 
+
+> 𝑠 𝑖
+
+), (9) the overall geometric consistency loss is: 
+
+Lgeo = 1
+
+𝑊 ∑︁ 𝑠 𝑖 ∈𝑆 
+
+𝑤 𝑖 [ℓmle (𝑠 𝑖 ) + I(𝑠 𝑖 ∈ 𝑆 𝑢𝑙 ) 𝛼 𝑖 ℓul (𝑠 𝑖 )] , (10) where 𝑊 = Í𝑠 𝑖 ∈𝑆 𝑤 𝑖 , 𝑤 𝑖 denotes the position-specific weight that assigns different levels of importance to the measurement compo-nents. I(·) restricts UL to numeric positions, and 𝛼 𝑖 = 1/√︁ |V 𝑛𝑏𝑟 |.
+
+3.5.2 KL Loss. To prevent excessive deviation from the pre-trained model, we introduce a global KL-divergence loss [18]: 
+
+Lkl = 1
+
+𝐿 
+
+> 𝐿
+
+∑︁ 
+
+> 𝑡 =1
+
+𝐷 KL 
+
+ 𝜎 (Z𝑡 
+
+> 0
+
+) ∥ 𝜎 (Z𝑡 ) , (11) where 𝜎 (·) denotes the softmax function, 𝐿 is the sequence length, and Z𝑡  
+
+> 0
+
+and Z𝑡 represent the logit vectors at position 𝑡 from the frozen pre-trained model and the current updated model, respec-tively. This anchors the adapted model to its original output distri-bution over the full sequence. 
+
+3.5.3 Entropy Minimization Loss . As discussed in Section 3.1, entropy minimization alone may lead to confirmation bias and over-confident but geometrically incorrect predictions. We adopt entropy minimization in a restricted, auxiliary manner. Specifically, it is applied only to the geometry-relevant positions 𝑆 = {𝑠 𝑖 }4 
+
+> 𝑖 =1
+
+and is jointly optimized with the geometric consistency and KL loss. Guided by the pseudo-label distribution ˆ 𝐶 ∗ and the constrained can-didate set V𝑛𝑏𝑟 , entropy minimization serves to sharpen the model’s belief within an already validated geometric interval. Formally, the entropy minimization loss is defined as: 
+
+Lent = 1
+
+|𝑆 |∑︁ 𝑠 𝑖 ∈𝑆 
+
+−∑︁  
+
+> 𝑣 ∈ V
+
+𝑃 (𝑣 ) 
+
+> 𝑠 𝑖
+
+log 𝑃 (𝑣 )
+
+> 𝑠 𝑖
+
+!
+
+, (12) 
+
+𝑃 (𝑣 ) 
+
+> 𝑠 𝑖
+
+denotes the predicted probability of token 𝑣 at position 𝑠 𝑖 .
+
+3.5.4 Parameter Optimization . Following Sec. 3.1, we restrict trainable parameters ¯𝜃 ⊆ 𝜃 to low-rank adapter weights ΔΦ in-jected into the backbone via Low-Rank Adaptation (LoRA) [19]. This design enables efficient test-time adaptation while mitigat-ing catastrophic forgetting, which is commonly observed in full-parameter updates during TTL [20]. During TTL, the backbone parameters 𝜃 remain frozen and only the adapter weights ΔΦ are updated. The optimization proceeds iteratively as: 
+
+ΔΦ 𝑘 +1 = ΔΦ 𝑘 − 𝜂 ∇ΔΦ L( Φ𝜃, ΔΦ ; I, 𝑞 ), (13) where 𝑘 is the optimization step, 𝜂 is the learning rate, and Φ𝜃, ΔΦ 
+
+denotes the frozen backbone with trainable adapters. Adapters are updated cumulatively over the unlabeled test stream rather than reset per sample; each valid instance contributes one step, and later predictions use the adapted adapters. 
+
+## 4 Experiment 4.1 Experimental Settings 
+
+Datasets. We evaluate TTL-SR on benchmarks covering di-verse quantitative spatial reasoning tasks, including distance, ob-ject size, and orientation. We primarily use three datasets. Firstly, SpatialRGPT-Bench [6] is a spatial VQA benchmark spanning in-door, outdoor, and simulated scenes, with region annotations and quantitative questions for metric estimation. Secondly, Q-Spatial Bench [23] includes two subsets: Q-Spatial-ScanNet, based on pre-cise RGB-D measurements from ScanNet [7], and Q-Spatial++, con-taining diverse real-world images under varied conditions. For compatibility with region-aware models, we annotate target object regions for Q-Spatial Bench following the format of SpatialRGPT-Bench. Thirdly, we incorporate the object-to-object distance pre-diction task from SPAR-Bench [50], which focuses on fine-grained MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Gege Zhang et al. 
+
+Table 1: Quantitative comparison on Q-Spatial-ScanNet, Q-Spatial++, and the SPAR-Bench object-to-object distance task. Results are reported as Accuracy (%) ↑ / MARE ↓. The Average column denotes the mean accuracy across all categories.                                                                                                                                              
+
+> Method Q-Spatial-ScanNet Q-Spatial++ SPAR-Bench Direct Dist. Horiz. Dist. Vert. Dist. Width Height Average Average Dist. oo Average
+> Doubao-Seed-1.8 22.2 / 0.84 6.7 / 3.44 13.8 / 1.40 56.5 / 0.43 59.1 / 0.24 24.71 22.77 44.6 / 0.37 GPT-5.2 47.2 / 0.38 35.0 / 1.12 34.5 / 0.70 60.9 / 0.29 63.6 / 0.29 44.71 26.73 49.4 / 0.29 Gemini-3-Flash 58.3 / 0.24 28.3 / 0.58 44.8 / 0.66 60.9 / 0.34 90.9 / 0.13 50.00 38.61 58.4 / 0.28
+> Qwen3-VL-Plus 38.9 / 0.52 16.7 / 1.74 24.1 / 1.86 56.5 / 0.36 77.3 / 0.21 35.88 23.76 42.1 / 0.41 Qwen3-VL-2B-Instruct 38.9 / 0.31 31.7 / 1.30 20.7 / 0.66 52.2 / 0.38 40.9 / 0.55 35.29 31.68 39.9 / 0.37 Qwen3-VL-4B-Instruct 52.8 / 0.34 21.7 / 1.94 34.5 / 1.33 56.5 / 0.44 59.1 / 0.46 40.00 24.75 50.7 / 0.33 +Tent 52.8 / 0.30 21.7 / 1.43 37.9 / 1.43 56.5 / 0.49 40.9 / 0.44 38.24 30.69 52.1 / 0.31 +COME 52.8 / 0.29 25.0 / 1.28 41.4 / 1.37 56.5 / 0.49 40.9 / 0.46 40.00 29.70 52.3 / 0.31 +TLM 55.6 / 0.29 25.0 / 1.68 31.0 / 1.32 60.9 / 0.44 40.9 / 0.51 39.41 27.72 53.2 / 0.31
+> +TTL-SR (Ours) 63.9 / 0.24 28.3 / 1.48 34.5 / 1.23 60.9 / 0.43 68.2 / 0.31 46.47 34.65 55.1 / 0.30
+> SpatialRGPT-VILA-1.5-8B 47.2 / 0.27 26.7 / 0.99 24.1 / 1.25 52.2 / 0.41 27.3 / 0.58 34.12 29.70 -+Tent 44.4 / 0.24 30.0 / 1.12 34.5 / 1.22 52.2 / 0.42 54.6 / 0.44 40.00 27.72 -+COME 52.8 / 0.25 30.0 / 1.29 34.5 / 1.26 52.2 / 0.44 54.6 / 0.45 41.76 26.73 -+TLM 52.8 / 0.23 33.3 / 0.89 31.0 / 1.22 47.8 / 0.43 45.5 / 0.56 40.60 30.69 -
+> +TTL-SR (Ours) 58.3 / 0.23 35.0 / 1.07 34.5 / 1.18 47.8 / 0.45 50.0 / 0.42 43.53 33.66 -
+
+spatial relationship estimation between object pairs and serves as a complementary evaluation for metric-level reasoning. Additional dataset details are provided in the supplementary materials B.1. 
+
+Evaluation metrics. Following [6], we adopt two primary met-rics after normalizing all predictions to a consistent unit: (i) Accu-racy: a prediction ˆ 𝑦 is considered correct if its relative error w.r.t. the ground truth 𝑦 𝑔𝑡 satisfies | ˆ𝑦 −𝑦 𝑔𝑡 | 
+
+> 𝑦 𝑔𝑡
+
+≤ 0.25. For clock-face direction, we use an absolute tolerance of 2 hours. (ii) Mean Absolute Relative Error (MARE): we report the average absolute relative error over all samples to measure overall measurement precision. 
+
+VLMs and baselines. We evaluate TTL-SR on two representa-tive open-source VLM backbones: Qwen3-VL-4B-Instruct [46] and SpatialRGPT-VILA-1.5-8B [6]. We compare TTL-SR against repre-sentative TTA or TTL methods, including Tent [43], COME [51], and TLM [20], which adapt model parameters using unlabeled data at inference time. In addition, we also compare with fron-tier closed-source models, including Doubao-Seed-1.8 [37], GPT-5.2 [30], Gemini-3-Flash [13], Qwen3-VL-Plus [46]. Additional de-tails are provided in the supplementary materials B.1. 
+
+Implementation details. We evaluate TTL-SR on Qwen3-VL-4B-Instruct [46] and SpatialRGPT-VILA-1.5-8B [6], leveraging Qwen-VL finetuning framework [21] and official SpatialRGPT [6] code-bases. Unless stated otherwise, we set 𝜆 𝑘𝑙 = 50, 𝜆 𝑒𝑛𝑡 = 0.2, and 
+
+𝜏 = 𝜏 𝑙𝑎𝑏𝑒𝑙 = 0.20. Negative tokens for UL loss are selected via top-𝑘 
+
+search with 𝑘 = 10. Greedy decoding is used throughout. Experi-ments are conducted on NVIDIA RTX 4090 (24GB) for the 4B model and NVIDIA A100 (80GB) for the 8B model. Additional details are provided in supplementary materials B.2. 
+
+## 4.2 Comparison Experiments 
+
+We compare TTL-SR with SOTA closed-source VLMs, original open-source counterparts, and representative TTA / TTL methods (Tent, COME, TLM). Experiments are conducted on Q-Spatial-ScanNet, Q-Spatial++, the object-to-object distance subset of SPAR-Bench, and SpatialRGPT-Bench, as shown in Table 1 and Table 2. 
+
+4.2.1 Comparison with Original VLMs . TTL-SR consistently outperforms original backbones across all benchmarks. On Q-Spatial-ScanNet, it yields a 6.47% absolute accuracy gain for Qwen3-VL-4B-Instruct, with consistent MARE reductions across all query categories. Notably, TTL-SR demonstrates strong generalization for specialized region-aware models. For instance, it improves SpatialRGPT-VILA-1.5-8B by 9.41% in overall accuracy. Similar im-provements are observed on the SPAR-Bench distance subset, where TTL-SR enhances fine-grained object-to-object distance estimation. These results verify that TTL-SR provides a robust and architecture-agnostic improvement for quantitative spatial reasoning. 
+
+4.2.2 Comparison with TTA / TTL Methods . As shown in Table 1 and Table 2, existing TTA / TTL methods exhibit unsta-ble performance in quantitative spatial reasoning. When adapting Qwen3-VL-4B-Instruct on Q-Spatial-ScanNet, Tent and TLM ac-tually degrade the model: average accuracy drops from 40.00% to 38.24% and 39.41%, respectively, while Tent increases vertical dis-tance MARE from 1.33 to 1.43. In contrast, TTL-SR consistently yields substantial gains across all metrics. It reduces vertical dis-tance MARE to 1.23 and boosts the average accuracy to 46.47%, demonstrating both higher precision and better stability. Inter-estingly, on the SpatialRGPT-VILA-1.5-8B backbone evaluated on SpatialRGPT-Bench, all methods see a regression in horizontal dis-tance. One possible reason is that the model’s strong pre-trained priors for this specific dimension are particularly sensitive to repre-sentation drift during test-time optimization. Overall, these results suggest that confidence-driven adaptation is insufficient for reliable numeric refinement, whereas explicitly introducing geometric con-sistency enables more stable and effective test-time optimization. 
+
+4.2.3 Comparison with Closed-source VLMs . As shown in Table 1 and 2, quantitative spatial reasoning remains a challenging problem even for frontier closed-source models such as GPT-5.2 and Gemini-3-Flash. While these massive models excel in width and height estimation by leveraging extensive object-level priors, they struggle with complex distance queries. In contrast, our light-weight Qwen3-VL-4B-Instruct with TTL-SR achieves competitive or superior performance across multiple benchmarks. For example, Geometry-Aware Test-Time Learning for Quantitative Spatial Reasoning MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+Table 2: Quantitative comparison of spatial reasoning performance on SpatialRGPT-Bench. Results are reported as Accuracy (%) ↑ / MARE ↓. The Direction metric are reported as Accuracy (%) ↑ / Mean Angular Error ( ◦)↓.
+
+Method Direct Dist. Horiz. Dist. Vert. Dist. Width Height Direction Average 
+
+Doubao-Seed-1.8 24.3 / 0.67 21.3 / 1.38 33.0 / 0.52 57.1 / 0.32 68.4 / 2.90 55.1 / 55.79 ◦ 43.12 GPT-5.2 15.5 / 0.57 27.1 / 1.14 20.8 / 0.46 59.7 / 0.33 71.4 / 1.91 64.5 / 42.06 ◦ 42.72 Gemini-3-Flash 17.6 / 0.59 31.2 / 0.75 17.9 / 0.52 63.9 / 0.29 68.4 / 1.77 57.0 / 47.10 ◦ 42.72 Qwen3-VL-Plus 31.8 / 0.48 32.0 / 1.11 31.1 / 0.56 51.1 / 0.38 69.2 / 1.79 49.1 / 60.00 ◦ 44.25 
+
+Qwen3-VL-2B-Instruct 16.2 / 0.55 30.3 / 0.51 17.0 / 0.61 32.3 / 0.45 37.6 / 2.10 30.7 / 78.10 ◦ 27.32 Qwen3-VL-4B-Instruct 29.1 / 0.51 35.3 / 0.96 29.3 / 0.74 39.9 / 0.42 64.7 / 1.25 41.1 / 61.70 ◦ 40.05 +Tent 33.1 / 0.49 40.2 / 0.92 31.1 / 0.65 36.8 / 0.40 63.2 / 1.23 43.9 / 61.12 ◦ 41.52 +COME 30.4 / 0.49 42.6 / 0.91 32.1 / 0.66 38.4 / 0.41 66.2 / 1.23 39.3 / 63.08 ◦ 41.66 +TLM 34.5 / 0.49 42.6 / 0.94 33.0 / 0.65 38.4 / 0.42 66.9 / 1.32 38.3 / 64.77 ◦ 42.59 
+
++TTL-SR (Ours) 35.8 / 0.47 42.6 / 0.87 31.1 / 0.63 41.4 / 0.40 66.9 / 1.21 45.8 / 60.84 ◦ 44.19 
+
+SpatialRGPT-VILA-1.5-8B 45.9 / 0.31 68.0 / 0.22 56.6 / 0.28 48.9 / 0.28 61.7 / 0.41 95.3 / 9.70 ◦ -+Tent 38.5 / 0.35 62.3 / 0.23 60.4 / 0.27 51.1 / 0.31 72.9 / 0.40 96.3 / 10.37 ◦ 62.08 +COME 45.3 / 0.34 59.8 / 0.23 55.7 / 0.29 52.6 / 0.33 72.2 / 0.39 96.3 / 11.21 ◦ 62.48 +TLM 45.3 / 0.34 57.4 / 0.25 53.8 / 0.29 51.9 / 0.33 66.9 / 0.38 96.3 / 11.78 ◦ 60.75 
+
++TTL-SR (Ours) 46.6 / 0.32 60.7 / 0.23 64.2 / 0.28 54.9 / 0.33 70.7 / 0.37 96.3 / 11.20 ◦ 64.22 
+
+on Q-Spatial-ScanNet, it reaches 63.9% accuracy on direct distance, surpassing the 58.3% achieved by Gemini-3-Flash. These results demonstrate that incorporating explicit geometric consistency at test time can effectively bridge the performance gap between com-pact open-source models and large-scale closed-source VLMs. 
+
+## 4.3 Ablation Study 
+
+To evaluate the contribution of individual components in TTL-SR, we conduct a series of ablation experiments on the Q-Spatial-ScanNet dataset using the Qwen3-VL-4B-Instruct backbone. The results are summarized in Table 3, Table 5, Table 4, and Table 6. 
+
+Table 3: Ablation study of TTL-SR loss components. Ent KL Geo Direct Dist. Horiz. Dist. Vert. Dist. Width Height Average                                              
+
+> 52.8 / 0.34 21.7 / 1.94 34.5 / 1.33 56.5 / 0.44 59.1 / 0.46 40.00
+> ✓58.3 / 0.28 23.3 / 1.44 37.9 / 1.20 60.9 / 0.50 45.5 / 0.44 40.18
+> ✓✓55.6 / 0.29 21.7 / 1.61 37.9 / 1.23 60.9 / 0.49 50.0 / 0.44 40.59
+> ✓✓55.6 / 0.25 28.3 / 1.62 37.9 / 1.38 52.2 / 0.46 59.1 / 0.41 42.94
+> ✓✓61.1 / 0.25 25.0 / 1.58 37.9 / 1.25 52.2 / 0.45 63.6 / 0.30 43.53
+> ✓✓✓63.9 / 0.24 28.3 / 1.48 34.5 / 1.23 60.9 / 0.43 68.2 / 0.31 46.47
+
+4.3.1 Effectiveness of Loss Components . We first investigate the impact of different loss functions on model performance. As shown in Table 3, applying entropy minimization or KL regular-ization in isolation yields only marginal improvements over the baseline. Specifically, while entropy minimization slightly increases the average accuracy from 40.00% to 40.18% , it introduces instability across certain spatial categories, such as a performance degrada-tion in height estimation. Incorporating KL regularization enhances optimization stability and raises the average accuracy to 40.59%. However, the overall gains remain constrained, suggesting that confidence-based objectives alone are insufficient for mastering complex quantitative spatial reasoning. In contrast, the integration of our proposed geometric consis-tency loss leads to substantial performance gains across all spatial categories. When combined with KL regularization, the average accuracy increases to 42.94%, and further reaches 46.47% when all components are jointly optimized, representing a 6.47% absolute improvement over the baseline. While entropy and KL losses help stabilize test-time optimization, the primary performance boost comes from explicit geometric consistency. This confirms that geo-metric priors are indispensable for the model to reason accurately about quantitative spatial reasoning. 
+
+Table 4: Impact of individual geometric constraints.                                                                     
+
+> Constraints Direct Dist. Horiz. Dist. Vert. Dist. Width Height Average
+> Baseline (Ent+KL) 55.6 / 0.29 21.7 / 1.61 37.9 / 1.23 60.9 / 0.49 50.0 / 0.44 40.59 w/ L𝑔𝑒𝑜 (Same) 58.3 / 0.26 28.3 / 1.61 34.5 / 1.42 56.5 / 0.46 54.6 / 0.41 42.94 w/ L𝑔𝑒𝑜 (Direct) 58.3 / 0.29 23.3 / 1.61 31.0 / 1.57 60.9 / 0.46 59.1 / 0.40 41.76 w/ L𝑔𝑒𝑜 (Vert.) 61.1 / 0.27 25.0 / 1.66 37.9 / 1.30 60.9 / 0.47 50.0 / 0.44 42.94 w/ L𝑔𝑒𝑜 (Horiz.) 58.3 / 0.29 26.7 / 1.65 37.9 / 1.23 60.9 / 0.50 50.0 / 0.44 42.94 w/ L𝑔𝑒𝑜 (Width) 58.3 / 0.28 25.0 / 1.64 31.0 / 1.39 60.9 / 0.48 50.0 / 0.44 41.18 w/ L𝑔𝑒𝑜 (Height) 55.6 / 0.29 25.0 / 1.54 31.0 / 1.45 65.2 / 0.47 54.6 / 0.41 41.76 w/ L𝑔𝑒𝑜 (All) 63.9 / 0.24 28.3 / 1.48 34.5 / 1.23 60.9 / 0.43 68.2 / 0.31 46.47
+
+4.3.2 Analysis of Geometric Constraints . We further decom-pose the geometric consistency constraints to understand how in-dividual constraints guide spatial reasoning, as depicted in Table 4. The "Same" constraint ensures consistent outputs across diverse linguistic phrasings, while dimension-specific constraints (direct, height, etc.) anchor the model to fundamental physical principles. Our results reveal a tight coupling between spatial attributes: optimizing one dimension in isolation may distorts others. For ex-ample, activating only the w/ L𝑔𝑒𝑜 (Direct) improves direct distance accuracy from 55.6% to 58.3%, but simultaneously degrades vertical distance performance from 37.9% to 31.0%. TTL-SR bypasses these trade-offs by regularizing all spatial attributes in a unified opti-mization space. By respecting the entire geometric structure, our framework avoids skewed updates that favor specific dimensions. This highlights the necessity of coordinated geometric priors for achieving stable and physically plausible spatial reasoning. 
+
+4.3.3 Effectiveness of Framework Components . Table 5 breaks down the contribution of each TTL-SR module. Removing any sin-gle component leads to a consistent drop in accuracy and a rise in MARE, confirming their collective necessity. Specifically, omitting Adaptive Triggering (AT) incurs a 2.94% decline in accuracy, as the MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Gege Zhang et al. What is the width of the window in the image? 
+
+The window is 1.5 meters wide. 
+
+Qwen3-VL-4B-Instruct 
+
+The width of the window is 0.78 meters. 
+
++TTL-SR 
+
+GT: 74.0 cm 
+
+What is the length of the table in the image? 
+
+The table in the image is 2.5 meters long. 
+
+Qwen3-VL-4B-Instruct 
+
+The table is 1.80 meters long. 
+
++TTL-SR 
+
+GT: 1.75 meter 
+
+How far away is the soundsystem from the chair? 
+
+The soundsystem is 1.8 meters away from the chair. 
+
+Qwen3-VL-4B-Instruct 
+
+The soundsystem is 1.2 meters away from the chair. 
+
++TTL-SR 
+
+GT: 1. 33 meter 
+
+Measure the distance between the potted plant and the shelves horizontally. 
+
+The potted plant and the shelves are 2.8 meters apart. 
+
+Qwen3-VL-4B-Instruct 
+
+The potted plant and the shelves are 1.2 meters apart. 
+
++TTL-SR 
+
+GT: 1. 28 meter 
+
+Figure 4: Qualitative comparison of spatial reasoning between the baseline Qwen3-VL-4B-Instruct and our TTL-SR. Table 5: Component-wise ablation of TTL-SR framework. Method Direct Dist. Horiz. Dist. Vert. Dist. Width Height Average                         
+
+> w/o AT 61.1 / 0.25 23.3 / 1.50 34.5 / 1.27 56.5 / 0.44 68.2 / 0.32 43.53 w/o SPL 58.3 / 0.27 28.3 / 1.64 27.6 / 1.45 60.9 / 0.45 63.6 / 0.32 43.53 w/o UL 58.3 / 0.25 28.3 / 1.57 31.0 / 1.46 60.9 / 0.43 63.6 / 0.32 44.12 Ours 63.9 / 0.24 28.3 / 1.48 34.5 / 1.23 60.9 / 0.43 68.2 / 0.31 46.47
+
+Table 6: Sensitivity analysis of key hyper-parameters in TTL-SR, including the trigger threshold 𝜏 , the soft label tolerance interval 𝜏 𝑙𝑎𝑏𝑒𝑙 , and the sampling top-𝑘 for UL. Param. Value Direct Dist. Horiz. Dist. Vert. Dist. Width Height Average                                                                         
+
+> 𝜏
+> 0.00 61.1 / 0.25 23.3 / 1.50 34.5 / 1.27 56.5 / 0.44 68.2 / 0.32 43.53 0.10 58.3 / 0.26 26.7 / 1.52 37.9 / 1.23 56.5 / 0.44 63.6 / 0.31 44.12
+> 0.20 63.9 / 0.24 28.3 / 1.48 34.5 / 1.23 60.9 / 0.43 68.2 / 0.31 46.47
+> 0.40 61.1 / 0.26 25.0 / 1.59 34.5 / 1.40 52.2 / 0.46 63.6 / 0.32 42.94
+> 𝜏 𝑙𝑎𝑏𝑒𝑙
+> 0.10 61.1/ 0.25 25.0 / 1.56 37.9 / 1.25 47.8 / 0.46 68.2 / 0.33 43.53
+> 0.20 63.9 / 0.24 28.3 / 1.48 34.5 / 1.23 60.9 / 0.43 68.2 / 0.31 46.47
+> 0.30 58.3 / 0.25 25.0 / 1.54 41.4 / 1.18 56.5 / 0.44 63.6 / 0.31 44.12 0.40 61.1 / 0.26 23.3 / 1.58 37.9 / 1.22 56.5 / 0.46 63.6 / 0.33 43.53
+> 𝑘
+> 158.3 / 0.25 26.7 / 1.53 37.9 / 1.19 52.2 / 0.45 68.2 / 0.31 44.12 561.1 / 0.26 25.0 / 1.59 34.5 / 1.30 60.9 / 0.43 63.6 / 0.31 44.12
+> 10 63.9 / 0.24 28.3 / 1.48 34.5 / 1.23 60.9 / 0.43 68.2 / 0.31 46.47
+> 20 63.9 / 0.24 26.7 / 1.50 41.4 / 1.15 52.2 / 0.45 68.2 / 0.32 45.88
+
+model suffers from indiscriminate updates on physically implau-sible predictions. Replacing Soft Pseudo-Labeling (SPL) with hard one-hot encoding similarly degrades precision. Furthermore, ex-cluding the Unlikelihood Loss (UL) significantly elevates the MARE (e.g., from 1.23 to 1.46 in vertical distance), highlighting its critical role in suppressing confident but geometrically invalid outliers. Together, these modules ensure robust convergence by effectively balancing positive guidance with noise rejection. As shown in Table 6, the trigger threshold 𝜏 is most effective at 0.20, while a looser 𝜏 = 0.40 admits noisy inconsistent predictions and causes a 3.53% performance drop. The soft label tolerance 
+
+𝜏 𝑙𝑎𝑏𝑒𝑙 = 0.20 provides a robust neighborhood for pseudo-labels. Increasing 𝑘 from 1 to 10 improves average accuracy from 44.12% to 46.47%, with diminishing gains beyond 𝑘 = 10. Additional cross-dataset validation is provided in supplementary materials C.4. 
+
+## 4.4 Qualitative Comparison 
+
+To qualitatively evaluate the effectiveness of our framework, we compare the baseline Qwen3-VL-4B-Instruct [46] with our proposed TTL-SR. As illustrated in Figure 4, the baseline frequently produces spatial predictions that are numerically imprecise or physically inconsistent, particularly in scenarios requiring complex geomet-ric reasoning. In contrast, predictions refined by TTL-SR exhibit markedly improved numerical precision and stronger adherence to geometric constraints. By leveraging geometric consistency as an intrinsic supervisory signal, our method effectively corrects implau-sible outputs, yielding predictions that are both closer to ground truth values and more coherent under physical laws. Moreover, TTL-SR consistently improves performance across diverse scenes, suggesting that the refinement process generalizes beyond specific instances. These qualitative results indicate that our approach en-hances not only the final predictions but also the underlying reason-ing process, steering the model toward more physically grounded solutions. Additional qualitative results, along with failure case analysis, are provided in supplementary materials C.2 and C.3. 
+
+## 5 Conclusion 
+
+In this paper, we propose TTL-SR , a geometry-aware test-time learning framework for improving quantitative spatial reasoning in VLMs. By leveraging geometric consistency as an intrinsic su-pervisory signal, TTL-SR enables unsupervised adaptation dur-ing test time, aligning model predictions with underlying spatial constraints and activating latent spatial knowledge. Extensive ex-periments across multiple benchmarks demonstrate consistent im-provements across both spatially specialized and general-purpose VLMs. Beyond quantitative gains, TTL-SR produces more physi-cally plausible and logically coherent predictions, suggesting a shift toward more structured and reliable reasoning. More broadly, our findings suggest that incorporating explicit geometric structure into test-time learning can bridge data-driven prediction and phys-ically grounded reasoning, with TTL-SR serving as a lightweight alternative to retraining. Future work will explore more flexible constraint formulations and extend the framework to a wider range of complex reasoning tasks and settings. Geometry-Aware Test-Time Learning for Quantitative Spatial Reasoning MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil 
+
+## Acknowledgments 
+
+The research is partially supported by the National Natural Science Foundation of China (No. 62576139, 62176093) and the National Key Research and Development Program of China (2023YFC3502900). 
+
+## References 
+
+[1] Emre Can Acikgoz, Cheng Qian, Heng Ji, Dilek Hakkani-Tür, and Gokhan Tur. 2025. Self-improving llm agents at test-time. arXiv preprint arXiv:2510.07841 
+
+(2025). [2] Alisson Azzolini, Junjie Bai, Hannah Brandon, Jiaxin Cao, Prithvijit Chattopad-hyay, Huayu Chen, Jinju Chu, Yin Cui, Jenna Diamond, Yifan Ding, et al. 2025. Cosmos-reason1: From physical common sense to embodied reasoning. arXiv preprint arXiv:2503.15558 (2025). [3] Wenxiao Cai, Iaroslav Ponomarenko, Jianhao Yuan, Xiaoqi Li, Wankou Yang, Hao Dong, and Bo Zhao. 2025. Spatialbot: Precise spatial understanding with vision language models. In 2025 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 9490–9498. [4] Boyuan Chen, Zhuo Xu, Sean Kirmani, Brain Ichter, Dorsa Sadigh, Leonidas Guibas, and Fei Xia. 2024. Spatialvlm: Endowing vision-language models with spatial reasoning capabilities. In Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition . 14455–14465. [5] Guohao Chen, Shuaicheng Niu, Chen Deyu, Jiahao Yang, Zitian Zhang, Mingkui Tan, Pengcheng Wu, and Zhiqi Shen. 2026. Zerosiam: An efficient asymmetry for test-time entropy optimization without collapse. In International Conference on Learning Representations , Vol. 2026. 144893–144925. [6] An-Chieh Cheng, Hongxu Yin, Yang Fu, Qiushan Guo, Ruihan Yang, Jan Kautz, Xiaolong Wang, and Sifei Liu. 2024. Spatialrgpt: Grounded spatial reasoning in vision-language models. Advances in Neural Information Processing Systems 37 (2024), 135062–135093. [7] Angela Dai, Angel X Chang, Manolis Savva, Maciej Halber, Thomas Funkhouser, and Matthias Nießner. 2017. Scannet: Richly-annotated 3d reconstructions of indoor scenes. In Proceedings of the IEEE conference on computer vision and pattern recognition . 5828–5839. [8] Gang Dai, Yining Huang, Yiming Xia, Guohao Chen, and Shuaicheng Niu. 2026. Guided Trajectory Optimization with Sparse Scaling for Test-Time Diffusion. 
+
+arXiv preprint arXiv:2605.21907 (2026). [9] Gang Dai, Qingfeng Wang, Yutao Qin, Gang Wei, and Shuangping Huang. 2025. VG-SAM: Visual in-context guided SAM for universal medical image segmenta-tion. Fractal and Fractional 9, 11 (2025), 722. [10] Gang Dai, Yifan Zhang, Quhui Ke, Qiangya Guo, and Shuangping Huang. 2024. One-dm: One-shot diffusion mimicker for handwritten text generation. In Euro-pean Conference on Computer Vision . Springer, 410–427. [11] Gang Dai, Yifan Zhang, Yutao Qin, Qiangya Guo, Shuangping Huang, and Shuicheng Yan. 2025. Beyond isolated words: Diffusion brush for handwrit-ten text-line generation. In 2025 IEEE/CVF International Conference on Computer Vision (ICCV) . IEEE, 19054–19064. [12] Gang Dai, Yifan Zhang, Qingfeng Wang, Qing Du, Zhuliang Yu, Zhuoman Liu, and Shuangping Huang. 2023. Disentangling writer and character styles for handwriting generation. In 2023 IEEE/CVF conference on computer vision and pattern recognition (CVPR) . IEEE, 5977–5986. [13] Google DeepMind. 2025. https://deepmind.google/models/gemini/flash/. [14] Daniel Elford, Simon J Lancaster, and Garth A Jones. 2022. Exploring the effect of augmented reality on cognitive load, attitude, spatial ability, and stereochemical perception. Journal of Science Education and Technology 31, 3 (2022), 322–339. [15] Severin Fichtl, Andrew McManus, Wail Mustafa, Dirk Kraft, Norbert Krüger, and Frank Guerin. 2014. Learning spatial relationships from 3D vision using histograms. In 2014 IEEE International Conference on Robotics and Automation (ICRA) . IEEE, 501–508. [16] François Fleuret et al. 2021. Test time adaptation through perturbation robust-ness. In NeurIPS 2021 Workshop on Distribution Shifts: Connecting Methods and Applications .[17] Qiushan Guo, Shalini De Mello, Hongxu Yin, Wonmin Byeon, Ka Chun Cheung, Yizhou Yu, Ping Luo, and Sifei Liu. 2024. Regiongpt: Towards region under-standing vision language model. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 13796–13806. [18] Geoffrey Hinton, Oriol Vinyals, and Jeff Dean. 2015. Distilling the knowledge in a neural network. arXiv preprint arXiv:1503.02531 (2015). [19] Edward J Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, Weizhu Chen, et al. 2022. Lora: Low-rank adaptation of large language models. ICLR 1, 2 (2022), 3. [20] Jinwu Hu, Zitian Zhang, Guohao Chen, Xutao Wen, Chao Shuai, Wei Luo, Bin Xiao, Yuanqing Li, and Mingkui Tan. 2025. Test-Time Learning for Large Language Models. In Proceedings of the 42nd International Conference on Machine Learning (Proceedings of Machine Learning Research, Vol. 267) . 24823–24849. [21] Yuwon Lee. 2026. Qwen-VL-Finetune. https://github.com/2U1/Qwen-VL-Series-Finetune [22] Dingming Li, Hongxing Li, Zixuan Wang, Yuchen Yan, Hang Zhang, Siqi Chen, Guiyang Hou, Shengpei Jiang, Wenqi Zhang, Yongliang Shen, et al. 2025. Viewspatial-bench: Evaluating multi-perspective spatial localization in vision-language models. arXiv preprint arXiv:2505.21500 (2025). [23] Yuan-Hong Liao, Rafid Mahmood, Sanja Fidler, and David Acuna. 2024. Reasoning Paths with Reference Objects Elicit Quantitative Spatial Reasoning in Large Vision-Language Models. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing . 17028–17047. [24] Chenyang Ma, Kai Lu, Ta-Ying Cheng, Niki Trigoni, and Andrew Markham. 2024. Spatialpin: Enhancing spatial reasoning capabilities of vision-language models through prompting and interacting 3d priors. Advances in neural information processing systems 37 (2024), 68803–68832. [25] Toki Migimatsu and Jeannette Bohg. 2022. Grounding predicates through actions. In 2022 International Conference on Robotics and Automation (ICRA) . IEEE, 3498– 3504. [26] Spyridon Mouselinos, Henryk Michalewski, and Mateusz Malinowski. 2024. Be-yond Lines and Circles: Unveiling the Geometric Reasoning Gap in Large Lan-guage Models. In Findings of the Association for Computational Linguistics: EMNLP 2024 . 6192–6222. [27] Shuaicheng Niu, Guohao Chen, Deyu Chen, Yifan Zhang, Jiaxiang Wu, Zhi-quan Wen, Yaofo Chen, Peilin Zhao, Chunyan Miao, and Mingkui Tan. 2026. Adapt in the wild: Test-time entropy minimization with sharpness and feature regularization. IEEE Transactions on Pattern Analysis and Machine Intelligence 
+
+(2026). [28] Shuaicheng Niu, Guohao Chen, Peilin Zhao, Tianyi Wang, Pengcheng Wu, and Zhiqi Shen. 2025. Self-Bootstrapping for Versatile Test-Time Adaptation. In 
+
+International Conference on Machine Learning , Vol. 267. PMLR, 46611–46628. [29] Shuaicheng Niu, Jiaxiang Wu, Yifan Zhang, Yaofo Chen, Shijian Zheng, Peilin Zhao, and Mingkui Tan. 2022. Efficient test-time model adaptation without forgetting. In International conference on machine learning . PMLR, 16888–16905. [30] OpenAI. 2025. Introducing GPT-5.2. https://openai.com/index/introducing-gpt-5-2/. [31] Mingjie Pan, Jiyao Zhang, Tianshu Wu, Yinghao Zhao, Wenlong Gao, and Hao Dong. 2025. Omnimanip: Towards general robotic manipulation via object-centric interaction primitives as spatial constraints. In Proceedings of the Computer Vision and Pattern Recognition Conference . 17359–17369. [32] Wenjie Peng, Hongxiang Huang, Tianshui Chen, Quhui Ke, Gang Dai, and Shuang-ping Huang. 2025. Globally correlation-aware hard negative generation. Interna-tional Journal of Computer Vision 133, 5 (2025), 2441–2462. [33] Wenjie Peng, Shuangping Huang, YunQing Hu, and Tianshui Chen. 2026. Dual-granularity image-text alignment for zero-shot composed image retrieval. Expert Systems with Applications (2026), 133463. [34] Wenjie Peng, Quhui Ke, Jinglin Liang, Shuangping Huang, and Tianshui Chen. 2025. Proxy-AN loss for deep metric learning. Neural Networks (2025), 108254. [35] Kanchana Ranasinghe, Satya Narayan Shukla, Omid Poursaeed, Michael S Ryoo, and Tsung-Yu Lin. 2024. Learning to localize objects improves spatial reasoning in visual-llms. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 12977–12987. [36] Md Imbesat Rizvi, Xiaodan Zhu, and Iryna Gurevych. 2024. SpaRC and SpaRP: Spatial reasoning characterization and path generation for understanding spatial reasoning capability of large language models. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) .4750–4767. [37] Bytedance Seed. 2025. Seed 1.8 Model Card: Towards Generalized Real-World Agency. https://lf3-static.bytednsdoc.com/obj/eden-cn/lapzild-tss/ ljhwZthlaukjlkulzlp/research/Seed-1.8-Modelcard.pdf. [38] Yifan Shen, Yuanzhe Liu, Jingyuan Zhu, Xu Cao, Xiaofeng Zhang, Yixiao He, Wenming Ye, James Matthew Rehg, and Ismini Lourentzou. 2025. Fine-Grained Preference Optimization Improves Spatial Reasoning in VLMs. NeurIPS (2025). [39] Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. 2023. Reflexion: Language agents with verbal reinforcement learning. 
+
+Advances in Neural Information Processing Systems 36 (2023), 8634–8652. [40] Fatemeh Shiri, Xiao-Yu Guo, Mona Golestan Far, Xin Yu, Reza Haf, and Yuan-Fang Li. 2024. An empirical analysis on spatial reasoning capabilities of large multimodal models. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing . 21440–21455. [41] Mohit Shridhar, Lucas Manuelli, and Dieter Fox. 2022. Cliport: What and where pathways for robotic manipulation. In Conference on robot learning . PMLR, 894– 906. [42] Mingkui Tan, Guohao Chen, Jiaxiang Wu, Yifan Zhang, Yaofo Chen, Peilin Zhao, and Shuaicheng Niu. 2025. Uncertainty-calibrated test-time model adaptation without forgetting. IEEE Transactions on Pattern Analysis and Machine Intelligence 
+
+47, 8 (2025), 6274–6289. [43] Dequan Wang, Evan Shelhamer, Shaoteng Liu, Bruno Olshausen, and Trevor Dar-rell. 2021. Tent: Fully test-time adaptation by entropy minimization. International Conference on Learning Representations (2021). MM ’26, November 10–14, 2026, Rio de Janeiro, Brazil Gege Zhang et al. 
+
+[44] Lai Wei, Yuting Li, Chen Wang, Yue Wang, Linghe Kong, Weiran Huang, and Lichao Sun. 2025. First SFT, Second RL, Third UPT: Continual Improving Multi-Modal LLM Reasoning via Unsupervised Post-Training. In The Thirty-ninth An-nual Conference on Neural Information Processing Systems .[45] Wenshan Wu, Shaoguang Mao, Yadong Zhang, Yan Xia, Li Dong, Lei Cui, and Furu Wei. 2024. Mind’s eye of LLMs: visualization-of-thought elicits spatial reasoning in large language models. Advances in Neural Information Processing Systems 37 (2024), 90277–90317. [46] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 (2025). [47] Jihan Yang, Shusheng Yang, Anjali W Gupta, Rilyn Han, Li Fei-Fei, and Saining Xie. 2025. Thinking in space: How multimodal large language models see, remember, and recall spaces. In Proceedings of the Computer Vision and Pattern Recognition Conference . 10632–10643. [48] Baiqiao Yin, Qineng Wang, Pingyue Zhang, Jianshu Zhang, Kangrui Wang, Zihan Wang, Jieyu Zhang, Keshigeyan Chandrasegaran, Han Liu, Ranjay Krishna, et al. 2025. Spatial mental modeling from limited views. In Structural Priors for Vision Workshop at ICCV’25 .[49] Yuqian Yuan, Wentong Li, Jian Liu, Dongqi Tang, Xinjie Luo, Chi Qin, Lei Zhang, and Jianke Zhu. 2024. Osprey: Pixel understanding with visual instruction tuning. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition . 28202–28211. [50] Jiahui Zhang, Yurui Chen, Yueming Xu, Ze Huang, Jilin Mei, Junhui Chen, Yan-peng Zhou, Yu-Jie Yuan, Xinyue Cai, Guowei Huang, Xingyue Quan, Hang Xu, and Li Zhang. 2025. From Flatland to Space: Teaching Vision-Language Models to Perceive and Reason in 3D. In The Thirty-ninth Annual Confer-ence on Neural Information Processing Systems Datasets and Benchmarks Track .https://openreview.net/forum?id=GzgPleFl8f [51] Qingyang Zhang, Yatao Bian, Xinke Kong, Peilin Zhao, and Changqing Zhang. 2025. COME: Test-time adaption by conservatively minimizing entropy. In The Thirteenth International Conference on Learning Representations (2025). [52] Qingyang Zhang, Haitao Wu, Changqing Zhang, Peilin Zhao, and Yatao Bian. 2025. Right Question is Already Half the Answer: Fully Unsupervised LLM Reasoning Incentivization. Advances in neural information processing systems 
+
+(2025). [53] Zhilu Zhang and Mert Sabuncu. 2018. Generalized cross entropy loss for training deep neural networks with noisy labels. Advances in neural information processing systems 31 (2018). [54] Yuxin Zuo, Kaiyan Zhang, Li Sheng, Shang Qu, Ganqu Cui, Xuekai Zhu, Haozhan Li, Yuchen Zhang, Xinwei Long, Ermo Hua, Biqing Qi, Youbang Sun, Zhiyuan Ma, Lifan Yuan, Ning Ding, and Bowen Zhou. 2025. Ttrl: Test-time reinforcement learning. The Thirty-ninth Annual Conference on Neural Information Processing Systems (2025).

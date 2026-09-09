@@ -1,0 +1,509 @@
+Title: MeshSplatBench: A Unified Benchmark for Triangle-Based Neural Rendering
+
+URL Source: https://arxiv.org/pdf/2609.01306v1
+
+Published Time: Wed, 02 Sep 2026 01:29:27 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+Preprint. Under Review. 
+
+# MESH SPLAT BENCH : A U NIFIED BENCHMARK FOR 
+
+# TRIANGLE -B ASED NEURAL RENDERING 
+
+Kaixuan Zhang 1 Minxian Li 1,2∗ Mingwu Ren 1,2 Xiatian Zhu 3
+
+> 1
+
+Nanjing University of Science and Technology 
+
+> 2
+
+State Key Laboratory of Intelligent Manufacturing of Advanced Construction Machinery 
+
+> 3
+
+University of Surrey 
+
+ABSTRACT 
+
+Triangle-based neural rendering bridges neural scene representations and conven-tional graphics pipelines by optimizing explicit geometric primitives compatible with standard rasterization hardware. However, existing approaches are evalu-ated almost exclusively within custom research renderers, obscuring their practi-cal deployability in production engines. To bridge this gap, we introduce Mesh-SplatBench , a unified benchmark that systematically investigates triangle-based neural rendering across the complete pipeline from native optimization to game-engine deployment. MeshSplatBench establishes a standardized evaluation pro-tocol while preserving each method’s native optimization semantics, reproduc-ing published results within 0.8% PSNR deviation. Furthermore, we introduce a hierarchical Unity deployment protocol spanning three rendering tiers: native CUDA renderers, method-specific dedicated engine shaders, and standard opaque mesh pipelines, isolating the exact fidelity losses caused by engine adaptation 
+
+vs. representation reduction. Finally, we conduct a topological audit of recon-structed surfaces, demonstrating that explicit connectivity and shared indexing alone are insufficient to guarantee production-ready assets due to prevalent non-manifold structures, fragmented components, and boundary artifacts. Overall, MeshSplatBench demonstrates that rasterizability is merely a primitive-level at-tribute, whereas graphics readiness requires jthe holistic alignment of representa-tion, topology, and engine compatibility. Source code will be released. 
+
+1 INTRODUCTION 
+
+Neural scene representations have achieved remarkable progress in novel view synthesis (NVS). Neural radiance fields (NeRFs) (Mildenhall et al., 2020) synthesize high-fidelity novel views through continuous volumetric ray integration, while 3D Gaussian Splatting (3DGS) (Kerbl et al., 2023) en-ables real-time rasterization using explicit anisotropic Gaussian primitives. Despite their visual fi-delity, both representations remain fundamentally coupled to bespoke research rendering pipelines: NeRFs require costly volumetric marching, whereas 3DGS relies on specialized 2D projection, tile-based sorting, and custom alpha compositing. Consequently, deploying them in conventional com-puter graphics (CG) engines typically requires representation conversion or custom rendering sup-port, introducing substantial engineering friction and visual degradation (Gu´ edon & Lepetit, 2024; Huang et al., 2024). Triangle-based neural rendering provides an appealing alternative by directly optimizing the funda-mental primitive natively supported by modern graphics hardware and game engines (Held et al., 2026b; Sheng et al., 2025; Held et al., 2026a; Tojo et al., 2026). At first glance, optimizing explicit planar facets suggests that the learned scene can be ingested directly by conventional rasterization pipelines. However, rasterizable geometry does not necessarily constitute a graphics-ready asset .While polygon geometry can be ingested by standard graphics pipelines, the final rendered appear-ance frequently depends on non-standard mechanisms—including continuous soft coverage kernels, per-primitive learned opacity, view-dependent spherical harmonics (SHs), neural texture decoders, and custom order-dependent alpha blending. Although these features are readily executed within 
+
+> ∗
+
+Corresponding author. 
+
+1arXiv:2609.01306v1 [cs.GR] 1 Sep 2026 Preprint. Under Review. MeshSplatBench protocol Controlled export and cross-renderer comparison   
+
+> 1 ASSET PREPARATION
+> Trained checkpoint
+> Source of truth for the official Native renderer
+> Versioned .triasset
+> Geometry/topology · appearance/opacity · coordinates · provenance method adapter
+> IDENTICAL EVALUATION CONTROLS · pose · intrinsics · resolution · capture settings
+> Native
+> Official reference
+> checkpoint → source-code renderer
+> Dedicated Unity
+> Method-aware path
+> .triasset → supported method-specific fields
+> Default Unity
+> General-purpose path
+> .triasset → geometry + baked color · opaque mesh
+> Official source-code Native renderer Consumes supported method-specific fields Uses geometry and available baked color
+> native-deployment gap
+
+Figure 1: MeshSplatBench protocol. A trained checkpoint of the official Native renderer is ex-ported by a method adapter to a versioned .triasset . Dedicated Unity consumes supported method-specific fields, whereas Default Unity adopts an opaque mesh path. specialized CUDA research rasterizers, they incur substantial performance overhead or fidelity loss when ported to standard game engines ( e.g. , Unity). This discrepancy exposes two critical limitations in current evaluation practices. First, existing triangle-based methods are evaluated almost exclusively within their custom native CUDA rasteriz-ers. Consequently, reported NVS metrics characterize the joint capacity of the representation and its specialized rendering kernel, obscuring practical deployability. Second, existing literature exhibits pervasive inconsistencies ( e.g. , background compositing policies, and metric implementations), con-founding fair cross-method comparisons even in native environments. A representation exhibiting superior native NVS quality may suffer severe degradation once its learned opacity, boundary anti-aliasing, or custom compositing rules are constrained by standard engine interfaces. These call for a unified benchmarking framework that measures both native reconstruction fidelity and post-deployment performance inside production CG engines. A primary goal of triangle-based neural representations is to reconstruct geometry that functions as a conventional, well-behaved polygon mesh in downstream engines like Unity. Among exist-ing paradigms, while triangle soups ( e.g. , 2DTS (Sheng et al., 2025) and Triangle-Splatting (Held et al., 2026b)) parameterize disconnected facelets, MeshSplatting (Held et al., 2026a) explicitly targets connected surface geometry by forming an indexed mesh via restricted Delaunay triangula-tion. We therefore perform an in-depth topological audit of MeshSplatting’s reconstructed assets. Crucially, our geometric analysis reveals that indexed vertex sharing alone does not guarantee a production-quality mesh: the exported geometry exhibits extensive open boundary edges, preva-lent non-manifold vertices, and thousands of fragmented components, demonstrating that neither primitive-level rasterizability nor explicit index sharing is sufficient for true graphics readiness (see Sec. 5.4). To systematically address these challenges, we introduce MeshSplatBench , a unified benchmark that investigates triangle-based neural rendering from native training to production engine deploy-ment. MeshSplatBench strictly standardizes dataset splits, camera calibration, background policies, evaluation resolutions, and metric implementations while preserving each method’s native optimiza-tion loops and loss formulations. Across all method–scene pairs with published per-scene bench-marks, our unified implementation reproduces reported native PSNR values with a maximum rela-tive deviation below 0.8% (and within 0.26% on dataset averages), establishing a solid and verified baseline for standardized cross-method evaluation (see Sec. 5.2). Beyond native benchmarking, MeshSplatBench establishes a Unity deployment protocol spanning three hierarchical rendering tiers: (i) the Native source-code research renderer; (ii) a Dedicated Unity renderer implementing custom engine shaders to faithfully support spherical harmonics (SHs), learned opacity, and soft coverage; and (iii) a Default Unity renderer that reduces the asset to a stan-2Preprint. Under Review.                               
+
+> Method Shared vertices Soft coverage Learned opacity SH MLP Alpha blending
+> 2DTS (Sheng et al., 2025) ✗✓✓✓✗✓
+> Triangle-Splatting (Held et al., 2026b) ✗✓✓✓✗✓
+> MeshSplatting (Held et al., 2026a) ✓✗✓✓✗✓
+> DiffSoup (Tojo et al., 2026) ✗✗✓✗✓✗
+
+Table 1: Objective representation and native-rendering attributes of the evaluated methods. ✓ and 
+
+✗ denote present and absent attributes, respectively. Shared vertices indicate an indexed layout, not manifoldness or global connectivity. DiffSoup uses learned texture opacity with binary visibility and depth testing rather than soft splatting or alpha blending. dard opaque mesh evaluated with hardware Z-buffering. Evaluating identical held-out viewpoints across this hierarchy cleanly disentangles the engine adaptation gap (Native vs. Dedicated) from the representation reduction gap (Dedicated vs. Default) (see Sec. 4). As illustrated in Fig. 1, our asset pipeline bridges native representations to versioned engine assets via the unified .triasset 
+
+abstraction. Empirical evaluation reveals that triangle primitives alone do not guarantee seamless engine deploy-ment. While Dedicated Unity shaders recover significantly higher appearance fidelity than default mesh pipelines, every method exhibits a measurable adaptation drop (up to 4.88 dB in PSNR). Cru-cially, method rankings invert across rendering conditions (see Tab. 4): representations with superior native NVS fidelity do not necessarily retain the highest quality under standard engine constraints (e.g. , 2DTS outperforms MeshSplatting natively by 3.44 dB, but degrades below it on default mesh paths). Combined with our topological audit, these findings confirm that successful deployment requires the joint optimization of appearance representation, boundary blending, compositing rules, and topological structure. In summary, our key contributions are: ( I) We introduce MeshSplatBench , a unified benchmark for triangle-based neural rendering that standardizes evaluation semantics while preserving method-specific optimization semantics; ( II ) We design an auditable .triasset exchange contract and a three-tier rendering protocol that disentangles engine adaptation from representation reduction gaps; ( III ) We benchmark methods across NVS fidelity, rendering efficiency, training overhead, and engine deployment, demonstrating that no single method dominates across all metrics and that engine constraints induce significant rank inversions; and ( IV ) we conduct a systematic topological audit of reconstructed geometry, showing that explicit vertex indexing fails to ensure production-ready meshes due to pervasive open boundaries and non-manifold structures. 
+
+2 RELATED WORK 
+
+Neural Scene Representations and Specialized Rendering. Neural radiance fields represent a scene as a continuous function and synthesize views through volumetric integration (Mildenhall et al., 2020). Later methods improve reconstruction quality and anti-aliasing (Barron et al., 2021; 2022; 2023) or accelerate rendering through explicit, factorized, and hashed structures (Reiser et al., 2024; Yu et al., 2021; Fridovich-Keil et al., 2022; Chen et al., 2022; M¨ uller et al., 2022). 3DGS replaces repeated network queries with optimized anisotropic Gaussians and a dedicated splatting rasterizer (Kerbl et al., 2023). Follow-up work refines Gaussian optimization or encourages surface-aligned geometry, including 3DGS-MCMC (Kheradmand et al., 2024), 2DGS (Huang et al., 2024), and SuGaR (Gu´ edon & Lepetit, 2024). These methods establish strong NVS baselines, but their out-puts remain coupled to specialized renderers or require a separate conversion stage before entering a conventional graphics pipeline. 
+
+Triangle-Based Neural Representations. To bridge the gap between neural primitives and standard graphics hardware, triangle-based neural representations optimize geometry directly expressible by hardware rasterizers (Held et al., 2026b; Sheng et al., 2025; Held et al., 2026a; Tojo et al., 2026). These approaches diverge into two distinct paradigms: (i) discontinuous triangle soups (e.g. , 2DTS (Sheng et al., 2025) and Triangle-Splatting (Held et al., 2026b)) that parameterize independent pla-nar facelets optimized with continuous coverage kernels and splatting-style alpha blending; and (ii) 
+
+structured or indexed meshes (e.g. , MeshSplatting (Held et al., 2026a) and DiffSoup (Tojo et al., 2026)) that introduce explicit local connectivity or neural texture parameterizations. As categorized in Tab. 1, their core differences extend far beyond geometric representation—subtle discrepancies in 3Preprint. Under Review. learned opacity, SHs, boundary anti-aliasing, and depth compositing dictate how much specialized engine support is mandatory post-export. 
+
+Neural Asset Deployment and Graphics Conversion. A parallel line of research investigates extracting deployable polygon meshes from implicit fields or explicit splats. Methods such as Mo-bileNeRF (Chen et al., 2023) and BakedSDF (Yariv et al., 2023) bake radiance fields into textured polygon meshes with feature textures executed via lightweight fragment shaders. For explicit splats, SuGaR (Gu´ edon & Lepetit, 2024) and GaMeS (Waczy´ nska et al., 2024) extract mesh surfaces from 3D Gaussians or bind Gaussian primitives to deformable mesh faces. Although these conversion pipelines produce standard mesh assets, they often rely on lossy post-processing ( e.g. , Marching Cubes, Poisson surface reconstruction, or heuristic simplification) that decouples the optimization target from the final rendering objective. In contrast, triangle-based neural rendering optimizes the deployable primitive end-to-end, raising the fundamental question of whether natively optimized triangles are truly graphics-ready without lossy approximations. 
+
+Neural Rendering Benchmarks and Protocols. Standardized benchmarking has become essen-tial for rigorous evaluation in novel-view synthesis. NerfBaselines (Kulhanek & Sattler, 2025) and Splatwizard (Liu et al., 2026) establish rigorous native evaluation protocols across diverse NeRF and 3DGS compression variants. However, existing benchmarks operate exclusively within native research environments, evaluating image-space metrics while leaving post-deployment behavior un-examined. MeshSplatBench complements these efforts by extending evaluation beyond native re-construction: it standardizes native workflows while introducing a matched multi-condition engine deployment protocol and a comprehensive structural topology audit, systematically quantifying the fidelity drop, hardware overhead, and geometric integrity. 
+
+3 MESH SPLAT BENCH : B ENCHMARK DESIGN 
+
+3.1 UNIFIED EVALUATION PROTOCOL 
+
+MeshSplatBench standardizes dataset splits, preprocessing, calibrated cameras, evaluation cameras, image resolution, background policy, color-space handling, and NVS metrics, including PSNR, SSIM (Wang et al., 2004), and LPIPS (Zhang et al., 2018). LPIPS uses the VGG backbone (Si-monyan & Zisserman, 2015), with images normalized to [−1, 1] . The benchmark preserves each method’s official optimization loop, method-specific training logic and hyperparameters, primitive or topology updates, densification or refinement schedule, native renderer, and checkpoint seman-tics. Common configuration fields are translated into native arguments rather than replacing method behavior. In short, MeshSplatBench standardizes evaluation semantics without replacing method-specific optimization semantics .The protocol separates four evaluation dimensions. Reproduction fidelity checks agreement with reported native behavior. Standardized native performance measures reconstruction quality, render-ing efficiency, optimization cost, peak training memory, and geometry when reliable ground truth is available. Engine deployment measures fidelity and runtime on matched cameras under practical renderer constraints. Graphics readiness audits the representation properties retained after export and, for MeshSplatting, boundary coherence, manifoldness, and global connectivity. This sepa-ration prevents any single image-quality metric from acting as a proxy for the distinct objectives involved in deployment. 3.2 UNIFIED ENGINE -A SSET ABSTRACTION 
+
+A method adapter maps a trained native representation to a versioned engine asset, 
+
+Sm
+
+> Em
+
+−−→ A m, (1) where m indexes a method, Sm is its trained native representation, Em is the corresponding method adapter, and Am is the resulting versioned engine asset consumed by the unified execution en-gine. The .triasset contract stores geometry and topology; appearance attributes such as SHs, neural features, and textures; opacity and coverage parameters; and metadata including the source checkpoint and coordinate convention. Unsupported fields are marked explicitly rather than silently discarded. This contract is the auditable interface between a native method and Unity where the 4Preprint. Under Review. native checkpoint remains the source of truth, while each rendering condition declares which asset fields it consumes. 
+
+4 RENDERER -C ONDITIONED ENGINE DEPLOYMENT 
+
+4.1 DEPLOYMENT SETTING AND MATCHED -V IEW EVALUATION PROTOCOL 
+
+We consider a rendering-first workflow in which a trained static reconstruction is exported to Unity for interactive camera motion. Editing, collision, animation, physics, and mesh repair are outside the task definition. For held-out camera set C, the native renderer produces 
+
+Inat  
+
+> m
+
+(c) = Rnat  
+
+> m
+
+(Sm, c ), (2) where Rnat  
+
+> m
+
+denotes the original source-code renderer of method m, and Inat  
+
+> m
+
+(c) is the rendered image under the native rendering pipeline. The adapter records world-to-camera and camera-to-world transforms, intrinsics, image dimensions, and clipping planes before converting them to each backend’s convention. Unity then renders the same asset and camera under dedicated and default conditions, yielding images Ided  
+
+> m
+
+(c) from the method-specific Unity renderer and Idef  
+
+> m
+
+(c) from the default Unity renderer. All three images are evaluated against the same ground truth Igt (c), with capture settings ( e.g. , color conversion, exposure and tone mapping) held fixed. 4.2 HIERARCHICAL RENDERING CONDITIONS FOR DEPLOYMENT EVALUATION 
+
+The three conditions answer progressively stricter questions. The native condition measures perfor-mance inside the official research renderer. The dedicated Unity condition permits method-specific shaders and engine functionality and asks how much of the learned appearance can be retained in-side a real engine. The default Unity condition converts the asset to a standard opaque Unity mesh with vertex color and Z-buffer visibility and asks what remains without method-specific rendering support. For a higher-is-better quality metric Q (e.g. , PSNR), given a matched camera set C, let Qnat  
+
+> m
+
+, Qded  
+
+> m
+
+,and Qdef  
+
+> m
+
+denote the average metric values obtained by the native, dedicated Unity, and default Unity renderers of method m, respectively: 
+
+Qrm = 1
+
+|C| 
+
+X
+
+> c∈C
+
+q  Irm(c), I gt (c) , (3) where r ∈ { nat , ded , def } denotes the rendering condition and q(·, ·) is the corresponding image quality metric. We then define three deployment-related gaps: 
+
+∆Qadapt  
+
+> m
+
+= Qnat  
+
+> m
+
+− Qded  
+
+> m
+
+, (4) 
+
+∆Qport  
+
+> m
+
+= Qded  
+
+> m
+
+− Qdef  
+
+> m
+
+, (5) 
+
+∆Qdeploy  
+
+> m
+
+= Qnat  
+
+> m
+
+− Qdef  
+
+> m
+
+, (6) where the adaptation gap ∆Qadapt  
+
+> m
+
+quantifies the performance loss incurred during engine integra-tion while preserving method-specific rendering support; the portability gap ∆Qport  
+
+> m
+
+quantifies the additional degradation caused by replacing specialized rendering components with generic engine primitives; and the deployment gap ∆Qdeploy  
+
+> m
+
+quantifies the total discrepancy between the original research renderer and conventional engine deployment. For lower-is-better metrics ( e.g. , LPIPS), we reverse the sign convention so that a positive gap consistently indicates degradation. Tab. 2 summarizes, for each method and Unity condition, which native representation properties are retained. Dedicated support does not imply exact native reproduction: the current Unity renderers do not reproduce native per-camera primitive sorting, and the DiffSoup ColorMLP is not implemented. The default condition retains geometry and, when available, a baked SH-DC color term; higher-order view dependence, learned opacity, soft coverage, and method-specific compositing are discarded. 5Preprint. Under Review.                                                         
+
+> Method Unity condition View-dep. Opacity Soft coverage Native ordering Appearance decoder
+> 3DGS (Kerbl et al., 2023) Dedicated N/A Default N/A 2DGS (Huang et al., 2024) Dedicated N/A Default ✗✗✗✗baked color 2DTS (Sheng et al., 2025) Dedicated ✓✓✓✗SH Default ✗✗✗✗baked SH-DC Triangle-Splatting (Held et al., 2026b) Dedicated ✓✓✓✗SH Default ✗✗✗✗baked SH-DC MeshSplatting (Held et al., 2026a) Dedicated ✓✓–✗SH Default ✗✗–✗baked SH-DC DiffSoup (Tojo et al., 2026) Dedicated (partial) ✗△–△ColorMLP absent Default N/A
+
+Table 2: Feature preservation under the dedicated and default Unity conditions. ✓, △, ✗, and – denote retained, partially retained, discarded, and inapplicable native properties, respectively. N/A denotes renderer incompatibility; “baked color” is a static appearance fallback. 
+
+5 BENCHMARK EVALUATION 
+
+5.1 EXPERIMENTAL SETUP AND REPRODUCTION CHECK 
+
+We evaluate 2DTS (Sheng et al., 2025), Triangle-Splatting (Held et al., 2026b), MeshSplatting (Held et al., 2026a), and DiffSoup (Tojo et al., 2026). Mip-NeRF 360 (Barron et al., 2022) and Tanks and Temples (Knapitsch et al., 2017) provide indoor and outdoor scenes; DTU (Jensen et al., 2014) provides object-centric scenes with ground-truth geometry; and NeRF-Synthetic (Mildenhall et al., 2020) provides an additional controlled cross-dataset check. Mip-NeRF 360 images are downsam-pled by 2 for indoor scenes and 4 for outdoor scenes; the other datasets use 2× downsampling. DTU is evaluated under both full-image and foreground-mask policies because prior methods differ in background treatment. All training and native evaluation use a single NVIDIA RTX 4090 with 24 GB memory. We report PSNR, SSIM (Wang et al., 2004), and LPIPS (Zhang et al., 2018) as image metrics; native efficiency includes FPS, peak training memory, and optimization time, while current Unity results include image metrics and FPS. 
+
+Reproduction fidelity. Before cross-method interpretation, we compare MeshSplatBench with paper-reported values and public implementations. For 2DTS, Triangle-Splatting, and Mesh-Splatting on method–scene pairs with paper-reported per-scene PSNR, the relative deviation 
+
+|QMeshSplatBench − Qpaper |/Q paper is below 0.8%. DiffSoup is excluded from this per-scene claim because its paper does not report the corresponding values. Across 27 Mip-NeRF 360 method– scene pairs, the mean absolute difference is 0.075 dB; the maximum is 0.230 dB (2DTS on room ), and the largest relative deviation is 0.775% (Triangle-Splatting on treehill ). This validates paper-PSNR agreement on the evaluated pairs only; it does not establish identical geometry, runtime, or optimization trajectories. App. A.6 provides the per-scene difference plot and complete metric-level comparisons. 5.2 STANDARDIZED NATIVE BENCHMARK 
+
+Tab. 3 brings the standardized native results into the main paper. Per-dataset and protocol-specific re-sults remain in App. A.3. Across Mip-NeRF 360 (Barron et al., 2022) and NeRF-Synthetic (Milden-hall et al., 2020), 2DTS has the highest image fidelity, whereas Triangle-Splatting is strongest on two of the three Tanks and Temples image metrics. DiffSoup has the highest native FPS and shortest optimization time on all three datasets shown, but does not lead image fidelity. MeshSplatting differs structurally through its indexed layout, yet that property does not make it the native image-quality or efficiency winner. Thus, no representation dominates fidelity, throughput, memory, and training time simultaneously. DTU (Jensen et al., 2014) additionally exposes protocol and objective sensitivity. Under the full-image protocol, Triangle-Splatting has the best NVS metrics while MeshSplatting has the lowest Chamfer distance ( i.e. , 0.79); under the foreground protocol, 2DTS has the highest PSNR and low-est Chamfer distance ( i.e. , 0.63), while Triangle-Splatting retains the best LPIPS. These changes 6Preprint. Under Review. 
+
+Dataset Method PSNR ↑ SSIM ↑ LPIPS ↓ FPS ↑ Peak mem. (MiB) ↓ Train time (s) ↓
+
+Mip-NeRF 360 2DTS 28.16 0.841 0.215 70 10069 2764 Triangle-Splatting 27.13 0.812 0.227 94 18901 2428 MeshSplatting 24.72 0.729 0.365 38 23134 2500 DiffSoup 23.54 0.689 0.322 168 23484 1009 
+
+Tanks and Temples 2DTS 23.42 0.853 0.203 101 16061 1556 Triangle-Splatting 23.08 0.856 0.171 159 11157 1472 MeshSplatting 20.53 0.756 0.319 66 21321 1446 DiffSoup 17.45 0.645 0.389 226 23890 923 
+
+NeRF-Synthetic 2DTS 33.65 0.970 0.034 126 3172 980 Triangle-Splatting 29.87 0.956 0.055 243 12257 1145 MeshSplatting 29.50 0.945 0.071 86 23386 803 DiffSoup 28.65 0.910 0.076 371 16334 734 
+
+Table 3: Standardized native-renderer results on three datasets. Bold indicates the best value within each dataset and metric. 2DTS Triangle-Splatting MeshSplatting DiffSoup                                        
+
+> (a) Mip-NeRF 360
+> 10 15 20 25 30 Native Dedicated Default
+> PSNR (dB)
+> 12341342123
+> PSNR (dB) Native Dedicated Default
+> 2DTS 28.16 23.28 12.52 Triangle-Splatting 27.13 22.96 14.77 MeshSplatting 24.72 22.52 19.83 DiffSoup 23.54 23.04 –
+> (b) Tanks and Temples
+> Native Dedicated Default
+> 12341234123
+> PSNR (dB) Native Dedicated Default
+> 2DTS 23.42 19.26 12.40 Triangle-Splatting 23.08 19.54 11.08 MeshSplatting 20.53 16.09 14.38 DiffSoup 17.45 17.02 –
+
+Figure 2: Renderer-conditioned deployment gaps and PSNR ranks on (a) Mip-NeRF 360 and (b) Tanks and Temples. Each line follows one method from its source-code Native renderer through Dedicated and Default Unity. – denotes renderer incompatibility. demonstrate that background policy can alter rankings and that NVS fidelity and geometry accuracy are distinct objectives. App. Tab. 9 reports the full comparison. 5.3 RENDERER -C ONDITIONED DEPLOYMENT 
+
+Fig. 2 summarizes the Native–Dedicated–Default PSNR trajectories and renderer-conditioned rank changes, while Tab. 4 provides the complete Mip-NeRF 360 quality and throughput measurements. Under the evaluated engine-asset contract, 3DGS (Kerbl et al., 2023) is incompatible with both Unity conditions. 2DGS (Huang et al., 2024) has no compatible dedicated Unity renderer because its official TSDF export does not retain the method’s defining rendering variables; its extracted mesh is nevertheless compatible with the default Unity path. Dedicated Unity rendering preserves more quality than the default renderer for every triangle method with results in both conditions. Yet adaptation remains imperfect: the PSNR adaptation gaps are 4.88 dB for 2DTS, 4.17 dB for Triangle-Splatting, 2.20 dB for MeshSplatting, and 0.50 dB for the partial DiffSoup implementation. Removing method-specific support produces Mip-NeRF 360 portability gaps of 10.76 dB for 2DTS, 8.19 dB for Triangle-Splatting, and 2.69 dB for MeshSplatting. Consequently, their overall native-to-default gaps are 15.64, 12.36, and 4.89 dB, and their PSNR-derived Default fidelity retention is 2.7%, 5.8%, and 32.4%, respectively. Native ranking does not survive deployment: 2DTS leads Native and Dedicated PSNR, whereas MeshSplatting leads under Default Unity. Fig. 2(b) shows the same native-third-to-default-first reversal for MeshSplatting on Tanks and Temples, where its Default path retains 24.3% of the Native inverse-MSE fidelity. High native fidelity therefore does not imply high portability. 7Preprint. Under Review.                                                                           
+
+> Renderer Metric 3DGS 2DGS 2DTS Triangle-Splatting MeshSplatting DiffSoup
+> Source-code native PSNR ↑27.21 26.79 28.16 27.13 24.72 23.54
+> SSIM ↑0.815 0.796 0.841 0.812 0.729 0.689
+> LPIPS ↓0.214 0.252 0.215 0.227 0.365 0.322
+> FPS ↑109 38 70 94 38 168 Dedicated Unity PSNR ↑
+> N/A N/A 23.28 22.96 22.52 23.04 SSIM ↑0.699 0.695 0.589 0.641 LPIPS ↓0.313 0.301 0.457 0.382 FPS ↑545 70 157 1259
+> Default Unity PSNR ↑
+> N/A 8.88 12.52 14.77 19.83 N/A SSIM ↑0.076 0.311 0.246 0.491 LPIPS ↓0.699 0.661 0.656 0.518 FPS ↑1933 3754 2294 943
+
+Table 4: Renderer-conditioned comparisons on Mip-NeRF 360. N/A denotes renderer incompati-bility. MeshSplatting’s smaller portability gap is consistent with its indexed, increasingly opaque design requiring fewer behaviors outside a conventional Z-buffer path. Conversely, soft coverage, learned transparency, and view-dependent appearance require more method-specific support. This is an in-terpretation of coupled cross-method evidence, not proof that any one attribute causes the gap. The missing sorting and incomplete DiffSoup mapping further show that dedicated support improves fidelity at the cost of implementation complexity and may still fall short of native semantics. Ap-pendix Tab. 11 gives the complete Tanks and Temples values underlying Fig. 2(b). 
+
+Runtime and resource efficiency. Evaluating rendering throughput across deployment condi-tions exposes a critical tension between custom pipeline expressiveness and real-time execution cost (Tabs. 3–4). In the dedicated engine environment, supporting custom sorting, alpha blend-ing, and view-dependent shading incurs non-trivial GPU overhead: median GPU latencies (P50) on Mip-NeRF 360 range from 2.1, ms for 2DTS to 6.4, ms for MeshSplatting, with dedicated graphics memory allocations spanning 927 –1,559 , MiB. Across all methods, the tight bounds between P50 and P95 frame times ( < 0.2, ms delta) indicate highly deterministic GPU workloads with minimal temporal jitter. Conversely, routing assets through Unity’s standard rasterization path (Default) collapses GPU frame times to sub-millisecond ranges (0.3–1.1 ms) and slashes graphics allocations to a uniform 
+
+54 , MiB. However, this throughput surge (up to 3754 FPS) is fundamentally an artifact of dropping non-standard shading and sorting passes rather than an algorithmic optimization, coming at the ex-pense of devastating fidelity degradation ( e.g. , up to 15.64 dB drop in 2DTS). Crucially, while GPU latency isolates the raw hardware rendering cost, end-to-end FPS reflects full engine dispatch and synchronization overheads. Comprehensive scene-level latency profiles and memory breakdowns on Mip-NeRF 360 and Tanks and Temples are provided in App. Tabs. 6–13. 5.4 STRUCTURAL ANALYSIS OF MESH SPLATTING 
+
+MeshSplatting is the evaluated method whose construction explicitly shares vertices, making it the appropriate case study for whether indexed connectivity yields a well-formed mesh. Fig. 3 summa-rizes the four structural diagnostics used in our audit before we report numerical measurements. A boundary edge has exactly one incident face; a non-manifold edge has more than two incident faces; a non-manifold vertex has incident faces that split into multiple disconnected fans around the same vertex; and connected components are maximal face sets linked by shared complete edges, with the largest component denoted LCC. The figure is a schematic definition of what is counted, while Tab. 5 reports the corresponding per-scene and mean statistics on the nine Mip-NeRF 360 scenes. App. A.5 gives the complete metric definitions and audit protocol. The vertex/face ratio and valence show substantial local vertex reuse, but the boundary and non-manifold ratios reveal extensive local structural irregularities. The largest component contains only about 70% of faces and 69% of area, while the raw component count indicates substantial fragmen-tation under edge-based connectivity. Boundaries can be legitimate for partial scenes and component count depends on resolution; these metrics therefore diagnose structure rather than prove geometric 8Preprint. Under Review. (a) Boundary edge 
+
+> open boundary
+> 1 incident face
+> Boundary ratio = |E 1| / |E|
+
+(b) Non-manifold edge 
+
+> over-shared edge
+> F1 F2 F3
+> 3 faces share one edge
+> NM-edge ratio = |E >2 | / |E|
+
+(c) Non-manifold vertex 
+
+> disconnected incident fans
+> Fan A Fan B
+> >1 incident fan
+> NM-vertex ratio = |V nm | / |V|
+
+(d) Connected components  
+
+> edge-connected islands
+> LCC
+> 3 edge-connected islands
+> Components = 3 LCC = largest island
+> Highlighted primitives are counted; neutral geometry provides structural context.
+
+Figure 3: Topology diagnostics used in the structural audit. (a) Boundary edges have exactly one incident face. (b) Non-manifold edges are shared by more than two faces. (c) Non-manifold ver-tices contain multiple disconnected incident-face fans around the same vertex. (d) Edge-connected components are maximal face sets joined through complete shared edges; LCC denotes the largest component.                                                                                               
+
+> Scene Local reuse Local structure Global connectivity V/F Valence Boundary edge Non-manif. edge ↓Non-manif. vertex ↓LCC face ↑LCC area ↑Components ↓
+> Outdoor scenes
+> bicycle 0.57 5.90 0.45 0.16 0.57 0.69 0.67 720,695 flowers 0.62 5.62 0.49 0.14 0.55 0.65 0.63 758,308 garden 0.48 6.85 0.43 0.20 0.70 0.73 0.73 771,271 stump 0.57 5.92 0.45 0.16 0.57 0.68 0.64 762,169 treehill 0.59 5.77 0.46 0.16 0.56 0.68 0.66 752,539
+> Indoor scenes
+> room 0.46 7.22 0.46 0.18 0.75 0.71 0.71 706,507 counter 0.46 7.08 0.46 0.20 0.73 0.70 0.70 616,675 kitchen 0.41 7.56 0.40 0.24 0.75 0.77 0.78 514,944 bonsai 0.54 6.46 0.48 0.16 0.68 0.68 0.68 813,180
+> Mean 0.52 6.49 0.45 0.18 0.65 0.70 0.69 712,921
+
+Table 5: Per-scene structural diagnostics for MeshSplatting exports on Mip-NeRF 360. Boundary and non-manifold entries are ratios; LCC entries are largest edge-connected component fractions; Components is an unnormalized count. incorrectness. Even with that qualification, the measurements show that shared indices and explicit connectivity do not imply a well-formed edge-connected manifold asset. 
+
+Design implications. Graphics readiness should be treated as a joint function of geometry, topol-ogy, appearance, boundary behavior, and compositing. Future triangle representations should make appearance compact enough to survive standard shader interfaces, model boundaries without requir-ing fragile ordering, and optimize topology in addition to image and surface losses. A useful asset interface should also declare unsupported learned fields explicitly, so that successful import cannot be mistaken for faithful deployment. The central distinction is: rasterizability is a primitive-level property; graphics readiness is a representation-level property .
+
+6 CONCLUSION 
+
+MeshSplatBench studies when a rasterizable triangle representation becomes a practical graphics asset. Its matched native–dedicated–default protocol separates engine integration from portabil-ity to a conventional mesh path, revealing substantial quality gaps and renderer-dependent ranking changes. Its structural audit further shows that an indexed, connected representation can retain extensive boundaries, non-manifold neighborhoods, and fragmentation. Together, these results ar-gue that future triangle-based neural rendering should co-design geometry, topology, appearance, boundary behavior, and compositing, and should evaluate learned assets jointly in image, geometry, efficiency, and graphics-engine spaces. Overall, no method is universally best: native fidelity, geom-etry accuracy, training cost, rendering throughput, engine portability, and mesh integrity are distinct objectives whose rankings can disagree. 9Preprint. Under Review. 
+
+ETHICS STATEMENT 
+
+MeshSplatBench uses public reconstruction datasets and is intended to improve reproducible, trans-parent graphics-deployment evaluation. Deployed systems should use authorized data, disclose syn-thetic or reconstructed content, and preserve attribution. 
+
+REPRODUCIBILITY STATEMENT 
+
+We will publicly release the MeshSplatBench code and evaluation configurations. Secs. 3–5 define the native protocol, exported .triasset abstraction, matched Unity conditions, metrics, datasets, preprocessing, and hardware. App. Secs. A.1–A.4 document renderer mismatches and full tim-ing/resource/native results, and App. Secs. A.5–A.6 provide topology definitions and reproduction comparisons. 
+
+AI U SE STATEMENT 
+
+Generative AI tools assisted with formatting and ICLR-template migration; the authors reviewed the manuscript and take responsibility for its content. 
+
+REFERENCES 
+
+Jonathan T. Barron, Ben Mildenhall, Matthew Tancik, Peter Hedman, Ricardo Martin-Brualla, and Pratul P. Srinivasan. Mip-NeRF: A multiscale representation for anti-aliasing neural radiance fields. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pp. 5855– 5864, 2021. Jonathan T. Barron, Ben Mildenhall, Dor Verbin, Pratul P. Srinivasan, and Peter Hedman. Mip-NeRF 360: Unbounded anti-aliased neural radiance fields. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 5470–5479, 2022. Jonathan T. Barron, Ben Mildenhall, Dor Verbin, Pratul P. Srinivasan, and Peter Hedman. Zip-nerf: Anti-aliased grid-based neural radiance fields. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pp. 19697–19705, 2023. Anpei Chen, Zexiang Xu, Andreas Geiger, Jingyi Yu, and Hao Su. TensoRF: Tensorial radiance fields. In Computer Vision – ECCV 2022 , pp. 333–350. Springer, 2022. Zhiqin Chen, Thomas Funkhouser, Peter Hedman, and Andrea Tagliasacchi. Mobilenerf: Exploiting the polygon rasterization pipeline for efficient neural field rendering on mobile architectures. In 
+
+The Conference on Computer Vision and Pattern Recognition , 2023. Sara Fridovich-Keil, Alex Yu, Matthew Tancik, Qinhong Chen, Benjamin Recht, and Angjoo Kanazawa. Plenoxels: Radiance fields without neural networks. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pp. 5501–5510, 2022. Antoine Gu´ edon and Vincent Lepetit. SuGaR: Surface-aligned gaussian splatting for efficient 3D mesh reconstruction and high-quality mesh rendering. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition , pp. 5354–5365, 2024. Jan Held, Sanghyun Son, Renaud Vandeghen, Daniel Rebain, Matheus Gadelha, Yi Zhou, Anthony Cioppa, Ming C. Lin, Marc Van Droogenbroeck, and Andrea Tagliasacchi. MeshSplatting: Dif-ferentiable rendering with opaque meshes. In Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition , pp. 7320–7329, 2026a. Jan Held, Renaud Vandeghen, Adrien Deliege, Abdullah Hamdi, Daniel Rebain, Silvio Gian-cola, Anthony Cioppa, Andrea Vedaldi, Bernard Ghanem, Andrea Tagliasacchi, and Marc Van Droogenbroeck. Triangle splatting for real-time radiance field rendering. In International Conference on 3D Vision , 2026b. doi: 10.1109/3DV69130.2026.00123. 10 Preprint. Under Review. Binbin Huang, Zehao Yu, Anpei Chen, Andreas Geiger, and Shenghua Gao. 2D gaussian splatting for geometrically accurate radiance fields. In ACM SIGGRAPH 2024 Conference Papers , pp. 1–11. ACM, 2024. Rasmus Jensen, Anders Dahl, George Vogiatzis, Engin Tola, and Henrik Aanæs. Large scale multi-view stereopsis evaluation. In Proceedings of the IEEE conference on computer vision and pattern recognition , pp. 406–413, 2014. Bernhard Kerbl, Georgios Kopanas, Thomas Leimk¨ uhler, and George Drettakis. 3D gaussian splat-ting for real-time radiance field rendering. ACM Transactions on Graphics , 42(4):1–14, 2023. Shakiba Kheradmand, Daniel Rebain, Gopal Sharma, Weiwei Sun, Yang-Che Tseng, Hossam Isack, Abhishek Kar, Andrea Tagliasacchi, and Kwang Moo Yi. 3d gaussian splatting as markov chain monte carlo. In Advances in Neural Information Processing Systems , 2024. Spotlight Presenta-tion. Arno Knapitsch, Jaesik Park, Qian-Yi Zhou, and Vladlen Koltun. Tanks and temples: Benchmarking large-scale scene reconstruction. ACM Transactions on Graphics , 36(4), 2017. Alex Krizhevsky, Ilya Sutskever, and Geoffrey E Hinton. Imagenet classification with deep convo-lutional neural networks. Advances in neural information processing systems , 25, 2012. Jonas Kulhanek and Torsten Sattler. Nerfbaselines: Consistent and reproducible evaluation of novel view synthesis methods. Advances in Neural Information Processing Systems , 38:127378– 127403, 2025. doi: 10.52202/085713-3831. Xiang Liu, Yimin Zhou, Jinxiang Wang, Yujun Huang, Shuzhao Xie, Shiyu Qin, Mingyao Hong, Jiawei Li, Yaowei Wang, Zhi Wang, Shu-Tao Xia, and Bin Chen. Splatwizard: A benchmark toolkit for 3d gaussian splatting compression. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Findings , pp. 2261–2271, 2026. Ben Mildenhall, Pratul P. Srinivasan, Matthew Tancik, Jonathan T. Barron, Ravi Ramamoorthi, and Ren Ng. NeRF: Representing scenes as neural radiance fields for view synthesis. In Proceedings of the European Conference on Computer Vision , pp. 405–421, 2020. Thomas M¨ uller, Alex Evans, Christoph Schied, and Alexander Keller. Instant neural graphics prim-itives with a multiresolution hash encoding. ACM Transactions on Graphics , 41(4):1–15, 2022. Christian Reiser, Songyou Peng, Yiyi Liao, and Andreas Geiger. KiloNeRF: Speeding up neural radiance fields with thousands of tiny MLPs. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pp. 14335–14345, 2024. Kaifeng Sheng, Zheng Zhou, Yingliang Peng, and Qianwei Wang. 2D triangle splatting for direct differentiable mesh training, 2025. Karen Simonyan and Andrew Zisserman. Very deep convolutional networks for large-scale image recognition. In International Conference on Learning Representations , 2015. Kenji Tojo, Bernd Bickel, and Nobuyuki Umetani. Diffsoup: Direct differentiable rasterization of triangle soup for extreme radiance field simplification. In Proceedings of the IEEE/CVF Confer-ence on Computer Vision and Pattern Recognition , pp. 8353–8363, 2026. Joanna Waczy´ nska, Piotr Borycki, Sławomir Tadeja, Jacek Tabor, and Przemysław Spurek. Games: Mesh-based adapting and modification of gaussian splatting. arXiv preprint arXiv:2402.01459 ,2024. Zhou Wang, Alan C. Bovik, Hamid R. Sheikh, and Eero P. Simoncelli. Image quality assessment: From error visibility to structural similarity. IEEE Transactions on Image Processing , 13(4): 600–612, 2004. Lior Yariv, Peter Hedman, Christian Reiser, Dor Verbin, Pratul P Srinivasan, Richard Szeliski, Jonathan T Barron, and Ben Mildenhall. Bakedsdf: Meshing neural sdfs for real-time view syn-thesis. In ACM SIGGRAPH 2023 conference proceedings , pp. 1–9, 2023. 11 Preprint. Under Review. Alex Yu, Ruilong Li, Matthew Tancik, Hao Li, Ren Ng, and Angjoo Kanazawa. PlenOctrees for real-time rendering of neural radiance fields. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pp. 5752–5761, 2021. Richard Zhang, Phillip Isola, Alexei A Efros, Eli Shechtman, and Oliver Wang. The unreasonable effectiveness of deep features as a perceptual metric. In Proceedings of the IEEE conference on computer vision and pattern recognition , pp. 586–595, 2018. 12 Preprint. Under Review. 
+
+A SUPPLEMENTARY MATERIAL 
+
+A.1 UNITY RENDERER IMPLEMENTATION DETAILS AND KNOWN MISMATCHES 
+
+Dedicated renderer. Each method uses a Unity component backed by the procedural HLSL shader TriAssetSplat with a method-specific render-mode branch. Geometry is issued through DrawProceduralIndirect . The blended path uses Blend SrcAlpha OneMinusSrcAlpha and ZWrite Off ; SH is evaluated from the stored coefficients, opacity logits are activated by a sigmoid, and the shader selects the exported coverage rule. Triangle-Splatting uses an incenter-normalized power law, whereas 2DTS uses its exported exp( − 12 ε2γ )
+
+rule. For MeshSplatting, export reduces the three activated vertex weights to a triangle opacity; a terminal-solid asset uses an opaque ZWrite On path. These choices explain the feature-level summary in Tab. 2; they do not make the Unity renderer numerically identical to the native CUDA rasterizer. 
+
+Primitive order and coverage. Native rasterizers perform tile-local front-to-back sorting be-fore alpha compositing. The Unity cull pass TriAssetCull.compute currently writes 
+
+Visible[id] = id , so the dedicated renderer preserves primitive index order rather than sort-ing for each camera. Overlapping transparent primitives can therefore composite in a different order. The Unity shader also reconstructs screen-space coverage in pixel-scaled coordinates but does not replicate the native tile-level evaluation exactly. These are implementation mismatches, not con-trolled estimates of the contribution of sorting or coverage alone. 
+
+View-dependent appearance. The current SH path evaluates direction at a triangle centroid for per-face attributes and at a corner for per-vertex attributes rather than reproducing the native per-pixel ray evaluation exactly. Large or oblique triangles can therefore receive a different view direction. For DiffSoup, the multiresolution feature interpolation and view-conditioned ColorMLP have not been validated in Unity. The current partial path reads proxy feature channels as color and uses a binary alpha test. Its dedicated results must therefore be labeled partial, not as a faithful reproduction or a lower bound with a guaranteed ordering. 
+
+Default renderer. The default condition creates a standard Unity Mesh and renders it with an unlit opaque vertex-color shader ( GeneralPurposeVertexColor , Queue=Geometry , ZWrite On , Blend Off ). When available, export bakes the zeroth-order SH coefficient into vertex RGB as c0fdc + 0 .5, where c0 = 0 .28209 . Higher-order SH, opacity, coverage parameters, neural fea-tures, and method-specific compositing are excluded. DiffSoup has no validated SH-DC field and is consequently marked unsupported in this condition. A.2 MIP -N ERF 360 U NITY TIMING AND RESOURCE RESULTS 
+
+The renderer-conditioned comparison in Tab. 4 reports all-scene mean image quality and FPS. To keep the main comparison compact, Tabs. 6-7 provide the complementary per-scene GPU frame-time percentiles and memory measurements. The indoor, outdoor, and all-scene rows are arithmetic means over scenes; in particular, the reported mean P95 values are means of scene-level P95 values rather than percentiles pooled over frames from different scenes. DiffSoup is marked partial under the dedicated condition because its ColorMLP is absent and incompatible under the default condition because no appearance-complete general-purpose Unity path is available. 13 Preprint. Under Review. 
+
+Scene Dedicated Unity Default Unity 2DTS Triangle-Splatting MeshSplatting DiffSoup 2DTS Triangle-Splatting MeshSplatting DiffSoup 
+
+P50 ms ↓ P95 ms ↓ P50 ms ↓ P95 ms ↓ P50 ms ↓ P95 ms ↓ P50 ms ↓ P95 ms ↓ P50 ms ↓ P95 ms ↓ P50 ms ↓ P95 ms ↓ P50 ms ↓ P95 ms ↓ P50 ms ↓ P95 ms ↓
+
+bonsai 1.4 1.4 3.1 3.2 6.9 7.2 1.0 1.2 0.2 0.2 0.4 0.4 1.1 1.1 N/A 
+
+counter 1.7 1.9 3.2 3.7 5.5 5.7 1.2 1.2 0.2 0.2 0.4 0.4 1.0 1.0 N/A 
+
+kitchen 1.7 1.9 2.5 2.8 5.8 5.9 1.3 1.4 0.2 0.3 0.4 0.4 1.1 1.1 N/A 
+
+room 1.4 1.4 2.2 2.3 6.7 6.9 1.0 1.0 0.2 0.2 0.3 0.3 1.1 1.1 N/A 
+
+Indoor mean 1.6 1.7 2.8 3.0 6.2 6.4 1.1 1.2 0.2 0.2 0.4 0.4 1.1 1.1 N/A 
+
+bicycle 2.6 2.6 4.9 5.0 6.3 6.5 0.7 0.7 0.3 0.3 0.5 0.6 1.0 1.0 N/A 
+
+flowers 2.6 2.7 5.0 5.1 6.0 6.2 0.6 0.7 0.3 0.3 0.6 0.6 0.9 0.9 N/A 
+
+garden 2.6 2.6 4.5 4.5 7.9 8.2 0.7 0.8 0.3 0.4 0.5 0.5 1.3 1.3 N/A 
+
+stump 2.6 2.6 4.3 4.4 6.4 6.7 0.6 0.7 0.3 0.3 0.5 0.5 1.1 1.1 N/A 
+
+treehill 2.7 2.7 4.6 4.7 6.3 6.5 0.7 0.7 0.3 0.3 0.5 0.5 1.0 1.0 N/A 
+
+Outdoor mean 2.6 2.6 4.7 4.8 6.6 6.8 0.7 0.7 0.3 0.3 0.5 0.5 1.1 1.1 N/A 
+
+All-scene mean 2.1 2.2 3.8 4.0 6.4 6.6 0.9 0.9 0.3 0.3 0.5 0.5 1.1 1.1 N/A 
+
+Table 6: Per-scene GPU frame-time percentiles (ms) for the Mip-NeRF 360 Unity evaluations; lower is better. Indoor, outdoor, and all-scene means are unweighted means of the displayed scene-level percentiles. N/A means renderer incompatibility.                                                                                                                                                                                                                            
+
+> Scene Dedicated Unity Default Unity 2DTS Triangle-Splatting MeshSplatting DiffSoup 2DTS Triangle-Splatting MeshSplatting DiffSoup
+> Render MiB ↓Asset MiB ↓Render MiB ↓Asset MiB ↓Render MiB ↓Asset MiB ↓Render MiB ↓Asset MiB ↓Render MiB ↓Asset MiB ↓Render MiB ↓Asset MiB ↓Render MiB ↓Asset MiB ↓Render MiB ↓Asset MiB ↓
+> bonsai 572 235 1159 627 975 669 285 258 57 235 57 627 57 669 N/A
+> counter 571 235 1043 561 779 514 285 258 57 235 57 561 57 514 N/A
+> kitchen 571 235 1001 537 779 503 285 258 57 235 57 537 57 503 N/A
+> room 572 235 890 462 887 592 285 258 57 235 57 462 57 592 N/A
+> Indoor mean 571 235 1023 547 855 569 285 258 57 235 57 547 57 569 N/A
+> bicycle 1599 703 2084 1156 956 665 280 258 51 703 51 1156 51 665 N/A
+> flowers 1594 701 2136 1186 935 658 280 258 52 701 52 1186 52 658 N/A
+> garden 1602 704 1930 1068 1078 734 281 258 52 704 52 1068 52 734 N/A
+> stump 1579 694 1838 1016 982 684 280 258 52 694 52 1016 52 684 N/A
+> treehill 1601 704 1950 1080 971 680 280 258 52 704 52 1080 52 680 N/A
+> Outdoor mean 1595 701 1988 1101 984 684 280 258 52 701 52 1101 52 684 N/A
+> All-scene mean 1140 494 1559 855 927 633 282 258 54 494 54 855 54 633 N/A
+
+Table 7: Per-scene renderer graphics allocation (Render) and serialized exported-asset size (Asset) for the Mip-NeRF 360 Unity evaluations. Indoor, outdoor, and all-scene means are unweighted means over scenes. N/A means renderer incompatibility. A.3 FULL NATIVE BENCHMARK RESULTS 
+
+This section provides the detailed native-renderer measurements underlying the compact summary in Tab. 3. These results characterize native fidelity and cost; they do not establish engine-side retention or resource use. A.3.1 MIP -N ERF 360 N ATIVE RESULTS 
+
+Tab. 8 reports native-renderer averages over the Mip-NeRF 360 scenes. The image metrics support the reproduction check in Sec. 5; FPS, memory, and optimization time remain native or offline measurements and are therefore not interpreted as Unity deployment costs. 
+
+Outdoor Indoor Average PSNR ↑ SSIM ↑ LPIPS ↓ PSNR ↑ SSIM ↑ LPIPS ↓ PSNR ↑ SSIM ↑ LPIPS ↓ FPS ↑ Mem. (MiB) ↓ Time (s) ↓
+
+2DTS (Sheng et al., 2025) 25.45 0.763 0.237 31.54 0.937 0.188 28.16 0.841 0.215 70 10069 2764 Triangle-Splatting (Held et al., 2026b) 24.15 0.720 0.248 30.85 0.928 0.200 27.13 0.812 0.227 94 18901 2428 MeshSplatting (Held et al., 2026a) 22.46 0.621 0.390 27.55 0.863 0.335 24.72 0.729 0.365 38 23134 2500 DiffSoup (Tojo et al., 2026) 21.17 0.548 0.406 26.50 0.864 0.218 23.54 0.689 0.322 168 23484 1009 
+
+Table 8: Native-renderer results on Mip-NeRF 360 (Barron et al., 2022). A.3.2 DTU P ROTOCOL SENSITIVITY 
+
+Tab. 9 gives the full-image and foreground DTU results. The changes in method ranking across these two evaluation targets demonstrate protocol sensitivity; they do not provide a preference ordering for a downstream application or an engine-side deployment conclusion. 14 Preprint. Under Review. 
+
+Method PSNR ↑ SSIM ↑ LPIPS ↓ FPS ↑ Mem. (MiB) ↓ Time (s) ↓ CD ↓ NVS Rank ↓ Geo. Rank ↓
+
+Full image 2DTS (Sheng et al., 2025) 21.83 0.780 0.425 369 2272 1196 0.84 3 2Triangle-Splatting (Held et al., 2026b) 27.03 0.870 0.257 172 3921 798 1.16 1 3MeshSplatting (Held et al., 2026a) 25.93 0.841 0.329 103 8525 777 0.79 2 1
+
+DiffSoup (Tojo et al., 2026) 21.56 0.707 0.423 148 23431 961 4.27 4 4Foreground 2DTS (Sheng et al., 2025) 29.66 0.951 0.110 312 2470 1272 0.63 1 1
+
+Triangle-Splatting (Held et al., 2026b) 27.78 0.944 0.080 165 4163 784 1.27 3 3MeshSplatting (Held et al., 2026a) 27.82 0.933 0.106 114 7680 639 0.80 2 2DiffSoup (Tojo et al., 2026) 17.91 0.760 0.263 170 23930 867 3.89 4 4
+
+Table 9: Native-renderer results on DTU (Jensen et al., 2014) under full-image and foreground protocols. Results are averaged across scenes; memory is reported in MiB and time in seconds. Bold indicates the best value within each protocol and metric. A.4 ADDITIONAL CROSS -D ATASET NATIVE AND UNITY RESULTS 
+
+A.4.1 TANKS AND TEMPLES NATIVE RESULTS 
+
+Tab. 10 reports the full native-renderer comparison on Tanks and Temples, complementing the cross-dataset summary in the main paper. 
+
+Method PSNR ↑ SSIM ↑ LPIPS ↓ FPS ↑ Memory (MiB) ↓ Time (s) ↓
+
+2DTS (Sheng et al., 2025) 23.42 0.853 0.203 101 16061 1556 Triangle-Splatting (Held et al., 2026b) 23.08 0.856 0.171 159 11157 1472 MeshSplatting (Held et al., 2026a) 20.53 0.756 0.319 66 21321 1446 DiffSoup (Tojo et al., 2026) 17.45 0.645 0.389 226 23890 923 
+
+Table 10: Native-renderer results on Tanks and Temples (Knapitsch et al., 2017). Results are averaged across scenes; bold indicates the best value for each metric. A.4.2 TANKS AND TEMPLES UNITY DEPLOYMENT RESULTS 
+
+Tab. 11 gives the renderer-conditioned Unity deployment results on Tanks and Temples, comple-menting the Mip-NeRF 360 analysis in the main paper. For every method available under both Unity conditions, the dedicated renderer yields higher image quality on both scenes, whereas the default renderer generally provides higher throughput. Under the dedicated condition, Triangle-Splatting achieves the best mean image quality (19.54 dB PSNR, 0.719 SSIM, 0.258 LPIPS), while the partial DiffSoup path achieves the highest throughput ( 2388 FPS). Under the default condition, MeshSplatting retains the best mean quality (14.38 dB PSNR, 0.506 SSIM, 0.490 LPIPS), consis-tent with the Mip-NeRF 360 finding that the opaque, indexed layout of MeshSplatting degrades less severely without method-specific shading. DiffSoup has no default-renderer result for the same reason as on Mip-NeRF 360: no appearance-complete general-purpose Unity path is available for its exported asset. Tabs. 12-13 additionally report the per-scene GPU frame-time percentiles and renderer/asset memory measurements.                                                                                                                 
+
+> train truck Mean Renderer Method PSNR ↑SSIM ↑LPIPS ↓FPS ↑PSNR ↑SSIM ↑LPIPS ↓FPS ↑PSNR ↑SSIM ↑LPIPS ↓FPS ↑
+> Dedicated 2DTS (Sheng et al., 2025) 18.79 0.650 0.330 1222 19.72 0.642 0.262 596 19.26 0.646 0.296 909 Triangle-Splatting (Held et al., 2026b) 18.44 0.705 0.301 469 20.63 0.733 0.215 604 19.54 0.719 0.258 536 MeshSplatting (Held et al., 2026a) 15.67 0.572 0.465 249 16.52 0.602 0.405 350 16.09 0.587 0.435 300 DiffSoup (Tojo et al., 2026) 15.38 0.546 0.482 2431 18.66 0.666 0.321 2345 17.02 0.606 0.402 2388
+> Default 2DTS (Sheng et al., 2025) 11.68 0.313 0.655 6643 13.12 0.361 0.603 4316 12.40 0.337 0.629 5480
+> Triangle-Splatting (Held et al., 2026b) 9.26 0.257 0.710 3587 12.89 0.327 0.613 4269 11.08 0.292 0.661 3928
+> MeshSplatting (Held et al., 2026a) 13.88 0.485 0.519 1313 14.88 0.528 0.462 1743 14.38 0.506 0.490 1528
+> DiffSoup (Tojo et al., 2026) N/A
+
+Table 11: Dedicated and default Unity renderer comparison on Tanks and Temples (Knapitsch et al., 2017), reported per scene and averaged over two scenes. N/A means renderer incompatibility. Bold marks the better available Unity condition within each method and metric; DiffSoup Dedicated is a partial implementation. 15 Preprint. Under Review. 
+
+train truck Mean Renderer Method P50 ms ↓ P95 ms ↓ P50 ms ↓ P95 ms ↓ P50 ms ↓ P95 ms ↓
+
+Dedicated 2DTS (Sheng et al., 2025) 0.8 0.8 1.7 1.7 1.2 1.3 Triangle-Splatting (Held et al., 2026b) 2.1 2.2 1.7 1.7 1.9 1.9 MeshSplatting (Held et al., 2026a) 4.0 4.1 2.9 2.9 3.4 3.5 DiffSoup (Tojo et al., 2026) 0.4 0.4 0.4 0.4 0.4 0.4 Default 2DTS (Sheng et al., 2025) 0.2 0.2 0.2 0.2 0.2 0.2 Triangle-Splatting (Held et al., 2026b) 0.3 0.3 0.2 0.2 0.3 0.3 MeshSplatting (Held et al., 2026a) 0.8 0.8 0.6 0.6 0.7 0.7 DiffSoup (Tojo et al., 2026) N/A 
+
+Table 12: Per-scene GPU frame-time percentiles (ms) for the Tanks and Temples Unity evaluations; lower is better. Mean values average the two scene-level percentiles, rather than pooling frames from both scenes before computing a percentile. N/A means renderer incompatibility.                                                           
+
+> train truck Mean Renderer Method Render MiB ↓Asset MiB ↓Render MiB ↓Asset MiB ↓Render MiB ↓Asset MiB ↓
+> Dedicated 2DTS (Sheng et al., 2025) 562 234 1103 469 832 352 Triangle-Splatting (Held et al., 2026b) 1025 556 841 440 933 498 MeshSplatting (Held et al., 2026a) 673 434 518 346 596 390 DiffSoup (Tojo et al., 2026) 276 258 276 258 276 258 Default 2DTS (Sheng et al., 2025) 48 234 48 469 48 352 Triangle-Splatting (Held et al., 2026b) 48 556 48 440 48 498 MeshSplatting (Held et al., 2026a) 48 434 48 346 48 390 DiffSoup (Tojo et al., 2026) N/A
+
+Table 13: Per-scene renderer graphics allocation (Render) and serialized exported-asset size (Asset), in MiB, for the Tanks and Temples Unity evaluations. Mean values average the two scenes. N/A means renderer incompatibility. A.4.3 NERF-S YNTHETIC NATIVE EVALUATION 
+
+To demonstrate that MeshSplatBench can apply the integrated methods to an additional dataset under a shared protocol, we evaluate all four methods on NeRF-Synthetic (Mildenhall et al., 2020). As shown in Tab. 14, 2DTS achieves the strongest average image fidelity, reaching 33.65 dB PSNR, 0.970 SSIM, and 0.034 LPIPS. Compared with the second-best Triangle-Splatting, this corresponds to a 3.78 dB PSNR gain, a 0.014 SSIM improvement, and a 0.021 reduction in LPIPS. 2DTS also requires the least peak training memory at 3,172 MiB. However, its fidelity advantage does not extend to computational speed: DiffSoup achieves the highest rendering throughput at 371 FPS and the shortest training time at 734 seconds, whereas 2DTS reaches 126 FPS and trains in 980 seconds. These results reinforce that no representation dominates across all criteria and expose a clear trade-off between rendering fidelity, memory consumption, and computational efficiency.                                     
+
+> Method PSNR ↑SSIM ↑LPIPS ↓FPS ↑Training Mem. (MiB) ↓Training Time (s) ↓
+> 2DTS (Sheng et al., 2025) 33.65 0.970 0.034 126 3172 980 Triangle-Splatting (Held et al., 2026b) 29.87 0.956 0.055 243 12257 1145 MeshSplatting (Held et al., 2026a) 29.50 0.945 0.071 86 23386 803 DiffSoup (Tojo et al., 2026) 28.65 0.910 0.076 371 16334 734
+
+Table 14: Quantitative results on the NeRF-Synthetic dataset (Mildenhall et al., 2020). Results are averaged across scenes. A.5 TOPOLOGY -M ETRIC DEFINITIONS AND DETAILED RESULTS 
+
+This appendix uses a structural audit to distinguish an indexed representation’s local vertex reuse from its global surface integrity. We apply this audit only to MeshSplatting, the evaluated method that enforces shared-vertex connectivity during construction. Let V , E, and F denote the sets of unique vertices, undirected edges, and triangular faces in one exported mesh. For connected-component analysis, we construct a face-adjacency graph in which two faces are adjacent only 16 Preprint. Under Review. garden bicycle flowers treehill stump kitchen bonsai counter room truck train 
+
+> 0.2
+> 0.1
+> 0.0 0.1 0.2
+> PSNR diff.
+
+a) Mip-NeRF 360 b) Tanks & Temples   
+
+> 2DTS Triangle Splatting MeshSplatting
+
+(a) Mip-NeRF 360 (b) Tanks and Temples 
+
+Figure 4: Per-scene PSNR reproduction differences. Each bar reports PSNR MeshSplatBench −
+
+PSNR paper . Panel (a) contains the nine Mip-NeRF 360 scenes, and panel (b) contains the two Tanks and Temples scenes. Across the method–scene pairs, the largest relative deviation is 0.775%. DiffSoup is omitted because its paper does not provide the corresponding per-scene values.                                                
+
+> Method Paper Public MeshSplatBench PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓PSNR ↑SSIM ↑LPIPS ↓
+> 2DTS (Sheng et al., 2025) 28.18 0.842 0.218 28.51 0.851 0.215 28.16 0.841 0.215
+> Triangle-Splatting (Held et al., 2026b) 27.17 0.814 0.192 27.20 0.813 0.190 27.13 0.812 0.227 MeshSplatting (Held et al., 2026a) 24.78 0.728 0.310 24.78 0.728 0.310 24.72 0.729 0.365 DiffSoup (Tojo et al., 2026) 24.76 0.748 0.204 23.69 0.691 0.241 23.54 0.689 0.322
+
+Table 15: Quantitative comparison of implementation reproducibility on the Mip-NeRF 360 (Barron et al., 2022) dataset. Bold indicates the best value within each source block and metric. DiffSoup (Tojo et al., 2026) uses AlexNet (Krizhevsky et al., 2012) as the LPIPS backbone, whereas Mesh-SplatBench uniformly employs VGG (Simonyan & Zisserman, 2015). when they share a complete edge; a corner contact alone does not connect components. We exclude faces with repeated vertex indices from this graph and apply no component-size threshold. Tab. 5 in the main paper reports each metric per Mip-NeRF 360 scene and the arithmetic mean over the nine scenes. 
+
+Local vertex reuse. The V/F ratio |V |/|F | measures unique vertices per face; for a fixed face count, a lower value indicates more vertex sharing under the same export convention. UV seams, normal splits, and material boundaries can still duplicate colocated vertices. Average valence is  
+
+> 1
+> |V|
+
+P 
+
+> v∈V
+
+deg( v) = 2|E||V | and summarizes local adjacency density. It approaches 6 for an ideal closed triangular 2-manifold, but neither statistic alone measures surface quality. 
+
+Boundary and manifoldness. The boundary-edge ratio is |E1|/|E|, where E1 contains edges in-cident to one face. The non-manifold-edge ratio is |E>2|/|E|, and the non-manifold-vertex ratio is 
+
+|Vnm |/|V |, where incident faces at a non-manifold vertex fail to form one connected fan. A closed interior fan and an open boundary fan are valid; bow-tie or multiple fans are not. Boundaries may be legitimate for partial scenes, so these measures diagnose structure rather than error against a watertight target. 
+
+Global connectivity. The largest connected component (LCC) is extracted from the edge-based face-adjacency graph. LCC Face and LCC Area are its fractions of total faces and triangle area, while Components is the raw number of edge-connected face components. Higher LCC fractions and fewer components indicate greater global connectivity but not geometric correctness, manifold-ness, or absence of self-intersections. Component count is resolution- and scene-dependent and must therefore be interpreted with the LCC fractions and visual inspection. A.6 DETAILED REPRODUCIBILITY RESULTS 
+
+Fig. 4 and Tabs. 15–16 provide the per-scene PSNR differences and complete metric-level repro-duction comparisons; their captions specify the comparison scope and metric-protocol differences. 17 Preprint. Under Review. 
+
+Method Paper Public MeshSplatBench PSNR ↑ SSIM ↑ LPIPS ↓ PSNR ↑ SSIM ↑ LPIPS ↓ PSNR ↑ SSIM ↑ LPIPS ↓
+
+2DTS (Sheng et al., 2025) 23.39 0.853 0.204 23.44 0.853 0.171 23.42 0.853 0.203 Triangle-Splatting (Held et al., 2026b) 23.14 0.857 0.143 23.09 0.856 0.144 23.08 0.856 0.171 
+
+MeshSplatting (Held et al., 2026a) 20.52 0.745 0.287 20.58 0.758 0.272 20.53 0.756 0.319 DiffSoup (Tojo et al., 2026) - - - 18.38 0.671 0.299 18.90 0.685 0.352 
+
+Table 16: Quantitative comparison of implementation reproducibility on the Tanks and Temples (Knapitsch et al., 2017) dataset. Bold indicates the best value within each source block and metric. DiffSoup (Tojo et al., 2026) does not report official Tanks and Temples results. 18
