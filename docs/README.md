@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-09</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-10</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 34 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 21 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>21</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>8</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-09 21:40:18 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-10 22:04:42 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,7 +69,9 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共扫描34篇新论文，精读21篇、速读13篇，聚焦3D场景理解与重建前沿进展。最值得关注的是满分论文《Spheriverse》开创球面观测下的野外3D场景理解新范式，以及9分论文《On-the-Fly3R》面向无人机大规模场景的在线重建方案；速读中《MeshSplatBench》为三角形神经渲染提供了统一基准。建议普通读者优先精读这两篇高分工作，关注其开源代码与基准数据集，以快速跟进3D重建领域最新突破。</p>
+<p>9月10日日报：共21篇，精读8篇、速读13篇，3D视频先验与视觉位置识别两篇8.0领跑精读。</p>
+<p>最值得看的是3D感知与空间智能方向：精读《Rethinking 3D Noise》和《AdaptVPR》，速读中LVLM空间智能、多视角空间推理、单目点云也均为8.0。</p>
+<p>普通读者可先读两篇精读，再按兴趣扫速读里的空间智能三篇。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -78,12 +80,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">21 篇</strong>
+    <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Spheriverse: 3D Scene Understanding from Spherical Observations in the Wild">Spheriverse: 3D Scene Understanding from Spherical Observations in the Wild</span></li><li><span class="dpr-home-dashboard-paper-title" title="On-the-Fly3R: Towards Robust Online 3D Reconstruction with Feed-Forward 3R Models for Large-Scale UAV Scenarios">On-the-Fly3R: Towards Robust Online 3D Reconstruction with Feed-Forward 3R Models for Large-Scale UAV Scenarios</span></li><li><span class="dpr-home-dashboard-paper-title" title="AutoCompass: Accurate Visual Localization on Public Maps by Learning from Weak Labels">AutoCompass: Accurate Visual Localization on Public Maps by Learning from Weak Labels</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Rethinking 3D Noise: Learning 3D-Aware Video Priors via Optimization-Free Morphological Perturbations">Rethinking 3D Noise: Learning 3D-Aware Video Priors via Optimization-Free Morphological Perturbations</span></li><li><span class="dpr-home-dashboard-paper-title" title="AdaptVPR: Route-Aware Hard Positive Generation for Robust Visual Place Recognition">AdaptVPR: Route-Aware Hard Positive Generation for Robust Visual Place Recognition</span></li><li><span class="dpr-home-dashboard-paper-title" title="Open-Set 3D Scene Graphs for Field Robotics: An Outdoor Case Study">Open-Set 3D Scene Graphs for Field Robotics: An Outdoor Case Study</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>14</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>4</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">multimodal <strong>5</strong></span><span class="dpr-home-dashboard-tag">d-vision <strong>2</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -94,9 +96,9 @@
     <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="MeshSplatBench: A Unified Benchmark for Triangle-Based Neural Rendering">MeshSplatBench: A Unified Benchmark for Triangle-Based Neural Rendering</span></li><li><span class="dpr-home-dashboard-paper-title" title="Uncovering Understanding-Generation Synergy in Native Unified Multimodal Models: From Representation, Task to System">Uncovering Understanding-Generation Synergy in Native Unified Multimodal Models: From Representation, Task to System</span></li><li><span class="dpr-home-dashboard-paper-title" title="GeoStore: Finding Small Storefronts in Large Scenes -- A Fine-Grained POI Localization Benchmark with Global-to-Local Asymmetric Matching">GeoStore: Finding Small Storefronts in Large Scenes -- A Fine-Grained POI Localization Benchmark with Global-to-Local Asymmetric Matching</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="SpatialBlock: Enhancing Spatial Intelligence in LVLMs via Synthetic Block-Stacking Problem">SpatialBlock: Enhancing Spatial Intelligence in LVLMs via Synthetic Block-Stacking Problem</span></li><li><span class="dpr-home-dashboard-paper-title" title="MV-STRIDE: Enabling MLLMs to Master Multi-View Spatial Reasoning via Hierarchical Capability Modeling">MV-STRIDE: Enabling MLLMs to Master Multi-View Spatial Reasoning via Hierarchical Capability Modeling</span></li><li><span class="dpr-home-dashboard-paper-title" title="OmniPoint: Universal Monocular Metric Pointcloud from Any Camera">OmniPoint: Universal Monocular Metric Pointcloud from Any Camera</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>7</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>5</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>10</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span></div>
 </section>
 </div>
 

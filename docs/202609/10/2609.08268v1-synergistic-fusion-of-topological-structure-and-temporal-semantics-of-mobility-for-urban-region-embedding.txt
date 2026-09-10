@@ -1,0 +1,911 @@
+Title: Synergistic Fusion of Topological Structure and Temporal Semantics of Mobility for Urban Region Embedding
+
+URL Source: https://arxiv.org/pdf/2609.08268v1
+
+Published Time: Wed, 09 Sep 2026 03:21:47 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+> PREPRINT. 1
+
+# Synergistic Fusion of Topological Structure and Temporal Semantics of Mobility for Urban Region Embedding 
+
+Namwoo Kim ∗, Jeeyun Chang †, Kanghoon Lee ‡, and Yoonjin Yoon ∗§ ∗Urban AI Institute, Korea Advanced Institute of Science and Technology (KAIST), Daejeon, Republic of Korea 
+
+†Graduate School of Data Science, KAIST, Daejeon, Republic of Korea 
+
+‡Department of Industrial Engineering and Systems, KAIST, Daejeon, Republic of Korea 
+
+§Department of Civil and Environmental Engineering, KAIST, Daejeon, Republic of Korea 
+
+Abstract —Urban region embeddings have shown promising re-sults in diverse urban sensing tasks such as crime, income, and service-call prediction. Recent methods improve representation quality by integrating mobility data with auxiliary modalities, using cross-view attention or contrastive objectives to align heterogeneous features into a unified region representation. However, leveraging the temporal dynamics of human mobility remains under-explored. Regional inflow and outflow fluctuate throughout the day, and inter-region connections emerge, persist, and dissolve over time. Moreover, prevailing fusion strategies combine views additively and miss the joint signal that emerges only when views co-occur. To address these gaps, we propose Mobility Stream–Structure Synergy (MoSS), which derives com-plementary views from mobility data: a Sequence view that pre-serves each region’s hourly inflow/outflow profile, and a Structure view based on zigzag persistence diagrams that capture how regional connectivity emerges, persists, and dissolves over time. A synergy module then extracts emergent representations from the co-occurrence of these views through multi-degree interactions, explicitly capturing higher-order signal across views. Extensive experiments on New York City and Chicago show that MoSS achieves state-of-the-art performance across three downstream tasks using mobility data alone, outperforming baselines that rely on auxiliary modalities. 
+
+Index Terms —Urban region embedding, Time series modeling, Zigzag persistence 
+
+I. I NTRODUCTION 
+
+# URBAN region embedding maps each city region to a latent vector, enabling downstream tasks such as crime prediction, region popularity estimation, population density in-ference, land-use clustering, and socioeconomic analysis [1]– [8]. A region, however, cannot be characterized in isolation: its functional identity emerges from how it interacts with other regions — residential blocks outflow to business districts in the morning, commercial zones absorb inflows on weekends, and so on. To capture such interactions, human mobility data have been widely adopted, since every trip between two regions is an observable act of interaction that, in aggregate, encodes the functional organization of the city [9], [10]. 
+
+This work has been submitted to the IEEE for possible publication. Copyright may be transferred without notice, after which this version may no longer be accessible. 
+
+A substantial body of work uses human mobility as the primary signal for region embedding. Early approaches mod-eled origin-destination (OD) co-occurrence with skip-gram-style objectives or random walks on flow graphs [2], [3]. Subsequent work reconstructs OD matrices or conditional trip distributions [4]–[6], and the most recent approaches apply contrastive learning over inflow/outflow embeddings [7], [11]. These studies collectively establish that mobility carries rich functional information. A complementary line of work enriches region representa-tions by combining mobility with auxiliary sources — POIs, check-ins, road networks — and proposes a variety of fusion strategies. Prior studies have explored diverse strategies for multi-view urban representation learning. Early approaches fo-cused on learning view-shared representations and aggregating them with adaptive weighting schemes [4]. Subsequent work modeled mobility patterns through graph clustering and cross-view attention mechanisms [5], while others built heteroge-neous region graphs with prompt-based task adaptation [12]. More recent methods have emphasized fine-grained fusion and consistency learning, such as dual attention over regions and features [13] and mutual-information-based consistency objectives across views [7]. Recent advances further leverage graph pre-training, task-aware prompting [14], and structure-aware contrastive learning for joint multi-view representation learning [15]. A concurrent line of work explicitly separates cross-view shared and view-private signals in this multi-modal setting [16]. Collectively, these methods show that the fusion of heterogeneous urban signals can improve downstream per-formance. Despite these advances, current approaches leave two gaps under-explored. The first concerns how mobility itself is modeled. Mobility-oriented methods typically model mobility either as a static graph or as independently processed temporal snapshots, so they fail to capture both region-specific temporal dynamics—weekday/weekend periodicity, peak/off-peak tran-sitions, and autocorrelation patterns—and the evolving con-nectivity structure among regions, where inter-region relations emerge, persist, and disappear over time [17]. Figure 1 makes both facets concrete on a Manhattan pair: two regions with comparable aggregate outflow magnitudes nevertheless differ arXiv:2609.08268v1 [cs.LG] 8 Sep 2026 PREPRINT. 20 100 200 300 400 500 600 700                
+
+> hour (1 month, 31 days)
+> 0100 200 300 400
+> outflow volume  R33 out=75K in=80K
+> R78 out=74K in=76K
+> 010 20 30 40 50 60 70
+> lag (hours)
+> 0.5
+> 0.0 0.5 1.0
+> autocorrelation  R33 R78
+> Fri 23:00 out=54, | N| = 15
+> 36 716 26 30 56 68 77 78 81 95 102 145 148
+> 33
+> Sat 00:00 out=30, | N| = 10
+> 67
+> 20 62 63 74
+> 77
+> 124 132 144
+> 33
+> Sat 01:00 out=18, | N| = 1
+> 6
+> 33
+> Fri 23:00 out=48, | N| = 17
+> 1418 22 33 35 44 47 62 63 75 92 110 113 120 123 155 179
+> 78
+> Sat 00:00 out=36, | N| = 17
+> 07
+> 35 47 62 63
+> 68
+> 75
+> 79 81
+> 92
+> 95 100
+> 110 120
+> 122
+> 123
+> 78
+> Sat 01:00 out=17, | N| = 7
+> 47 79 95 120 122 123
+> 127
+> 78
+> (a) Outflow time series near-identical volume
+> (b) Autocorrelation temporal dependency differs
+> (c) Mobility connectivity of R33 (d) Mobility connectivity of R78
+
+Fig. 1: Same volume, different connectivity dynamics. Two Manhattan regions, R33 and R78 , with near-identical aggregate mobility over the 31-day study period. (a) Outflow time series over the full month: the two regions are comparable in aggre-gate volume. (b) Autocorrelation up to a 72 h lag: R33 exhibits a strong 24 h periodicity while R78 shows a much weaker oscillation — their temporal dependency structures differ markedly. (c, d) Inter-region connectivity at three consecutive hours (Fri 23:00 → Sat 01:00) over which the two regions also share similar hourly outflow ( 54 /48 → 30 /36 → 18 /17 
+
+trips). Despite this volume parity, neighborhood dynamics diverge sharply. Solid nodes denote neighbors persistent from the previous snapshot; outlined nodes are new entrants. sharply in temporal dependency (Figure 1(a, b)) as well as in inter-region connectivity (Figure 1(c, d)). The second gap concerns how views are fused. Even when both temporal and structural views are made available, pre-vailing multi-view fusion strategies—attention-based aggrega-tion [4], [5], [12], [13] or contrastive alignment [7], [15]— combine views additively and tend to miss the co-occurrence-based signal that emerges only when the two are considered jointly. A region’s functional identity often depends on the specific co-occurrence of its temporal rhythm and its connec-tivity neighborhood, so capturing this multiplicative interac-tion between temporal and structural patterns is essential for translating these two complementary streams into an effective region embedding that jointly reflects both signals. To address these gaps, we propose Mobility Stream–Structure Synergy (MoSS), a region embedding framework that captures both per-region temporal dynamics and the evolving inter-region mobility structure from a single mobility stream, and explicitly models cross-view synergy. MoSS consists of two complementary streams. A Sequence stream captures each region’s temporal semantics by modeling its hourly inflow and outflow series with dilated convolutions that span daily and weekly periodicities. A Structure stream captures each region’s topological structure by tracking the evolution of its connectivity neighborhood through zigzag persistence di-agrams [18]. The two streams produce complementary views per region, which we fuse via a synergy module built on a shared–private feature decomposition together with multi-degree interactions. Empirical evaluation on New York City and Chicago shows that MoSS achieves state-of-the-art region embedding performance from a single mobility input, without relying on any auxiliary modality. To summarize, our contributions are as follows.  
+
+> •
+
+We propose a dual-stream mobility representation con-sisting of a sequence stream and a structure stream — to the best of our knowledge, the first application of zigzag persistent homology to urban region embedding.  
+
+> •
+
+To model higher-order cross-view interactions, we intro-duce a synergy module that combines shared–private de-composition with multi-degree multiplicative interactions.  
+
+> •
+
+Extensive experiments on New York City and Chicago show that MoSS achieves state-of-the-art urban region embedding using mobility data alone, outperforming baselines that rely on auxiliary modalities such as POIs, check-ins, or land use. II. R ELATED WORK 
+
+A. Human Mobility in Urban Region Embedding 
+
+Human mobility has long been a core signal for urban region embedding. Early studies such as ZE-Mob [3] and HDGE [2] primarily modeled mobility using static origin–destination (OD) statistics or transition graphs. MGFN [5] extended this line of work by introducing multiple mobility patterns derived from grouped OD snapshots, but these patterns were still constructed from static aggregations and did not capture the PREPRINT. 3
+
+continuous temporal dynamics of mobility flows. Subsequent studies incorporated additional urban modalities such as POIs, land use, satellite imagery, and street views [4], [6], [11]–[13], [19]–[23]. Other recent approaches explored prompt learning and contrastive learning frameworks for urban representation learning [7], [12], [14], [15], [24]. In summary, mobility is still often modeled as a static signal, typically using aggregated OD matrices, transition graphs, or temporally grouped snapshots. While these representations have proven effective for capturing large-scale mobility struc-ture, they generally summarize observations over time and therefore provide only limited access to the temporal conti-nuity and dependency inherent in human movement patterns. As a result, the dynamic evolution of inter-region interactions, including how connections form, persist, and change across hours and days, remains less explored. To address this gap, we model mobility as fine-grained temporal dynamics and capture both its flow-level temporal patterns and its evolving connectivity topology within a unified framework. 
+
+B. Multi-View Approaches in Urban Region Embedding 
+
+A growing body of work leverages diverse modalities and views to learn comprehensive and semantically rich urban region embeddings [25]. These multi-view methods cluster into three fusion families. Attention-based fusion [4], [5], [12], [13] combines per-view embeddings through input-dependent weighted sums, often arranged hierarchically across intra-view, inter-view, and region levels. Contrastive alignment [7], [11], [14], [15] reshapes view-specific embeddings via cross-view agreement objectives—mutual information maximiza-tion, structure-aware contrastive losses, or prompt-based self-supervision—to enforce consistency. Shared–private decom-position, established for domain adaptation and multimodal sentiment analysis [26], [27], has been recently adapted to urban region embedding by ComSRE [16] on mobility and POI views, instantiated with a contrastive alignment and a differential orthogonality penalty. These three families, however, remain limited in modeling higher-order cross-view interactions. Informative patterns that emerge only through the joint presence of multiple views are not explicitly represented in additive fusion [28]. Prior work has shown that explicitly modeling multiplicative interactions can improve multimodal representation learning [29]–[31]. Building on this intuition, we introduce a synergy module that models cross-view interactions, including pairwise (second-order) and triple-wise (third-order) multiplicative terms across views. Unlike attention or contrastive alignment, synergy mod-ule explicitly incorporates these higher-order interaction terms into the representation pathway, providing a compositional inductive bias for multi-view urban region embedding. 
+
+C. Topological Data Analysis for Time-Varying Data 
+
+Persistent homology, a central tool in topological data anal-ysis (TDA), summarizes the multi-scale shape of data as a persistence diagram, and has been used as a complementary signal in deep representation learning, both for time series [32] and for tracking structural change in time-varying graphs [33]. However, a standard filtration grows monotonically, so it cannot represent features that vanish and re-emerge. Zigzag persistence [18] removes this restriction by allowing inclusions in alternating directions, which allows such features to be tracked directly (Sec. III-D), and a growing line of work applies it to temporal and graph-structured data. It has been used to detect bifurcations in dynamical systems [34] and to summarize temporal networks as a single zigzag diagram, recovering daily and weekly commuting periodicities in trans-portation that connectivity and centrality statistics miss [35]. More recent work integrates zigzag persistence into graph neural networks, either as a time-aware topological layer [36] or as a compact filtration-curve summary used for time-series forecasting [37]. Across these settings, zigzag persistence has proven effective in capturing how connectivity evolves over time, but it has not yet been used for urban region embedding. III. P RELIMINARIES 
+
+This section introduces the topological tools that MoSS uses to summarize the temporal evolution of inter-regional mobility. We refer to [38], [18], and [35] for a complete treatment. 
+
+A. Clique Complex of a Graph 
+
+A simplicial complex K over a vertex set V is a collection of subsets (simplices) closed under taking subsets. A subset of size k+1 is a k-simplex, so that vertices, edges, and triangles are the 0-, 1-, 2-, and higher-dimensional simplices respectively. 
+
+Definition 1 (Clique complex): Let G = ( V, E) be a finite undirected graph. The clique complex of G up to dimension 
+
+D is 
+
+XD (G) = σ ⊆ V : 1 ≤ | σ| ≤ D+1 , σ is a clique in G .
+
+(1) 
+
+B. Homology and Betti Numbers 
+
+For each k ≥ 0, let Ck(K) be the F2-vector space spanned by the k-simplices of K. The boundary map ∂k : Ck(K) →
+
+Ck−1(K) sends a k-simplex to the formal sum of its (k−1) -faces, and satisfies ∂k−1 ◦ ∂k = 0 . Thus, the k-th homology group is 
+
+Hk(K) = ker( ∂k)  im( ∂k+1 ), (2) i.e., the cycles modulo the boundaries. 
+
+Definition 2 (Betti number): The k-th Betti number of a sim-plicial complex K is the dimension of its k-th homology group over F2,
+
+βk(K) = dim Hk(K). (3) Geometrically, βk counts the number of independent k-dimensional holes in K: β0 is the number of connected components (separate pieces), β1 the number of 1-dimensional loops (tunnels through the complex), and β2 the number of enclosed 2-dimensional cavities. PREPRINT. 4
+
+A static βk is one snapshot of structure. Capturing how features appear and disappear over time requires a notion of 
+
+persistence .
+
+C. Persistent Homology 
+
+A filtration is a nested sequence 
+
+K(1) ⊆ K (2) ⊆ · · · ⊆ K (T ). (4) Persistent homology tracks each topological feature as it ap-pears and disappears across this filtration sequence, recording it as a point (b, d ), where b denotes the filtration index at which the feature appears and d the index at which it disappears. The collection of such points is the persistence diagram in dimension k.A filtration only ever grows, so it cannot represent features that disappear and reappear. This is a structural property of urban mobility where edges between regions emerge during peak hours and dissolve afterwards [33], [35]. 
+
+D. Zigzag Persistent Homology 
+
+Zigzag persistent homology [18] replaces the one-way filtra-tion of Eq. (4) by a sequence of inclusions in alternating directions, 
+
+K(1) ,→ K (1 ,2) ←- K(2) ,→ · · · ← - K(T ), (5) where we take K(t,t +1) = K(t)∪K (t+1) . The forward inclusion 
+
+K(t) ,→ K (t,t +1) adds simplices that appear in K(t+1) but not in K(t), and the backward inclusion K(t+1) ,→ K (t,t +1) adds simplices that exist in K(t) but not in K(t+1) . The output is again a multiset of points (b, d ), but indexed along the zigzag positions rather than along a monotone parameter, so that features which vanish and re-emerge are represented natively rather than lost. Two structural properties of urban mobility motivate the use of zigzag persistence. First, edges in inter-regional mobility are inherently transient , so the standard filtration of Eq. (4) cannot represent dissolution. Second, the macro-level role of a region depends on when its connections appear and dissolve, rather than only on the static set of connections that eventually exist. IV. M ETHOD 
+
+A. Model Overview 
+
+MOSS represents each region from two complementary view-points of the same mobility stream and fuses them through a synergy module (Figure 2). The Sequence stream (Sec. IV-B) encodes each region’s hourly inflow/outflow series with a dilated TCN. The Structure stream (Sec. IV-C–IV-E) encodes how the inter-region connections around a region emerge, persist, and dissolve over the observation window using zigzag persistence. The resulting view tensors are then composed by the synergy module (Sec. IV-F), which internally factors each view into shared and view-private embeddings and aggregates them through multi-degree interaction that captures first-order, second-order, and third-order interactions across views. 
+
+B. Sequence Stream 
+
+Each region i is associated with two observed series of trip volumes (inflow and outflow), recording how many trips leave and arrive at the region over the full observation window of length T . We stack the two normalized series along the channel axis to form a two-channel input xi = [¯ xinflow  
+
+> i
+
+; ¯ xoutflow  
+
+> i
+
+] ∈
+
+R2×T .A single dilated temporal convolutional network [39], [40] processes both flow directions jointly. After a 1×1 projection of the two-channel input to hidden width Ch, the series passes through a stack of Ltcn residual blocks; the ℓ-th block applies two width-preserving 1D convolutions of kernel size 
+
+k with dilation 2ℓ, with a GELU pre-activation before each convolution and a residual shortcut around the pair, 
+
+hℓ = hℓ−1 + Conv (2) 2ℓ
+
+
+
+GELU  Conv (1) 2ℓ
+
+ GELU( hℓ−1) 
+
+.
+
+(6) Exponentially growing dilation gives the topmost block a receptive field that spans both daily and weekly periodicities using only a logarithmic number of layers, while the residual path keeps gradients well behaved. A final 1×1 projection maps the channel dimension to D-dimension, after which we reduce the time axis by max-pooling to produce a sequence-view embedding 
+
+Vseq  
+
+> i
+
+= maxpool t
+
+
+
+Conv (out)  hLtcn 
+
+
+
+∈ RD . (7) 
+
+C. Structure Stream: Connectivity-graph Construction 
+
+Figure 3 gives a visual roadmap of the structure stream: a temporal sequence of region-centric connectivity-graphs (Figure 3a) is summarized as per-edge lifespans (Figure 3b), and zigzag persistent homology turns those lifespans into a persistence diagram (Figure 3c) that the structure stream then encodes. Starting from the raw OD matrices {F(t)}Tt=1 with F(t) ∈
+
+RN ×N , we condense the stream into a shorter representative period of length T ′ (e.g., a typical week of hourly snapshots) by averaging OD matrices that share the same within-period phase across repeated cycles. The resulting averaged matrices are then binarized so that each entry records only whether a flow exists between two regions. For each region i, the connectivity-graph G(t) 
+
+> i
+
+at time index t is the subgraph of G(t) induced by i and the regions connected to it (Figure 3a). We construct two directional variants: the outflow graph Gout ,(t) 
+
+> i
+
+, which includes edges where i is the source, and the inflow graph Gin ,(t) 
+
+> i
+
+, which includes edges where region i is the destination. These two graphs capture complementary aspects of the functional role of region i.The temporally aligned sequences Gin ,(t) 
+
+> i
+
+and Gout ,(t) 
+
+> i
+
+are then used as input to the zigzag persistence computation. For simplicity, we use ◦ ∈ { out , in } to denote either direction in what follows. 
+
+D. Structure Stream: Zigzag Persistence Computation 
+
+For each region i, we build a clique complex K◦,(t) 
+
+> i
+
+over the connectivity-graph G◦,(t) 
+
+> i
+
+at every time index, and connect PREPRINT. 5……… 
+
+> Connectivity Graph Zigzag PD computation
+> PD Encoder TS Encoder View-shared Encoder View-private Encoder
+> View-shared embs View-private embs
+> Synergy Module Sequence Stream Structure Stream
+> First-order terms Second-order interactions Third-order interactions Averaged shared term Final embed
+
+Fig. 2: Overview of MoSS. Left. Two complementary streams encode each region’s mobility. The Sequence (TS) view (top) feeds the per-region hourly inflow/outflow series into a temporal convolutional encoder (TS Encoder), and the Structure (PD) view (bottom) constructs the region-centric connectivity-graph at each time step, computes its zigzag persistence diagram, and encodes the diagram with a permutation-invariant set encoder (PD Encoder). The structure encoder produces source-and destination-side view embeddings. Right. The synergy module fuses the three views. It first applies a shared–private decomposition that factors each view into a cross-view shared embedding (filled triangles) and a view-private embedding (dashed circles), and then aggregates the resulting embeddings through multi-degree interaction that captures first-order, second-order, and third-order interactions in a single per-region embedding. G(1)  
+
+> v
+> 12
+> 3
+
+vG(2)  
+
+> v
+> 123
+
+vG(3)  
+
+> v
+> 123
+
+v
+
+G(1)  
+
+> v
+
+G(2)  
+
+> v
+> 123
+
+v
+
+G(2)  
+
+> v
+
+G(3)  
+
+> v
+> 123
+
+v     
+
+> t= 1 t= 2 t= 3
+> time
+> (v,1)
+> (v,2) (v,3)
+> edge ( i, j)
+
+Edge lifespans (emerge / persist / dissolve)     
+
+> 123
+> Birth ( t)
+> 123
+> Death ( t)
+> (v,1) removed at t= 3 new {1}
+
+Persistence diagram ( H0)
+
+> H0
+
+(a) (b) (c) 
+
+Fig. 3: Structure stream: from a temporal sequence of connectivity-graphs to a persistence diagram . (a) Connectivity-graph G(t) 
+
+> v
+
+at three consecutive time indices (top row), and the union graph G(t) 
+
+> v
+
+∪ G(t+1)  
+
+> v
+
+between every consecutive pair (middle row); filled green nodes are neighbors active at that time, faded gray nodes are inactive. (b) Per-edge lifespans across the window. The bar segments mark the time indices at which the edge is present, exposing the emerge / persist / dissolve dynamics that no single snapshot captures. (c) The resulting zigzag persistence diagram with H0 features; the diagonal marks zero lifespan. PREPRINT. 6
+
+consecutive complexes through the zigzag diagram in Eq. (5). Zigzag persistent homology in dimension 0 returns a persis-tence diagram PD ◦ 
+
+> i
+
+that summarizes how the corresponding feature class (connected components) of the mobility neigh-borhood of i emerges, persists, and dissolves over the time window. Figure 3 illustrates this construction on a four-node toy. Figure 3 (a) shows the per-time graphs G(t) 
+
+> v
+
+for t = 1 , 2, 3, together with the consecutive unions G(t) 
+
+> v
+
+∪G(t+1)  
+
+> v
+
+. These union graphs occupy the half-integer slots t = 1 .5, 2.5 along the filtration axis, sitting between the per-time snapshots so that edges added or removed across consecutive times are accounted for. Figure 3 (b) renders each edge’s lifespan as a horizontal bar. As edges enter or leave between consecutive complexes, the number of connected components ( β0, the rank of H0) of the current K rises and falls, and the persistence diagram in (c) collects these changes into one point per component: birth b
+
+marks the step where a new component first separates out, death d marks the step where it merges back into an older one (or is pinned to d = T if it survives the window). The red point (b, d ) = (2 .5, 3) traces a single such event. Edge 
+
+(v, 1) is present through K2 and the union K2,3 but disappears at K3, which disconnects node 1 from v’s component. The resulting singleton is born at the preceding union step b = 2 .5
+
+and, since (v, 1) does not reappear, persists to the window’s end d = T = 3 .The other two points are read similarly. (1 , 3) is v’s own component, born at K1 and alive throughout the window, while (1 , 1.5) is the briefly-isolated node 3 that merges into 
+
+v’s component as soon as edge (v, 3) first enters at K1,2.We restrict the computation to H0 because the structure stream targets connectivity . β0 counts the connected components of a region’s mobility neighborhood, so it responds directly to whether regions remain linked to its neighbors. When a region becomes disconnected from its neighborhood, a new component appears, and when regions reconnect, components merge. Therefore, tracking H0 across the zigzag captures the connectivity changes that motivate the structure stream, while higher-dimensional features ( β1 and above) are not needed for this connectivity-focused purpose. 
+
+E. Structure Stream: Persistence-diagram Encoder 
+
+The zigzag persistence computation returns, for each region 
+
+i and direction ◦ ∈ { out , in }, a multiset of birth–death pairs 
+
+(b◦, d ◦) that characterize the emergence and disappearance of connected components over time in the mobility neighborhood of region i along direction ◦. We augment each pair with its lifespan l◦ = d◦ − b◦, yielding the per-region, per-direction persistence multiset 
+
+p◦
+
+> i, 1
+
+, . . . , p ◦ 
+
+> i,M i
+
+, p◦ 
+
+> i,j
+
+= ( b◦ 
+
+> i,j
+
+, d ◦ 
+
+> i,j
+
+, l ◦ 
+
+> i,j
+
+) ∈ R3, (8) where Mi denotes the cardinality. Our goal is to map this multiset to a fixed-size vector V◦ 
+
+> i
+
+∈ RD .
+
+a) Permutation invariance.: Points in the persistence diagram carry no canonical ordering, since the birth–death pairs index topological features that all coexist during the zigzag and have no natural total order. An order-sensitive encoder would treat the diagram as an order sequence rather than a set, so the resulting embedding would depend on an arbitrary indexing convention rather than on the topological information the diagram actually encodes. To rule this out by construction, the encoder f ◦ 
+
+> θ
+
+must satisfy, for any multiset {p1, . . . , p M } of diagram points, 
+
+f ◦
+
+> θ
+
+ {pπ(1) , . . . , p π(M )} = f ◦
+
+> θ
+
+ {p1, . . . , p M } ∀ π ∈ SM .
+
+(9) 
+
+b) Encoder.: The canonical way to build a function that satisfies Eq. (9) is to compose a per-point transformation shared across all points with a symmetric aggregator over the resulting features [41], [42]. We instantiate this as 
+
+V◦ 
+
+> i
+
+= f ◦
+
+> θ
+
+ {p◦
+
+> i, 1
+
+, . . . , p ◦ 
+
+> i,M i
+
+} = ζ
+
+ϕ(p◦ 
+
+> i,j
+
+) Mi
+
+> j=1
+
+
+
+∈ RD ,
+
+(10) where ϕθ : R3 → RD is a stack of 1×1 convolutions along the point axis with ReLU activations — equivalent to applying the same MLP to every diagram point independently — and ζ
+
+is coordinate-wise max-pooling across the Mi feature vectors. Both ϕ and ζ depend only on the multiset of their inputs and not on the order in which the points are presented, so fθ
+
+satisfies Eq. (9) by construction. Through f ◦ 
+
+> θ
+
+for ◦ ∈ { out , in }, we obtain two embeddings 
+
+Vout and Vin in RN ×D . Each row encodes when the con-nected components of a region’s neighborhood emerge, persist, and disappear. 
+
+F. Synergy Module 
+
+The two encoder streams produce three view embeddings per region: a sequence view Vseq from the temporal series and two directional views Vout , Vin from the zigzag persistence diagrams, collected as V = {seq , out , in }. We take synergy 
+
+to mean the useful features that arise only when two or more of these views co-occur — signal that is uninformative, or not present at all, in any single view observed in isolation. Recovering such features requires that the fusion stage receive, from each view, only what that view contributes distinctively: if shared content were left inside each view, every cross-view product would repeatedly recombine the same redundant signal, causing the fused representation to be dominated by redundant cross-view correlations rather than genuinely com-plementary interactions. The synergy module therefore fuses the three views in two stages. First, a shared–private decomposition splits each view into a cross-view shared embedding and a view-private em-bedding. Second, a multi-degree interaction applies a low-rank tensor product over the three private embeddings, enabling the fused representation to capture higher-order interactions across views. PREPRINT. 7
+
+a) Shared–private decomposition.: For each view embedding 
+
+Vv ∈ RD , a shared projection gshared : RD → RD with parameters tied across views and a view-private projection 
+
+gv 
+
+> private
+
+: RD → RD produce [26], [27] 
+
+Sv = gshared 
+
+ Vv  ∈ RD ,
+
+Pv = gv
+
+> private
+
+ Vv  ∈ RD , v ∈ V , (11) each implemented as a two-layer MLP (Linear–GELU– Dropout–Linear). Two auxiliary losses shape the decomposi-tion. A cross-view Central Moment Discrepancy (CMD) [43] pulls the shared embeddings toward a common distribution by matching their first K central moments across view pairs, 
+
+Lalign = X
+
+> {v,w }⊂V
+
+CMD K
+
+ Sv , Sw, (12) while an orthogonality penalty decorrelates Sv ⊥ Pv within each view and Pv ⊥ Pw across views, 
+
+Lorth = X
+
+> v∈V
+
+Decorr  Sv , Pv  + X
+
+> {v,w }⊂V
+
+Decorr  Pv , Pw,
+
+(13) where Decorr( A, B) = ∥ ˜A⊤ ˜B∥2 
+
+> F
+
+is the squared Frobe-nius cross-product on row-centered, row-normalized matrices 
+
+˜A, ˜B. Together these objectives drive the decomposition to-ward its intended structure: Lalign collapses the three shared embeddings {Sv }v∈V toward a common cross-view represen-tation that captures content present across all views, while 
+
+Lorth keeps each private Pv distinguishable from both its within-view shared embeddings and the other views’ privates, so that Pv retains only signal specific to view v.
+
+b) Multi-degree Interaction.: With the shared–private decom-position in place, the synergy module fuses only the three private embeddings {pseq , pout , pin }, each in RD . Synergy, as we defined it above, requires interactions across views; to capture all such interactions of every degree within a single object, we first augment each private with a constant unit, 
+
+ep v = [ 1 ; pv ] ∈ RD+1 , v ∈ V . (14) The outer product of the augmented privates yields the fusion tensor 
+
+T = ep seq ⊗ ep out ⊗ ep in ∈ R(D+1) ×(D+1) ×(D+1) . (15) Because the zeroth coordinate corresponds to the prepended constant unit, the tensor simultaneously encodes first-order terms (e.g., pseq  
+
+> i
+
+), second-order interactions (e.g., pseq  
+
+> i
+
+pout  
+
+> j
+
+), and full third-order interactions pseq  
+
+> i
+
+pout  
+
+> j
+
+pin  
+
+> k
+
+.A synergy embedding is computed via a learned tensor pro-jection, where a weight tensor W ∈ RD×(D+1) |V| 
+
+linearly combines the entries of T as follows: 
+
+Ysyn , m = X
+
+> i, j, k
+
+Wm, i, j, k Tijk . (16) Direct parameterization is computationally expensive because 
+
+W alone contains D(D + 1) |V| parameters. To obtain a more parameter-efficient formulation, we approximate W using a low-rank tensor factorization following [31]: 
+
+W ≈ 
+
+> R
+
+X
+
+> r=1
+
+wy 
+
+> r
+
+⊗ useq  
+
+> r
+
+⊗ uout  
+
+> r
+
+⊗ uin  
+
+> r
+
+, (17) collecting the view factors uvr ∈ RD+1 into Uv ∈ RR×(D+1) 
+
+and the output factors wy 
+
+> r
+
+∈ RD into Wy ∈ RD×R.Substituting (17) into (16) yields an equivalent factorized form in which the fusion reduces to an element-wise Hadamard product across views in rank space, 
+
+z = K
+
+> v∈V
+
+Uv ep v ∈ RR, Ysyn = Wy z ∈ RD . (18) This compression preserves the multi-degree interaction struc-ture described above. Finally, the synergy output Ysyn is recombined with the shared content as follows: 
+
+Y = LayerNorm  Ysyn 
+
+ + LayerNorm  ¯S ∈ RD , (19) where ¯S = 1
+
+> |V|
+
+P 
+
+> v∈V
+
+Sv denotes the mean shared embeddings across views. 
+
+G. Trip-distribution Loss 
+
+We supervise the learned embeddings using the empirical OD distribution M ∈ RN ×N , obtained from the observed OD matrix. The synergy embedding Y ∈ RD is mapped to a region representation Z = fhead (Y) ∈ RN ×H by a two-layer MLP head that expands the view dimension D to the final embedding dimension H, and then projected into source and destination embeddings, 
+
+Zsrc = Z W ⊤
+
+> src
+
+, Zdst = Z W ⊤
+
+> dst
+
+. (20) Then, the mobility distributions are computed as 
+
+bQout  
+
+> i,j
+
+= exp  zsrc  
+
+> i
+
+·zdst 
+
+> j
+
+PNk=1 exp  zsrc  
+
+> i
+
+·zdst 
+
+> k
+
+ , (21) 
+
+bQin  
+
+> i,j
+
+= exp  zdst  
+
+> i
+
+·zsrc 
+
+> j
+
+PNk=1 exp  zdst  
+
+> i
+
+·zsrc 
+
+> k
+
+ . (22) The predicted transition distributions are matched against the empirical OD distributions in both directions using the following loss: 
+
+Lmob = − X
+
+> i,j
+
+h
+
+Mi,j log bQout  
+
+> i,j
+
++ Mj,i log bQin 
+
+> i,j
+
+i
+
+. (23) 
+
+H. Total Training Objective 
+
+MoSS is trained end-to-end by minimizing 
+
+Ltotal = Lmob + λalign Lalign + λorth Lorth , (24) where λalign , λ orth ≥ 0 control the strength of cross-view shared alignment and dual orthogonality terms, respectively. PREPRINT. 8
+
+TABLE I: Dataset statistics and sources. Counts (regions, trips, and events) are reported as totals. Income is reported as the average of per-region median household income.                   
+
+> Data NYC CHI Source Regions 180 77 U.S. Census Bureau [46] and CHIDP [45] Taxi trips 9,779,714 3,368,049 NYCOD [44] and CHIDP [45] Crime 35,335 18,200 NYCOD [44] and CHIDP [45] Income $84,600 $74,734 NYCOD [44] and Chicago Health Atlas [47] Service calls 516,187 24,350 NYCOD [44] and CHIDP [45]
+
+V. E XPERIMENTS 
+
+A. Datasets and Tasks 
+
+To evaluate the effectiveness of the proposed model MoSS ,experiments are conducted using real-world data from two U.S. cities: New York City (NYC) and Chicago (CHI). Table I summarizes the datasets. The region division uses 180 census tracts in NYC and 77 
+
+community areas in CHI. For each region, we aggregate taxi-trip records by pickup and drop-off region to form an hourly OD tensor, which serves as the raw mobility input to MoSS. The mobility data is obtained from the NYC Taxi & Limousine Commission [44] for NYC and from the City of Chicago data portal [45] for CHI. The embeddings of the region are evaluated in three downstream prediction tasks.  
+
+> •
+
+Crime prediction. Predict the annual crime count of each region from its embedding.  
+
+> •
+
+Income prediction. Predict the median household in-come of each region.  
+
+> •
+
+Service-call prediction. Predict the annual 311 service-call count for each region. 
+
+B. Implementation Details a) Zigzag persistence.: We extract only H0 persistence, which tracks connectivity by counting connected components. For each region, we compute one zigzag H0 diagram per direction (inflow/outflow), which yields two persistence-diagram views per region. 
+
+b) Persistence-diagram encoder.: The PD encoder of Eq. (10) takes each persistence point as a 3-dim feature (birth, death, persistence) and applies Lϕ = 4 point-wise convolutions with widths C1 = 32 , C2 = 64 , C3 = 128 , and final width D,followed by max-pooling along the point axis. 
+
+c) Temporal encoder.: The two outflow / inflow time series are stacked into a single 2-channel input and processed jointly by a dilated TCN with hidden width Ch = 32 , Ltcn = 10 residual blocks with kernel size kts = 3 , dilation 2ℓ at the ℓ-th block, and max-pooling over the time axis to width D.
+
+d) Optimization.: Adam optimizer is used throughout. Hyper-parameters are tuned separately for each city. For NYC, we set the learning rate to 10 −3, the alignment weight λalign to 1,and the synergy rank R to 8. For Chicago, the learning rate is 
+
+8 × 10 −4, λalign = 50 , and R = 4 . Shared settings across both cities include λorth = 50 , output dimension H = 144 , view dimension D = 16 , and dropout rate 0.1.TABLE II: Categorization of baselines and MoSS along modality and fusion strategy.                 
+
+> Method Modality Fusion strategy MVURE [4] mobility + POI + check-in attention-based MGFN [5] mobility attention-based HREP [12] mobility + POI + geographic neighbor attention-based ReCP [7] mobility + POI contrastive MVJC [15] mobility + POI + check-in contrastive ComSRE [16] mobility + POI shared–private decomposition
+> MoSS (ours) mobility shared–private + synergy
+
+C. Baselines 
+
+We compare against six representative urban region embedding methods that span the main families used to integrate human mobility with auxiliary information.  
+
+> •
+
+MVURE [4] adds a self-attention layer over view-specific embeddings and fuses them with adaptive view weights.  
+
+> •
+
+MGFN [5] learns separate source and destination em-beddings from a multi-graph fusion of typical-week OD patterns.  
+
+> •
+
+HREP [12] couples a heterogeneous region encoder with prompt-based downstream specialization, supervised by mobility, geographical, and POI signals.  
+
+> •
+
+ReCP [7] contrasts attribute and mobility autoencoders with a dual prediction objective.  
+
+> •
+
+MVJC [15] adds a structure-aware contrastive objective to mitigate the false-negative problem among functionally similar regions.  
+
+> •
+
+ComSRE [16] disentangles commonality and view-specific representations across multiple urban views through attention-based fusion and contrastive learning. Table II positions these baselines and MoSS along modality and fusion strategy. 
+
+D. Evaluation Protocol 
+
+Following prior work [4], [7], [12], [13], we evaluate the frozen region embeddings with a Ridge regressor under 5-fold cross-validation, as the number of regions is small. We report the mean absolute error (MAE), root mean squared error (RMSE), and coefficient of determination R2 as mean and standard deviation over 5 runs. 
+
+E. Main Results 
+
+We compare M OSS against six recent region-representation baselines—MVURE, MGFN, HREP, ReCP, MVJC, and ComSRE—on three downstream prediction tasks (crime, in-come, service call) in two cities, New York City ( N =180 ) and Chicago ( N =77 ). All baselines are trained with their authors’ released code. Each configuration is evaluated with five runs; we report mean ± std of MAE, RMSE, and R2 in Table III. 
+
+a) Overall performance.: MOSS achieves state-of-the-art per-formance on every task in terms of MAE, RMSE, and R2.The largest R2 gains over the strongest per-column base-line appear on service call ( +0 .040 on NY over MVURE; 
+
++0 .100 on CHI over HREP) and on income on CHI ( +0 .069 
+
+over HREP/MGFN). On crime, RMSE drops by 12 .0% on PREPRINT. 9
+
+NY (HREP, 88 .43 → 77 .82 ) and 4.4% on CHI (ComSRE, 
+
+117 .94 → 112 .77 ). Crucially, the same model configuration and the same set of region embeddings are used for all three tasks within a city, so the uniform gains reflect amore transferable representation rather than per-task tuning— several baselines that are competitive on one task collapse on another (e.g. ComSRE is the strongest baseline on CHI crime, 
+
+R2=0 .548 , but falls to 0.187 on CHI income; ReCP’s CHI service call R2 varies by ±0.157 ). 
+
+b) Cross-city consistency.: Existing baselines exhibit perfor-mance variability across cities and tasks. For instance, Com-SRE achieves the best performance on CHI crime prediction (R2=0 .548 ) but drops to the middle of the pack on NY crime (0.450 , compared to HREP’s 0.642 ). Likewise, MGFN attains strong performance on CHI income prediction ( R2=0 .630 ) yet degrades markedly on NY income ( 0.460 ), while HREP, which leads on NY crime ( 0.642 ), is overtaken on CHI crime ( 0.513 ). In contrast, M OSS ranks first in mean across all tasks and both cities, demonstrating stable generalization across different urban structures, prediction targets, and target scales. 
+
+c) Stability.: MOSS attains the best mean on every NY task together with consistently low seed variance — the lowest on NY crime and service call — and remains competitive in variance on CHI while maintaining state-of-the-art predictive performance. In comparison, several baselines show either larger variability or lower overall accuracy depending on the task. For example, ReCP on CHI service call exhibits alarge fluctuation ( ±0.157 ), while MGFN on CHI service call and MVURE across CHI tasks also display relatively high variance (0.205 and 0.087–0.094, respectively). Conversely, some methods such as ComSRE and MVJC achieve relatively small standard deviations on NY tasks (0.020), but with lower mean performance than M OSS. 
+
+F. Ablation Study 
+
+To isolate the contribution of each component of our model, we ablate four modules:  
+
+> •
+
+w/o Seq. Replace the dilated-TCN encoding of each region’s hourly inflow/outflow time series with a row-wise embedding of its row in the (row-normalized) OD matrix.  
+
+> •
+
+w/o Strct. Remove structure stream.  
+
+> •
+
+w/o SP. Remove the shared–private decomposition: the three raw view embeddings feed the synergy mod-ule directly, with no shared embedding and no align-ment/orthogonality regularization.  
+
+> •
+
+w/o Syn. Replace the synergy module with a plain concatenation of the shared embeddings and the three private embeddings. The results for all four variants are shown in Table IV and we make the following observations. 
+
+a) Effectiveness of sequence stream.: Replacing the sequence stream with a row-wise OD-row embedding ( w/o Seq ) de-grades the model, with magnitude varying by city and task. The resulting drop in downstream performance shows that the time-evolving volume semantics carries predictive information that neither the aggregate OD-row embedding nor the topolog-ical views recover. 
+
+b) Effectiveness of structure stream.: Dropping the persistence-diagram views ( w/o Strct ) consistently degrades performance across all settings. Prediction across cities and tasks empirically confirms that this persistent connectivity structure carries signal that neither the raw temporal sequence nor a single-view embedding can substitute. 
+
+c) Effectiveness of shared–private decomposition.: Removing the shared–private decomposition ( w/o SP ) feeds the raw view embeddings directly into the synergy module, with no shared embedding and no alignment/orthogonality regularization. The drop is consistent on NYC (e.g. Crime 0.723 → 0.622 ,Income 0.520 → 0.432 ) and particularly severe on CHI Crime (0.587 → 0.208 ). This shows that the synergy module benefits from private embeddings that are disentangled from a common shared component, through shared–private decomposition. 
+
+d) Effectiveness of synergy module.: Replacing the multi-linear interaction with a plain concatenation of the shared embedding and the three private embeddings ( w/o Syn ) also degrades performance across both cities. This confirms that the performance gain does not arise merely from combining multiple view embeddings but from explicitly modeling their multiplicative interactions through the synergy mechanism. 
+
+G. Hyperparameter Analysis 0.1 1 10 50 0.4 0.6 0.8                          
+
+> R2
+> Crime
+> (a) Alignment weight
+> 0.1 110 50
+> align
+> Income
+> 0.1 110 50
+> Service
+> 0.1 110 50 0.4 0.6 0.8
+> R2
+> Crime
+> (b) Orthogonality weight
+> 0.1 110 50
+> orth
+> Income
+> 0.1 110 50
+> Service
+> 64 96 144 192 0.4 0.6 0.8
+> R2
+> Crime
+> (c) Final embedding dimension
+> 64 96 144 192
+> H
+> Income
+> 64 96 144 192
+> Service
+> NY CHI
+
+Fig. 4: Impact of (a) alignment weight λalign , (b) orthogonality weight λorth , and (c) final embedding dimension H, on NYC and CHI. Each curve reports per-task R2 ↑.We analyze M OSS’s sensitivity to the following hyperparam-eters.  
+
+> •
+
+Alignment weight λalign ∈ { 0.1, 1, 10 , 50 }. 
+
+> •
+
+Orthogonality weight λorth ∈ { 0.1, 1, 10 , 50 }. 
+
+> •
+
+Final embedding dimension H ∈ { 64 , 96 , 144 , 192 }.PREPRINT. 10 
+
+TABLE III: Downstream task performance on (a) New York and (b) Chicago . Each cell reports MAE ↓ /RMSE ↓ / R2 ↑ as mean ± std over 5 runs, evaluated with a frozen embedding and a Ridge regressor under 5-fold cross-validation; best results in bold .
+
+(a) New York City ( N = 180 regions)                      
+
+> Crime Income Service Call Model MAE ↓RMSE ↓R2↑MAE ↓RMSE ↓R2↑MAE ↓RMSE ↓R2↑
+> MVURE
+
+66.97 ± 2.53 91.32 ± 3.11 0.618 ± 0.026 24,679.25 ± 555.00 34,039.77 ± 1,419.32 0.454 ± 0.046 1,388.52 ± 73.98 2,119.61 ± 79.52 0.402 ± 0.045  
+
+> MGFN
+
+72.65 ± 1.91 95.92 ± 3.33 0.579 ± 0.029 25,348.51 ± 453.34 33,892.86 ± 906.87 0.460 ± 0.029 1,561.49 ± 64.51 2,297.65 ± 74.43 0.297 ± 0.046  
+
+> HREP
+
+67.52 ± 3.40 88.43 ± 3.82 0.642 ± 0.030 24,050.41 ± 609.86 32,811.26 ± 613.64 0.494 ± 0.019 1,421.57 ± 59.56 2,174.02 ± 53.01 0.371 ± 0.031  
+
+> ReCP
+
+78.47 ± 2.25 105.62 ± 3.71 0.489 ± 0.035 23,591.51 ± 786.42 33,752.57 ± 904.24 0.464 ± 0.029 1,638.69 ± 14.16 2,379.75 ± 92.45 0.246 ± 0.058  
+
+> MVJC
+
+96.56 ± 1.61 126.20 ± 1.45 0.272 ± 0.017 24,854.67 ± 395.86 34,048.97 ± 623.97 0.455 ± 0.020 1,730.27 ± 32.07 2,550.76 ± 19.69 0.135 ± 0.013  
+
+> ComSRE
+
+83.32 ± 1.23 109.62 ± 1.67 0.450 ± 0.017 25,972.68 ± 209.84 36,785.39 ± 352.58 0.364 ± 0.012 1,527.64 ± 21.50 2,233.19 ± 27.18 0.337 ± 0.016                            
+
+> MoSS (ours) 58.54 ±1.47 77.82 ±1.88 0.723 ±0.013 22,570.61 ±553.36 31,961.66 ±546.65 0.520 ±0.017 1,350.51 ±25.85 2,048.49 ±17.70 0.442 ±0.010
+
+(b) Chicago ( N = 77 community areas)                                                                                                                                                                                                                  
+
+> Crime Income Service Call Model MAE ↓RMSE ↓R2↑MAE ↓RMSE ↓R2↑MAE ↓RMSE ↓R2↑
+> MVURE 106.65 ±9.33 137.63 ±11.04 0.386 ±0.094 17,596.48 ±1,338.95 22,888.09 ±1,753.51 0.436 ±0.087 196.32 ±15.70 277.74 ±21.96 0.397 ±0.093
+> MGFN 105.98 ±4.95 141.99 ±7.58 0.348 ±0.069 14,251.82 ±1,337.33 18,500.46 ±1,630.94 0.630 ±0.067 230.35 ±29.03 327.00 ±38.85 0.158 ±0.205
+> HREP 91.31 ±5.31 122.80 ±5.09 0.513 ±0.041 13,985.99 ±1,176.41 18,506.64 ±1,676.33 0.630 ±0.068 178.36 ±4.59 253.41 ±8.26 0.501 ±0.032
+> ReCP 99.22 ±8.82 135.96 ±8.27 0.402 ±0.073 16,038.75 ±1,486.26 22,514.94 ±1,845.25 0.453 ±0.088 195.54 ±26.83 280.62 ±37.17 0.378 ±0.157
+> MVJC 114.08 ±3.68 148.21 ±3.22 0.292 ±0.030 16,878.63 ±433.16 21,639.37 ±528.62 0.498 ±0.025 185.13 ±8.00 271.29 ±10.93 0.428 ±0.045
+> ComSRE 83.85 ±4.88 117.94 ±10.37 0.548 ±0.077 20,423.16 ±685.85 27,524.31 ±1,337.32 0.187 ±0.081 236.27 ±3.21 314.85 ±5.53 0.230 ±0.027
+> MoSS (ours) 82.45 ±7.90 112.77 ±9.88 0.587 ±0.072 12,485.64 ±869.83 16,733.43 ±954.44 0.699 ±0.035 156.69 ±5.88 226.57 ±10.48 0.601 ±0.037
+
+TABLE IV: Ablation study on NY and CHI. We remove or replace one module at a time: w/o Seq replaces the dilated-TCN sequence encoder with a row-wise OD-row embedding, 
+
+w/o Strct drops the structure stream, w/o SP removes the shared–private decomposition (feeding raw view embeddings into the synergy module), and w/o Syn replaces the synergy module with plain concatenation. Each cell reports per-task 
+
+R2 ↑ (mean over 5 runs); best results in bold .
+
+NY CHI Variant Crime Income Service Call Crime Income Service Call Full 0.723 0.520 0.442 0.587 0.699 0.601 
+
+w/o Seq 0.558 0.441 0.378 0.404 0.577 0.284 w/o Strct 0.646 0.481 0.406 0.442 0.504 0.422 w/o SP 0.622 0.432 0.395 0.208 0.576 0.326 w/o Syn 0.582 0.477 0.395 0.414 0.454 0.426 
+
+a) Weight parameters λalign and λorth .: The two weights affect the three tasks differently (Figure 4a,b). Crime is the most robust, varying within 0.02 in R2 across both weight ranges on both cities. Service call is the most responsive, and the two cities respond in opposite directions to λalign : CHI rises monotonically from 0.466 at λalign =0 .1 to 0.601 at λalign =50 ,while NY declines from 0.465 to 0.426 across the same range. 
+
+b) Final embedding dimension.: On CHI, all three tasks peak at H = 144 and decline at H = 192 , with the worst performance at H = 64 (Figure 4c). NY shows two different patterns: crime and income improve monotonically up to 
+
+H = 192 (0.699 → 0.729 and 0.501 → 0.532 ), whereas service call peaks early at H = 96 (0.476 ) and declines at larger dimensions. TABLE V: Trainable parameters and per-epoch training time of M OSS and the six baselines on NY and CHI; lower is better for both metrics. 
+
+NY ( N = 180 ) CHI ( N = 77 )Model Params ms/epoch Params ms/epoch MVURE 222 K 91.0 222 K 23.7 MGFN 13.39 M 27.3 3.46 M 24.5 HREP 188 K 26.6 188 K 26.2 ReCP 289 K 155.4 235 K 166.9 MVJC 829 K 51.4 558 K 49.5 ComSRE 458 K 29.4 353 K 28.7 
+
+MoSS (ours) 157 K 62.0 157 K 61.6 
+
+H. Model Size and Training Efficiency 
+
+We additionally compare M OSS against the six baselines along two practical axes: number of trainable parameters and wall-clock time per training epoch. Parameter counts are obtained by enumerating all trainable tensors in each model after instantiation with the hyperparameters used to produce Table III. Per-epoch time is measured on a single NVIDIA RTX 3090 (24 GB) with 20 measured epochs after 3 warm-up epochs. Numbers are reported in Table V. 
+
+a) Parameter count.: MOSS uses ∼157K trainable parame-ters on both cities, the smallest among the compared methods. It uses fewer parameters than HREP ( 188 K), and is 85 ×
+
+smaller than MGFN on NY ( 13 .39 M → 157 K) and 22 ×
+
+smaller on CHI ( 3.46 M → 157 K). 
+
+b) Training time.: MOSS incurs a moderately higher per-epoch cost than most baselines, with only MVURE (NY) and ReCP being slower, because its sequence and structure en-coders together with the multi-degree synergy fusion add per-step overhead beyond plain attention or contrastive objectives. This reflects a deliberate trade-off: these components raise the PREPRINT. 11 
+
+per-epoch cost yet keep M OSS compact in parameters and drive its accuracy gains. VI. C ONCLUSION 
+
+We presented MoSS, an urban region embedding framework that combines mobility time series with zigzag persistence diagrams of the time-evolving connectivity-graphs. A shared– private decomposition, paired with cross-view alignment and orthogonality losses, fuses these complementary signals into a unified region representation refined by multi-degree inter-action. Although MoSS draws solely on mobility data, it out-performs urban region embedding baselines that additionally rely on auxiliary modalities such as POI and check-in, while using a fraction of the parameters of the strongest baselines. We view the temporal–topological pairing as a general design pattern for representing urban regions and leave its extension to additional modalities, longer time scales, and cross-city transfer for future work. REFERENCES [1] W. Zhang, J. Han, Z. Xu, H. Ni, T. Lyu, H. Liu, and H. Xiong, “Towards urban general intelligence: A review and outlook of urban foundation models,” ACM Trans. Intell. Syst. Technol. , 2026. [2] H. Wang and Z. Li, “Region representation learning via mobility flow,” in Proc. ACM Int. Conf. Inf. Knowl. Manage. , 2017, pp. 237–246. [3] Z. Yao, Y. Fu, B. Liu, W. Hu, and H. Xiong, “Representing urban functions through zone embedding with human mobility patterns,” in 
+
+Proc. Int. Joint Conf. Artif. Intell. , 2018, pp. 3919–3925. [4] M. Zhang, T. Li, Y. Li, and P. Hui, “Multi-view joint graph representation learning for urban region embedding,” in Proc. Int. Joint Conf. Artif. Intell. , 2020, pp. 4431–4437. [5] S. Wu, X. Yan, X. Fan, S. Pan, S. Zhu, C. Zheng, M. Cheng, and C. Wang, “Multi-graph fusion networks for urban region embedding,” in Proc. Int. Joint Conf. Artif. Intell. , 2022. [6] N. Kim and Y. Yoon, “Effective urban region representation learning using heterogeneous urban graph attention network (hugat),” IEEE Access , 2025. [7] Z. Li, W. Huang, K. Zhao, M. Yang, Y. Gong, and M. Chen, “Urban region embedding via multi-view contrastive prediction,” in Proc. AAAI Conf. Artif. Intell , 2024, pp. 8724–8732. [8] T. Li, S. Xin, Y. Xi, S. Tarkoma, P. Hui, and Y. Li, “Predicting multi-level socioeconomic indicators from structural urban imagery,” in Proc. ACM Int. Conf. Inf. Knowl. Manage. , 2022, pp. 3282–3291. [9] J. Yuan, Y. Zheng, and X. Xie, “Discovering regions of different functions in a city using human mobility and pois,” in Proc. ACM SIGKDD Int. Conf. Knowl. Discovery Data Mining , 2012, pp. 186–194. [10] Y. Zheng, L. Capra, O. Wolfson, and H. Yang, “Urban computing: concepts, methodologies, and applications,” ACM Trans. Intell. Syst. Technol. , vol. 5, no. 3, pp. 1–55, 2014. [11] L. Zhang, C. Long, and G. Cong, “Region embedding with intra and inter-view contrastive learning,” IEEE Trans. Knowl. Data Eng. , vol. 35, no. 9, pp. 9031–9036, 2022. [12] S. Zhou, D. He, L. Chen, S. Shang, and P. Han, “Heterogeneous region embedding with prompt learning,” in Proc. AAAI Conf. Artif. Intell ,2023, pp. 4981–4989. [13] F. Sun, J. Qi, Y. Chang, X. Fan, S. Karunasekera, and E. Tanin, “Urban region representation learning with attentive fusion,” in Proc. IEEE Int. Conf. Data Eng. , 2024, p. 4409–4421. [14] J. Jin, Y. Song, D. Kan, H. Zhu, X. Sun, Z. Li, X. Sun, and J. Zhang, “Urban region pre-training and prompting: a graph-based approach,” in 
+
+Proc. ACM SIGKDD Int. Conf. Knowl. Discovery Data Mining , 2025, p. 1071–1082. [15] Y. Lin, Y. Xu, L. Jiang, and P. Wang, “Comprehensive urban region representation learning via multi-view joint learning and contrastive learning,” in Proc. AAAI Conf. Artif. Intell , 2026, p. 15261–15268. [16] Z. Li, H. Jia, K. Zhao, W. Huang, and M. Chen, “Multi-view urban re-gion embedding via commonality-specificity disentanglement,” in Proc. ACM SIGKDD Int. Conf. Knowl. Discovery Data Mining , 2026. [17] P. Wang, Y. Fu, J. Zhang, X. Li, and D. Lin, “Learning urban community structures: A collective embedding perspective with periodic spatial-temporal mobility graphs,” ACM Trans. Intell. Syst. Technol. , vol. 9, no. 6, pp. 1–28, 2018. [18] G. Carlsson and V. De Silva, “Zigzag persistence,” Found. Comput. Math. , vol. 10, no. 4, pp. 367–405, 2010. [19] M. Chen, H. Jia, Z. Li, W. Huang, K. Zhao, Y. Gong, H. Xu, and H. Dai, “Region embedding with adaptive correlation discovery for predicting urban socioeconomic indicators,” IEEE Trans. Knowl. Data Eng. , vol. 38, no. 2, pp. 1280–1291, 2026. [20] Y. Liu, X. Zhang, J. Ding, Y. Xi, and Y. Li, “Knowledge-infused contrastive learning for urban imagery-based socioeconomic prediction,” in Proc. Int. World Wide Web Conf. , 2023, pp. 4150–4160. [21] Q. Zhang, X. Gao, H. Wang, D. Huang, S.-M. Yiu, and H. Yin, “Hgau-rban: Heterogeneous graph autoencoding for urban spatial-temporal learning,” in Proc. ACM Int. Conf. Inf. Knowl. Manage. , 2025, p. 4139–4148. [22] Y. Zhang, Y. Fu, P. Wang, X. Li, and Y. Zheng, “Unifying inter-region autocorrelation and intra-region structures for spatial embedding via collective adversarial learning,” in Proc. ACM SIGKDD Int. Conf. Knowl. Discovery Data Mining , 2019, pp. 1700–1708. [23] Y. Li, W. Huang, G. Cong, H. Wang, and Z. Wang, “Urban region representation learning with openstreetmap building footprints,” in Proc. ACM SIGKDD Int. Conf. Knowl. Discovery Data Mining , 2023, pp. 1363–1373. [24] F. Sun, Y. Chang, E. Tanin, S. Karunasekera, and J. Qi, “Flexireg: Flexible urban region representation learning,” in Proc. ACM SIGKDD Int. Conf. Knowl. Discovery Data Mining , 2025, p. 2702–2713. [25] Y. Fu, P. Wang, J. Du, L. Wu, and X. Li, “Efficient region embedding with multi-view spatial networks: A perspective of locality-constrained spatial autocorrelations,” in Proc. AAAI Conf. Artif. Intell , vol. 33, 2019, p. 906–913. [26] K. Bousmalis, G. Trigeorgis, N. Silberman, D. Krishnan, and D. Erhan, “Domain separation networks,” in Adv. Neural Inf. Process. Syst. , 2016, p. 343–351. [27] D. Hazarika, R. Zimmermann, and S. Poria, “Misa: Modality-invariant and-specific representations for multimodal sentiment analysis,” in Proc. ACM Int. Conf. Multimedia , 2020, pp. 1122–1131. [28] J. Zhao, X. Xie, X. Xu, and S. Sun, “Multi-view learning overview: Recent progress and new challenges,” Inf. Fusion , vol. 38, pp. 43–54, 2017. [29] A. Zadeh, M. Chen, S. Poria, E. Cambria, and L.-P. Morency, “Tensor fusion network for multimodal sentiment analysis,” in Proc. Conf. Empir. Methods Nat. Lang. Process. , 2017, pp. 1103–1114. [30] Z. Yu, J. Yu, J. Fan, and D. Tao, “Multi-modal factorized bilinear pooling with co-attention learning for visual question answering,” in Proc. IEEE Int. Conf. Comput. Vis. , 2017, pp. 1839–1848. [31] Z. Liu, Y. Shen, V. B. Lakshminarasimhan, P. P. Liang, A. Bagher Zadeh, and L.-P. Morency, “Efficient low-rank multimodal fusion with modality-specific factors,” in Proc. Annu. Meeting Assoc. Comput. Linguistics ,2018, pp. 2247–2256. [32] N. Kim, H. Baik, and Y. Yoon, “Topocl: Topological contrastive learning for time series,” IEEE Trans. Neural Netw. Learn. Syst. , pp. 1–12, 2026. PREPRINT. 12 
+
+[33] M. Hajij, B. Wang, C. Scheidegger, and P. Rosen, “Visual detection of structural changes in time-varying graphs using persistent homology,” in Proc. IEEE Pacific Vis. Symp. , 2018, pp. 125–134. [34] S. Tymochko, E. Munch, and F. A. Khasawneh, “Using zigzag persistent homology to detect hopf bifurcations in dynamical systems,” Algorithms ,vol. 13, no. 11, p. 278, 2020. [35] A. Myers, D. Mu˜ noz, F. A. Khasawneh, and E. Munch, “Temporal network analysis using zigzag persistence,” EPJ Data Sci. , p. 6, 2023. [36] Y. Chen, I. Segovia, and Y. R. Gel, “Z-gcnets: Time zigzags at graph convolutional networks for time series forecasting,” in Proc. Int. Conf. Mach. Learn. , vol. 139, 2021, pp. 1684–1694. [37] Y. Chen, Y. Gel, and H. V. Poor, “Time-conditioned dances with simpli-cial complexes: Zigzag filtration curve based supra-hodge convolution networks for time-series forecasting,” in Adv. Neural Inf. Process. Syst. ,vol. 35, 2022, pp. 8940–8953. [38] H. Edelsbrunner and J. Harer, Computational topology: an introduction .American Mathematical Soc., 2010. [39] A. Van Den Oord, S. Dieleman, H. Zen, K. Simonyan, O. Vinyals, A. Graves, N. Kalchbrenner, A. Senior, K. Kavukcuoglu, et al. ,“Wavenet: A generative model for raw audio,” arXiv preprint arXiv:1609.03499 , vol. 12, no. 1, 2016. [40] S. Bai, J. Z. Kolter, and V. Koltun, “An empirical evaluation of generic convolutional and recurrent networks for sequence modeling,” arXiv preprint arXiv:1803.01271 , 2018. [41] M. Zaheer, S. Kottur, S. Ravanbakhsh, B. Poczos, R. R. Salakhutdinov, and A. J. Smola, “Deep sets,” in Adv. Neural Inf. Process. Syst. , 2017. [42] C. R. Qi, H. Su, K. Mo, and L. J. Guibas, “Pointnet: Deep learning on point sets for 3d classification and segmentation,” in Proc. IEEE Conf. Comput. Vis. Pattern Recognit. , 2017. [43] W. Zellinger, T. Grubinger, E. Lughofer, T. Natschl¨ ager, and S. Saminger-Platz, “Central moment discrepancy (cmd) for domain-invariant representation learning,” in Proc. Int. Conf. Learn. Represent. ,2017. [44] NYC OpenData, “NYC OpenData: Open data for all new yorkers,” 2024, accessed: 2026-05-13. [Online]. Available: https://opendata. cityofnewyork.us/ [45] Chicago Data Portal, “Chicago data portal,” 2024, accessed: 2026-05-13. [Online]. Available: https://data.cityofchicago.org/ [46] U.S. Census Bureau, “Measuring america’s people, places, and economy,” 2024, accessed: 2026-05-13. [Online]. Available: https: //www.census.gov/ [47] Chicago Health Atlas, “Median household income (Indicator INC),” https://chicagohealthatlas.org/indicators/INC, 2024, U.S. Census Bureau, American Community Survey (Table B19013).

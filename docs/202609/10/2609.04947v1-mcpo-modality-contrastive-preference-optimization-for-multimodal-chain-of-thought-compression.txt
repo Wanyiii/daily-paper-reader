@@ -1,0 +1,380 @@
+Title: MCPO: Modality-Contrastive Preference Optimization for Multimodal Chain-of-Thought Compression
+
+URL Source: https://arxiv.org/pdf/2609.04947v1
+
+Published Time: Mon, 07 Sep 2026 00:47:41 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# MCPO: Modality-Contrastive Preference Optimization for Multimodal Chain-of-Thought Compression 
+
+## Guangheng Yang ∗
+
+ygh25@mails.tsinghua.edu.cn Tsinghua University Huawei Technologies Ltd. Beijing, China 
+
+## Zhenliang Ni ∗
+
+nizhenliang2@huawei.com Huawei Technologies Ltd. Beijing, China 
+
+## Zhenkai Wu 
+
+wuzhenkai2@huawei.com Huawei Technologies Ltd. Beijing, China 
+
+## Han Shu †
+
+han.shu@huawei.com Huawei Technologies Ltd. Beijing, China 
+
+## Juan Feng †
+
+juan.feng@sz.tsinghua.edu.cn Tsinghua University Beijing, China 
+
+## Wenming Yang 
+
+yang.wenming@sz.tsinghua.edu.cn Tsinghua University Beijing, China 
+
+## Jie Hu 
+
+hujie23@huawei.com Huawei Technologies Ltd. Shanghai, China 
+
+Abstract 
+
+Recently, multimodal large-scale reasoning models have demon-strated remarkable capabilities in solving complex tasks through long Chains-of-Thought (M-CoT). However, excessively long rea-soning trajectories incur substantial computational costs and signif-icant KV-cache pressure. Existing CoT compression and alignment paradigms mainly rely on static rules or single-dimensional pref-erences, lacking fine-grained cross-modal constraints; as a result, they are prone to inducing visual laziness and hallucinatory rea-soning. To address these issues, we propose Modality-Contrastive Preference Optimization (MCPO), a highly sample-efficient two-stage length-compression method that requires fewer than 900 training samples. In the compression stage, we introduce a step-level Normalized Cross-Modal Mutual Information (NCMI) prun-ing algorithm, which automatically identifies and removes visual-independent reasoning steps by comparing the reasoning discrepan-cies between with-image and no-image contexts. This significantly reduces redundancy and hallucinatory content in the reasoning chains. In the alignment stage, the model first undergoes supervised fine-tuning to achieve domain-adaptive initialization, followed by optimization using an asymmetric multimodal length-controlled preference loss. This objective adopts a highly nonlinear odds-ratio formulation that provides steep gradients in the with-image con-text to reinforce length constraints for preferred trajectories, while applying a scaled, flat-gradient linear difference in the no-image context to maintain modality consistency, thereby achieving sta-ble cross-modal preference alignment. Extensive experiments on mainstream base models such as Qwen3-VL-Thinking show that our method can reduce CoT length by up to 69.5% and achieve up to 3.34 × end-to-end inference speedup while preserving original accuracy. 
+
+1 Introduction 
+
+In recent years, multimodal large-scale reasoning models [10, 29, 30] have achieved remarkable progress in tasks such as visual question answering, scene understanding, and cross-modal reasoning. Multi-modal Chain-of-Thought (M-CoT) [31] has emerged as a key mech-anism for enhancing complex reasoning capabilities, enabling mod-els to generate multi-step reasoning trajectories that more precisely interpret visual content, construct cross-modal associations, and exhibit human-like reasoning depth in challenging scenarios [8, 33]. However, these long reasoning chains impose substantial system burdens: inference latency increases significantly, KV-cache pres-sure grows sharply, and the overall computational cost becomes prohibitive in real-world deployment [9, 17, 19, 24, 32]. As model sizes continue to expand, achieving effective M-CoT length com-pression while preserving reasoning quality has become a central challenge for practical multimodal reasoning systems. To reduce inference overhead, prior work has explored rule-based pruning, and preference alignment to compress chain-of-thought reasoning [2, 12, 23, 32]. Yet these approaches exhibit notable limi-tations. Many rely on static heuristics or single-dimensional prefer-ences and lack fine-grained modeling of visual information, often in-ducing “visual laziness,” where models ignore image content during reasoning. The absence of cross-modal consistency constraints fur-ther increases the likelihood of hallucinated reasoning, particularly in tasks with strong visual dependence. Moreover, existing methods frequently require large amounts of high-quality annotated data or costly online preference optimization, resulting in high training overhead and limited applicability in low-resource settings [7, 35]. Consequently, current CoT compression paradigms struggle to simultaneously achieve high compression ratios, cross-modal con-sistency, and low training cost. To address these limitations, we propose Modality-Contrastive Preference Optimization (MCPO), a highly sample-efficient two-stage 
+
+> ∗Equal contribution
+> †Corresponding authors arXiv:2609.04947v1 [cs.CV] 4 Sep 2026
+
+Yang et al. 10 3    
+
+> Avg. Thinking Tokens (Log-Scale) 45 50 55 60 65 70 75 Benchmark Accuracy (%)
+> MathVista ScienceQA MMMU MMStar
+> (a) Multi-Benchmark Pareto Frontier (8B)
+> Base (8B) StepEntropy REFRAIN Ours (MCPO)
+> 0.000 0.025 0.050 0.075 0.100 0.125 0.150 0.175 0.200 Contrastive Weight ( )
+> 50 55 60 65 70 Accuracy (%)
+> (b) Dual-Axis -Sensitivity Landscape
+> MathVista Acc (%) ScienceQA Acc (%) MMMU Acc (%) MMMU Tokens
+> Easy Medium Hard
+> 25 30 35 40 45 50 55 60 65 Accuracy (%)
+> +10.3% Boost!
+> (c) Overthinking Mitigation by Difficulty
+> Base Acc (%) MCPO Acc (%) Base Tokens MCPO Tokens
+> 800 900 1000 1100 1200 1300 1400 1500 1600 Thinking Tokens (Dashed)
+> 01000 2000 3000 4000 5000 Avg. Tokens
+
+Figure 1: Comprehensive empirical evaluation of the MCPO framework on Qwen3-VL-8B-Thinking. (a) Multi-benchmark vector shift illustrating the optimization trajectory from Base-8B to MCPO across MathVista, ScienceQA, MMMU, and MMStar: thinking token lengths are significantly compressed (by 42.6%–69.5%) while maintaining competitive task accuracy compared to StepEntropy and REFRAIN baselines. (b) Dual-axis hyperparameter landscape measuring accuracy and token length sensitivity across contrastive weights 𝛼 ∈ { 0.0, 0.05 , 0.1, 0.2}, identifying 𝛼 = 0.05 as the optimal Pareto choice. (c) Overthinking mitigation across reasoning difficulty levels, demonstrating that MCPO adaptively curtails redundant reasoning steps on simple tasks while unlocking a +10.3% absolute accuracy boost on Hard reasoning tasks. 
+
+framework for multimodal chain-of-thought compression that re-quires fewer than 900 offline training samples. In the compres-sion stage, MCPO introduces a step-level Normalized Cross-Modal Mutual Information (NCMI) pruning algorithm that compares the model’s reasoning behavior under with-image and no-image con-texts to automatically determine whether each reasoning step gen-uinely depends on visual information. Steps with low cross-modal mutual information are pruned, effectively removing visual inde-pendent reasoning. This mechanism substantially reduces redun-dant reasoning and suppresses hallucinations at their source, pro-ducing more compact reasoning trajectories that maintain faithful reliance on visual content. In the alignment stage, MCPO further stabilizes the compressed reasoning style through an asymmetric multimodal length-controlled preference loss. The model first undergoes supervised fine-tuning for domain-adaptive initialization, followed by preference optimiza-tion using a novel asymmetric objective. Under with-image con-texts, the loss employs a highly nonlinear odds-ratio formulation that yields steep gradients, strongly reinforcing the preference for shorter, high-quality reasoning trajectories. Under no-image con-texts, the loss adopts a scaled linear difference with flatter gradients to preserve cross-modal consistency and prevent over-reliance on linguistic patterns. This asymmetric design enables MCPO to main-tain visual grounding while reliably controlling reasoning length. Extensive experiments on prominent base models such as Qwen3-VL-Thinking demonstrate that MCPO reduces chain-of-thought length by up to 69.5% without sacrificing accuracy. This indicates that redundant reasoning steps can be pruned effectively while fully preserving the model’s core visual comprehension capabili-ties. This reduction translates to significant end-to-end execution speedups (up to 3.34 ×), substantially lowering inference latency and delivering strong efficiency and robustness under extremely low-resource data and compute conditions. In summary, the main contributions of this work are as follows: 
+
+• Step-Level Cross-Modal Pruning : We propose an adap-tive step-level NCMI pruning method to quantitatively iden-tify and remove visual-independent redundant and halluci-natory reasoning steps prior to training. 
+
+• Asymmetric Preference Optimization (MCPO) : We de-sign a decoupled loss function leveraging an asymmetric gradient velocity gap between multimodal log-odds and uni-modal log-probabilities, enforcing visual grounding while systematically preventing probability collapse. 
+
+• High Sample and Compute Efficiency : MCPO achieves strong alignment performance using only 860 training sam-ples, significantly lowering data and memory barriers for M-CoT compression. 
+
+• Comprehensive Empirical Validation : Evaluations across four benchmarks on 8B and 4B models show up to 69.5% to-ken reduction, up to 3.34 × inference speedup, and a +10.3% accuracy boost on hard tasks. 
+
+2 Related Work 2.1 Chain-of-Thought Reasoning 
+
+Chain-of-Thought (CoT) prompting elicits step-by-step reasoning in large language models (LLMs) and is effective for complex multi-step tasks [31]. However, it often incurs substantial computational cost and produces verbose, repetitive traces. Recent studies identify overthinking in long-reasoning models, where additional reasoning yields only marginal gains in accuracy and response diversity [7]. Overthinking includes verbose overthinking, which is inefficient but generally harmless, and harmful overthinking, where continued reasoning beyond a correct intermediate solution introduces errors [5]. Prefix-level analyses further show that many problems can be solved with much shorter reasoning trajectories [5]. From an information-theoretic perspective, step entropy measures the con-tribution of individual reasoning steps, and low-entropy steps can MCPO: Modality-Contrastive Preference Optimization for Multimodal Chain-of-Thought Compression I. Offline Adaptive NCMI Pruning  Step-Level CD                                     
+
+> +➔y_orig Split: \n\n / Regex
+> Step Visual Dependency Evaluation
+> S₁: Locate & measure visual features ✔Keep
+> S₂: Language transition bias [SKIP] ⏩
+> S₃: Ungrounded prior reasoning [SKIP] ⏩
+> S_N: Final calculation & answer ✔Keep
+> CV-Driven Dynamic Thresholding (τ)
+> τ = μ_NCMI + β · σ_NCMI | β = -1.0 + CV · scale
+> • High CV ➔Higher τ (More Pruning) | Low CV ➔Lower τ (Preserve CoT)
+> Output: D_sft (Pruned y_w) D_train (Pair: y_w, y_l)
+> II. SFT Warmup & MCPO Alignment 2-Stage Online
+> Stage 1: Domain-Adaptive SFT Warmup
+> Frozen ViT & Projector
+> No Parameter Drift
+> [SKIP] Zero-Grad Hook
+> Freezes [SKIP] Embedding
+> Stage 2: Asymmetric MCPO Preference Alignment
+> Multimodal Track (With Image I) Steep Log-Odds
+> A: y_w (Chosen Short) vs C: y_l (Rejected Long)
+> Unimodal Track (No Image I_ø) Flat Linear
+> B: y_w (No-Img) -D: y_l (No-Img)
+> L_total =L_VGLP(I) +α·L_MILP(I_ø)
+> Non-linear Log-Odds (Primary) + Linear Log-Prob (Constraint)
+> Dynamic Calibration & Safeguards
+> 1. Asymmetric Gradient Velocity Gap
+> |∇_A L_VGLP| ∝1/(1-p_w)
+> Exponential Surge
+> |∇_B αL_MILP| ∝α
+> Flat Linear (α<1)
+> |∇_A L_VGLP| >> | ∇_B αL_MILP| ➔Guarantees A >> B
+> 2. Anti-Reward-Hacking Safeguards
+> Log-Likelihood Floor Clamp
+> torch.clamp(log_prob, min = -10.0) — Blocks -∞ collapse
+> NCMI Dynamic Contrast Ceiling
+> torch.clamp(NCMI, min = -5.0, max = +5.0) — Bounds gradients
+
+Figure 2: Overview of the proposed MCPO (Modality-Contrastive Preference Optimization) framework. The offline phase leverages step-level NCMI to adaptively prune ungrounded reasoning steps and construct compact chosen trajectories. In the online phase, an asymmetric loss combines steep log-odds in multimodal contexts with flat linear constraints in unimodal contexts to maintain strong visual dependencies while preventing probability collapse. 
+
+often be removed without reducing accuracy [16]. These findings motivate methods for compressing CoT traces while preserving essential reasoning. 
+
+2.2 Efficient Chain-of-Thought Compression 
+
+Existing compression strategies can be divided into training-based methods, which learn shortened reasoning policies, and training-free methods, which dynamically stop or prune without parameter updates. 
+
+Training-based methods. Training-based methods improve rea-soning efficiency through supervised fine-tuning, preference opti-mization, and reinforcement learning. The two-stage SFT–GRPO pipeline [27] enables models to produce [SKIP] tokens, cutting token usage by 16–57% with no loss in accuracy [16]. Meanwhile, static step-entropy pruning can eliminate low-entropy steps with-out harming accuracy, albeit with a fixed pruning criterion [16]. Length Controlled Preference Optimization (LCPO) develops a reference-free objective for length alignment under a unified Bradley– Terry framework [4], preserving reasoning accuracy with only 0.8k training samples [11]. Self-training with DPO [25] or SimPO [22] similarly shortens reasoning traces while retaining useful reflection [7]. For multimodal reasoning, V-Skip preserves visually salient tokens through an information bottleneck and dual-path gating, yielding a 2.9 × inference speedup [37]. Other methods impose ex-plicit length penalties in reinforcement learning, such as CoT-Valve [21] and L1 [1], or learn adaptive policies that balance fast and slow reasoning [18]. 
+
+Training-free methods. Training-free methods reduce inference-time reasoning cost without updating model parameters. HALT-CoT stops generation when the Shannon entropy of the predicted answer distribution falls below a threshold, reducing token us-age by 15–30% while keeping accuracy within ±0.4 percentage points of full CoT [15]. DEER generates provisional answers at reasoning transitions, such as “Wait”, and exits when confidence exceeds a threshold [34]. REFRAIN detects semantically redundant reflective steps and uses a sliding-window UCB bandit to adapt stopping thresholds online, without supervision or fine-tuning [28]. Confidence-based prompting similarly terminates generation once the model’s self-assessed confidence reaches a predefined threshold [14]. These methods motivate robust and adaptive strategies for separating essential reasoning from redundant computation. 
+
+3 Methodology 3.1 Overall Pipeline Design 
+
+Our proposed framework, MCPO (Modality-Contrastive Preference 
+
+Optimization), consists of two mutually consistent phases. The first phase is offline step pruning, where we construct a step-level Normalized Cross-Modal Mutual Information (NCMI) pruning al-gorithm on the data side to quantitatively identify and stream-line redundant or hallucinatory reasoning steps lacking visual de-pendency. This produces the pruned chosen trajectory 𝑦 𝑤 along-side the original rejected trajectory 𝑦 𝑙 . The second phase is on-line alignment, which adopts a two-stage training strategy. The model first undergoes supervised fine-tuning (SFT) to serve as a domain-adaptive initialization and distributional warmup in the representation space. Subsequently, it is optimized via our proposed multimodal contrastive length-controlled preference loss ( MCPO Loss ), enabling the model to adaptively balance concise generation and visual grounding. 
+
+3.2 Adaptive Step Pruning via NCMI 
+
+To quantify the causal dependency of each reasoning step on visual features, we introduce Normalized Cross-Modal Mutual Informa-tion (NCMI). Given a multimodal context containing an image 𝐼 and a textual prompt 𝑇 , suppose the original long Chain-of-Thought Yang et al. 
+
+generated by the model is 𝑦 orig , which is segmented into 𝑁 steps: 
+
+𝑦 orig = (𝑆 1, 𝑆 2, . . . , 𝑆 𝑁 ) (1) For the 𝑖 -th step 𝑆 𝑖 , conditioned on the preceding historical steps 
+
+𝑆 <𝑖 , its NCMI is defined as: NCMI (𝑆 𝑖 ) = log 𝑃 𝜃 (𝑆 𝑖 | 𝐼,𝑇 , 𝑆 <𝑖 ) − log 𝑃 𝜃 (𝑆 𝑖 | 𝐼 ∅,𝑇 , 𝑆 <𝑖 ) (2) where 𝐼 ∅ represents the unimodal context with the visual chan-nel blocked (implemented by zeroing out visual embeddings), and 
+
+|𝑆 𝑖 | denotes the token set for that step. The length-normalized log-likelihoods under with-image and no-image conditions are cal-culated respectively as: log 𝑃 𝜃 (𝑆 𝑖 | 𝐼,𝑇 , 𝑆 <𝑖 ) = 1
+
+|𝑆 𝑖 |∑︁ 𝑥 𝑡 ∈𝑆 𝑖 
+
+log 𝜋 𝜃 (𝑥 𝑡 | 𝑥 <𝑡 , 𝑆 <𝑖 , 𝐼,𝑇 ) (3) log 𝑃 𝜃 (𝑆 𝑖 | 𝐼 ∅,𝑇 , 𝑆 <𝑖 ) = 1
+
+|𝑆 𝑖 |∑︁ 𝑥 𝑡 ∈𝑆 𝑖 
+
+log 𝜋 𝜃 (𝑥 𝑡 | 𝑥 <𝑡 , 𝑆 <𝑖 , 𝐼 ∅,𝑇 ) (4) When NCMI (𝑆 𝑖 ) > 0, the visual input increases the token pre-diction likelihood for that step, indicating a key reasoning anchor highly dependent on visual features. Conversely, when NCMI (𝑆 𝑖 ) ≈ 
+
+0, the step exhibits minimal likelihood discrepancy regardless of the presence of the image, characterizing it as a redundant or po-tentially hallucinatory step reliant primarily on language priors that should be pruned. To ensure local computation precision for NCMI on unanno-tated raw reasoning traces, we design a hierarchical step segmenta-tion strategy. Primary paragraph-level segmentation utilizes double newlines ( \n\n ) as the main delimiter to partition the chain into dis-crete steps. If paragraph segmentation yields only a single step, the system falls back to secondary sentence-level segmentation using regular expressions while enforcing a minimum length protection (MIN_STEP_CHARS = 20) and character offset tracking to prevent generating meaningless token fragments. To prevent static pruning ratios 𝜅 from causing over-pruning on complex tasks or under-pruning on simple tasks, we formulate an adaptive dynamic threshold based on the coefficient of variation (CV). For a sequence containing 𝑁 steps, we compute the mean 
+
+𝜇 NCMI and standard deviation 𝜎 NCMI of its step-level NCMI values. The adaptive margin adjustment factor 𝛽 is defined as 𝛽 = −1.0 +
+
+CV · scale, where the coefficient of variation is CV = 𝜎 NCMI   
+
+> |𝜇 NCMI |
+
+, and scale is a global hyperparameter defaulted to 1 .2. The dynamic pruning threshold is then calculated as: 
+
+𝜏 = 𝜇 NCMI + 𝛽 · 𝜎 NCMI (5) For the 𝑖 -th step, if NCMI (𝑆 𝑖 ) < 𝜏 , it is physically replaced with the special token [SKIP] [16]; otherwise, it is retained. When the NCMI variance across steps is pronounced (high CV), indicating a clear boundary between visually dependent and in-dependent steps, 𝛽 shifts positive to raise threshold 𝜏 , adaptively increasing the pruning ratio. When NCMI values are uniform (low CV), reflecting high step coupling, 𝛽 shifts negative to lower 𝜏 ,adaptively preserving logical reasoning integrity. Furthermore, we cap CV at 3 .0, restrict 𝛽 ∈ [− 2.0, 1.0], and guarantee that every sample retains at least one reasoning step. 
+
+Dual-Channel Visual Zero-Out Mechanism. Accurately comput-ing step-level NCMI (as well as the unimodal contrastive loss LMILP 
+
+in online alignment) fundamentally relies on evaluating the model’s conditional distribution under a strictly non-visual context 𝐼 ∅ . How-ever, in modern vision-language models, visual information is not merely injected at the input embedding layer; naive approaches such as omitting the image or substituting it with a blank canvas fail to establish a true non-visual baseline due to residual feature representations. Taking Qwen3-VL as an exemplar architecture, visual cues enter the language backbone through two concurrent pathways: Path A (Input Embedding Injection) , where visual embeddings Eimg extracted from the Vision Transformer (ViT) are projected into visual placeholder positions, and Path B (Cross-Layer Visual Injection) , where a DeepStack mechanism directly feeds multi-scale visual features into intermediate Transformer layers alongside self-attention. To achieve complete visual isolation under this dual-pathway architecture, we introduce a Dual-Channel Visual Zero-Out Mechanism to construct 𝐼 ∅ . For Path A, we substitute the visual embeddings Eimg with a zero tensor 0 of identical shape prior to token-level feature scattering, forcing input embeddings at visual placeholder positions to be physically zeroed out. For Path B, we replace all multi-layer DeepStack visual representations passed to intermediate layers with zero tensors, completely blocking cross-layer visual propagation. All remaining computational parameters— including 3D positional encodings, attention masks, textual token embeddings, and sequence lengths—remain strictly identical to the multimodal forward pass ( 𝐼 ). This design guarantees that the sole discrepancy between execution paths stems exclusively from the presence or absence of visual information, ensuring that the estimated NCMI reflects the genuine causal dependency of each reasoning step on visual evidence rather than artifacts from residual visual leakage. 
+
+3.3 Modality-Contrastive Preference Optimization 
+
+In the first stage (SFT Warmup), we fine-tune the model on the pruned dataset to perform domain-adaptive initialization in the representation space. Using standard autoregressive cross-entropy loss, this phase narrows the likelihood distance between the native vocabulary distribution and the target domain of pruned reasoning chains, smoothing the latent representation manifold and preparing the model for the “concise reasoning + visual dependency” genera-tive paradigm. This warmup prevents optimization divergence or distribution shift when executing steep-gradient preference align-ment in the second stage. In the second stage (MCPO Alignment), to compress reasoning lengths while enforcing visual feature dependencies and preventing text-prior shortcuts, we design the multimodal contrastive prefer-ence loss ( MCPO Loss ). The total loss function LTotal (𝜃 ) comprises the with-image primary preference loss LVGLP and the no-image self-contrastive regularization term LMILP :
+
+LTotal (𝜃 ) = LVGLP (𝜃 | 𝐼,𝑇 ) + 𝛼 · L MILP (𝜃 | 𝐼 ∅,𝑇 ) (6) The with-image loss LVGLP operates under multimodal context 
+
+(𝐼,𝑇 ) as the primary alignment engine, constraining generation MCPO: Modality-Contrastive Preference Optimization for Multimodal Chain-of-Thought Compression Multimodal Input Example   
+
+> CLEVR Scene Example
+> Question (q):
+> "Is there anything else that has
+> the same shape as the green object?"
+> Ground Truth (a*): no
+> ⚠Scene Fact Check:
+> No green object exists in the scene.
+
+Original Verbose CoT (y_orig)  168 Tokens     
+
+> S₁ (Low CMI - Question Repeat):
+> "Got it... Question asks if anything has same shape..."
+> S₂ (High CMI - Visual Grounding): ✔
+> "Check scene: cyan sphere, yellow sphere, red cube."
+> ➔Identifies actual visual objects in image.
+> S₃ (Low CMI - Overthinking & Repeat):
+> "Wait, user said green object... no green object... let me
+> double check: cyan sphere, yellow sphere, red cube..."
+> S₄ (Low CMI - Hesitation Loop):
+> "Maybe user has a typo or a trick? Assuming scene..."
+> S₅ (High CMI - Conclusion): ✔
+> "So answer is no, because no green object in scene to compare."
+> 🚨 Severe Overthinking & Redundant Self-Doubt
+
+MCPO Pruned CoT (y_w)  42 Tok (-75%)        
+
+> [SKIP] ⏩(Omitted Prompt Repetition)
+> S₂ (Retained Visual Anchor):
+> "Check scene: cyan sphere, yellow sphere,
+> and a red metallic cube."
+> [SKIP] ⏩(Omitted Overthinking Loop)
+> [SKIP] ⏩(Omitted Typo Speculation)
+> S₅ (Retained Answer Anchor):
+> "So the answer is no, because no green
+> object exists in the scene to compare."
+> ⚡75% Token Savings & Zero Accuracy Loss
+> • Eliminates 3 redundant steps (126 tokens pruned)
+> • Maintains strict 100% visual grounding to CLEVR scene
+
+Figure 3: Qualitative case study on a CLEVR visual reasoning example. Comparing the original verbose CoT ( 𝑦 orig , 168 tokens) against our MCPO pruned CoT ( 𝑦 𝑤 , 42 tokens). MCPO effectively identifies and prunes redundant self-doubt loops and text-only prompt repetitions using step-level NCMI, replacing them with [SKIP] tokens to achieve a 75% length reduction while preserving strict visual grounding. 
+
+length by maximizing the implicit preference gap between the chosen trajectory 𝑦 𝑤 and rejected trajectory 𝑦 𝑙 :
+
+LVGLP = −E [log 𝜎 (𝑅 VGLP (𝑦 𝑤 | 𝐼,𝑇 ) − 𝑅 VGLP (𝑦 𝑙 | 𝐼,𝑇 ))] (7) Here, the with-image implicit reward for good and bad responses uses a non-linear log-odds formulation: 
+
+𝑅 VGLP (𝑦 | 𝐼,𝑇 ) = log 𝑝 (𝑦 | 𝐼,𝑇 )
+
+1 − 𝑝 (𝑦 | 𝐼,𝑇 ) + 𝜖 (8) where conditional generation probabilities represent the exponen-tial projection of the length-normalized log-probability over the entire thinking region: 𝑝 𝑤 = exp ( ¯log 𝑝 𝜃 (𝑦 𝑤 | 𝐼,𝑇 )) and 𝑝 𝑙 =
+
+exp ( ¯log 𝑝 𝜃 (𝑦 𝑙 | 𝐼,𝑇 )) .Correspondingly, the no-image loss LMILP operates under uni-modal context (𝐼 ∅,𝑇 ). To quantitatively regulate model preferences in degraded unimodal spaces, we formally define unimodal implicit rewards using a stable linear log-probability form rather than a steep odds reward: 
+
+𝑅 MILP (𝑦 | 𝐼 ∅,𝑇 ) = ¯log 𝑝 𝜃 (𝑦 | 𝐼 ∅,𝑇 ) (9) Under a unified reward contrastive framework, LMILP encourages the model to structurally prefer concise reasoning ( 𝑦 𝑤 ≻ 𝑦 𝑙 ) even when visual inputs ( 𝐼 ∅ ) are missing, converging to the standard preference contrast formulation: 
+
+LMILP = −E [log 𝜎 (𝑅 MILP (𝑦 𝑤 | 𝐼 ∅,𝑇 ) − 𝑅 MILP (𝑦 𝑙 | 𝐼 ∅,𝑇 ))] (10) This asymmetric architecture—combining a non-linear odds re-ward ( 𝑅 VGLP ) in multimodal space with a linear log-probability re-ward ( 𝑅 MILP ) in unimodal space—specifically addresses gradient an-tagonism and “visual laziness”. To ensure that the with-image prob-ability of chosen responses grows substantially faster than its no-image counterpart, we compute partial derivatives of total loss with respect to with-image chosen log-probability 𝐴 = ¯log 𝑝 𝜃 (𝑦 𝑤 | 𝐼,𝑇 )
+
+and no-image chosen log-probability 𝐵 = ¯log 𝑝 𝜃 (𝑦 𝑤 | 𝐼 ∅,𝑇 ), yield-ing the gradient flow equations: 
+
+𝜕 LVGLP 
+
+𝜕𝐴 = [1 − 𝜎 (𝑅 VGLP (𝑦 𝑤 | 𝐼,𝑇 ) − 𝑅 VGLP (𝑦 𝑙 | 𝐼,𝑇 ))] · 11 − 𝑝 𝑤 
+
+(11) 
+
+𝜕 (𝛼 LMILP )
+
+𝜕𝐵 = 𝛼 · [ 1 − 𝜎 (𝑅 MILP (𝑦 𝑤 | 𝐼 ∅,𝑇 ) − 𝑅 MILP (𝑦 𝑙 | 𝐼 ∅,𝑇 ))] 
+
+(12) Because the derivative of unimodal linear log-probability lacks the 1 − 𝑝 𝑤 denominator, its gradient pull is strictly capped within a flat linear scale bounded by damping factor 𝛼 < 1 (e.g., 𝛼 = 0.1). In contrast, the multimodal gradient features a log-odds slope accelera-tor 11−𝑝 𝑤 , exhibiting an exponential surge as probability approaches 1.0. This establishes a robust asymmetric gradient velocity gap dur-ing backpropagation: 
+
+𝜕 LVGLP 
+
+𝜕𝐴 > 𝜕𝛼 LMILP 
+
+𝜕𝐵 (13) This inequality mathematically guarantees that the increase rate of with-image chosen probability 𝐴 consistently dominates that of no-image probability 𝐵 , maintaining a healthy visual information gain gap. Consequently, this design satisfies the structural prefer-ence of favoring concise responses even in degraded spaces, while eliminating opportunities for model degradation via unimodal prob-ability collapse or text-prior shortcuts, forcing parameters to learn fine-grained pixel features to optimize the loss. 
+
+4 Experiments 
+
+In this section, we present the empirical evaluation of our frame-work, evaluating both its compression efficacy and reasoning fi-delity across diverse multimodal benchmarks. Yang et al. 
+
+Table 1: Main performance comparison across 8B and 4B model scales. Parentheses indicate accuracy delta ( Δ) and token reduction percentage ( ↓ %) relative to the respective Base model. Bold text highlights the best performance among compression methods. MCPO achieves up to 69.5% token reduction while maintaining task accuracy within 0.8%, significantly outperforming StepEntropy and REFRAIN in both system efficiency and reasoning fidelity. 
+
+Model / Method MathVista_mini [20] ScienceQA [26] MMMU_dev_val [36] MMStar [6] Acc(%) Tokens Acc(%) Tokens Acc(%) Tokens Acc(%) Tokens 
+
+4B Model Scale 
+
+Qwen3-VL-4B-Thinking [3] 71.20 1608.0 51.76 738.0 43.20 2383.0 57.87 1178.0 +Step Entropy [16] 70.30 (-0.90) 1266.5 (↓21.2%) 50.29 (-1.47) 549.3 (↓25.6%) 43.71 (+0.51) 1678.1 (↓29.6%) 55.53 (-2.34) 584.0 (↓50.4%) 
+
++REFRAIN [28] 69.50 (-1.70) 1256.0 (↓21.9%) 50.40 (-1.36) 550.0 (↓25.5%) 41.90 (-1.30) 1523.6 (↓36.1%) 56.27 (-1.60) 811.0 (↓31.2%) 
+
++MCPO (Ours) 70.80 (-0.40) 756.8 (↓52.9%) 51.21 (-0.55) 542.5 (↓26.5%) 44.23 (+1.03) 1281.0 (↓46.2%) 56.34 (-1.53) 517.0 (↓56.1%) 
+
+8B Model Scale 
+
+Qwen3-VL-8B-Thinking [3] 72.20 1188.0 50.27 553.0 53.10 2906.0 62.70 949.0 +Step Entropy [16] 70.60 (-1.60) 790.2 (↓33.5%) 47.51 (-2.76) 274.3 (↓50.4%) 52.30 (-0.80) 1211.0 (↓58.3%) 60.33 (-2.37) 624.9 (↓34.2%) 
+
++REFRAIN [28] 69.60 (-2.60) 930.0 (↓21.7%) 49.10 (-1.17) 460.0 (↓16.8%) 47.20 (-5.90) 1221.0 (↓58.0%) 58.70 (-4.00) 647.0 (↓31.8%) 
+
++MCPO (Ours) 71.40 (-0.80) 362.0 (↓69.5%) 49.93 (-0.34) 229.9 (↓58.4%) 53.30 (+0.20) 1153.0 (↓60.3%) 62.27 (-0.43) 545.0 (↓42.6%) 
+
+4.1 Datasets and Metrics 
+
+To guarantee that the Chain-of-Thought (CoT) trajectories used for preference learning are logically coherent and semantically correct, we selectively filter training instances exclusively from the base model’s correct predictions. Specifically, we collect 905 high-quality samples across two representative multimodal benchmarks: 396 correct predictions from the ScienceQA [26] training set and 509 correct predictions from the CLEVR [13] training set. These 905 samples are partitioned using a 95%/5% split into a training set of 860 instances and a validation set of 45 instances. For each sample, we apply the adaptive thresholding NCMI pruning algorithm in-troduced in Section 3.2 to offline prune redundant reasoning steps lacking visual dependency, replacing them with the [SKIP] token. This procedure yields two distinct datasets: an SFT dataset com-posed of questions, images, and single pruned, compact reasoning trajectories ( 𝑦 𝑤 ), and an MCPO preference dataset composed of pairwise preference instances, where the chosen trajectory is the pruned reasoning chain 𝑦 𝑤 and the rejected trajectory is the original verbose chain 𝑦 orig .We evaluate model performance across four representative mul-timodal reasoning benchmarks: MathVista_mini [20], ScienceQA (Image Only) [26], MMMU_dev_val [36], and MMStar [6]. We report three key metrics: (1) Task Accuracy (Acc, %) , evaluating correct answer rates; (2) Average Thinking Length (Tokens) ,measuring generated reasoning token conciseness; and (3) Infer-ence Latency (s) , measuring average end-to-end execution time per sample to quantify practical system-level speedup. 
+
+4.2 Implementation Details and Baselines 
+
+Qwen3-VL-8B-Thinking [3] and Qwen3-VL-4B-Thinking [3] serve as our base models. Training proceeds sequentially in two distinct phases. In Phase 1 (SFT Warmup), we fine-tune on the SFT dataset for 1 epoch with a learning rate of 2 × 10 −5, a per-device batch size of 1, and 32 gradient accumulation steps (yield-ing an effective global batch size of 32). In Phase 2 (MCPO Align-ment), building upon the Phase 1 SFT checkpoint, we fine-tune for 3 epochs with a learning rate of 5 × 10 −6 and a gradient accu-mulation step of 1. For the 8B model, we evaluate contrastive loss weights 𝛼 ∈ { 0.05 , 0.1, 0.2}; for the 4B model, we fix 𝛼 = 0.1. In both phases, we utilize LoRA for parameter-efficient fine-tuning (rank 
+
+𝑟 = 128, lora_alpha = 128, dropout = 0 .05), targeting all attention and FFN linear projection layers. We completely freeze the Vision Transformer encoder and cross-modal projector, while enabling gradient checkpointing on the language backbone to optimize mem-ory overhead. Under the freeze-skip setting, word embeddings corresponding to the [SKIP] token are physically frozen during backpropagation via a zero-gradient backward hook to preserve their neutral placeholder semantics. To evaluate the relative efficacy of MCPO, we adapt two represen-tative LLM Chain-of-Thought compression methods to multimodal scenarios for comparison: StepEntropy [16], a training-based prun-ing approach that measures information entropy across individual reasoning steps to remove low-contribution steps prior to fine-tuning; and REFRAIN [28], a training-free online pruning method that dynamically detects step-level redundancy during decoding and triggers early exiting. 
+
+4.3 Main Results 
+
+To systematically evaluate the overall performance of different inference token pruning algorithms on multimodal tasks, we con-ducted joint experiments on four benchmarks, measuring both accuracy and the number of generated tokens. Table 1 reports the results of Qwen3-VL as the baseline, together with Step Entropy, REFRAIN, and MCPO on MathVista-mini, ScienceQA, MMMU, and MMStar, including their accuracy, generated token counts, and to-ken reduction ratios. The results show that although Step Entropy and REFRAIN can reduce a portion of tokens, they often suffer from notable accuracy degradation; in contrast, MCPO consistently achieves substantial token compression across all tasks while in-curring much smaller accuracy drops. For example, on the MathVista-mini benchmark, the baseline Qwen3-VL generates 1188 tokens, while Step Entropy and REFRAIN prune the token count to 790 ( ↓33.5%) and 930 ( ↓21.7%), respectively, MCPO: Modality-Contrastive Preference Optimization for Multimodal Chain-of-Thought Compression 
+
+Table 2: Ablation study on the cross-modal contrastive weight 𝛼 using Qwen3-VL-8B-Thinking. Ratio indicates the percentage of retained thinking tokens relative to the uncompressed Base model. Setting 𝛼 = 0.05 yields the best balanced trade-off across benchmarks, while moderate weights consistently maintain stable token compression without performance degradation.                                                                       
+
+> Setting MathVista_mini ScienceQA MMMU_dev_val MMStar
+> Acc(%) Tokens Ratio Acc(%) Tokens Ratio Acc(%) Tokens Ratio Acc(%) Tokens Ratio
+> 𝛼 =0.00 70.70 356.8 30.03% 50.10 243.0 43.94% 53.50 1202.3 41.37% 62.93 578.0 60.91%
+> 𝛼 =0.05 71.40 362.0 30.47% 49.93 229.9 41.57% 53.30 1153.0 39.68% 62.27 545.0 57.43%
+> 𝛼 =0.10 71.80 363.0 30.56% 49.48 230.3 41.65% 52.88 1087.0 37.41% 60.60 557.3 58.73%
+> 𝛼 =0.20 70.90 365.0 30.72% 48.24 241.0 43.58% 53.90 1036.0 35.65% 62.13 572.1 60.28%
+
+Table 3: Ablation study on the physical freezing state of the 
+
+[SKIP] token embedding during fine-tuning. Freezing the em-bedding acts as a rigid semantic barrier, forcing aggressive token compression (down to 106.0 tokens) but degrading task accuracy due to long-range attention disruption. Conversely, keeping the embedding unfrozen allows it to function as an elastic semantic bridge that smoothly interpolates latent con-text, preserving reasoning accuracy while securing a robust 60% compression ratio.                          
+
+> Setting Embedding MathVista_mini ScienceQA
+> Acc(%) Tokens Acc(%) Tokens SFT Baseline Frozen 71.90 451.2 51.70 239.0 SFT Baseline Unfrozen 71.90 554.3 51.30 338.0 MCPO Frozen 52.00 106.0 46.90 53.4
+> MCPO Unfrozen 71.80 363.0 49.48 230.3
+
+but their accuracy decreases by 1.60 and 2.60. In comparison, MCPO aggressively reduces the generated tokens to only 362 ( ↓69.5%), achieving a much higher pruning ratio than the other two methods while reducing accuracy by merely 0.80, significantly less than both competitors. On ScienceQA, MMMU, and MMStar, MCPO achieves token pruning ratios of 58.4%, 60.3%, and 42.6%, respectively, all substantially outperforming Step Entropy and REFRAIN, with accu-racy changes consistently within ±1%, far better than the noticeable accuracy losses observed in the other methods. Overall, these results demonstrate that MCPO achieves the best balance between performance and token usage. This advantage stems from its ability to effectively suppress visual hallucinations and achieve better cross-modal alignment, enabling stable task performance even under aggressive token pruning. 
+
+4.4 System-Level Inference Latency Analysis 
+
+To quantify the practical system-level efficiency gains delivered by MCPO, we measure the average end-to-end execution time per sam-ple across all four benchmarks. As depicted in Figure 4(a), MCPO delivers substantial inference acceleration on the 8B model scale: on the complex MMMU benchmark, it slashes the average exe-cution time per query from 220 .30s to 65 .87s, achieving a 3 .34 ×
+
+speedup (a 70 .1% latency reduction); on MMStar , it accelerates inference from 81 .85s to 30 .87s (2 .65 × speedup ). Unlike training-free online baselines such as REFRAIN, which introduce notice-able runtime computation overhead during step-level confidence checking (increasing MathVista_mini latency to 129 .50s), MCPO internalizes the pruning policy during preference training with zero runtime overhead, lowering MathVista_mini execution time to 58 .35s (1 .38 × speedup). Furthermore, as shown in Figure 4(b) and (c), MCPO exhibits consistent cross-scale speedups on the 4B model (e.g., 1 .73 × on MathVista_mini and 1 .55 × on MMMU), maintaining robust speedup multipliers between 1 .2× and 3 .34 × across various contrastive weight configurations 𝛼 .
+
+4.5 Ablation Study 
+
+To analyze the impact of the cross-modal contrastive loss weight 𝛼 
+
+on the model performance within MCPO, we conducted an ablation study under different 𝛼 configurations. Table 2 reports the results on the Qwen3-VL-8B-Thinking model, showing how varying 𝛼 
+
+influences both accuracy and the number of generated inference to-kens, thereby evaluating the role of cross-modal alignment strength in MCPO. Overall, the results indicate that an appropriate choice of 𝛼 can enhance cross-modal consistency and further improve the stability of MCPO’s token pruning. From the table, we observe that the model achieves the highest average accuracy when 𝛼 = 0.05. Moreover, across multiple 𝛼 settings, the token pruning ratio re-mains stable, demonstrating that MCPO’s cross-modal alignment mechanism exhibits strong robustness even under different con-trastive loss weights. In summary, these ablation results confirm the robustness of MCPO’s design, showing that its cross-modal alignment strategy remains effective and stable across a range of hyperparameter configurations. To analyze whether the embedding vector of the [SKIP] token should be physically frozen during fine-tuning, we conducted an ablation study under different embedding states. Table 3 presents the results on the Qwen3-VL-8B-Thinking model, showing how frozen and unfrozen embeddings affect model accuracy and in-ference token usage on MathVista_mini and ScienceQA, thereby evaluating the role of the embedding state within MCPO. Overall, the results indicate that freezing the embedding can significantly reduce inference tokens, whereas keeping the embedding unfrozen is more beneficial for preserving model accuracy. From the table, we observe that in the SFT Baseline, freezing the embedding reduces the token count from 554.3 to 451.2 on MathVista_mini and from 338.0 to 239.0 on ScienceQA, while maintaining nearly identical Yang et al. MathVista ScienceQA MMMU MMStar            
+
+> 050 100 150 200 250
+> Time per Sample (Seconds)
+> 3.34× Speedup!
+> (a) End-to-End Latency Comparison (8B)
+> Base (8B) REFRAIN (8B) StepEntropy (8B) MCPO (Ours 8B)
+> MathVista ScienceQA MMMU MMStar
+> 025 50 75 100 125 150 175 200
+> Time per Sample (Seconds)
+> 1.73×
+> (b) Cross-Scale Latency Reduction (4B)
+> Base (4B) REFRAIN (4B) StepEntropy (4B) MCPO (Ours 4B)
+> 0.000 0.025 0.050 0.075 0.100 0.125 0.150 0.175 0.200 1.0 1.5 2.0 2.5 3.0 3.5
+> Speedup Multiplier (×)
+> 3.34× 2.65×
+> (c) Latency Speedup vs. Alpha (8B)
+> MMMU Speedup MMStar Speedup MathVista Speedup Base Level (1.0×)
+
+Figure 4: System-level end-to-end inference latency and speedup analysis. (a) Execution time per sample across four multimodal benchmarks on Qwen3-VL-8B-Thinking. (b) Cross-scale latency reduction on Qwen3-VL-4B-Thinking. (c) Speedup multipliers across different contrastive weight configurations 𝛼 , demonstrating up to 3.34 × end-to-end inference speedup on complex multimodal reasoning tasks. Table 4: Average thinking token consumption across differ-ent reasoning difficulty levels on MMMU. Thinking length naturally scales with task complexity. MCPO consistently cuts reasoning token overhead by 55%–63% across Easy, Medium, and Hard tiers, demonstrating adaptive and con-trollable compression irrespective of problem difficulty. 
+
+Difficulty Baseline 𝛼 = 0.1 𝛼 = 0.2 𝛼 = 0.05 Easy 1692 642 630 683 Medium 2934 1110 1083 1210 Hard 4799 2081 1966 2191 
+
+Table 5: Accuracy (%) evaluation across different reasoning difficulty levels on MMMU. Pruning redundant reasoning steps eliminates logical noise on Easy tasks (+1.8% gain) and mitigates harmful overthinking on Hard tasks, unlocking a substantial +10.3% absolute accuracy boost ( 𝛼 = 0.2) over the Base model. 
+
+Difficulty Baseline 𝛼 = 0.1 𝛼 = 0.2 𝛼 = 0.05 Easy 60.8% 62.6% 62.3% 60.5% Medium 53.2% 47.4% 48.2% 49.0% Hard 40.6% 44.4% 50.9% 49.1% 
+
+accuracy. A similar trend appears in MCPO: the frozen embed-ding further compresses the token count to extremely low levels (106.0 on MathVista_mini and 53.4 on ScienceQA), demonstrating strong pruning capability; in contrast, the unfrozen embedding substantially improves accuracy (71.80% and 49.48%), though with moderately increased token usage. This suggests that the frozen em-bedding is more suitable for extreme token compression, whereas the unfrozen embedding is preferable when maintaining task per-formance is the priority. In summary, this ablation study shows that the physical state of the [SKIP] token embedding plays a cru-cial role in balancing accuracy and token usage, highlighting its importance in the overall design of MCPO. To further understand the model’s reasoning cost under differ-ent difficulty levels, we evaluated the average number of thinking tokens on the MMMU dataset across the Easy, Medium, and Hard categories. As shown in Table 4, the results reveal a clear trend: as the reasoning difficulty increases, the model’s token consumption rises substantially. The Easy category exhibits the lowest token usage, the Medium category shows a noticeable increase, and the Hard category requires the highest number of tokens, indicating that more complex reasoning tasks demand longer reasoning chains and more extensive thinking steps. At the same time, we observe that the optimized model consistently reduces token consumption across all difficulty levels. Compared with the baseline, the reduc-tions reach approximately 60%, 63%, and 59% for the Easy, Medium, and Hard categories, respectively, demonstrating that the model maintains stable token pruning capability regardless of task dif-ficulty. Taken together, the reasoning cost increases significantly with task complexity, but the optimized reasoning strategy achieves stable and effective token compression across all difficulty levels, reflecting strong efficiency and controllability in complex reasoning scenarios. To analyze the model’s performance under different reasoning difficulty levels, we evaluated accuracy on the MMMU dataset across the Easy, Medium, and Hard categories, and compared the re-sults under different cross-modal contrastive loss weights ( 𝛼 = 0.1, 
+
+𝛼 = 0.2, 𝛼 = 0.05). As shown in Table 5, the baseline model and the various 𝛼 configurations exhibit distinct accuracy patterns across difficulty levels, reflecting how reasoning complexity influences the effectiveness of cross-modal alignment. From the table, we observe that the Easy category achieves its highest accuracy with 𝛼 = 0.1(62.6%), slightly outperforming the baseline. For the Medium cat-egory, 𝛼 = 0.05 yields the best performance (49.0%), while larger contrastive weights lead to noticeable degradation. In the Hard cat-egory, 𝛼 = 0.2 achieves the highest accuracy (50.9%), significantly surpassing the baseline result of 40.6%. These findings indicate that the model’s sensitivity to contrastive loss strength varies with task difficulty, and that appropriate alignment strength can enhance performance on more challenging reasoning tasks. These findings illustrate the meaningful role of contrastive loss weight in shaping MCPO: Modality-Contrastive Preference Optimization for Multimodal Chain-of-Thought Compression 
+
+the model’s reasoning ability, and highlight that different difficulty levels require different alignment strengths to achieve optimal per-formance. 
+
+5 Conclusion 
+
+In this work, we presented MCPO, a training-efficient framework designed to compress multimodal chain-of-thought reasoning while preserving task performance. Through comprehensive experiments across MathVista-mini, ScienceQA, MMMU, and MMStar, MCPO demonstrated substantial reductions in inference token usage—often exceeding 50% compression—alongside significant end-to-end exe-cution speedups (up to 3.34 ×), while maintaining accuracy within a narrow margin of the baseline model. These findings illustrate the effectiveness of combining adaptive step pruning with asymmetric modality-contrastive alignment, enabling the model to suppress vi-sual hallucinations and retain essential reasoning steps even under aggressive compression. Our ablation studies further highlight the robustness of MCPO: the method remains stable across different contrastive weights and embedding configurations, and exhibits consistent behavior across varying reasoning difficulty levels. To-gether, these results validate MCPO as a practical, latency-efficient, and scalable solution for multimodal reasoning. 
+
+References 
+
+[1] Pranjal Aggarwal and Sean Welleck. 2025. L1: Controlling how long a reason-ing model thinks with reinforcement learning. arXiv preprint arXiv:2503.04697 
+
+(2025). [2] Daman Arora and Andrea Zanette. 2025. Training language models to reason efficiently. arXiv preprint arXiv:2502.04463 (2025). [3] Shuai Bai, Yuxuan Cai, Ruizhe Chen, Keqin Chen, Xionghui Chen, Zesen Cheng, Lianghao Deng, Wei Ding, Chang Gao, Chunjiang Ge, et al. 2025. Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 (2025). [4] Ralph Allan Bradley and Milton E Terry. 1952. Rank analysis of incomplete block designs: I. the method of paired comparisons. Biometrika 39, 3/4 (1952), 324–345. [5] Simone Caldarella, Davide Talon, Rahaf Aljundi, Elisa Ricci, and Massimiliano Mancini. 2026. Thinking Past the Answer: Evaluating Harmful Overthinking in Large Reasoning Models. arXiv preprint arXiv:2606.02835 (2026). [6] Lin Chen, Jinsong Li, Xiaoyi Dong, Pan Zhang, Yuhang Zang, Zehui Chen, Haodong Duan, Jiaqi Wang, Yu Qiao, Dahua Lin, et al. 2024. Are we on the right way for evaluating large vision-language models? Advances in Neural Information Processing Systems 37 (2024), 27056–27087. [7] Xingyu Chen, Jiahao Xu, Tian Liang, Zhiwei He, Jianhui Pang, Dian Yu, Linfeng Song, Qiuzhi Liu, Mengfei Zhou, Zhuosheng Zhang, et al. 2025. Do NOT think that much for 2+ 3=? on the overthinking of long reasoning models. In Forty-second International Conference on Machine Learning .[8] Cheng Cheng, Zhenya Huang, Guanhao Zhao, Yuxiang Guo, Xin Lin, Jinze Wu, Xin Li, and Shijin Wang. 2025. From Objectives to Questions: A Planning-based Framework for Educational Mathematical Question Generation. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 12836–12856. [9] Sicheng Feng, Gongfan Fang, Xinyin Ma, and Xinchao Wang. 2025. Efficient reasoning models: A survey. arXiv preprint arXiv:2504.10903 (2025). [10] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. 2025. DeepSeek-R1 incen-tivizes reasoning in LLMs through reinforcement learning. Nature 645, 8081 (2025), 633–638. [11] Bin Hong, Jiayu Liu, Kai Zhang, Jianwen Sun, Mengdi Zhang, and Zhenya Huang. 2025. Pruning long chain-of-thought of large reasoning models via small-scale preference optimization. arXiv preprint arXiv:2508.10164 (2025). [12] Bairu Hou, Yang Zhang, Jiabao Ji, Yujian Liu, Kaizhi Qian, Jacob Andreas, and Shiyu Chang. 2025. Thinkprune: Pruning long chain-of-thought of llms via reinforcement learning. arXiv preprint arXiv:2504.01296 (2025). [13] Justin Johnson, Bharath Hariharan, Laurens Van Der Maaten, Li Fei-Fei, C Lawrence Zitnick, and Ross Girshick. 2017. Clevr: A diagnostic dataset for compositional language and elementary visual reasoning. In Proceedings of the IEEE conference on computer vision and pattern recognition . 2901–2910. [14] Junyeob Kim, Sang-goo Lee, and Taeuk Kim. 2026. Think Just Enough: Leverag-ing Self-Assessed Confidence for Adaptive Reasoning in Language Models. In 
+
+Findings of the Association for Computational Linguistics: EACL 2026 . 5000–5006. [15] Yassir Laaouach. 2025. Halt-cot: Model-agnostic early stopping for chain-of-thought reasoning via answer entropy. In 4th Muslims in ML Workshop co-located with ICML 2025 .[16] Zeju Li, Jianyuan Zhong, Ziyang Zheng, Xiangyu Wen, Zhijian Xu, Yingying Cheng, Fan Zhang, and Qiang Xu. 2026. Making slow thinking faster: Com-pressing LLM chain-of-thought via step entropy. In The Fourteenth International Conference on Learning Representations .[17] Baohao Liao, Yuhui Xu, Hanze Dong, Junnan Li, Christof Monz, Silvio Savarese, Doyen Sahoo, and Caiming Xiong. 2025. Reward-guided speculative decoding for efficient llm reasoning. arXiv preprint arXiv:2501.19324 (2025). [18] Chenyu Lin, Cheng Chi, Jinlin Wu, Sharon Li, and Kaiyang Zhou. 2025. Learn-ing to Think Fast and Slow for Visual Language Models. arXiv preprint arXiv:2511.16670 (2025). [19] Yue Liu, Jiaying Wu, Yufei He, Ruihan Gong, Jun Xia, Liang Li, Hongcheng Gao, Hongyu Chen, Baolong Bi, Jiaheng Zhang, et al. 2025. Efficient inference for large reasoning models: A survey. arXiv preprint arXiv:2503.23077 (2025). [20] Pan Lu, Hritik Bansal, Tony Xia, Jiacheng Liu, Chunyuan Li, Hannaneh Hajishirzi, Hao Cheng, Kai-Wei Chang, Michel Galley, and Jianfeng Gao. 2024. Mathvista: Evaluating mathematical reasoning of foundation models in visual contexts. In 
+
+International Conference on Learning Representations , Vol. 2024. 23439–23554. [21] Xinyin Ma, Guangnian Wan, Runpeng Yu, Gongfan Fang, and Xinchao Wang. 2025. Cot-valve: Length-compressible chain-of-thought tuning. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 6025–6035. [22] Yu Meng, Mengzhou Xia, and Danqi Chen. 2024. Simpo: Simple preference optimization with a reference-free reward. Advances in Neural Information Processing Systems 37 (2024), 124198–124235. [23] Niklas Muennighoff, Zitong Yang, Weijia Shi, Xiang Lisa Li, Li Fei-Fei, Hannaneh Hajishirzi, Luke Zettlemoyer, Percy Liang, Emmanuel Candès, and Tatsunori Hashimoto. 2025. s1: Simple test-time scaling. arXiv preprint arXiv:2501.19393 
+
+(2025). [24] Xiaoye Qu, Yafu Li, Zhao-Chen Su, Weigao Sun, Jianhao Yan, Dongrui Liu, Ganqu Cui, Daizong Liu, Shuxian Liang, Junxian He, et al. 2025. A survey of efficient reasoning for large reasoning models: Language, multimodality, and beyond. 
+
+arXiv preprint arXiv:2503.21614 (2025). [25] Rafael Rafailov, Archit Sharma, Eric Mitchell, Christopher D Manning, Stefano Ermon, and Chelsea Finn. 2023. Direct preference optimization: Your language model is secretly a reward model. Advances in neural information processing systems 36 (2023), 53728–53741. [26] Tanik Saikh, Tirthankar Ghosal, Amish Mittal, Asif Ekbal, and Pushpak Bhat-tacharyya. 2022. Scienceqa: A novel resource for question answering on scholarly articles. International Journal on Digital Libraries 23, 3 (2022), 289–301. [27] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al. 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 (2024). [28] Renliang Sun, Wei Cheng, Dawei Li, Haifeng Chen, and Wei Wang. 2026. Stop when enough: Adaptive early-stopping for chain-of-thought reasoning. In Pro-ceedings of the 64th Annual Meeting of the Association for Computational Linguis-tics (Volume 1: Long Papers) . 27250–27268. [29] Qwen Team. 2025. Qwen3 Technical Report. arXiv:2505.09388 [cs.CL] https: //arxiv.org/abs/2505.09388 [30] Qwen Team. 2025. Qwq-32b: Embracing the power of reinforcement learning. [31] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al. 2022. Chain-of-thought prompting elicits reason-ing in large language models. Advances in neural information processing systems 
+
+35 (2022), 24824–24837. [32] Yuhui Xu, Hanze Dong, Lei Wang, Doyen Sahoo, Junnan Li, and Caiming Xiong. 2025. Scalable chain of thoughts via elastic reasoning. arXiv preprint arXiv:2505.05315 (2025). [33] Shangzi Xue, Zhenya Huang, Jiayu Liu, Xin Lin, Yuting Ning, Binbin Jin, Xin Li, and Qi Liu. 2024. Decompose, analyze and rethink: Solving intricate problems with human-like reasoning cycle. Advances in Neural Information Processing Systems 37 (2024), 357–385. [34] Chenxu Yang, Qingyi Si, Yongjie Duan, Zheliang Zhu, Chenyu Zhu, Qiaowei Li, Minghui Chen, Zheng Lin, and Weiping Wang. 2025. Dynamic early exit in reasoning models. arXiv preprint arXiv:2504.15895 (2025). [35] Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xiaochen Zuo, Yu Yue, Weinan Dai, Tiantian Fan, Gaohong Liu, Lingjun Liu, et al. 2026. Dapo: An open-source llm reinforcement learning system at scale. Advances in Neural Information Processing Systems 38 (2026), 113222–113244. [36] Xiang Yue, Yuansheng Ni, Kai Zhang, Tianyu Zheng, Ruoqi Liu, Ge Zhang, Samuel Stevens, Dongfu Jiang, Weiming Ren, Yuxuan Sun, et al. 2024. Mmmu: A massive multi-discipline multimodal understanding and reasoning benchmark for expert agi. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition . 9556–9567. Yang et al. 
+
+[37] Dongxu Zhang, Yiding Sun, Cheng Tan, Wenbiao Yan, Ning Yang, Jihua Zhu, and Haijun Zhang. 2026. Chain-of-thought compression should not be blind: V-skip for efficient multimodal reasoning via dual-path anchoring. In Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 19402–19415.
