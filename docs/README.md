@@ -48,7 +48,7 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-10</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-11</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
     <strong class="dpr-home-dashboard-count">共 21 篇</strong>
@@ -58,7 +58,7 @@
     <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>8</dd></div>
     <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-10 22:04:42 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-11 22:26:31 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,9 +69,10 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>9月10日日报：共21篇，精读8篇、速读13篇，3D视频先验与视觉位置识别两篇8.0领跑精读。</p>
-<p>最值得看的是3D感知与空间智能方向：精读《Rethinking 3D Noise》和《AdaptVPR》，速读中LVLM空间智能、多视角空间推理、单目点云也均为8.0。</p>
-<p>普通读者可先读两篇精读，再按兴趣扫速读里的空间智能三篇。</p>
+<p>今日共生成 21 篇推荐（精读 8 篇，速读 13 篇）</p>
+<p>精读：《From State Synchronization to Cognitive Self-Evolution: An Operational Architecture for Cognitive Digital Twins》（9.0/10）, 《A Confidence-Aware Multimodal Fusion Framework for Industrial Human-Robot Collaboration》（9.0/10）</p>
+<p>速读：《An overview of 3D Vision-Language Models》（7.0/10）, 《UniFusion: Sparse-View 4D Reconstruction via Unified Spatio-temporal Depth Alignment》（7.0/10）, 《Radiation, Rotation and Scale Invariant Feature Descriptor for Multimodal Image Matching》（7.0/10）</p>
+<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -83,9 +84,9 @@
     <strong class="dpr-home-dashboard-count">8 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="Rethinking 3D Noise: Learning 3D-Aware Video Priors via Optimization-Free Morphological Perturbations">Rethinking 3D Noise: Learning 3D-Aware Video Priors via Optimization-Free Morphological Perturbations</span></li><li><span class="dpr-home-dashboard-paper-title" title="AdaptVPR: Route-Aware Hard Positive Generation for Robust Visual Place Recognition">AdaptVPR: Route-Aware Hard Positive Generation for Robust Visual Place Recognition</span></li><li><span class="dpr-home-dashboard-paper-title" title="Open-Set 3D Scene Graphs for Field Robotics: An Outdoor Case Study">Open-Set 3D Scene Graphs for Field Robotics: An Outdoor Case Study</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="From State Synchronization to Cognitive Self-Evolution: An Operational Architecture for Cognitive Digital Twins">From State Synchronization to Cognitive Self-Evolution: An Operational Architecture for Cognitive Digital Twins</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Confidence-Aware Multimodal Fusion Framework for Industrial Human-Robot Collaboration">A Confidence-Aware Multimodal Fusion Framework for Industrial Human-Robot Collaboration</span></li><li><span class="dpr-home-dashboard-paper-title" title="RiVaT-Fuse: Reliability-Calibrated Variational Tensor Fusion for Multimodal Prediction under Modality Uncertainty">RiVaT-Fuse: Reliability-Calibrated Variational Tensor Fusion for Multimodal Prediction under Modality Uncertainty</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">multimodal <strong>5</strong></span><span class="dpr-home-dashboard-tag">d-vision <strong>2</strong></span><span class="dpr-home-dashboard-tag">mgl <strong>1</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">multimodal <strong>5</strong></span><span class="dpr-home-dashboard-tag">d-vision <strong>3</strong></span></div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -96,9 +97,9 @@
     <strong class="dpr-home-dashboard-count">13 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="SpatialBlock: Enhancing Spatial Intelligence in LVLMs via Synthetic Block-Stacking Problem">SpatialBlock: Enhancing Spatial Intelligence in LVLMs via Synthetic Block-Stacking Problem</span></li><li><span class="dpr-home-dashboard-paper-title" title="MV-STRIDE: Enabling MLLMs to Master Multi-View Spatial Reasoning via Hierarchical Capability Modeling">MV-STRIDE: Enabling MLLMs to Master Multi-View Spatial Reasoning via Hierarchical Capability Modeling</span></li><li><span class="dpr-home-dashboard-paper-title" title="OmniPoint: Universal Monocular Metric Pointcloud from Any Camera">OmniPoint: Universal Monocular Metric Pointcloud from Any Camera</span></li></ul>
+<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="An overview of 3D Vision-Language Models">An overview of 3D Vision-Language Models</span></li><li><span class="dpr-home-dashboard-paper-title" title="UniFusion: Sparse-View 4D Reconstruction via Unified Spatio-temporal Depth Alignment">UniFusion: Sparse-View 4D Reconstruction via Unified Spatio-temporal Depth Alignment</span></li><li><span class="dpr-home-dashboard-paper-title" title="Radiation, Rotation and Scale Invariant Feature Descriptor for Multimodal Image Matching">Radiation, Rotation and Scale Invariant Feature Descriptor for Multimodal Image Matching</span></li></ul>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>10</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>3</strong></span></div>
+  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>11</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>2</strong></span></div>
 </section>
 </div>
 

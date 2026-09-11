@@ -1,0 +1,470 @@
+Title: RiVaT-Fuse: Reliability-Calibrated Variational Tensor Fusion for Multimodal Prediction under Modality Uncertainty
+
+URL Source: https://arxiv.org/pdf/2609.10798v1
+
+Published Time: Fri, 11 Sep 2026 00:14:03 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# RiVaT-Fuse: Reliability-Calibrated Variational Tensor Fusion for Multimodal Prediction under Modality Uncertainty 
+
+Yingfan Xu 1∗ Tieming Liu 1 Ye Liang 2 Taiping Liu 31School of Industrial Engineering and Management Oklahoma State University 
+
+> 2
+
+Department of Statistics, Oklahoma State University 
+
+> 3
+
+Systems Engineering and Operations Research George Mason University 
+
+# Abstract 
+
+Image–metadata prediction requires fusing heterogeneous evidence whose reli-ability can vary across samples and latent factors. Existing representation-level fusion methods typically choose an aggregation architecture, such as concatena-tion, gating, conditional modulation, or attention, without explicitly defining what the fused representation should mean under modality uncertainty. We propose RiVaT-Fuse, a reliability-calibrated variational tensor fusion framework that defines fusion as sample-wise latent-state estimation. Rather than producing a fused vector by direct aggregation, RiVaT-Fuse estimates a consensus latent state through a variational objective that balances image evidence, metadata evidence, structured cross-modal interaction, and stability. The resulting framework replaces scalar modality confidence with matrix-valued trust geometry, decomposes interaction into additive, multiplicative, and relational components, and couples the latent state with conditional robustness and structured multi-task prediction. We provide well-posedness and stability interpretations of the latent solve and instantiate the framework with efficient low-rank-plus-diagonal trust operators. On an image-level image–metadata prediction benchmark, RiVaT-Fuse achieves the strongest over-all predictive rank among direct representation-level baselines while improving probability and label stability under perturbation. 
+
+# 1 Introduction 
+
+Many high-stakes prediction problems require fusing visual observations with structured contextual variables. In medical imaging, remote sensing, robotics, and healthcare analytics, visual data may contain rich perceptual evidence, while metadata may provide demographic, contextual, acquisition-level, or environment-level information. These modalities are often complementary, but they are rarely equally reliable for every sample. Images may be degraded by blur, illumination variation, occlusion, or acquisition artifacts, while structured metadata may be incomplete, noisy, or only weakly informative for a particular prediction instance. The central challenge is therefore not merely how to combine modalities, but how much each modality should be trusted for each sample. Despite substantial progress in multimodal learning, most fusion layers remain architecturally defined but semantically under-specified [3, 30]. Concatenation treats modalities as fixed feature blocks. Scalar gates and gated multimodal units can reweight modalities but usually impose a coarse global 
+
+> ∗Corresponding author. Preprint. arXiv:2609.10798v1 [cs.LG] 9 Sep 2026
+
+notion of trust [2]. Conditional modulation [33], co-attention [27], and cross-attention or multimodal transformer layers [39, 38] introduce stronger interaction, but they typically do not define what the fused representation is supposed to mean as a sample-wise latent object. Similarly, robustness mechanisms are often applied at the loss level after fusion has already been performed, and multi-task coupling is usually treated separately from modality trust. As a result, existing fusion mechanisms may produce useful representations, but they rarely define a reliability-calibrated consensus latent state. We propose to define multimodal fusion as sample-wise latent-state estimation. Instead of first choosing a fusion architecture and then hoping that the resulting feature is useful, we define the fused representation as the optimizer of a variational objective. The latent state is encouraged to remain close to image evidence, remain close to metadata evidence, exploit structured cross-modal interactions, and stay stable through regularization. This formulation turns fusion from a hand-designed aggregation rule into the solution of a reliability-calibrated optimization problem. This perspective leads naturally to RiVaT-Fuse, a reliability-calibrated variational tensor fusion framework. The framework uses matrix-valued trust operators to allow different latent directions to place different levels of trust in image and metadata evidence. It further introduces a structured tensor interaction operator with additive, multiplicative, and relational components, capturing direct correction, higher-order conjunction, and metadata-guided attention over image tokens. To address unreliable samples, RiVaT-Fuse incorporates conditional distributionally robust learning whose ambiguity radius depends on a learned reliability state. Finally, structured multi-task coupling and stabilized quadratic heads allow related prediction tasks to share information while retaining task-specific decision boundaries. Our empirical target is image-level multimodal prediction under repeated visual acquisitions. Ac-cordingly, all methods are evaluated under an image-level protocol, where each acquisition-level observation is paired with structured metadata and treated as the prediction unit. This protocol is deliberately chosen to match the target image-level inference setting and to ensure strict comparability across all direct baselines. Patient-disjoint deployment evaluation addresses a different estimand and is not the primary target of this method paper. Our contributions are fourfold. • Variational fusion principle. We formulate multimodal fusion as sample-wise latent-state estimation, where the fused representation is the optimizer of a reliability-calibrated variational objective. • Matrix-valued trust and structured interaction. We introduce sample-adaptive matrix-valued trust operators and a decomposed tensor interaction operator combining additive, multiplicative, and relational components. • Conditional robustness and task coupling. We integrate conditional distributionally robust learning and structured multi-task coupling into the same latent fusion framework, allowing robustness pressure and task sharing to depend on reliability-aware states. • Theory and benchmark-aligned evaluation. We provide well-posedness and stability guarantees and evaluate the method under an image-level multimodal prediction protocol against unimodal and representation-level early-fusion baselines, with decision-level and hybrid systems reported separately as expanded comparisons. 
+
+# 2 Problem Formulation 
+
+We formulate RiVaT-Fuse for general image-level multimodal prediction. Each observation consists of an image and an associated metadata vector, 
+
+xi = ( Ii, m i), (1) where Ii denotes an image-level acquisition and mi denotes the corresponding structured metadata. The target can include multiple task labels, 
+
+yi = ( y1 
+
+> i
+
+, . . . , y Ti ), (2) where each task may be binary, ordinal, or multiclass depending on the application. The method itself does not rely on any disease-specific label semantics. In our empirical instantiation, we evaluate the 2framework on multimodal retinal prediction, where the tasks include ordinal disease-severity grading and binary clinical decision outcomes. The image-level protocol is part of the task definition. Metadata may describe patient context, acquisition context, or other structured variables associated with an image-level observation. When labels are constructed from repeated observations or aggregated annotations, they are merged back to image-level rows so that the supervised prediction unit remains the image-level acquisition. This design evaluates acquisition-level multimodal inference rather than patient-disjoint deployment generalization. The image and metadata modalities are encoded into a shared latent dimension: 
+
+zI = ϕI (I) ∈ Rd, zM = ϕM (m) ∈ Rd, (3) where ϕI is the image encoder and ϕM is the metadata encoder. The goal of fusion is to estimate a latent representation h⋆(x) ∈ Rd that integrates these two modality-specific embeddings under sample-dependent reliability. A principled fusion mechanism should satisfy four desiderata. First, it should be sample-adaptive, because the reliability of image and metadata evidence varies across observations. Second, it should support direction-dependent trust, since different latent dimensions may rely on different modalities. Third, it should capture structured cross-modal interaction beyond simple feature aggregation. Fourth, it should be robust to unreliable or degraded evidence. RiVaT-Fuse is designed to satisfy these desiderata through a variational latent-state formulation. 
+
+# 3 RiVaT-Fuse 
+
+RiVaT-Fuse is built around a single design principle: fusion should estimate a reliability-calibrated latent state, not merely concatenate or attend over features . This is the central innovation of the framework. Each component below is introduced to resolve a specific weakness of standard representation-level fusion. The variational solver gives the fused representation an explicit semantics; the trust operators decide which modality should be trusted and in which latent directions; the interaction operator captures how modalities complement each other; the conditional robust objective increases pressure on unreliable samples; and the task structure coordinates related prediction heads. The goal is therefore not to stack independent modules, but to make each design serve the same latent-state estimation problem. 
+
+3.1 Variational Latent Fusion 
+
+A standard early-fusion layer directly maps (zI , z M ) to a fused vector, leaving the meaning of that vector implicit. RiVaT-Fuse instead asks a more constrained question: what latent state is simultaneously close to image evidence, close to metadata evidence, supported by their interaction, and stable enough for prediction? For each input x = ( I, m ), this state is defined as 
+
+h⋆(x) = arg min 
+
+> h∈Rd
+
+ 12 ∥h − zI ∥2  
+
+> PI(x)
+
++ 12 ∥h − zM ∥2  
+
+> PM(x)
+
+− ⟨ h, T (x)( zI ⊗ zM )⟩ + λ
+
+2 ∥h∥22
+
+
+
+.
+
+(4) The first two terms make fusion a reliability-weighted consensus problem rather than an unconstrained feature transformation. The interaction term prevents the consensus from becoming a simple average by rewarding cross-modal evidence that is useful only when modalities are considered jointly. The regularizer stabilizes the latent state and controls the conditioning of the solve. Define 
+
+H(x) = PI (x) + PM (x) + λI, b(x) = PI (x)zI + PM (x)zM + T (x)( zI ⊗ zM ). (5) When H(x) is positive definite, the fused state has the closed-form expression 
+
+h⋆(x) = H(x)−1b(x). (6) This expression is useful because it makes the roles of the two sides explicit: H(x) encodes the geometry of reliability, while b(x) combines modality evidence and cross-modal synergy. In imple-mentation, we solve H(x)h = b(x) directly rather than explicitly forming the inverse. Thus, the latent solve is not a cosmetic theoretical layer; it is the mechanism that enforces a reliability-weighted compromise for each sample. 3Figure 1: Overview of RiVaT-Fuse. RiVaT-Fuse defines multimodal fusion as a sample-wise latent solve. Image and metadata embeddings are combined through reliability-conditioned matrix-valued trust operators and structured tensor interaction, yielding a consensus latent state for multi-task prediction. 
+
+3.2 Reliability State and Matrix-Valued Trust 
+
+The variational objective is only meaningful if the model can decide how the two modalities should be trusted. RiVaT-Fuse therefore builds a sample state 
+
+s(x) = [ q(I), u (I), r (m)] , (7) where q(I) estimates image reliability, u(I) captures image-side uncertainty, and r(m) captures metadata reliability or completeness. This state has two purposes: it controls the geometry of fusion through PI (x) and PM (x), and it controls robustness pressure through the conditional DRO radius below. A scalar gate can only say that one modality is globally more important than the other. This is too coarse when one latent direction may encode visual morphology while another may benefit more from metadata context. We therefore use matrix-valued trust operators: 
+
+PI (x) = Diag( dI (s)) + UI Diag( gI (s)) U ⊤ 
+
+> I
+
++ ϵI, (8) 
+
+PM (x) = Diag( dM (s)) + UM Diag( gM (s)) U ⊤ 
+
+> M
+
++ ϵI. (9) The diagonal part captures dimension-wise reliability, while the low-rank part captures correlated trust directions. The positive-semidefinite construction keeps the latent system well behaved, and the low-rank-plus-diagonal form avoids the cost and instability of dense precision matrices. As a result, reliability is represented as an anisotropic geometry in latent space rather than as a single confidence score. 
+
+3.3 Structured Tensor Interaction 
+
+Reliability-weighted consensus alone would still be limited if the two modalities only contributed independently. RiVaT-Fuse therefore adds a structured interaction operator 
+
+T (x) = Tadd (x) + Tmult (x) + Trel (x), (10) where each component targets a different kind of cross-modal dependency. The additive component captures direct modality-specific correction: 
+
+Tadd (x)( zI ⊗ zM ) = AI (x)zI + AM (x)zM . (11) 4Its purpose is to handle cases where one modality shifts or calibrates the other without requiring high-order interaction. This keeps the model from forcing every cross-modal effect into an unnecessarily complex multiplicative form. The multiplicative component captures contingency effects: a visual feature may matter only under a particular metadata context, or a metadata feature may become informative only when paired with certain image evidence. We model this through low-rank multiplicative factors: 
+
+Tmult (x)( zI ⊗ zM ) = 
+
+> K
+
+X
+
+> k=1
+
+αk(x)Rk(UkzI ⊙ VkzM ). (12) The low-rank factorization is important: it gives the model access to tensor-style interactions without constructing a full dense tensor, and the sample-adaptive coefficients αk(x) allow different samples to emphasize different interaction components. The relational component addresses a different failure mode. Global image embeddings can hide which local image tokens are relevant under a given metadata context. Let ZI ∈ RL×d denote image tokens. We define 
+
+Trel (x)( zI ⊗ zM ) = WR(x)
+
+> L
+
+X
+
+> ℓ=1
+
+πℓ(x)ZI,ℓ , (13) where πℓ(x) is a metadata-conditioned attention weight. This component lets metadata guide token-level evidence selection, complementing the feature-level conjunction captured by the multiplicative branch. Together, these three interactions prevent the model from relying on a single cross-modal mechanism. Additive interaction supports correction, multiplicative interaction supports conjunction, and relational interaction supports context-guided token selection. Their combination makes the tensor operator expressive while keeping each submodule interpretable in terms of the fusion problem it solves. 
+
+3.4 Conditional Distributionally Robust Learning 
+
+A reliability-aware fusion model should not treat all training samples as equally trustworthy. If the image is unreliable, the uncertainty is high, or the metadata is incomplete, the model should be trained with stronger protection against local distribution shift. RiVaT-Fuse implements this idea through a state-dependent ambiguity radius 
+
+ρ(s) = ρ0 + ρq (1 − q) + ρuu + ρr (1 − r). (14) Thus, the same state vector that controls fusion geometry also controls robustness pressure: lower image reliability, higher uncertainty, and lower metadata reliability all enlarge the local robust budget. The ideal conditional DRO objective is approximated in mini-batches using state-binned groups. Samples are assigned to bins according to a reliability-risk score derived from s(x), and each group is associated with a learnable temperature parameter. This approximation avoids unstable per-sample robust optimization while preserving the central purpose of cDRO: the model should be more conservative exactly where the evidence is less reliable. 
+
+3.5 Task Coupling and Quadratic Heads 
+
+The prediction tasks share the same fused latent state but need not use it in identical ways. Indepen-dent heads ignore task relatedness, while overly shared heads can suppress task-specific decision boundaries. RiVaT-Fuse uses a graph-Laplacian task regularizer 
+
+Ωtask (W ) = tr( W L T W ⊤), (15) where W collects representative task coefficients and LT encodes task relations. This encourages compatible task geometry without forcing all tasks to collapse into the same classifier. Each task head combines a linear term with a stabilized second-order decision surface: 
+
+ft,c (x) = w⊤
+
+> t,c
+
+h⋆ + h⋆⊤St,c h⋆ + bt,c . (16) The quadratic term is included to capture nonlinear decision boundaries after fusion, while the structured parameterization keeps the head stable and avoids a fully dense quadratic form. 53.6 Training Objective 
+
+The final objective ties the above design choices together: 
+
+L = LcDRO + λT Ωtask + λRΩrank + λC Lcons . (17) The objective is not a loose collection of penalties. Each term corresponds to a failure mode: conditional DRO handles unreliable samples, task coupling handles related outputs, rank control stabilizes interaction complexity, and consistency discourages prediction drift under controlled perturbations. 
+
+Theoretical interpretation. The variational formulation provides a compact theoretical interpreta-tion without requiring a separate main-text theory section. Under a positive-definite latent system matrix H(x) = PI (x) + PM (x) + λI , the objective in Eq. (4) is strongly convex and admits a unique fused state h⋆(x) = H(x)−1b(x). A first-order perturbation analysis shows that changes in 
+
+h⋆ are controlled by the conditioning of H(x) and by perturbations to the modality embeddings and interaction operator. Therefore, the same reliability geometry that defines the latent solve also controls its stability. Under Lipschitz task heads, this latent stability transfers to prediction stability, and a sufficiently large margin implies label invariance under bounded perturbation. Formal statements and proof sketches are given in Appendix A. 
+
+# 4 Experiments 
+
+4.1 Experimental Setup 
+
+We evaluate RiVaT-Fuse on an image-level image–metadata prediction benchmark. Each input consists of an image and structured metadata, and the model predicts one ordinal outcome and two binary outcomes in our empirical instantiation. For clarity in the experimental tables, we refer to these as the ordinal task, binary task 1, and binary task 2; their dataset-specific clinical meanings are described in Appendix C. All methods are evaluated under the same image-level protocol. This protocol is deliberately chosen to match the acquisition-level inference target of this paper and to ensure strict comparability across baselines. Patient-disjoint evaluation corresponds to a different deployment-oriented estimand and is not the primary target of this work. All preprocessing and threshold selection are performed using training and validation data only. Metadata preprocessing is fit on the training set, image transformations are matched across compared models when applicable, and thresholds for binary tasks are selected on the validation set before final test evaluation using diagnostic operating-point criteria such as the Youden index [40]. For image-based models, we use ResNet-style encoders [17] with ImageNet normalization [10]; optimization is implemented in PyTorch [32] using Adam/AdamW-style adaptive updates [23, 26]. For the ordinal prediction task, we report quadratic weighted kappa following the weighted agreement formulation of Cohen [8]. The experiments address four mechanism-oriented questions: whether a variational consensus state improves over architecture-first fusion, whether matrix-valued trust improves beyond coarse weight-ing, whether the interaction branches provide complementary evidence, and whether reliability-aware robustness improves calibration and stability. The main text reports completed direct comparisons, diagnostics, and visual evidence; Appendix G summarizes their mechanism-oriented interpretation without claiming component-level ablations. 
+
+4.2 Baselines 
+
+We focus the main comparison on unimodal and representation-level fusion baselines, since RiVaT-Fuse is an early fusion framework that learns a fused latent representation before task prediction. The unimodal baselines include metadata-only multilayer perceptrons and image-only ResNet-style models. The direct early-fusion baselines include Concat Fusion, FiLM-style conditional modulation, gated fusion, and cross-attention/co-attention fusion. These methods operate at the same representation level as RiVaT-Fuse and therefore provide the most appropriate comparison set for evaluating the proposed fusion principle. 6Table 1: Predictive performance against direct representation-level baselines under the image-level multimodal prediction protocol. The method is general, but this empirical benchmark reports one ordinal task and two binary tasks. The table includes discrimination, operating-point accuracy, sensitivity, and specificity. Avg. Rank is computed across the ten displayed predictive metrics, with lower values indicating stronger overall predictive ranking. Decision-level late-fusion and hybrid/composite systems are reported separately in Appendix E.                                                                                 
+
+> Method Type Ord. Acc Ord. QWK Bin.-1 AUC Bin.-1 Acc Bin.-1 Sens Bin.-1 Spec Bin.-2 AUC Bin.-2 Acc Bin.-2 Sens Bin.-2 Spec Avg. Rank RiVaT-Fuse Proposed early fusion 0.864 0.843 0.950 0.933 0.844 0.944 0.971 0.933 0.865 0.954 1.35
+> Cross-/Co-Attention Fusion Early fusion 0.719 0.585 0.868 0.867 0.744 0.883 0.866 0.787 0.746 0.799 6.40 Gated Fusion Early fusion 0.825 0.800 0.926 0.894 0.756 0.912 0.947 0.904 0.832 0.927 3.85 FiLM Fusion Early fusion 0.825 0.788 0.948 0.889 0.822 0.898 0.955 0.915 0.859 0.932 3.35 Concat Fusion Early fusion 0.840 0.806 0.933 0.891 0.800 0.903 0.959 0.882 0.908 0.874 3.30 Image ResNet Image-only 0.768 0.644 0.911 0.862 0.767 0.874 0.864 0.842 0.692 0.889 6.10 Metadata MLP Metadata-only 0.832 0.667 0.940 0.933 0.489 0.991 0.944 0.898 0.703 0.959 3.65
+> Note. In the retinal instantiation used for evaluation, the ordinal task corresponds to severity grading, and the two binary tasks correspond to two clinical decision outcomes. We keep generic column names in the main table to preserve the method-level framing; dataset-specific task names and full metric definitions are given in Appendix C. Bold marks the best value in each predictive column. Some operating-point metrics reveal expected sensitivity–specificity trade-offs, so Avg. Rank should be interpreted together with the individual columns.
+
+To make comparisons interpretable, all direct baselines are evaluated under the same image-level label construction, split protocol, training-only preprocessing rule, validation-only model selection, and validation-only threshold selection whenever the corresponding component is applicable. This aligned design is crucial for this paper: the goal is to compare representation-level fusion principles, not to conflate architectural differences with inconsistent preprocessing, split definitions, or decision-threshold tuning. Decision-level late-fusion and hybrid/composite methods operate at a different level of the modeling pipeline; we therefore report them separately in Appendix E as expanded comparisons rather than direct representation-level baselines. 
+
+4.3 Main Results 
+
+RiVaT-Fuse achieves the strongest overall predictive profile across the direct representation-level comparison set, as summarized in Table 1. It obtains the best ordinal accuracy and QWK, the best AUC on both binary tasks, the best binary-task-1 sensitivity, the best binary-task-2 accuracy, and the strongest average rank across the displayed predictive metrics. These results support the central claim that the gain is not merely from using both image and metadata, but from estimating a reliability-calibrated fused latent state. The comparison also reveals useful operating-point trade-offs. Metadata MLP achieves very high specificity, especially for binary task 1, but its sensitivity is substantially lower, indicating a conserva-tive decision profile. Concat Fusion and FiLM are competitive early-fusion baselines, with Concat Fusion achieving the highest binary-task-2 sensitivity and FiLM showing strong binary AUCs. Gated Fusion performs well on the ordinal task and binary-task-2 AUC, while Cross-/Co-Attention Fusion is weaker in this benchmark despite being more expressive than simple concatenation. RiVaT-Fuse provides the best balance across ordinal severity prediction, binary discrimination, and sensitivity-oriented behavior. The most meaningful comparison is therefore against strong representation-level fusion baselines rather than only against unimodal models. Concat Fusion directly tests whether simple early aggre-gation is sufficient. FiLM and gated fusion test conditional modulation and scalar trust. Cross-/Co-Attention Fusion tests whether attention-based interaction alone is sufficient. RiVaT-Fuse improves the overall predictive profile by coupling matrix-valued trust, structured interaction, and conditional robustness within the same variational latent fusion framework. 7Table 2: Calibration and perturbation-stability diagnostics for direct baselines. These metrics complement Table 1 by reporting confidence quality and prediction stability under perturbation. Lower values are better. Representation shift is reported in each model’s native latent space and is therefore a diagnostic rather than a strictly scale-normalized cross-model metric.                                                                        
+
+> Method Mean ECE Bin.-1 Brier Bin.-2 Brier Bin.-1
+> |∆p|
+> Bin.-2
+> |∆p|
+> Ord. Flip Bin.-1 Flip Bin.-2 Flip Mean Flip Repr. Shift RiVaT-Fuse 0.072 0.046 0.060 0.025 0.042 0.066 0.028 0.044 0.046 3.699 Cross-/Co-Attention Fusion 0.179 0.152 0.134 0.046 0.062 0.065 0.110 0.140 0.105 2.427 Gated Fusion 0.076 0.055 0.078 0.034 0.076 0.102 0.078 0.071 0.084 5.561 FiLM Fusion 0.085 0.053 0.072 0.035 0.051 0.110 0.069 0.085 0.088 20.469 Concat Fusion 0.072 0.045 0.066 0.030 0.081 0.098 0.057 0.114 0.090 5.713 Image ResNet 0.115 0.055 0.125 0.035 0.066 0.094 0.036 0.071 0.067 8.013 Metadata MLP 0.032 0.054 0.075 0.063 0.105 0.144 0.135 0.129 0.136 3.030
+
+Figure 2: Robustness and calibration under modality degradation. RiVaT-Fuse is evaluated under controlled image degradation and metadata corruption. The curves test whether reliability-aware trust and cDRO improve stability beyond average clean performance. 
+
+4.4 Diagnostic Interpretation and Component Questions 
+
+Table 2 shows that predictive strength and diagnostic behavior are not identical. Metadata MLP has the lowest mean ECE, but Table 1 shows that this calibration advantage is paired with very low binary-task-1 sensitivity. This illustrates why calibration cannot be interpreted without operating-point behavior. Conversely, RiVaT-Fuse achieves the lowest mean label-flip rate, the smallest binary-task probability shifts, and the lowest binary-task-2 Brier score, while also ranking first in predictive performance. This pattern is consistent with the intended role of reliability-aware latent fusion: improving discrimination while reducing perturbation-induced output instability. The representation-shift column should be interpreted cautiously because each architecture has a different latent representation scale. For this reason, the main cross-model stability conclusions rely more heavily on probability shifts and label-flip rates, which are directly comparable at the predictive-output level. Full per-task ECEs, binary QWKs, Brier scores, and representation-shift standard deviations are reported in Appendix F. We do not claim component-ablation evidence in this submission; instead, Appendix G explains how the completed baseline, calibration, stability, and visualization analyses support a mechanism-oriented interpretation. 84.5 Robustness, Calibration, and Stability 
+
+We next evaluate whether reliability-aware fusion improves robustness under controlled modality degradation. We apply image corruptions such as blur, illumination perturbation, noise, and masking, as well as metadata corruption through feature masking or missingness simulation. RiVaT-Fuse is expected to degrade more gracefully because less reliable samples receive stronger robustness pressure through the state-conditioned cDRO mechanism. Because RiVaT-Fuse explicitly models reliability, calibration is also a key evaluation dimension. Table 2 reports ECE and Brier score summaries for all direct baselines. The results show that the lowest ECE does not necessarily correspond to the strongest sensitivity or stability profile, motivating the use of calibration metrics together with discrimination and operating-point metrics. We also measure latent and prediction stability under perturbation. Specifically, we compare represen-tation shift, probability shift, and label-flip rate between clean and corrupted inputs. RiVaT-Fuse has the lowest mean label-flip rate among the direct baselines and the smallest probability shifts on both binary tasks, empirically connecting the theoretical stability analysis to observed model behavior. 
+
+4.6 Dynamics and Qualitative Analysis 
+
+The learned state variables evolve meaningfully during training rather than remaining static diagnostic scores. In particular, reliability, uncertainty, and the induced ambiguity radius jointly determine how robustness pressure is allocated across samples. This supports the interpretation of the state descriptor as a bridge between reliability estimation and robust fusion. The learned trust operators and contribution profiles reveal that fusion is dynamically balanced across modalities and interactions. The model does not simply rely on a single dominant branch; instead, it learns changing contributions from image evidence, metadata evidence, and structured interaction. Representative attention visualizations further provide an intuitive view of the relational component by showing how metadata context guides attention over image tokens. Taken together, the experimental design aims to validate the central claim of this paper: RiVaT-Fuse does not merely add more modules to a multimodal network, but changes the semantics of fusion from feature aggregation to reliability-calibrated latent-state estimation. The main results evaluate predictive performance, while the robustness and dynamics analyses test whether the learned behavior matches the intended reliability-aware design. Since no additional component-ablation experiments are included in this submission, we restrict the evidence to completed direct comparisons, calibration/stability diagnostics, and visualization-based mechanism analysis. Additional quantitative details, calibration curves, and case studies are provided in the appendix. 
+
+# 5 Related Work 
+
+Multimodal representation fusion. Multimodal fusion includes early fusion, late fusion, co-learning, and hybrid strategies [3, 30]. Representation-level mechanisms include concatenation, gated multimodal units [2], conditional modulation [33], co-attention [27, 22], transformer-based fusion [39, 38], and Perceiver-style architectures [19]. Bilinear and tensor fusion methods provide multiplicative interactions through compact bilinear pooling, tensor fusion, low-rank fusion, and Tucker fusion [12, 41, 25, 5]. RiVaT-Fuse differs by defining fusion as a reliability-calibrated latent optimization solution rather than a directly parameterized aggregation layer. 
+
+Reliability, robustness, and task structure. Predictive uncertainty and calibration are central under distribution shift [13, 20, 24, 15, 31]. Distributionally robust and group-robust learning control worst-case loss under ambiguity or group shifts [4, 11, 29, 18, 16, 35]. Multi-task learning studies shared representations and task balancing [6, 34, 28, 21, 7, 36]. RiVaT-Fuse connects these ideas by using reliability states to construct matrix-valued latent trust, state-dependent robustness, and task coupling inside the fusion layer. 
+
+Medical image–metadata learning. Retinal AI has achieved strong performance for disease de-tection and referral prediction from fundus or OCT imaging [14, 37, 9, 1]. More broadly, medical AI often combines imaging with clinical or tabular variables. Our main comparison focuses on representation-level fusion because RiVaT-Fuse is an early fusion framework. 96 Conclusion and Limitations 
+
+We introduced RiVaT-Fuse, a reliability-calibrated variational tensor fusion framework for multimodal prediction under modality uncertainty. By defining fusion as sample-wise latent-state estimation, RiVaT-Fuse unifies matrix-valued trust, structured cross-modal interaction, conditional robustness, and task coupling within one principled framework. This provides a methodologically grounded alternative to heuristic multimodal fusion and offers a representation-level fusion module that can be evaluated under aligned image–metadata prediction protocols. 
+
+Scope. The empirical study is centered on one primary image–metadata benchmark, enabling a controlled analysis of the proposed fusion principle. The target is image-level acquisition prediction; patient-disjoint deployment evaluation is a complementary clinical validation question rather than the primary estimand of this method paper. The latent solve and structured interaction modules add computation relative to simple fusion, but are implemented with structured operators and batched solves. These scope choices keep the paper focused on reliability-calibrated fusion while leaving broader deployment-oriented extensions to future work. 
+
+# References 
+
+[1] Michael D. Abràmoff, Philip T. Lavin, Michele Birch, Nilay Shah, and James C. Folk. Pivotal trial of an autonomous AI-based diagnostic system for detection of diabetic retinopathy in primary care offices. npj Digital Medicine , 1(1):39, 2018. [2] John Arevalo, Thamar Solorio, Manuel Montes-y Gomez, and Fabio A. Gonzalez. Gated multi-modal units for information fusion. In International Conference on Learning Representations Workshop , 2017. [3] Tadas Baltrušaitis, Chaitanya Ahuja, and Louis-Philippe Morency. Multimodal machine learn-ing: A survey and taxonomy. IEEE Transactions on Pattern Analysis and Machine Intelligence ,41(2):423–443, 2019. [4] Aharon Ben-Tal, Dick den Hertog, Anja De Waegenaere, Bertrand Melenberg, and Gijs Rennen. Robust solutions of optimization problems affected by uncertain probabilities. Management Science , 59(2):341–357, 2013. [5] Hedi Ben-Younes, Remi Cadene, Matthieu Cord, and Nicolas Thome. MUTAN: Multimodal tucker fusion for visual question answering. In Proceedings of the IEEE International Confer-ence on Computer Vision , pages 2612–2620, 2017. [6] Rich Caruana. Multitask learning. Machine Learning , 28(1):41–75, 1997. [7] Zhao Chen, Vijay Badrinarayanan, Chen-Yu Lee, and Andrew Rabinovich. GradNorm: Gra-dient normalization for adaptive loss balancing in deep multitask networks. In International Conference on Machine Learning , pages 794–803, 2018. [8] Jacob Cohen. Weighted kappa: Nominal scale agreement provision for scaled disagreement or partial credit. Psychological Bulletin , 70(4):213–220, 1968. [9] Jeffrey De Fauw, Joseph R. Ledsam, Bernardino Romera-Paredes, Stanislav Nikolov, Nenad Tomasev, Sam Blackwell, Harry Askham, Xavier Glorot, Brendan O’Donoghue, Daniel Visentin, et al. Clinically applicable deep learning for diagnosis and referral in retinal disease. Nature Medicine , 24(9):1342–1350, 2018. [10] Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. ImageNet: A large-scale hierarchical image database. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , pages 248–255, 2009. [11] John Duchi, Tatsunori Hashimoto, and Hongseok Namkoong. Learning models with uniform performance via distributionally robust optimization. In International Conference on Learning Representations , 2018. 10 [12] Akira Fukui, Dong Huk Park, Daylen Yang, Anna Rohrbach, Trevor Darrell, and Marcus Rohrbach. Multimodal compact bilinear pooling for visual question answering and visual grounding. In Proceedings of the Conference on Empirical Methods in Natural Language Processing , pages 457–468, 2016. [13] Yarin Gal and Zoubin Ghahramani. Dropout as a bayesian approximation: Representing model uncertainty in deep learning. In International Conference on Machine Learning , pages 1050–1059, 2016. [14] Varun Gulshan, Lily Peng, Marc Coram, Martin C. Stumpe, Derek Wu, Arunachalam Narayanaswamy, Subhashini Venugopalan, Kasumi Widner, Tom Madams, Jorge Cuadros, et al. Development and validation of a deep learning algorithm for detection of diabetic retinopathy in retinal fundus photographs. JAMA , 316(22):2402–2410, 2016. [15] Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q. Weinberger. On calibration of modern neural networks. In International Conference on Machine Learning , pages 1321–1330, 2017. [16] Tatsunori B. Hashimoto, Megha Srivastava, Hongseok Namkoong, and Percy Liang. Fairness without demographics in repeated loss minimization. In International Conference on Machine Learning , pages 1929–1938, 2018. [17] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for im-age recognition. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , pages 770–778, 2016. [18] Weihua Hu, Gang Niu, Issei Sato, and Masashi Sugiyama. Does distributionally robust super-vised learning give robust classifiers? In International Conference on Machine Learning , pages 2029–2037, 2018. [19] Andrew Jaegle, Felix Gimeno, Andrew Brock, Oriol Vinyals, Andrew Zisserman, and Joao Carreira. Perceiver: General perception with iterative attention. In International Conference on Machine Learning , pages 4651–4664, 2021. [20] Alex Kendall and Yarin Gal. What uncertainties do we need in bayesian deep learning for computer vision? In Advances in Neural Information Processing Systems , 2017. [21] Alex Kendall, Yarin Gal, and Roberto Cipolla. Multi-task learning using uncertainty to weigh losses for scene geometry and semantics. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , pages 7482–7491, 2018. [22] Jin-Hwa Kim, Jaehyun Jun, and Byoung-Tak Zhang. Bilinear attention networks. In Advances in Neural Information Processing Systems , 2018. [23] Diederik P. Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In Interna-tional Conference on Learning Representations , 2015. [24] Balaji Lakshminarayanan, Alexander Pritzel, and Charles Blundell. Simple and scalable predictive uncertainty estimation using deep ensembles. In Advances in Neural Information Processing Systems , 2017. [25] Zhun Liu, Ying Shen, Varun Bharadhwaj Lakshminarasimhan, Paul Pu Liang, Amir Zadeh, and Louis-Philippe Morency. Efficient low-rank multimodal fusion with modality-specific factors. In Proceedings of the 56th Annual Meeting of the Association for Computational Linguistics ,pages 2247–2256, 2018. [26] Ilya Loshchilov and Frank Hutter. Decoupled weight decay regularization. In International Conference on Learning Representations , 2019. [27] Jiasen Lu, Jianwei Yang, Dhruv Batra, and Devi Parikh. Hierarchical question-image co-attention for visual question answering. In Advances in Neural Information Processing Systems ,2016. [28] Ishan Misra, Abhinav Shrivastava, Abhinav Gupta, and Martial Hebert. Cross-stitch networks for multi-task learning. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition , pages 3994–4003, 2016. 11 [29] Hongseok Namkoong and John C. Duchi. Variance-based regularization with convex objectives. In Advances in Neural Information Processing Systems , 2017. [30] Jiquan Ngiam, Aditya Khosla, Mingyu Kim, Juhan Nam, Honglak Lee, and Andrew Y. Ng. Multimodal deep learning. In Proceedings of the 28th International Conference on Machine Learning , pages 689–696, 2011. [31] Yaniv Ovadia, Emily Fertig, Jie Ren, Zachary Nado, D. Sculley, Sebastian Nowozin, Joshua V. Dillon, Balaji Lakshminarayanan, and Jasper Snoek. Can you trust your model’s uncertainty? evaluating predictive uncertainty under dataset shift. In Advances in Neural Information Processing Systems , 2019. [32] Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, et al. PyTorch: An imperative style, high-performance deep learning library. In Advances in Neural Information Processing Systems , 2019. [33] Ethan Perez, Florian Strub, Harm de Vries, Vincent Dumoulin, and Aaron Courville. FiLM: Visual reasoning with a general conditioning layer. In Proceedings of the AAAI Conference on Artificial Intelligence , 2018. [34] Sebastian Ruder. An overview of multi-task learning in deep neural networks. arXiv preprint arXiv:1706.05098 , 2017. [35] Shiori Sagawa, Pang Wei Koh, Tatsunori B. Hashimoto, and Percy Liang. Distributionally robust neural networks for group shifts: On the importance of regularization for worst-case generalization. In International Conference on Learning Representations , 2020. [36] Ozan Sener and Vladlen Koltun. Multi-task learning as multi-objective optimization. In 
+
+Advances in Neural Information Processing Systems , 2018. [37] Daniel Shu Wei Ting, Carol Yim-lui Cheung, Gavin Lim, Gavin Siew Wei Tan, Nguyen Dinh Quang, Alfred Gan, Haslina Hamzah, Renata Garcia-Franco, Ian San Yeo, Shu Yen Lee, et al. Development and validation of a deep learning system for diabetic retinopathy and related eye diseases using retinal images from multiethnic populations with diabetes. JAMA , 318(22): 2211–2223, 2017. [38] Yao-Hung Hubert Tsai, Shaojie Bai, Paul Pu Liang, J. Zico Kolter, Louis-Philippe Morency, and Ruslan Salakhutdinov. Multimodal transformer for unaligned multimodal language sequences. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics ,pages 6558–6569, 2019. [39] Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Advances in Neural Informa-tion Processing Systems , 2017. [40] William J. Youden. Index for rating diagnostic tests. Cancer , 3(1):32–35, 1950. [41] Amir Zadeh, Minghai Chen, Soujanya Poria, Erik Cambria, and Louis-Philippe Morency. Tensor fusion network for multimodal sentiment analysis. In Proceedings of the 2017 Conference on Empirical Methods in Natural Language Processing , pages 1103–1114, 2017. 12 Appendix Contents 
+
+• Appendix A: Derivations and stability analysis 
+
+– A.1 Matrix form of the latent objective 
+
+– A.2 Closed-form latent solution 
+
+– A.3 Well-posedness 
+
+– A.4 Perturbation and prediction stability 
+
+– A.5 Interpretation of the theoretical claims • Appendix B: Implementation details 
+
+– B.1 Model components 
+
+– B.2 Image branch 
+
+– B.3 Metadata branch 
+
+– B.4 Trust, interaction, and robust objective 
+
+– B.5 Optimization and thresholding • Appendix C: Dataset, labels, and image-level protocol 
+
+– C.1 Target estimand 
+
+– C.2 Label construction 
+
+– C.3 Splits and protocol transparency 
+
+– C.4 Preprocessing rules • Appendix D: Direct representation-level baselines 
+
+– D.1 Metadata MLP 
+
+– D.2 Image ResNet 
+
+– D.3 Early-fusion baselines • Appendix E: Decision-level and hybrid methods • Appendix F: Full numerical results 
+
+– F.1 Full predictive metrics 
+
+– F.2 Calibration metrics 
+
+– F.3 Perturbation-stability metrics • Appendix G: Mechanism-oriented interpretation of completed evidence 
+
+– G.1 Completed evidence blocks 
+
+– G.2 Claim boundary 
+
+– G.3 Interpretation summary • Appendix H: Stability, calibration, and stress-test interpretation • Appendix I: Visualization atlas and artifact inventory 
+
+– I.1 Artifact tree summary 
+
+– I.2 Training-history visualizations 
+
+– I.3 Final-test visualizations 
+
+– I.4 Probe-panel temporal visualizations • Appendix J: Representation-space diagnostics • Appendix K: Probe-level qualitative case studies • Appendix L: Reproducibility statement 13 A Derivations and Stability Analysis 
+
+A.1 Matrix form of the latent objective 
+
+For an image–metadata observation, the two modality encoders produce 
+
+zI = ϕI (I) ∈ Rd, zM = ϕM (m) ∈ Rd. (18) RiVaT-Fuse defines the fused representation as the solution of the quadratic latent objective 
+
+J(h; x) = 12 ∥h − zI ∥2  
+
+> PI(x)
+
++ 12 ∥h − zM ∥2  
+
+> PM(x)
+
+− ⟨ h, T (x)( zI ⊗ zM )⟩ + λ
+
+2 ∥h∥22. (19) Collecting all terms that depend on h gives 
+
+J(h; x) = 12 h⊤H(x)h − h⊤b(x) + C(x), (20) where C(x) is independent of h and 
+
+H(x) = PI (x) + PM (x) + λI, (21) 
+
+b(x) = PI (x)zI + PM (x)zM + T (x)( zI ⊗ zM ). (22) This form separates reliability geometry, encoded by H(x), from the evidence-and-interaction vector, encoded by b(x).
+
+A.2 Closed-form latent solution 
+
+The derivative of J(h; x) with respect to h is 
+
+∇hJ(h; x) = H(x)h − b(x). (23) At the minimizer, ∇hJ(h; x) = 0 , yielding the linear system 
+
+H(x)h⋆(x) = b(x). (24) When H(x) is nonsingular, the solution is 
+
+h⋆(x) = H(x)−1b(x). (25) The implementation solves the linear system directly rather than explicitly forming an inverse. 
+
+A.3 Well-posedness Assumption 1 (Uniform positive definiteness) . For every sample x, there exists μ > 0 such that 
+
+H(x) = PI (x) + PM (x) + λI ⪰ μI. (26) 
+
+Theorem 1 (Well-posed latent fusion) . Under the above positive-definiteness assumption, the vari-ational fusion objective is strongly convex in h, admits a unique minimizer, and the minimizer is 
+
+h⋆(x) = H(x)−1b(x).Proof. The Hessian of J(h; x) with respect to h is H(x). Since H(x) ⪰ μI ≻ 0, J(h; x) is strongly convex. A strongly convex quadratic objective has a unique global minimizer. Setting ∇hJ(h; x) = 0 
+
+gives H(x)h = b(x), and the closed-form expression follows. 
+
+A.4 Perturbation and prediction stability 
+
+Let ∆zI , ∆zM , and ∆T denote perturbations in the image embedding, metadata embedding, and interaction operator. Treating H as fixed to first order, the perturbation in b(x) is 
+
+∆b = PI ∆zI + PM ∆zM + ∆ T (zI ⊗ zM ) (27) 
+
++ T (∆ zI ⊗ zM + zI ⊗ ∆zM ) + higher-order terms . (28) Thus ∆h⋆ = H−1∆b. Applying the triangle inequality and submultiplicativity of the operator norm gives 
+
+∥∆h⋆∥2 ≤ ∥ H−1∥2 B(∆ zI , ∆zM , ∆T ), (29) where B collects the first-order perturbation terms. If a task head ft is Lt-Lipschitz, then 
+
+|ft(h⋆(x)) − ft(h⋆(x′)) | ≤ Lt∥h⋆(x) − h⋆(x′)∥2. (30) For classification, if the perturbation-induced score change is smaller than half of the clean prediction margin, the predicted label is unchanged. 14 A.5 Interpretation of the theoretical claims 
+
+The theoretical statements are sufficient-condition results. They formalize two properties of the latent fusion layer: the sample-wise latent state is well defined under positive definiteness, and its sensitivity is controlled by the conditioning of the latent system and by bounded changes in modality evidence and interaction terms. The empirical sections evaluate whether this reliability-conditioned formulation leads to favorable behavior in the trained model through output-level probability shifts, label-flip rates, calibration metrics, and representation diagnostics. 15 B Implementation Details 
+
+B.1 Model components 
+
+The faithful implementation contains an image branch, a metadata branch, state estimators, matrix-valued trust operators, structured interaction modules, a latent linear solve, and multi-task heads. The shared latent dimension is d = 256 . The trust operator uses a low-rank-plus-diagonal form with trust rank 32 and numerical stabilizer ϵ = 10 −3. The multiplicative interaction module uses four low-rank components with interaction rank 64. The quadratic heads use low-rank second-order structure with rank 8 and a small initialization scale. 
+
+B.2 Image branch 
+
+The image branch uses a ResNet-style encoder initialized from ImageNet-pretrained weights. Input images are resized to 512 × 512 and normalized with ImageNet statistics. Training uses image-level augmentation aligned with the direct image and early-fusion baselines, including light geometric perturbation and standard normalization. The implementation separates clean evaluation transforms from perturbations used for stability diagnostics. 
+
+B.3 Metadata branch 
+
+Continuous metadata variables are converted to numeric values, imputed using training-set statistics, and standardized using training-set means and standard deviations. Categorical variables are filled using training-set modes and encoded through training-set vocabularies with an unknown-token convention. Metadata completeness is computed before imputation and is retained as a reliability signal rather than being erased by preprocessing. 
+
+B.4 Trust, interaction, and robust objective 
+
+The image and metadata trust operators are positive semidefinite by construction through diagonal gates plus low-rank basis matrices. The interaction operator decomposes into additive correction, multiplicative low-rank conjunction, and metadata-conditioned relational attention. The conditional robustness term uses state bins derived from the reliability state [q, u, r ] and a state-dependent ambi-guity radius. The implementation uses warm-up and ramp-up schedules for robust and consistency terms to avoid destabilizing early optimization. 
+
+B.5 Optimization and thresholding 
+
+The model is optimized with AdamW using decoupled learning rates for the image backbone and non-backbone modules. The aligned run uses batch size 16 for training and 64 for evaluation, weight decay 10 −4, gradient clipping with norm 2.0, and early stopping based on validation performance. Binary decision thresholds are selected on the validation split using the selected operating-point rule and are then fixed for the test evaluation. 16 C Dataset, Labels, and Image-Level Protocol 
+
+C.1 Target estimand 
+
+The target estimand of this work is image-level acquisition prediction. Each sample corresponds to an image-level observation paired with structured metadata. This protocol is used consistently for RiVaT-Fuse and all direct representation-level baselines so that differences in performance are attributable to the fusion mechanism rather than to inconsistent split definitions. 
+
+C.2 Label construction 
+
+The empirical retinal instantiation contains one ordinal severity task and two binary decision tasks. Patient-level aggregation is used to construct labels when required by the annotation structure, and the resulting labels are merged back to image-level rows. The referable-style binary outcome is defined by the combination of ordinal severity and edema-related status used by the evaluation script. Main-text tables use generic task names to preserve the method-level framing; the metric mapping is ordinal severity, binary outcome 1, and binary outcome 2. 
+
+C.3 Splits and protocol transparency 
+
+The aligned run contains 3603 training images, 772 validation images, and 773 test images. The cor-responding unique-patient counts are 1278, 630, and 604. Because the target estimand is image-level acquisition prediction, the split is intentionally image-level and is not a patient-disjoint deployment split. The observed patient overlap across image-level splits is part of the declared acquisition-level protocol rather than an unreported leakage issue. 
+
+C.4 Preprocessing rules 
+
+All preprocessing statistics are fit using the training split only. Metadata imputation, standardization, and categorical vocabularies are derived from training data. Model selection and threshold tuning use validation data only. Test data are reserved for final reporting and are not used for preprocessing, checkpoint selection, or threshold selection. 17 D Direct Representation-Level Baselines 
+
+D.1 Metadata MLP 
+
+The metadata-only baseline uses the same structured variables and the same training-set-only prepro-cessing pipeline as the metadata branch of RiVaT-Fuse. It evaluates the predictive value of structured metadata without image evidence. This baseline is important because it establishes whether the metadata channel alone already carries strong signal for the ordinal and binary tasks. 
+
+D.2 Image ResNet 
+
+The image-only baseline uses the same image-level split, image resolution, normalization convention, and validation-threshold protocol as the image branch used in multimodal models. It evaluates how much information can be recovered from the image modality without structured metadata. 
+
+D.3 Early-fusion baselines 
+
+The direct early-fusion baselines operate at the representation level before task prediction. Concat Fusion combines image and metadata features through direct feature fusion. FiLM Fusion uses metadata-conditioned modulation of image-derived features. Gated Fusion learns a sample-dependent gate over fused evidence. Cross-/Co-Attention Fusion uses attention to exchange information between image and metadata representations. These models are direct comparators because they answer the same modeling question as RiVaT-Fuse: how to form a fused representation before prediction. 18 E Decision-Level and Hybrid Methods 
+
+Decision-level late fusion and hybrid/composite methods operate at a different level of the modeling pipeline from RiVaT-Fuse. They combine predictions, logits, or outputs from multiple trained systems after representation learning has already occurred. The main paper therefore does not treat these methods as direct representation-level baselines. When reported, their role is an expanded comparison that answers a complementary question: how much can post-hoc or composite decision combination improve over individual representation-level models? This separation is important for interpretation. A decision-level ensemble can outperform a representation-level model by leveraging multiple predictors, but such a result does not invali-date the representation-level contribution of RiVaT-Fuse. Instead, a strong RiVaT-Fuse representation can itself serve as an improved component in late-fusion or hybrid systems. 19 F Full Numerical Results 
+
+F.1 Full predictive metrics 
+
+Table 3: Full predictive metrics for direct baselines under validation-tuned thresholds. The main text reports a compact subset; this table keeps all predictive metrics produced by the evaluation script. 
+
+Method Ord. Acc Ord. QWK B1 AUC B1 Acc B1 QWK B1 Sens B1 Spec B2 AUC B2 Acc B2 QWK B2 Sens B2 Spec RiVaT-Fuse 0.864 0.843 0.950 0.933 0.707 0.844 0.944 0.971 0.933 0.816 0.865 0.954 Concat Fusion 0.840 0.806 0.933 0.891 0.571 0.800 0.903 0.959 0.882 0.708 0.908 0.874 FiLM Fusion 0.825 0.788 0.948 0.889 0.571 0.822 0.898 0.955 0.915 0.771 0.859 0.932 Gated Fusion 0.825 0.800 0.926 0.894 0.564 0.756 0.912 0.947 0.904 0.743 0.832 0.927 Cross-/Co-Attention 0.719 0.585 0.868 0.867 0.492 0.744 0.883 0.866 0.787 0.482 0.746 0.799 Image ResNet 0.768 0.644 0.911 0.862 0.488 0.767 0.874 0.864 0.842 0.573 0.692 0.889 Metadata MLP 0.832 0.667 0.940 0.933 0.595 0.489 0.991 0.944 0.898 0.702 0.703 0.959 
+
+F.2 Calibration metrics 
+
+Table 4: Calibration and probability-quality metrics. ECE is reported for the ordinal and binary tasks; Brier score is reported for the binary tasks. 
+
+Method Ord. ECE B1 ECE B2 ECE B1 Brier B2 Brier RiVaT-Fuse 0.113 0.044 0.058 0.046 0.060 Concat Fusion 0.111 0.043 0.063 0.045 0.066 FiLM Fusion 0.131 0.053 0.070 0.053 0.072 Gated Fusion 0.112 0.047 0.069 0.055 0.078 Cross-/Co-Attention 0.094 0.292 0.151 0.152 0.134 Image ResNet 0.179 0.050 0.115 0.055 0.125 Metadata MLP 0.027 0.031 0.037 0.054 0.075 
+
+F.3 Perturbation-stability metrics 
+
+Table 5: Perturbation-stability diagnostics. Representation shifts are measured in each model’s native latent scale and are therefore not directly comparable across architectures. Probability deltas and label-flip rates are output-level quantities and are directly comparable.                                                           
+
+> Method Repr. Shift Mean Repr. Shift Std B1 Prob. ∆B2 Prob. ∆Ord. Flip B1 Flip B2 Flip RiVaT-Fuse 3.699 2.567 0.025 0.042 0.066 0.028 0.044 Concat Fusion 5.713 3.229 0.030 0.081 0.098 0.057 0.114 FiLM Fusion 20.469 16.159 0.035 0.051 0.110 0.069 0.085 Gated Fusion 5.561 3.939 0.034 0.076 0.102 0.078 0.071 Cross-/Co-Attention 2.427 2.247 0.046 0.062 0.065 0.110 0.140 Image ResNet 8.013 1.280 0.035 0.066 0.094 0.036 0.071 Metadata MLP 3.030 2.133 0.063 0.105 0.144 0.135 0.129
+
+20 G Mechanism-Oriented Interpretation of Completed Evidence 
+
+G.1 Completed evidence blocks 
+
+The current submission includes three completed forms of mechanism-oriented evidence. First, direct representation-level baseline comparisons evaluate RiVaT-Fuse against alternative ways of forming early fused representations. Second, calibration and perturbation-stability diagnostics evaluate whether the method changes output-level behavior under input perturbation. Third, visualization outputs document training dynamics, reliability-state trajectories, trust summaries, contribution profiles, embedding geometry, and probe-level temporal behavior. 
+
+G.2 Claim boundary 
+
+The submission does not claim component-removal ablation evidence. The completed results support the full RiVaT-Fuse formulation as a representation-level fusion framework and show that it compares favorably with direct early-fusion baselines under the aligned protocol. They do not assign a separate quantitative effect size to every internal module, such as the trust operator, multiplicative interaction, relational interaction, cDRO term, or task coupling. This wording keeps the empirical claim aligned with the experiments included in the manuscript. 
+
+G.3 Interpretation summary 
+
+The strongest supported conclusion is that reliability-calibrated latent-state fusion provides a favorable complete-framework alternative to heuristic representation-level fusion. The predictive tables show improvements over direct early-fusion baselines. The stability table shows lower output-level probability shifts and generally lower label-flip rates. The visualization atlas provides qualitative evidence that reliability states, trust summaries, and contribution patterns evolve during training. Together, these completed analyses support the central mechanism story without relying on unreported ablation experiments. 21 H Stability, Calibration, and Stress-Test Interpretation 
+
+The completed perturbation-stability evaluation compares clean and perturbed inputs at both the latent/representation level and the prediction-output level. The manuscript emphasizes output-level metrics for cross-model comparison because representation vectors live in model-specific spaces and can have different natural scales. Probability deltas and label-flip rates are therefore the primary stability diagnostics used across methods. Calibration is evaluated with expected calibration error for the ordinal and binary outputs and with Brier score for binary outputs. Metadata MLP achieves strong ECE values, but its operating-point behavior shows a sensitivity–specificity imbalance on Binary-1. RiVaT-Fuse provides a stronger balance between discrimination, operating-point sensitivity, and perturbation stability. This distinction is important because a well-calibrated model can still be unsuitable for a screening-oriented decision point if sensitivity is too low. Worst-group and reliability-stratified summaries are reported through the generated visualization artifacts when available. These diagnostics complement average performance by examining whether errors concentrate in low-reliability or difficult strata. They are used as descriptive stress-test evidence rather than as a standalone fairness claim. 22 I Visualization Atlas and Artifact Inventory 
+
+This appendix summarizes the visualization artifacts generated by the analysis pipeline. The research archive contains serialized records, checkpoint snapshots, training-history plots, final diagnostic plots, and probe-panel sequences. These archive contents are described here but are not distributed in the arXiv source package. The visualization families are used to support different types of claims: optimization stability, reliability-state behavior, trust and contribution dynamics, representation geometry, calibration, perturbation stability, and qualitative case-level interpretation. 
+
+I.1 Artifact tree summary 
+
+The visualization output is organized under a single seed directory with the following top-level families: • analysis_records/ : serialized validation and test records. • checkpoints/ : selected best-checkpoint and periodic checkpoint snapshots from training. • plots_history/ : epoch-level training, reliability, trust, interaction, and contribution curves. • plots_final/ : final-test calibration, stability, confusion, embedding, and worst-group visual-izations. • probe_panels/ : temporal case-study panels and evolution GIFs for selected probe examples. The complete file listing is retained as directory_tree.txt in the research archive and is not included in the arXiv source package. 
+
+I.2 Training-history visualizations 
+
+Table 6: Training-history visualization families generated by the analysis pipeline.         
+
+> Family Example files Manuscript role Optimization dynamics loss_metrics.png ,
+> lr_patience.png
+> Documents convergence, early stop-ping, and learning-rate behavior. Task dynamics task_metrics.png Shows how validation metrics evolve across the ordinal and binary tasks. Reliability and trust state_metrics.png ,
+> trust_metrics.png
+> Documents the learned state variables and trust summaries over epochs. Interaction and geometry interaction_metrics.png ,
+> fusion_geometry.png
+> Summarizes interaction strength and fused-representation geometry. Contribution dynamics contribution_metrics.png ,
+> val_modality_contribution_ stack.png
+> Shows the relative contribution of im-age, metadata, and interaction terms.
+
+23 I.3 Final-test visualizations 
+
+Table 7: Final diagnostic visualization families. 
+
+Family Example files Manuscript role Reliability diagrams reliability_dme.png ,
+
+reliability_ref.png 
+
+Supports calibration analysis for the bi-nary outputs. Stability summary stability_metrics.png Summarizes latent shift, probability shift, and label-flip behavior. Confusion matrix test_confusion_dr.png Displays ordinal classification error pat-terns. Fused embeddings test_h_pca_y_dr.png ,
+
+test_h_tsne_y_ref.png 
+
+Visualizes fused latent geometry by task label. Image embeddings test_z_img_pca_y_dr.png ,
+
+test_z_img_tsne_y_ref.png 
+
+Visualizes image-branch geometry be-fore fusion. Metadata embeddings test_z_meta_pca_y_dr.png ,
+
+test_z_meta_tsne_y_ref.png 
+
+Visualizes metadata-branch geometry before fusion. Worst-group summary worst_group_summary.png Describes performance on difficult or low-reliability strata. 
+
+I.4 Probe-panel temporal visualizations 
+
+The probe-panel outputs contain temporal sequences for six tracked probes: probe_6 , probe_26 ,
+
+probe_32 , probe_49 , probe_233 , and probe_409 . For each probe, the artifact tree contains panels at multiple epochs and an evolution GIF. These sequences show how predictions, reliability state, trust summaries, and contribution patterns change from early training to the final selected checkpoint. They are used as qualitative temporal diagnostics rather than as quantitative evidence of component necessity. 24 J Representation-Space Diagnostics 
+
+The representation-space diagnostics compare image embeddings zI , metadata embeddings zM , and fused latent states h⋆ using PCA and t-SNE projections. The artifact inventory contains validation and test projections for the image branch, metadata branch, and fused latent representation, colored by ordinal and binary labels. These visualizations support the representation-level interpretation of RiVaT-Fuse by showing whether fused geometry organizes task labels differently from either unimodal representation. PCA and t-SNE plots are interpreted qualitatively. Projection geometry can be affected by class imbalance, scaling, neighborhood parameters, and stochastic initialization. For this reason, embedding visualizations are used alongside quantitative metrics such as QWK, AUC, calibration, probability shift, and label-flip rate. 25 K Probe-Level Qualitative Case Studies 
+
+Probe-level case studies explain individual model behavior rather than aggregate performance. The tracked probes in the visualization package provide examples of temporal prediction trajectories across training. A case-study panel contains the image evidence, metadata context, reliability state, trust summaries, modality/interaction contribution summaries, and task predictions at selected checkpoints. The case-study interpretation distinguishes three types of qualitative evidence. First, stable-correct cases show whether the model maintains correct decisions across training. Second, corrected-by-fusion cases show whether multimodal fusion resolves disagreement between image-only and metadata-only evidence. Third, failure cases reveal where reliability-aware fusion remains insufficient. Including all three categories prevents the qualitative appendix from presenting only favorable examples. Attention or relational maps are interpreted as model-behavior visualizations rather than clinical explanations. They illustrate how the relational component allocates attention under metadata context, but they are not used as standalone evidence of causal or clinical reasoning. 26 L Reproducibility Statement 
+
+The experiments use a fixed image-level split seed and fixed training seed for the aligned comparison. The run logs record train, validation, and test image counts, unique-patient counts, selected thresholds, checkpoint-selection metrics, and final test outputs. The image-level split identifier is part of the target protocol and is stored with the evaluation artifacts. The implementation uses Python with PyTorch and torchvision, a ResNet-style image backbone, AdamW optimization, gradient clipping, early stopping, and validation-selected binary thresholds. The research archive contains serialized validation/test records, checkpoint snapshots, training-history plots, final diagnostic plots, and probe-panel sequences. Reproduction involving the original dataset remains subject to its access conditions. The archived visualization package is organized into analysis_records/ , checkpoints/ ,
+
+plots_history/ , plots_final/ , and probe_panels/ . This structure links numerical results, checkpoints, and visual diagnostics, making the reported figures traceable to the corresponding evaluation records. 
+
+Statistical uncertainty and computational reporting. The aligned comparison reports fixed-seed results and detailed diagnostics, but does not report multi-seed error bars or statistical significance tests due to computational constraints. The exact compute worker type, GPU memory, and wall-clock time are not fully specified for every experiment. 
+
+Data access and release scope. The arXiv source package contains the manuscript sources and the figures required to rebuild this paper. It does not distribute executable model code, checkpoints, serialized evaluation records, or raw clinical images. Dataset access and any separate artifact release remain subject to the original asset conditions. The study uses existing de-identified data resources and does not introduce a new dataset or conduct crowdsourcing, new human-subject recruitment, or intervention; original dataset governance is handled by the dataset provider. 
+
+Responsible use. RiVaT-Fuse is a research framework rather than a stand-alone clinical decision system. Potential benefits in multimodal prediction must be considered alongside clinical over-reliance, distribution-shift risks, and privacy considerations. Deployment requires local validation and human oversight; broader dataset validation would strengthen generality. 
+
+Methodology and tool assistance. LLMs are not used as an important, original, or non-standard component of the core method, experiments, or scientific claims. Any ordinary writing or formatting assistance does not affect the methodology. 27
