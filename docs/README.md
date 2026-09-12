@@ -48,17 +48,17 @@
 <section class="dpr-home-dashboard-card dpr-home-report-card">
   <div class="dpr-home-dashboard-header">
     <div>
-      <span class="dpr-home-dashboard-kicker">2026-09-11</span>
+      <span class="dpr-home-dashboard-kicker">2026-09-12</span>
       <h3 class="dpr-home-dashboard-title">今日汇总</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">共 21 篇</strong>
+    <strong class="dpr-home-dashboard-count">共 0 篇</strong>
   </div>
   <dl class="dpr-home-dashboard-stats">
     <div class="dpr-home-dashboard-stat"><dt>累计更新</dt><dd>1 次</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>8</dd></div>
-    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>13</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>精读</dt><dd>0</dd></div>
+    <div class="dpr-home-dashboard-stat"><dt>速读</dt><dd>0</dd></div>
   </dl>
-  <p class="dpr-home-dashboard-body">最近更新：2026-09-11 22:26:31 UTC<br>状态：成功</p>
+  <p class="dpr-home-dashboard-body">最近更新：2026-09-12 22:28:14 UTC<br>状态：成功</p>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-brief-card">
   <div class="dpr-home-dashboard-header">
@@ -69,10 +69,7 @@
     <strong class="dpr-home-dashboard-count">AI</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<p>今日共生成 21 篇推荐（精读 8 篇，速读 13 篇）</p>
-<p>精读：《From State Synchronization to Cognitive Self-Evolution: An Operational Architecture for Cognitive Digital Twins》（9.0/10）, 《A Confidence-Aware Multimodal Fusion Framework for Industrial Human-Robot Collaboration》（9.0/10）</p>
-<p>速读：《An overview of 3D Vision-Language Models》（7.0/10）, 《UniFusion: Sparse-View 4D Reconstruction via Unified Spatio-temporal Depth Alignment》（7.0/10）, 《Radiation, Rotation and Scale Invariant Feature Descriptor for Multimodal Image Matching》（7.0/10）</p>
-<p>这些结果覆盖了当下较热的方向，建议先看精读区论文的关键问题与方法。</p>
+<p>今日无新推荐，系统未产出可展示论文。</p>
   </div>
 </section>
 <section class="dpr-home-dashboard-card dpr-home-deep-card">
@@ -81,12 +78,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">精读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">8 篇</strong>
+    <strong class="dpr-home-dashboard-count">0 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="From State Synchronization to Cognitive Self-Evolution: An Operational Architecture for Cognitive Digital Twins">From State Synchronization to Cognitive Self-Evolution: An Operational Architecture for Cognitive Digital Twins</span></li><li><span class="dpr-home-dashboard-paper-title" title="A Confidence-Aware Multimodal Fusion Framework for Industrial Human-Robot Collaboration">A Confidence-Aware Multimodal Fusion Framework for Industrial Human-Robot Collaboration</span></li><li><span class="dpr-home-dashboard-paper-title" title="RiVaT-Fuse: Reliability-Calibrated Variational Tensor Fusion for Multimodal Prediction under Modality Uncertainty">RiVaT-Fuse: Reliability-Calibrated Variational Tensor Fusion for Multimodal Prediction under Modality Uncertainty</span></li></ul>
+<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">multimodal <strong>5</strong></span><span class="dpr-home-dashboard-tag">d-vision <strong>3</strong></span></div>
+
 </section>
 <section class="dpr-home-dashboard-card dpr-home-skim-card">
   <div class="dpr-home-dashboard-header">
@@ -94,12 +91,12 @@
       <span class="dpr-home-dashboard-kicker">今日累计</span>
       <h3 class="dpr-home-dashboard-title">速读推荐</h3>
     </div>
-    <strong class="dpr-home-dashboard-count">13 篇</strong>
+    <strong class="dpr-home-dashboard-count">0 篇</strong>
   </div>
   <div class="dpr-home-dashboard-body">
-<ul class="dpr-home-dashboard-paper-list"><li><span class="dpr-home-dashboard-paper-title" title="An overview of 3D Vision-Language Models">An overview of 3D Vision-Language Models</span></li><li><span class="dpr-home-dashboard-paper-title" title="UniFusion: Sparse-View 4D Reconstruction via Unified Spatio-temporal Depth Alignment">UniFusion: Sparse-View 4D Reconstruction via Unified Spatio-temporal Depth Alignment</span></li><li><span class="dpr-home-dashboard-paper-title" title="Radiation, Rotation and Scale Invariant Feature Descriptor for Multimodal Image Matching">Radiation, Rotation and Scale Invariant Feature Descriptor for Multimodal Image Matching</span></li></ul>
+<p class="dpr-home-dashboard-empty">今日暂无推荐。</p>
   </div>
-  <div class="dpr-home-dashboard-tags"><span class="dpr-home-dashboard-tag">d-vision <strong>11</strong></span><span class="dpr-home-dashboard-tag">multimodal <strong>2</strong></span></div>
+
 </section>
 </div>
 
